@@ -6,7 +6,7 @@ import {
   completedPlayerReloadHardeningLaneCaseDefinitions,
 } from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
 
-test("completed player endgame refresh owns command, resync, and reveal expectations", () => {
+test("completed player endgame refresh owns command, reconnect, and reveal expectations", () => {
   const scenario = completedPlayerEndgameRefreshScenario();
   assert.deepEqual(scenario, {
     proofField: "staleCompletedVoteRecoveryProof",
@@ -23,7 +23,7 @@ test("completed player endgame refresh owns command, resync, and reveal expectat
     staleBoundary:
       "Seeded browser stale completed-game vote proof opened with old Day 5 no-lynch controls.",
     expectedRefreshKeys: ["votecount", "commandState", "endgameSummary"],
-    expectedResyncKey: "endgameSummary",
+    expectedReconnectRefreshKey: "endgameSummary",
     expectedSummaryState: "revealed",
     expectedRevealSlot: "slot-7",
     expectedRoleKey: "godfather",
@@ -39,7 +39,7 @@ test("completed player endgame refresh owns command, resync, and reveal expectat
       .slice(-2)
       .map((lane) => lane.id),
     [
-      "stale-player-complete-endgame-resync",
+      "stale-player-complete-endgame-reconnect",
       "stale-player-complete-vote-history",
     ],
   );
@@ -55,8 +55,8 @@ test("completed player endgame refresh browser assertion covers all three recove
       assertCompletedPlayerEndgameRefreshBrowserProof({
         proof: {
           ...proof,
-          manualEndgameResync: {
-            ...proof.manualEndgameResync,
+          manualEndgameReconnect: {
+            ...proof.manualEndgameReconnect,
             snapshotEndgameSummary: null,
           },
         },
@@ -116,11 +116,11 @@ function completedEndgameRefreshProofFixture() {
     coldLoadEndpointsAfterReject: {
       endgameSummaryEndpoint: "/games/game-a/endgame-summary",
     },
-    resyncKeysAfterReject: ["thread", "endgameSummary", "commandState"],
+    reconnectRefreshKeysAfterReject: ["thread", "endgameSummary", "commandState"],
     endgameSummaryAfterReject: summary,
     endgameSurfaceAfterReject: surface,
-    manualEndgameResync: {
-      fromSeq: 0,
+    manualEndgameReconnect: {
+      reconnectEvent: { kind: "reconnect", attempt: 1, state: "recovered" },
       snapshotEndgameSummary: summary,
       surface,
     },

@@ -155,6 +155,7 @@ import {
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
 import {
+  assertLiveProjectionLagObservability,
   liveProjectionLagServerTraceContract,
   liveProjectionResyncMetricsAreConsistent,
 } from "./dev_test_game_live_projection_observability.mjs";
@@ -1110,20 +1111,32 @@ test("live projection lag observability contract matches the server trace", asyn
   assert.equal(
     liveProjectionResyncMetricsAreConsistent({
       resyncFramesReceived: 3,
-      resyncRefreshesStarted: 3,
-      resyncFramesCoalesced: 1,
-      resyncTrailingRefreshesStarted: 1,
     }),
     true,
   );
   assert.equal(
     liveProjectionResyncMetricsAreConsistent({
-      resyncFramesReceived: 3,
-      resyncRefreshesStarted: 2,
-      resyncFramesCoalesced: 1,
-      resyncTrailingRefreshesStarted: 1,
+      resyncFramesReceived: 1,
     }),
     false,
+  );
+  assert.equal(
+    liveProjectionResyncMetricsAreConsistent({
+      resyncFramesReceived: 3,
+      unexpectedMetric: 3,
+    }),
+    false,
+  );
+  assert.throws(
+    () =>
+      assertLiveProjectionLagObservability({
+        laneId: "live-projection-lag-resync",
+        status: "passed",
+        serverTraceContract: liveProjectionLagServerTraceContract,
+        clientMetrics: { resyncFramesReceived: 2 },
+        recoveredReconnectCount: 1,
+      }),
+    /observability evidence drifted/,
   );
 });
 
@@ -4263,6 +4276,44 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
     nextActionWithFrontendReadiness.generatedFrom.frontendSetupWorkbenchReadiness,
     frontendSetupWorkbenchReadinessFixture(),
   );
+  const legacyLayoutSummary = frontendReadinessSummaryFixture();
+  legacyLayoutSummary.shared.hostSetupWorkbench.local.viewportLayouts[1].layout =
+    "co-located-columns";
+  assert.throws(
+    () =>
+      buildDevTestGameNextAction(manifest, {
+        frontendReadinessSummary: legacyLayoutSummary,
+      }),
+    /frontend setup workbench tablet layout drifted/,
+  );
+  const legacyCardSummary = frontendReadinessSummaryFixture();
+  const legacyMobileLayout =
+    legacyCardSummary.shared.hostSetupWorkbench.local.viewportLayouts[0];
+  delete legacyMobileLayout.rosterCardCount;
+  delete legacyMobileLayout.roleCardCount;
+  legacyMobileLayout.slotCount = 2;
+  assert.throws(
+    () =>
+      buildDevTestGameNextAction(manifest, {
+        frontendReadinessSummary: legacyCardSummary,
+      }),
+    /frontend setup workbench mobile layout drifted/,
+  );
+  const fiveStageSummary = frontendReadinessSummaryFixture();
+  fiveStageSummary.shared.hostSetupWorkbench.local.viewportLayouts[2].stageIds = [
+    "pack",
+    "roster",
+    "roles",
+    "rules",
+    "review",
+  ];
+  assert.throws(
+    () =>
+      buildDevTestGameNextAction(manifest, {
+        frontendReadinessSummary: fiveStageSummary,
+      }),
+    /frontend setup workbench desktop layout drifted/,
+  );
   const adminOnlyManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
     proofFreshness: {
@@ -4323,7 +4374,7 @@ function frontendReadinessSummaryFixture() {
       hostSetupWorkbench: {
         requirement: {
           id: "host-setup-workbench",
-          label: "Host setup workbench geometry",
+          label: "Host setup guided workflow geometry",
           state: "browser_proven",
         },
         local: {
@@ -4333,21 +4384,48 @@ function frontendReadinessSummaryFixture() {
             {
               viewport: "mobile",
               layout: "stacked",
-              slotCount: 2,
+              workflowMode: "guided-stage-canvas",
+              stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+              defaultSelectedStageId: "roster",
+              correctedStageId: "roles",
+              rosterCardCount: 2,
+              roleCardCount: 2,
+              correctionTargets: [
+                { checkId: "slots-occupied", stageId: "roster" },
+                { checkId: "roles-assigned", stageId: "roles" },
+              ],
               noHorizontalOverflow: true,
               screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
             },
             {
               viewport: "tablet",
-              layout: "co-located-columns",
-              slotCount: 2,
+              layout: "stepper-canvas",
+              workflowMode: "guided-stage-canvas",
+              stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+              defaultSelectedStageId: "roster",
+              correctedStageId: "roles",
+              rosterCardCount: 2,
+              roleCardCount: 2,
+              correctionTargets: [
+                { checkId: "slots-occupied", stageId: "roster" },
+                { checkId: "roles-assigned", stageId: "roles" },
+              ],
               noHorizontalOverflow: true,
               screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
             },
             {
               viewport: "desktop",
-              layout: "co-located-columns",
-              slotCount: 2,
+              layout: "stepper-canvas",
+              workflowMode: "guided-stage-canvas",
+              stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+              defaultSelectedStageId: "roster",
+              correctedStageId: "roles",
+              rosterCardCount: 2,
+              roleCardCount: 2,
+              correctionTargets: [
+                { checkId: "slots-occupied", stageId: "roster" },
+                { checkId: "roles-assigned", stageId: "roles" },
+              ],
               noHorizontalOverflow: true,
               screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
             },
@@ -4367,7 +4445,7 @@ function frontendReadinessSummaryFixture() {
 function frontendSetupWorkbenchReadinessFixture() {
   return {
     id: "host-setup-workbench",
-    label: "Host setup workbench geometry",
+    label: "Host setup guided workflow geometry",
     state: "browser_proven",
     route: "/g/midsummer/setup",
     localStatus: "browser_proven",
@@ -4376,21 +4454,48 @@ function frontendSetupWorkbenchReadinessFixture() {
       {
         viewport: "mobile",
         layout: "stacked",
-        slotCount: 2,
+        workflowMode: "guided-stage-canvas",
+        stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+        defaultSelectedStageId: "roster",
+        correctedStageId: "roles",
+        rosterCardCount: 2,
+        roleCardCount: 2,
+        correctionTargets: [
+          { checkId: "slots-occupied", stageId: "roster" },
+          { checkId: "roles-assigned", stageId: "roles" },
+        ],
         noHorizontalOverflow: true,
         screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
       },
       {
         viewport: "tablet",
-        layout: "co-located-columns",
-        slotCount: 2,
+        layout: "stepper-canvas",
+        workflowMode: "guided-stage-canvas",
+        stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+        defaultSelectedStageId: "roster",
+        correctedStageId: "roles",
+        rosterCardCount: 2,
+        roleCardCount: 2,
+        correctionTargets: [
+          { checkId: "slots-occupied", stageId: "roster" },
+          { checkId: "roles-assigned", stageId: "roles" },
+        ],
         noHorizontalOverflow: true,
         screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
       },
       {
         viewport: "desktop",
-        layout: "co-located-columns",
-        slotCount: 2,
+        layout: "stepper-canvas",
+        workflowMode: "guided-stage-canvas",
+        stageIds: ["pack", "roster", "roles", "rules", "program", "review"],
+        defaultSelectedStageId: "roster",
+        correctedStageId: "roles",
+        rosterCardCount: 2,
+        roleCardCount: 2,
+        correctionTargets: [
+          { checkId: "slots-occupied", stageId: "roster" },
+          { checkId: "roles-assigned", stageId: "roles" },
+        ],
         noHorizontalOverflow: true,
         screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
       },
@@ -14003,7 +14108,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             ],
             enabledMutatingButtons: [],
           },
-          reloadedResyncSnapshotCommandState: {
+          reloadedReconnectedSnapshotCommandState: {
             gameCompleted: true,
           },
           receiptStatusText:
@@ -14675,9 +14780,12 @@ test("session card and markdown include role credential URLs and tokens", async 
             ],
             resyncEvent: {
               kind: "resync-required",
-              fromSeq: 0,
-              state: "recovered",
+              fromEventSeq: 0,
+              state: "reconnecting",
             },
+            closeEvent: { kind: "close" },
+            reconnectEvent: { kind: "reconnect", attempt: 1, state: "recovered" },
+            recoveredStatus: { state: "recovered" },
             continuationCommandId: "20000000-0000-4000-8000-000000000001",
             continuationDeltaKind: "ThreadPostsChanged",
             projectedPostCount: 1,
@@ -14692,19 +14800,22 @@ test("session card and markdown include role credential URLs and tokens", async 
             ],
             resyncEvent: {
               kind: "resync-required",
-              fromSeq: 0,
-              state: "recovered",
+              fromEventSeq: 0,
+              state: "reconnecting",
             },
+            closeEvent: { kind: "close" },
+            reconnectEvent: { kind: "reconnect", attempt: 1, state: "recovered" },
+            recoveredStatus: { state: "recovered" },
             continuationCommandId: "20000000-0000-4000-8000-000000000002",
             continuationDeltaKind: "ThreadPostsChanged",
             projectedPostCount: 1,
             currentSubmitPostReceiptCount: 1,
           },
         ],
-        resyncRecoveryCount: 2,
-        resyncEvents: [
-          { kind: "resync-required", fromSeq: 0, state: "recovered" },
-          { kind: "resync-required", fromSeq: 0, state: "recovered" },
+        terminalResyncFrameCount: 2,
+        terminalResyncEvents: [
+          { kind: "resync-required", fromEventSeq: 0, state: "reconnecting" },
+          { kind: "resync-required", fromEventSeq: 0, state: "reconnecting" },
         ],
         burstCommandIds: [
           "10000000-0000-4000-8000-000000000001",
@@ -14720,24 +14831,15 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         apiContinuationPostCounts: [1, 1],
         currentSubmitPostReceiptCount: 1,
-        reconnectEventCount: 0,
+        recoveredReconnectCount: 2,
         clientMetricsBefore: {
           resyncFramesReceived: 0,
-          resyncRefreshesStarted: 0,
-          resyncFramesCoalesced: 0,
-          resyncTrailingRefreshesStarted: 0,
         },
         clientMetricsAfter: {
           resyncFramesReceived: 2,
-          resyncRefreshesStarted: 2,
-          resyncFramesCoalesced: 0,
-          resyncTrailingRefreshesStarted: 0,
         },
         clientMetrics: {
           resyncFramesReceived: 2,
-          resyncRefreshesStarted: 2,
-          resyncFramesCoalesced: 0,
-          resyncTrailingRefreshesStarted: 0,
         },
       },
       stalePlayerVote: {
@@ -18849,7 +18951,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(
     markdown.includes(
-      "Live lag resync: 2 recoveries, ThreadPostsChanged/ThreadPostsChanged, reconnects 0",
+      "Live lag resync: 2 terminal frames, ThreadPostsChanged/ThreadPostsChanged, 2 recovered reconnects",
     ),
   );
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
@@ -19017,7 +19119,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "public-player-complete-reload",
       "stale-player-complete",
       "stale-player-complete-reload",
-      "stale-player-complete-endgame-resync",
+      "stale-player-complete-endgame-reconnect",
       "stale-player-complete-vote-history",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
@@ -20155,10 +20257,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 5);
   assert.deepEqual(opsArtifacts.liveProjectionLagObservability.clientMetrics, {
     resyncFramesReceived: 2,
-    resyncRefreshesStarted: 2,
-    resyncFramesCoalesced: 0,
-    resyncTrailingRefreshesStarted: 0,
   });
+  assert.equal(
+    opsArtifacts.liveProjectionLagObservability.recoveredReconnectCount,
+    2,
+  );
   assert.equal(
     opsArtifacts.checks.some(
       (check) =>
@@ -21895,10 +21998,8 @@ function liveProjectionLagObservabilityFixture() {
     },
     clientMetrics: {
       resyncFramesReceived: 2,
-      resyncRefreshesStarted: 2,
-      resyncFramesCoalesced: 0,
-      resyncTrailingRefreshesStarted: 0,
     },
+    recoveredReconnectCount: 2,
   };
 }
 
@@ -24309,10 +24410,10 @@ function privateChannelRoleSurfaceFixture() {
         visitedRolePath,
         surfaceTestId: "player-surface",
         clickedThroughFromRoleUrl: true,
-        resyncFromSeq: completedPrivateReloadScenario.resyncFromSeq,
-        initialResyncSnapshotCommandState:
+        authoritativeSourceSeq: completedPrivateReloadScenario.authoritativeSourceSeq,
+        initialReconnectedSnapshotCommandState:
           completedPrivateReloadSnapshot.commandState,
-        reloadedResyncSnapshotCommandState:
+        reloadedReconnectedSnapshotCommandState:
           completedPrivateReloadSnapshot.commandState,
         initialSnapshot: completedPrivateReloadSnapshot,
         reloadedSnapshot: completedPrivateReloadSnapshot,
@@ -24357,7 +24458,7 @@ function privateChannelRoleSurfaceFixture() {
         submitDisabledBeforeReject: false,
         snapshotAfterReject: completedPrivateRejectSnapshot,
         snapshotAfterReload: completedPrivateRejectSnapshot,
-        reloadedResyncSnapshotCommandState:
+        reloadedReconnectedSnapshotCommandState:
           completedPrivateRejectSnapshot.commandState,
         receiptStatusText: staleCompletedPrivateScenario.commandMessage,
         receiptRefreshKeys:
@@ -25351,7 +25452,7 @@ function hardeningAdminProofFixture({
         "public-player-complete-reload",
         "stale-player-complete",
         "stale-player-complete-reload",
-        "stale-player-complete-endgame-resync",
+        "stale-player-complete-endgame-reconnect",
         "stale-player-complete-vote-history",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
@@ -25376,7 +25477,7 @@ function hardeningAdminProofFixture({
         "concurrent-player-complete-race",
         "public-player-complete-reload",
         "stale-player-complete-reload",
-        "stale-player-complete-endgame-resync",
+        "stale-player-complete-endgame-reconnect",
         "stale-player-complete-vote-history",
         "concurrent-host-mixed-advance-race",
         "concurrent-host-mixed-advance-race-reload",

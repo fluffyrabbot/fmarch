@@ -9,6 +9,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
+import { FIXTURE_SESSION_PRINCIPAL_IDS } from "../frontend/src/lib/server/session-capabilities.mjs";
+import { PRODUCTION_FIXTURE_MODE_ERROR } from "../frontend/src/lib/server/runtime-mode.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -41,6 +43,15 @@ const apiServer = https.createServer(
       method: request.method,
       url: request.url,
     });
+    if (request.method === "GET" && request.url === "/auth/session") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        principal_id: FIXTURE_SESSION_PRINCIPAL_IDS.admin,
+        rotation_required: false,
+        capabilities: [{ kind: "GlobalAdmin" }],
+      }));
+      return;
+    }
     if (request.method === "POST" && request.url === "/auth/session-logout") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
@@ -63,6 +74,31 @@ const apiOrigin = `https://${host}:${apiAddress.port}`;
 const port = await availablePort(host);
 const origin = `http://${host}:${port}`;
 const proofUrl = `${origin}/auth/login`;
+const guardedStartup = spawnSync("node", ["build"], {
+  cwd: frontendRoot,
+  encoding: "utf8",
+  timeout: 5_000,
+  env: {
+    ...process.env,
+    HOST: host,
+    PORT: String(port),
+    ORIGIN: origin,
+    NODE_ENV: "production",
+    FMARCH_FRONTEND_FIXTURE_SESSION: "1",
+  },
+  stdio: ["ignore", "pipe", "pipe"],
+});
+assert.notEqual(
+  guardedStartup.status,
+  0,
+  "production adapter must refuse fixture session mode before serving requests",
+);
+assert.ok(
+  `${guardedStartup.stdout ?? ""}${guardedStartup.stderr ?? ""}`.includes(
+    PRODUCTION_FIXTURE_MODE_ERROR.message,
+  ),
+  "production adapter rejection must identify the forbidden fixture configuration",
+);
 const output = [];
 const server = spawn("node", ["build"], {
   cwd: frontendRoot,
@@ -75,7 +111,6 @@ const server = spawn("node", ["build"], {
     NODE_EXTRA_CA_CERTS: certificatePath,
     FMARCH_API_BASE_URL: apiOrigin,
     FMARCH_API_INTERNAL_URL: "",
-    FMARCH_FRONTEND_FIXTURE_SESSION: "1",
     FMARCH_SSR_FETCH_TIMEOUT_MS: "50",
   },
   stdio: ["ignore", "pipe", "pipe"],
@@ -202,8 +237,28 @@ try {
   assert.deepEqual(apiRequests, [
     {
       authorization: "Bearer fixture-admin",
+      method: "GET",
+      url: "/auth/session",
+    },
+    {
+      authorization: "Bearer fixture-admin",
+      method: "GET",
+      url: "/auth/session",
+    },
+    {
+      authorization: "Bearer fixture-admin",
       method: "POST",
       url: "/auth/session-logout",
+    },
+    {
+      authorization: "Bearer fixture-admin",
+      method: "GET",
+      url: "/auth/session",
+    },
+    {
+      authorization: "Bearer fixture-admin",
+      method: "GET",
+      url: "/auth/session",
     },
     {
       authorization: "Bearer fixture-admin",

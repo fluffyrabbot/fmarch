@@ -331,7 +331,7 @@ export function assertHostNightActionTransitionSurfaceCase({
 
 const dayFourNoLynchHostTransitionProofCaseDefinition = Object.freeze({
   surfaceTestId: "host-console-surface",
-  setupResyncFromSeq: 912,
+  setupAuthoritativeSourceSeq: 912,
   setupPhaseId: "D04",
   setupPhaseState: "open",
   expectedVotecountTarget: "No lynch",
@@ -375,7 +375,7 @@ export function assertDayFourNoLynchHostTransitionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== transitionCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== transitionCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== transitionCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== transitionCase.setupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !== transitionCase.setupPhaseState
   ) {
@@ -419,7 +419,7 @@ export function assertDayFourNoLynchHostTransitionProofCase({
 
 const emptyNightThreeHostTransitionProofCaseDefinition = Object.freeze({
   surfaceTestId: "host-console-surface",
-  setupResyncFromSeq: 909,
+  setupAuthoritativeSourceSeq: 909,
   setupPhaseId: "N03",
   setupPhaseState: "open",
   resolveCase: Object.freeze(
@@ -460,7 +460,7 @@ export function assertEmptyNightThreeHostTransitionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== transitionCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== transitionCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== transitionCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== transitionCase.setupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !== transitionCase.setupPhaseState
   ) {
@@ -1565,7 +1565,7 @@ export function assertHostStaleAdvanceAfterTransitionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 801 ||
+    proof.setupAuthoritativeSourceSeq !== 801 ||
     proof.setupSnapshotHost?.phase?.id !== "D02" ||
     proof.setupSnapshotHost?.phase?.state !== "locked" ||
     proof.clickedAction !== "advance_phase" ||

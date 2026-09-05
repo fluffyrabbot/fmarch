@@ -19,11 +19,12 @@ WebSocket code become adapters. Context application services own decisions.
 Context Postgres adapters own their schemas. The public, operator, projector,
 and privacy runtimes receive different authorities.
 
-This is a greenfield cutover. Development data, current event encodings, and
-wire protocol v2 may be reset. Runtime dual writes, compatibility event kinds,
-and transitional generic repositories are forbidden. Each vertical migration
-lands in one working state and deletes the superseded path in the same atomic
-change.
+This is a greenfield cutover. Development data and current event encodings may
+be reset; the live/command transport has been cut directly from protocol v2 to
+the scoped, audience-explicit protocol v3. Runtime dual writes, protocol
+compatibility modes, compatibility event kinds, and transitional generic
+repositories are forbidden. Each vertical migration lands in one working state
+and deletes the superseded path in the same atomic change.
 
 The companion `tools/architecture_fitness.mjs` distinguishes three things that
 must not be conflated:

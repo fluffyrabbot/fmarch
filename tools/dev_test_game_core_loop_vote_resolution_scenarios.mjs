@@ -46,7 +46,7 @@ const dayThreeVoteResolutionSurfaceCaseDefinition = Object.freeze({
     previousOutcomePhaseId: "D02",
     expectedBoundaryText: "Day 3 vote ACK",
     expectedRefreshKeys: Object.freeze(["votecount", "commandState"]),
-    setupResyncFromSeq: 906,
+    setupAuthoritativeSourceSeq: 906,
     expectedReceiptRefreshKeys: "votecount,commandState",
   }),
   hostResolutionCase: Object.freeze({
@@ -178,7 +178,7 @@ export function assertDayThreePlayerVoteProofCase({
         .expectedNeeded ||
     proof.projectionDayVoteOutcomes?.[0]?.phaseId !==
       voteCase.previousOutcomePhaseId ||
-    proof.setupResyncFromSeq !== voteCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== voteCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== voteCase.expectedPhaseId ||
     proof.currentVote?.hasVote !== "true" ||
     !String(proof.currentVote?.text ?? "").includes("Slot 4") ||

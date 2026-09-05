@@ -247,6 +247,10 @@ export function assertCapacityOverloadReport(report) {
       report.budgets.websocketConnections,
     "not every slow websocket received bounded resync recovery",
   );
+  for (const field of ["resyncFrames", "closedConnections", "recoveredConnections"]) {
+    assert(scenarios.slowWebsocketConsumers[field] === report.budgets.websocketConnections,
+      `slow websocket terminal recovery evidence missing: ${field}`);
+  }
   assert(
     scenarios.slowWebsocketConsumers.rejectedHandshakeStatus === 503,
     "excess websocket handshake was not rejected with 503",

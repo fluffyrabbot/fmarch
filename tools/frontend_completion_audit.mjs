@@ -2,10 +2,19 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import {
-  EXPECTED_COUNTS,
-  expectedThumbZoneCounts,
-} from "./frontend_proof_expectations.mjs";
+  hostSetupWorkflowEvidenceComplete,
+} from "./frontend_host_setup_proof_contract.mjs";
+import {
+  browserRoleSmokeEvidenceComplete as roleSmokeEvidenceComplete,
+} from "./frontend_role_smoke_evidence_contract.mjs";
+import {
+  ADMIN_OPERATOR_INBOX_CONTRACT,
+} from "../frontend/src/routes/admin/admin-operator-inbox.mjs";
+import {
+  PLAYER_ROUTE_LAYOUT_CONTRACT,
+} from "../frontend/src/routes/g/[game]/player-route-layout.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-completion-audit");
@@ -77,7 +86,7 @@ assert.equal(artifacts.tabletInteraction.forbiddenMatches.length, 0);
 assert.equal(artifacts.tabletInteraction.sharedAppCss.appShellTouchTargetMinPx, 44);
 assert.equal(
   artifacts.tabletInteraction.adminOperatorSurfaceCss.controlRailMode,
-  "flow-admin-operator-actions",
+  ADMIN_OPERATOR_INBOX_CONTRACT.mode,
 );
 assert.equal(
   artifacts.tabletInteraction.adminOperatorSurfaceCss.setupAndRecoveryBeforeStatusReadouts,
@@ -93,16 +102,16 @@ assert.equal(
 );
 assert.equal(
   artifacts.tabletInteraction.playerRouteLayoutCss.commandRailMode,
-  "sticky-tablet-command-column",
+  PLAYER_ROUTE_LAYOUT_CONTRACT.commandRail.mode,
 );
 assert.equal(artifacts.tabletInteraction.playerRouteLayoutCss.safeAreaAware, true);
 assert.equal(
-  artifacts.tabletInteraction.playerRouteLayoutCss.primaryControlsBeforeReceipts,
+  artifacts.tabletInteraction.playerRouteLayoutCss.threadBeforeComposer,
   true,
 );
 assert.equal(
   artifacts.tabletInteraction.moderatorControlSurfaceCss.controlRailMode,
-  "flow-host-control-actions",
+  "exception-queue-decision-canvas",
 );
 assert.equal(
   artifacts.tabletInteraction.moderatorControlSurfaceCss.primaryControlsBeforeStatusReadouts,
@@ -131,16 +140,20 @@ assert.equal(artifacts.hostConfirmations.actionCount, EXPECTED_COUNTS.moderatorC
 assert.equal(artifacts.routeLive.sources.player.onMountConnects, true);
 assert.equal(artifacts.routeLive.sources.moderator.onMountConnects, true);
 assert.deepEqual(artifacts.routeLive.runtime.player.eventKinds, [
-  "open",
   "hello",
   "delta",
   "resync-required",
+  "close",
+  "reconnecting",
+  "reconnect",
 ]);
 assert.deepEqual(artifacts.routeLive.runtime.moderator.eventKinds, [
-  "open",
   "hello",
   "delta",
   "resync-required",
+  "close",
+  "reconnecting",
+  "reconnect",
 ]);
 assert.equal(
   ["passed", "chromium-launch-blocked"].includes(artifacts.keyboardTraversal.status),
@@ -374,7 +387,7 @@ const audit = {
         "Host touch-control CSS proves the 44px target variable, 8px minimum gaps, touch-action: manipulation, visible focus outline, and wrapping confirmation actions used by moderator/admin-style destructive confirmations.",
         `Build-mode SSR proves admin setup/recovery, player vote/post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host actions are descendants of explicit thumb-zone containers.`,
         ...fullBrowserProofLines(
-          "Dev-server role smoke proves touch target geometry, thumb-zone target counts, setup workbench geometry for /g/midsummer/setup, overlap-checked visible targets, nonblank screenshots, and focus traversal across mobile, tablet, 1024, 1180, 1280, and desktop viewports.",
+          "Dev-server role smoke proves touch target geometry, thumb-zone target counts, the exact guided-stage-canvas workflow for /g/midsummer/setup, overlap-checked visible targets, nonblank screenshots, and focus traversal across mobile, tablet, 1024, 1180, 1280, and desktop viewports.",
         ),
       ],
       evidence: [
@@ -411,24 +424,30 @@ const audit = {
     }),
     requirement({
       id: "host-setup-workbench",
-      label: "Host setup workbench geometry",
+      label: "Host setup guided workflow geometry",
       state: hostSetupWorkbenchProof ? "browser_proven" : "browser_geometry_missing",
       proven: [
-        "The setup workbench proof is scoped to /g/midsummer/setup and records the host setup surface, capability label, roster, slot workbench, slot cards, role cells, and command touch targets.",
+        "The setup proof is scoped to /g/midsummer/setup and records the exact guided-stage-canvas workflow, including every contracted stage, the first blocking stage, readiness correction routing, roster and role cards for the scenario slots, and command touch targets.",
         ...(roleSmokeSetupWorkbenchEvidenceComplete()
           ? [
-              "Localhost role smoke records mobile stacked layout plus tablet and desktop co-located slot/role columns with no horizontal overflow and nonblank screenshots.",
+              "Localhost role smoke records the mobile stacked canvas and tablet/desktop stepper canvas with exact scenario roster and role cards, correction targets, no horizontal overflow, and nonblank screenshots.",
             ]
           : []),
         ...(importedRoleSmokeSetupWorkbenchEvidenceComplete()
           ? [
-              "Imported role-smoke validation preserves setup workbench screenshot and geometry evidence for portable browser acceptance.",
+              "Imported role-smoke validation preserves guided setup workflow screenshot and geometry evidence for portable browser acceptance.",
             ]
           : []),
       ],
       evidence: [
         "roleSmoke.setup",
-        "roleSmoke.setup[*].slotCards",
+        "roleSmoke.setup[*].workflowMode",
+        "roleSmoke.setup[*].stageIds",
+        "roleSmoke.setup[*].layout",
+        "roleSmoke.setup[*].rosterCards",
+        "roleSmoke.setup[*].roleCards",
+        "roleSmoke.setup[*].correctionTargets",
+        "roleSmoke.setup[*].noHorizontalOverflow",
         "roleSmoke.setup[*].screenshotPixels",
         "importedRoleSmoke.validated.setupCount",
         "importedRoleSmoke.validated.screenshotChecks",
@@ -438,7 +457,7 @@ const audit = {
       missing: hostSetupWorkbenchProof
         ? []
         : [
-            "Run or import a passed frontend role smoke with /g/midsummer/setup workbench geometry for mobile, tablet, and desktop.",
+            "Run or import a passed frontend role smoke with the exact /g/midsummer/setup guided-stage-canvas contract for mobile, tablet, and desktop.",
           ],
     }),
     requirement({
@@ -577,7 +596,7 @@ const audit = {
         "SSR and DOM proof render admin setup/recovery confirmations with DOM-visible focus/escape/tab metadata plus a single admin command activity rail for setup/recovery command feedback.",
         "Static command proof records admin create_game reject handling.",
         ...fullBrowserProofLines(
-          "Dev-server role smoke proves admin screenshots, audit-detail click-through evidence, cohost confirmation and recovery-gate ACK evidence, setup/recovery thumb zones, overlap-checked targets, and focus traversal.",
+          "Dev-server role smoke proves admin screenshots, exception-inbox decision-canvas geometry, native audit-detail click-through evidence, live setup/recovery thumb zones, overlap-checked targets, and focus traversal.",
         ),
       ],
       evidence: [
@@ -664,7 +683,7 @@ const audit = {
       proven:
         browserRoleSmokeEvidenceComplete()
           ? [
-              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin cohost confirmation/recovery-gate form evidence, player main-thread SubmitPost ACK, player private:role_pm:slot-7 SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
+              "Dev-server Chromium role smoke passed, generated screenshots, recorded the exact guided-stage-canvas workflow for /g/midsummer/setup, recorded live thumb-zone geometry, and recorded admin exception-inbox decision-canvas plus native audit-detail navigation evidence, player main-thread SubmitPost ACK, player private:role_pm:slot-7 SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
             ]
           : inAppBrowserImportedRunEvidenceComplete()
             ? [
@@ -829,191 +848,13 @@ function importedRoleSmokeSetupWorkbenchEvidenceComplete() {
 }
 
 function browserRoleSmokeEvidenceComplete() {
-  if (artifacts.roleSmoke.status !== "passed") {
-    return false;
-  }
-  const roleIds = new Set((artifacts.roleSmoke.roles ?? []).map((entry) => entry.role));
-  for (const id of ["admin", "player", "moderator"]) {
-    if (!roleIds.has(id)) {
-      return false;
-    }
-  }
-  return (
-    Array.isArray(artifacts.roleSmoke.board) &&
-    artifacts.roleSmoke.board.length > 0 &&
-    roleSmokeSetupWorkbenchEvidenceComplete() &&
-    Array.isArray(artifacts.roleSmoke.routeStates) &&
-    artifacts.roleSmoke.routeStates.length > 0 &&
-    (artifacts.roleSmoke.roles ?? []).every(
-      (entry) => entry.screenshotPixels !== undefined,
-    ) &&
-    roleSmokeThumbZoneEvidenceComplete() &&
-    adminBrowserOperationalEvidenceComplete() &&
-    playerBrowserPostEvidenceComplete() &&
-    playerPrivateChannelBrowserPostEvidenceComplete() &&
-    playerBrowserMediaEvidenceComplete() &&
-    moderatorBrowserSlotLifecycleEvidenceComplete()
-  );
-}
-
-function roleSmokeThumbZoneEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  if (viewportCount === 0) {
-    return false;
-  }
-  return expectedThumbZoneCounts().every(({ role, zones }) => {
-    const entries = (artifacts.roleSmoke.roles ?? []).filter(
-      (entry) => entry.role === role,
-    );
-    return (
-      entries.length >= viewportCount &&
-      entries.every((entry) => thumbZonesComplete(entry.thumbZones, zones))
-    );
-  });
+  return roleSmokeEvidenceComplete(artifacts.roleSmoke);
 }
 
 function roleSmokeSetupWorkbenchEvidenceComplete() {
-  const setupEntries = artifacts.roleSmoke.setup ?? [];
-  const viewportNames = new Set(setupEntries.map((entry) => entry.viewport?.name));
-  return (
-    setupEntries.length >= 3 &&
-    ["mobile", "tablet", "desktop"].every((name) => viewportNames.has(name)) &&
-    setupEntries.every((entry) =>
-      entry.role === "host-setup" &&
-      entry.path === "/g/midsummer/setup" &&
-      entry.surfaceTestId === "host-setup-surface" &&
-      entry.capabilityTestId === "host-setup-capability" &&
-      entry.noHorizontalOverflow === true &&
-      entry.screenshotPixels !== undefined &&
-      Array.isArray(entry.slotCards) &&
-      entry.slotCards.length >= 2 &&
-      entry.slotCards.every(
-        (slot) =>
-          slot.roleCellContainedInCard === true &&
-          slot.assignmentContainedInCard === true,
-      )
-    )
-  );
+  return hostSetupWorkflowEvidenceComplete(artifacts.roleSmoke.setup);
 }
 
-
-function thumbZonesComplete(actual, expectedZones) {
-  if (!Array.isArray(actual)) {
-    return false;
-  }
-  const byTestId = new Map(actual.map((zone) => [zone.testId, zone]));
-  return expectedZones.every(([testId, targetCount]) => {
-    const zone = byTestId.get(testId);
-    return zone?.targetCount === targetCount;
-  });
-}
-
-function adminBrowserOperationalEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  const adminEntries = (artifacts.roleSmoke.roles ?? []).filter(
-    (entry) => entry.role === "admin",
-  );
-  if (viewportCount === 0 || adminEntries.length < viewportCount) {
-    return false;
-  }
-  return adminEntries.every((entry) =>
-    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-cohost" &&
-    entry.commandResult?.recovery?.state === "ack" &&
-    entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
-      "admin-recovery-confirm-recovery-gate" &&
-    entry.commandResult?.recovery?.form?.action === "?/checkRecoveryGate" &&
-    includesAll(
-      entry.commandResult?.recovery?.form?.fieldNames,
-      ["game", "principalId"],
-    ) &&
-    entry.commandResult?.activity?.acknowledged?.state === "ack",
-  );
-}
-
-function playerBrowserPostEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  const playerEntries = (artifacts.roleSmoke.roles ?? []).filter(
-    (entry) => entry.role === "player",
-  );
-  if (viewportCount === 0 || playerEntries.length < viewportCount) {
-    return false;
-  }
-  return playerEntries.every((entry) =>
-    entry.commandResult?.postCommandReceipt?.state === "ack" &&
-    entry.commandResult?.postCommand?.requestCommand?.body ===
-      "Browser smoke player post" &&
-    entry.commandResult?.postCommand?.requestCommand?.channel_id === "main" &&
-    entry.commandResult?.postCommand?.refreshedPostTestId === "thread-post-445",
-  );
-}
-
-function playerBrowserMediaEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  const playerEntries = (artifacts.roleSmoke.roles ?? []).filter(
-    (entry) => entry.role === "player",
-  );
-  if (viewportCount === 0 || playerEntries.length < viewportCount) {
-    return false;
-  }
-  return playerEntries.every((entry) =>
-    entry.commandResult?.media?.renderedVariant === "tablet" &&
-    entry.commandResult?.media?.mediaTestId === "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" &&
-    entry.commandResult?.media?.requestedOriginal === false &&
-    Array.isArray(entry.commandResult?.media?.requested) &&
-    entry.commandResult.media.requested.length > 0 &&
-    entry.commandResult.media.requested.every((request) =>
-      ["tablet", "small", "thumb", "thumbnail"].includes(request.variant),
-    ),
-  );
-}
-
-function playerPrivateChannelBrowserPostEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  const entries = artifacts.roleSmoke.playerPrivateChannel ?? [];
-  if (viewportCount === 0 || entries.length < viewportCount) {
-    return false;
-  }
-  return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
-    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
-    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
-    entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
-    entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
-    entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
-    entry.screenshotPixels !== undefined,
-  );
-}
-
-function moderatorBrowserSlotLifecycleEvidenceComplete() {
-  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
-  const moderatorEntries = (artifacts.roleSmoke.roles ?? []).filter(
-    (entry) => entry.role === "moderator",
-  );
-  if (viewportCount === 0 || moderatorEntries.length < viewportCount) {
-    return false;
-  }
-  return moderatorEntries.every((entry) =>
-    entry.commandResult?.slotLifecycle?.state === "ack" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.game ===
-      "midsummer" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.slot ===
-      "slot-7" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.status ===
-      "modkilled" &&
-    entry.commandResult?.slotLifecycle?.projection?.lifecycleLabel === "Modkilled",
-  );
-}
-
-function includesAll(actual, expected) {
-  if (!Array.isArray(actual)) {
-    return false;
-  }
-  const values = new Set(actual);
-  return expected.every((value) => values.has(value));
-}
 
 function iabFixtureEvidenceComplete() {
   if (artifacts.inAppBrowserPage.status !== "page-generated") {

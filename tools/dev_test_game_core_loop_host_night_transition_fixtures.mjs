@@ -165,14 +165,14 @@ export function dayThreeObservationFixture({
           },
         ]
       : [],
-    resyncFromSeq: 906,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: 906,
+    reconnectedSnapshotCommandState: {
       actorSlot: slot,
       phase: {
         phaseId: "D03",
       },
     },
-    resyncSnapshotNotifications: privateReceipt
+    reconnectedSnapshotNotifications: privateReceipt
       ? [
           {
             status: "factional_kill",

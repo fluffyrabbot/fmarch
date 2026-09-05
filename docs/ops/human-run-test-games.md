@@ -760,13 +760,13 @@ player page replays one `SubmitPost` with the same durable `command_id` and
 verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
 lands, forces a capacity-one live broadcast receiver to lag under the local
-`FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS` pressure control twice, recovers two
-ordered server `ResyncRequired` frames without reconnecting, and receives a
-unique later UI post after each recovery on the same socket with one projected
-post and one current receipt. The client collapses back-to-back resync frames
-into one in-flight refresh plus one latest trailing refresh. That lane is saved
-as `live-projection-lag-resync` with measured client counters for received
-frames, started refreshes, coalesced frames, and trailing refreshes. The API
+`FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS` pressure control twice, treats each
+ordered server `ResyncRequired` frame as terminal, observes the old socket close,
+remints a ticket, accepts an exact Hello on a new socket, performs one
+authoritative refresh, and receives a unique later UI post on the new generation
+with one projected post and one current receipt. That lane is saved as
+`live-projection-lag-resync` with measured client counters for terminal frames
+and recovered reconnects; the reconnect count must cover every received frame. The API
 emits `live_projection_receiver_lagged` with game/connection scope and dropped
 message count when `RUST_LOG` enables the warning; neither credentials nor
 projection payloads are logged. The same saved metrics feed the hardening admin

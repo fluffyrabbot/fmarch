@@ -238,7 +238,7 @@ function hostStaleAdvanceProofFixture() {
     sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
     visitedRolePath: "/g/game-a/host",
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 801,
+    setupAuthoritativeSourceSeq: 801,
     setupSnapshotHost: {
       phase: { id: "D02", state: "locked" },
     },
@@ -390,9 +390,9 @@ function playerObservationProofFixture() {
     sourceRoleUrl,
     visitedRolePath,
     surfaceTestId: "player-surface",
-    resyncFromSeq: 802,
-    resyncKeys: ["commandState"],
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: 802,
+    reconnectRefreshKeys: ["commandState"],
+    reconnectedSnapshotCommandState: {
       phase: { phaseId: "N02" },
     },
     projectionCommandState: {
@@ -432,7 +432,7 @@ function staleVoteProofFixture({ sourceRoleUrl, visitedRolePath }) {
     visitedRolePath,
     clickedAction: "submit_vote",
     commandKind: "SubmitVote",
-    setupResyncFromSeq: 801,
+    setupAuthoritativeSourceSeq: 801,
     setupSnapshotCommandState: {
       phase: { phaseId: "D02" },
       voteTargets: [{ slotId: "slot-2" }],

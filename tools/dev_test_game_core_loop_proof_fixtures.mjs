@@ -67,7 +67,7 @@ export function postDayThreePlayerSurfaceFixture({
   privateCount,
   privateReceipt,
   boundary,
-  resyncFromSeq,
+  authoritativeSourceSeq,
   commandStateEndpoint,
   notificationsEndpoint,
   voteButtonCount = 0,
@@ -124,15 +124,15 @@ export function postDayThreePlayerSurfaceFixture({
         ]
       : [],
     projectionDayVoteOutcomes: dayVoteOutcomes,
-    resyncFromSeq,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq,
+    reconnectedSnapshotCommandState: {
       actorSlot: slot,
       gameCompleted,
       phase: {
         phaseId,
       },
     },
-    resyncSnapshotNotifications: privateReceipt
+    reconnectedSnapshotNotifications: privateReceipt
       ? [
           {
             status: privateReceiptStatus,
@@ -191,7 +191,7 @@ export function seededCoreLoopPlayerSurfaceFixture({
 
 export function seededCoreLoopHostSurfaceFixture({
   game,
-  setupResyncFromSeq,
+  setupAuthoritativeSourceSeq,
   setupPhaseId,
   setupPhaseState,
   setupSnapshotHost,
@@ -210,8 +210,8 @@ export function seededCoreLoopHostSurfaceFixture({
     releaseReady: false,
     productionReady: false,
   };
-  if (setupResyncFromSeq !== undefined) {
-    surface.setupResyncFromSeq = setupResyncFromSeq;
+  if (setupAuthoritativeSourceSeq !== undefined) {
+    surface.setupAuthoritativeSourceSeq = setupAuthoritativeSourceSeq;
   }
   if (setupSnapshotHost !== undefined) {
     surface.setupSnapshotHost = setupSnapshotHost;

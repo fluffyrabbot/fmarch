@@ -126,7 +126,7 @@ const nightFourNoActionSurfaceCaseDefinition = Object.freeze({
   ),
   noActionCase: Object.freeze({
     surfaceTestId: "player-surface",
-    setupResyncFromSeq: 914,
+    setupAuthoritativeSourceSeq: 914,
     setupPhaseId: "N04",
     expectedSlot: "slot-7",
     expectedPrincipalUserId: "player_mira",
@@ -148,7 +148,7 @@ const nightFourNoActionResolutionSurfaceCaseDefinition = Object.freeze({
   ]),
   hostResolutionCase: Object.freeze({
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 914,
+    setupAuthoritativeSourceSeq: 914,
     setupPhaseId: "N04",
     setupPhaseState: "open",
     resolveCase: Object.freeze(
@@ -280,7 +280,7 @@ export function assertNightFourPlayerNoActionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== noActionCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== noActionCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== noActionCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== noActionCase.setupPhaseId ||
     proof.setupSnapshotCommandState?.actions?.length !==
       noActionCase.expectedActionCount ||
@@ -391,7 +391,7 @@ export function assertNightFourHostResolutionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== hostCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== hostCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== hostCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== hostCase.setupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !== hostCase.setupPhaseState
   ) {
@@ -425,7 +425,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
   expectedBoundaryText,
   expectedPhaseId,
   expectedPhaseState,
-  expectedResyncFromSeq,
+  expectedAuthoritativeSourceSeq,
   expectedPrivateReceiptStatus,
   expectedPrivateReceiptPhaseId,
   expectedPrivateQueueBoundaryStatus,
@@ -471,9 +471,9 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
       expectedBoundaryText,
     ) ||
     proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D04" ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
+    proof.authoritativeSourceSeq !== expectedAuthoritativeSourceSeq ||
+    proof.reconnectedSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.reconnectedSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       expectedNotificationsEndpoint ||
     proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
@@ -497,7 +497,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
       proof.projectionNotifications?.[0]?.status !==
         expectedPrivateReceiptStatus ||
-      proof.resyncSnapshotNotifications?.[0]?.status !==
+      proof.reconnectedSnapshotNotifications?.[0]?.status !==
         expectedPrivateReceiptStatus)
   ) {
     throwLateActionProgressionAssertionError({
@@ -510,7 +510,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
     !expectedPrivateReceipt &&
     (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
       proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.reconnectedSnapshotNotifications?.length !== 0 ||
       proof.privateNotice !== undefined)
   ) {
     throwLateActionProgressionAssertionError({

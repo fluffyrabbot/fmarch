@@ -114,7 +114,7 @@ const nightThreeEmptyResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "opened N03 with no legal night action",
-    expectedResyncFromSeq: 909,
+    expectedAuthoritativeSourceSeq: 909,
   }),
   hostTransitionCase: Object.freeze(emptyNightThreeHostTransitionProofCase()),
   actionPlayerDayFourCase: Object.freeze({
@@ -132,7 +132,7 @@ const nightThreeEmptyResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "open D04 no-lynch voting",
-    expectedResyncFromSeq: 911,
+    expectedAuthoritativeSourceSeq: 911,
     expectedVoteButtonCount: 1,
     expectedVoteTargetCount: 1,
   }),
@@ -154,7 +154,7 @@ const dayFourSurvivorRoleSurfaceCaseDefinition = Object.freeze({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "survivor role opened D04",
-    expectedResyncFromSeq: 911,
+    expectedAuthoritativeSourceSeq: 911,
     expectedVoteButtonCount: 2,
     expectedVoteTargetCount: 2,
   }),
@@ -310,7 +310,7 @@ function assertPhaseProgressionPlayerObservation({
     expectedPrivateCount: playerCase.expectedPrivateCount,
     expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
     expectedBoundaryText: playerCase.expectedBoundaryText,
-    expectedResyncFromSeq: playerCase.expectedResyncFromSeq,
+    expectedAuthoritativeSourceSeq: playerCase.expectedAuthoritativeSourceSeq,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
     expectedNotificationsEndpoint:

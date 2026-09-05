@@ -155,7 +155,7 @@ function dayFourVoteProofFixture() {
     },
     projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
     projectionDayVoteOutcomes: [{ phaseId: "D03" }],
-    setupResyncFromSeq: 911,
+    setupAuthoritativeSourceSeq: 911,
     setupSnapshotCommandState: { phase: { phaseId: "D04" } },
     currentVote: { hasVote: "true", text: "Current vote: No lynch" },
     receiptCount: 1,

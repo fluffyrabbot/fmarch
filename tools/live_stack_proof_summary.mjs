@@ -101,7 +101,8 @@ export function buildLiveStackProofSummary(
         convergence?.after?.projection,
         "slot_1",
       ),
-      resyncState: convergence?.resyncEvent?.state ?? null,
+      reconnectState: convergence?.reconnectEvent?.state ?? null,
+      reconnectAttempt: convergence?.reconnectEvent?.attempt ?? null,
       sawFreshVoteEvent: convergence?.sawFreshVoteEvent ?? false,
       proof: convergence?.proof ?? null,
     },
@@ -318,8 +319,12 @@ export function assertLiveStackProofSummary(summary) {
   if (summary.hostVotecountConvergence?.afterSlot1Count !== 1) {
     throw new Error("live-stack summary missing host votecount convergence");
   }
-  if (summary.hostVotecountConvergence?.resyncState !== "recovered") {
-    throw new Error("live-stack summary missing host votecount resync recovery");
+  if (
+    summary.hostVotecountConvergence?.reconnectState !== "recovered" ||
+    !Number.isInteger(summary.hostVotecountConvergence?.reconnectAttempt) ||
+    summary.hostVotecountConvergence.reconnectAttempt < 1
+  ) {
+    throw new Error("live-stack summary missing host votecount reconnect recovery");
   }
   if (
     summary.rolePmReplacementLifecycle?.channelId !== "private:role_pm:slot-7" ||
@@ -436,7 +441,7 @@ export function markdownLiveStackProofSummary(summary) {
     `| before slot_1 | ${summary.hostVotecountConvergence.beforeSlot1Count ?? ""} |`,
     `| API slot_1 | ${summary.hostVotecountConvergence.apiSlot1Count ?? ""} |`,
     `| after slot_1 | ${summary.hostVotecountConvergence.afterSlot1Count ?? ""} |`,
-    `| resync | ${summary.hostVotecountConvergence.resyncState ?? ""} |`,
+    `| reconnect | ${summary.hostVotecountConvergence.reconnectState ?? ""} (attempt ${summary.hostVotecountConvergence.reconnectAttempt ?? ""}) |`,
     `| fresh vote event | ${summary.hostVotecountConvergence.sawFreshVoteEvent} |`,
     `| proof | ${summary.hostVotecountConvergence.proof ?? ""} |`,
     "",

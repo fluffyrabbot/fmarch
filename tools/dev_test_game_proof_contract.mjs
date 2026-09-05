@@ -2836,15 +2836,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
     }),
     lane(
       playerLiveLagResyncLaneId,
-      "Repeated player live projection lag resyncs without reconnecting",
+      "Repeated player live projection lag ends each generation and reconnects",
       {
         roleUrl: hardening.liveProjectionLagResync?.roleUrl ?? null,
         configuredCapacity:
           hardening.liveProjectionLagResync?.configuredCapacity ?? null,
         configuredDeliveryDelayMs:
           hardening.liveProjectionLagResync?.configuredDeliveryDelayMs ?? null,
-        resyncRecoveryCount:
-          hardening.liveProjectionLagResync?.resyncRecoveryCount ?? null,
+        terminalResyncFrameCount:
+          hardening.liveProjectionLagResync?.terminalResyncFrameCount ?? null,
         recoveryEventIndices:
           hardening.liveProjectionLagResync?.recoveryEpisodes?.map(
             (episode) => episode.eventIndex,
@@ -2861,8 +2861,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.liveProjectionLagResync?.apiContinuationPostCounts ?? null,
         currentSubmitPostReceiptCount:
           hardening.liveProjectionLagResync?.currentSubmitPostReceiptCount ?? null,
-        reconnectEventCount:
-          hardening.liveProjectionLagResync?.reconnectEventCount ?? null,
+        recoveredReconnectCount:
+          hardening.liveProjectionLagResync?.recoveredReconnectCount ?? null,
         clientMetrics:
           hardening.liveProjectionLagResync?.clientMetrics ?? null,
         passed: liveProjectionLagResyncPassed(
@@ -9018,7 +9018,7 @@ function completedGameLane({ id, label, evidence }) {
 
 function liveProjectionLagResyncPassed(proof) {
   const episodes = proof?.recoveryEpisodes;
-  const resyncEvents = proof?.resyncEvents;
+  const terminalResyncEvents = proof?.terminalResyncEvents;
   const burstCommandIds = proof?.burstCommandIds;
   const continuationCommandIds = Array.isArray(episodes)
     ? episodes.map((episode) => episode.continuationCommandId)
@@ -9032,14 +9032,14 @@ function liveProjectionLagResyncPassed(proof) {
     proof.roleUrl.includes("/g/") &&
     proof.configuredCapacity === 1 &&
     proof.configuredDeliveryDelayMs > 0 &&
-    proof.resyncRecoveryCount >= 2 &&
-    Array.isArray(resyncEvents) &&
-    resyncEvents.length >= 2 &&
-    resyncEvents.every(
+    proof.terminalResyncFrameCount >= 2 &&
+    Array.isArray(terminalResyncEvents) &&
+    terminalResyncEvents.length === proof.terminalResyncFrameCount &&
+    terminalResyncEvents.every(
       (event) =>
         event?.kind === "resync-required" &&
-        event.fromSeq === 0 &&
-        event.state === "recovered",
+        event.fromEventSeq === 0 &&
+        event.state === "reconnecting",
     ) &&
     Array.isArray(episodes) &&
     episodes.length === 2 &&
@@ -9049,8 +9049,14 @@ function liveProjectionLagResyncPassed(proof) {
         Number.isInteger(episode.eventIndex) &&
         Array.isArray(episode.burstCommandIds) &&
         episode.burstCommandIds.length > 1 &&
-        episode.resyncEvent?.fromSeq === 0 &&
-        episode.resyncEvent?.state === "recovered" &&
+        episode.resyncEvent?.fromEventSeq === 0 &&
+        episode.resyncEvent?.state === "reconnecting" &&
+        episode.closeEvent?.kind === "close" &&
+        episode.reconnectEvent?.kind === "reconnect" &&
+        episode.reconnectEvent?.state === "recovered" &&
+        Number.isInteger(episode.reconnectEvent?.attempt) &&
+        episode.reconnectEvent.attempt >= 1 &&
+        episode.recoveredStatus?.state === "recovered" &&
         typeof episode.continuationCommandId === "string" &&
         episode.continuationDeltaKind === "ThreadPostsChanged" &&
         episode.projectedPostCount === 1 &&
@@ -9061,8 +9067,9 @@ function liveProjectionLagResyncPassed(proof) {
     proof.apiContinuationPostCounts.length === 2 &&
     proof.apiContinuationPostCounts.every((count) => count === 1) &&
     proof.currentSubmitPostReceiptCount === 1 &&
-    proof.reconnectEventCount === 0 &&
+    proof.recoveredReconnectCount >= proof.terminalResyncFrameCount &&
     liveProjectionResyncMetricsAreConsistent(proof.clientMetrics) &&
+    proof.clientMetrics.resyncFramesReceived === proof.terminalResyncFrameCount &&
     allCommandIds.length > 4 &&
     new Set(allCommandIds).size === allCommandIds.length &&
     Object.values(proof.burstPostCounts ?? {}).length === burstCommandIds.length &&

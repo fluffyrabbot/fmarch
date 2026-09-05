@@ -116,7 +116,7 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
-    "stale-player-complete-endgame-resync",
+    "stale-player-complete-endgame-reconnect",
     "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.completedGameDemoOnly, [

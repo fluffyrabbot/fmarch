@@ -199,7 +199,18 @@ function surfaceScenarios() {
       surfaceTestId: "admin-surface",
       requiredText: ["Host setup workflow", "Recovery"],
       requiredSelectors: ['[data-testid="admin-setup-create-game"]'],
-      thumbZones: roleById.get("admin")?.thumbZones ?? [],
+      // The SSR fixture exposes only CreateGame. Its fuller command variants
+      // are covered by the dedicated confirmation and hydrated-surface lanes.
+      thumbZones: [
+        {
+          testId: "admin-setup-action-zone",
+          zone: "admin-setup-actions",
+          targetSelectors: ['[data-testid="admin-command-trigger-create-game"]'],
+        },
+        ...(roleById.get("admin")?.thumbZones ?? []).filter(
+          (zone) => zone.testId === "admin-recovery-action-zone",
+        ),
+      ],
       expandBeforeChecks: ['[data-testid="admin-recovery-workflow"]'],
     },
     {
@@ -415,8 +426,13 @@ async function assertTouchTargets(page, { id, viewport }) {
       continue;
     }
     if (box.width < minTarget || box.height < minTarget) {
+      const descriptor = await handle.evaluate((node) => ({
+        testId: node.getAttribute("data-testid"),
+        tagName: node.tagName.toLowerCase(),
+        text: node.textContent?.trim().slice(0, 80) ?? "",
+      }));
       throw new Error(
-        `${id} ${viewport.name} touch target ${index} was ${box.width}x${box.height}, expected at least ${minTarget}`,
+        `${id} ${viewport.name} touch target ${index} (${descriptor.tagName} ${descriptor.testId ?? descriptor.text}) was ${box.width}x${box.height}, expected at least ${minTarget}`,
       );
     }
     targets.push({

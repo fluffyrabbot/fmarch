@@ -216,7 +216,7 @@ function dayFiveVoteProof({ game, baseRoleUrl }) {
     },
     projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
     projectionDayVoteOutcomes: [{ phaseId: "D04" }],
-    setupResyncFromSeq: 917,
+    setupAuthoritativeSourceSeq: 917,
     setupSnapshotCommandState: { phase: { phaseId: "D05" } },
     currentVote: { hasVote: "true", text: "Current vote: No lynch" },
     receiptCount: 1,
@@ -235,7 +235,7 @@ function dayFiveHostTransitionProof({ game, baseRoleUrl }) {
     sourceRoleUrl: `${baseRoleUrl}/host`,
     visitedRolePath: `/g/${game}/host`,
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 918,
+    setupAuthoritativeSourceSeq: 918,
     setupSnapshotHost: { phase: { id: "D05", state: "open" } },
     resolveProof: {
       id: "resolve",
@@ -259,7 +259,7 @@ function staleDayFiveVoteProof({ game, baseRoleUrl }) {
     surfaceTestId: "player-surface",
     clickedAction: "submit_vote:no_lynch",
     commandKind: "SubmitVote",
-    setupResyncFromSeq: 918,
+    setupAuthoritativeSourceSeq: 918,
     setupSnapshotCommandState: {
       phase: { phaseId: "D05" },
       voteTargets: [{ kind: "no_lynch" }],

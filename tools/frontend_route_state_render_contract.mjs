@@ -1208,7 +1208,7 @@ async function proveRenderedModeratorSlotLifecycleConfirmation(bundle) {
     'data-testid="critical-host-action-confirmation-message"',
     "slot lifecycle confirmation message",
   );
-  assertIncludes(html, "Modkill Slot 7", "slot lifecycle confirmation label");
+  assertIncludes(html, "Modkill slot-7", "slot lifecycle confirmation label");
   assertIncludes(
     html,
     "set lifecycle to modkilled",
@@ -2413,6 +2413,7 @@ function fixtureRouteInput({ token, game = "midsummer" }) {
   return {
     principalId: canonicalFixturePrincipalId(session.principalId),
     capabilities: session.resolvedCapabilities,
+    fixtureMode: true,
   };
 }
 

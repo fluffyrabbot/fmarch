@@ -45,7 +45,7 @@ Before any DayEvent reward is “real,” all of the following must hold:
 
 ## Background & Motivation
 
-### Current state (what fmarch already has)
+### Implementation baseline at decision time (historical)
 
 The spine is solid for mini/standard games and night-resolution culture:
 
@@ -57,11 +57,11 @@ The spine is solid for mini/standard games and night-resolution culture:
 | Host prompts from engine policy | Shipped | Inner `HostPromptIssued` inside `ResolutionApplied`; `ResolveHostPrompt`; pack `host_prompt_resolution_effects` (`PkKill`, `AdvanceRevote`, `AdvanceNight`, `SkipNextDay`, `AcknowledgeOnly`). Beloved Princess uses `beloved_princess_policy` → skip_next_day prompt — not a separate command |
 | Host lifecycle **mutators** | Backend co-GM gates shipped; delivery followup required | `SetSlotStatus` → `SlotStatusChanged`; tags; `ResolvePhase`; `ControlItaSession`; `PublishSpectatorPost`; etc. use `require_game_run` + create-time denylist. The host UI still exposes only deadline controls to cohosts and events still need centrally stamped principal/authority metadata. Structural acts stay `HostOf` |
 | Host console as exception queue | Interaction contract settled | [13](13-interaction-architecture.md); `frontend/.../host-task-workspace.mjs` `buildHostTaskWorkspaceViewModel` + `TASK_POSTURE` |
-| Setup workflow | Pack → Roster → Roles → Rules → Review | [13](13-interaction-architecture.md); `setup-workflow-model.mjs` stageIds |
+| Setup workflow | Pack → Roster → Roles → Rules → Review (pre-Program baseline) | Historical baseline for [13](13-interaction-architecture.md); the current six-stage contract is recorded below |
 | Scoped channels | Role PM, faction rooms, mason/neighbor, dead, spectator | [01](01-domain-model.md) |
 | Snapshot rebuild for platform marks/lifecycle | Shipped | `crates/commands` snapshot match: top-level `EffectsMarked`/`EffectsCleared`/`SlotStatusChanged` fold into `StateSnapshot`; **`ActionGranted` today only via `ResolutionApplied` → `domain::apply_events`** |
 
-What is **not** yet modeled:
+What was **not** yet modeled at that decision point:
 
 - Mid-day **game events** with independent clocks (raffles, mini-games, theme quests, public challenges).
 - **Rewards** as first-class effects that are theme-named but engine-real (vote-weight grants, item grants, marks, channel access, narrative).
@@ -589,22 +589,23 @@ flowchart LR
 
 | Actor | Surface | Primary objects |
 |---|---|---|
-| **Mash designer** | Setup + optional **Program** stage | Pack/profile pin, roster, custom roles, day program document, reward bindings, 12/12 deadlines, theme assets |
+| **Mash designer** | Six-stage setup `guided-stage-canvas`; **Program** content optional | Pack/profile pin, roster, custom roles, day program document, reward bindings, 12/12 deadlines, theme assets |
 | **Host runtime** | Exception queue ([13](13-interaction-architecture.md)) | Engine `host-prompts` + platform `day-event-*` tasks; **effect palette** (`ApplyEffectPlan`); phase controls as existing commands; secondary evidence drawers |
 | **Player** | Reading-first workspace ([13](13-interaction-architecture.md)) | Thread, votes, night actions, **event attention rail**, participation controls |
 | **System** | Scheduler evidence + resolve | Phase deadline evidence, DayEvent open/lock due evidence, auto-resolve with recorded seed |
 
-#### Setup workflow extension
+#### Setup workflow extension (implemented; historical transition)
 
-Current: Pack → Roster → Roles → Rules → Review.
+Pre-implementation baseline: Pack → Roster → Roles → Rules → Review.
 
-Proposed additive stage (default **after Rules**):
+The implemented `guided-stage-canvas` adds **Program** after Rules:
 
 ```
 Pack → Roster → Roles → Rules → Program → Review → Start
 ```
 
-- **Program** optional (empty = current mini behavior).
+- The **Program stage is always present**; attaching Program content is optional,
+  so an empty stage preserves mini-game behavior.
 - Review validates reward bindings against catalog + pack tables (unknown effect tags / grant ids fail readiness).
 
 #### HostTask expansion
@@ -828,7 +829,9 @@ Wire: extend `wire::Command` / TS generation per [04](04-wire-protocol.md). Clos
 
 ### Setup
 
-- Optional Program stage; empty default preserves mini workflow.
+- The six-stage `guided-stage-canvas` always includes Program after Rules.
+  Program attachment is optional, so an empty Program stage preserves mini-game
+  behavior without changing the workflow topology.
 
 ---
 
@@ -921,9 +924,10 @@ Covered above; minimum ship bar: projection rebuild includes day/grant paths; ho
 
 ---
 
-## Rollout Plan
+## Historical Rollout Plan
 
-Greenfield, solo-dev, local proof. Feature “on” = program attached + commands available.
+This implemented greenfield rollout used local proof. Feature “on” means a
+program is attached and its commands are available.
 
 | Stage | What ships | Rollback |
 |---|---|---|
@@ -932,7 +936,7 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
 | **2** | Pure game-platform model + persistent Mark/Clear/Grant concrete planner + ApplyEffectPlan | Disable command |
 | **3** | HostTask instance model proven on existing host prompts | Existing grouped prompt surface |
 | **4** | Minimal inline DayEvent definition + host open/lock + opt-in participation + atomic host decision/reward resolution | Host cancel + fiat |
-| **5** | AttachDayProgram compiler + optional setup Program stage | Inline single-event definition |
+| **5** | AttachDayProgram compiler + six-stage guided setup with optional Program content | Inline single-event definition |
 | **6** | Absolute schedules; then relative schedules after explicit phase-open instant | Host force open/lock |
 | **7** | L3 auto-resolve + recorded seed | Cancel + fiat |
 | **8** | Theme narrative, broader catalog, templates, and scale checks | N/A |
@@ -983,8 +987,10 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
 14. **Cohost = co-GM by default; optional denylist at game creation.**  
     Rationale: hosts invite trusted co-GMs, not least-trust helpers. Full game-run mutator parity (including DayEvent + ApplyEffectPlan) is the default; primary host may deny specific `CohostPermissionClass` values at create. Structural acts (grant/revoke cohost, edit denylist, transfer host) stay primary-host-only. Migrates today’s HostOf-only command gates toward `CohostOf` + policy check.
 
-15. **Setup gains optional Program stage; non-mash path unchanged.**  
-    Rationale: zero tax on minis.
+15. **Setup uses a six-stage `guided-stage-canvas`; Program content is optional
+    and the non-mash path is unchanged.**
+    Rationale: one stable workflow topology with zero required Program content
+    for minis.
 
 16. **ApplyEffectPlan is all-or-nothing; reveal-class accepts a target only and reads authoritative role/alignment state.**
     Rationale: no partial mechanical state, client-supplied contradictory reveals, or UI-only reveals.
@@ -997,7 +1003,7 @@ Greenfield, solo-dev, local proof. Feature “on” = program attached + command
 
 ---
 
-## PR Plan
+## Historical PR Plan
 
 Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs; not all are single-session merges. Local proof via narrowest lanes.
 
@@ -1011,7 +1017,7 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 | **PR5** | HostTask instance contract | API selector + wire + host workspace, first migrate host prompts | PR2a-followup | Stable task id separate from task kind; allowed commands come from effective permissions |
 | **PR6** | minimal DayEvent vertical | inline definition command, lifecycle, participation, projection, host/player API | PR3–5 | HostOpened + OptIn + HostDecision; `DayEventResolved` and concrete effects commit atomically |
 | **PR7** | host/player DayEvent surfaces | host task canvas, player attention and participation | PR6 | End-to-end usable slice before program authoring |
-| **PR8** | AttachDayProgram compiler + setup stage | program validation/materialization, setup workflow | PR6–7 | Program attachment creates immutable future DayEvent definitions; existing/open events never mutate |
+| **PR8** | AttachDayProgram compiler + Program workflow stage | program validation/materialization, six-stage guided setup workflow | PR6–7 | Program attachment creates immutable future DayEvent definitions; Program content remains optional and existing/open events never mutate |
 | **PR9** | explicit phase-open time + absolute scheduling | phase event/projection, atomic due commands | PR6 | `UnixSeconds`; no wall-clock folds |
 | **PR10** | relative scheduling | DayEvent schedule compiler | PR9 | Uses committed `phase_opened_at`, never envelope logical time |
 | **PR11** | L3 auto-resolve + recorded seed | pure platform policy module, sealed automation command, indexed work | PR6, PR9 | First-N + seeded-random policies; lock-captured seed; atomic effects + resolution |
@@ -1048,8 +1054,9 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 6. **Custom roles**  
    **Default:** full pack validation always; no freeform role without IR entry.
 
-7. **Seat count ≥ 30 forcing Program stage**  
-   **Default:** no hard gate.
+7. **Seat count ≥ 30 forcing Program attachment or content**
+   **Default:** no hard gate. The Program stage is always present and may remain
+   empty at any seat count.
 
 8. **Synthetic source slot string for EffectsMarked.actor**  
    **Default:** reserved `"host"` string in schema; never a playable seat id. Confirm at implementation if pack validation rejects unknown actors.
@@ -1071,7 +1078,8 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 - `crates/domain/src/pack.rs` — `HostPromptResolutionEffect`, `GrantKind` / `GrantSpec`  
 - `crates/caps/src/lib.rs` — HostOf subsumes CohostOf; cohost does not satisfy HostOf  
 - `frontend/.../host-task-workspace.mjs` — exception queue + TASK_POSTURE  
-- `frontend/.../setup-workflow-model.mjs` — Pack→Roster→Roles→Rules→Review  
+- `frontend/.../setup-workflow-model.mjs` — six-stage `guided-stage-canvas`:
+  Pack→Roster→Roles→Rules→Program→Review
 - `packs/mafiascum/` — culture pack shape for mash role density  
 
 ---
@@ -1134,12 +1142,12 @@ It continues to consume slot state, submissions, and folded effects — includin
 | `DayProgramAttached` | 1 | `program_id`, `content_hash`, `theme_ref?` | |
 | `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref`, compiled narrative templates | Materialize immutable definitions and exact narrative content/hash snapshots from program |
 | `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: UnixSeconds` | |
-| `DayEventLocked` | 1 | `event_id`, `locked_at`, `auto_seed?` | Seed is present only when the resolution policy requires it |
+| `DayEventLocked` | 1 | `event_id`, `locked_at`, `auto_seed?` | Seed is present only when the resolution policy requires it; every serialized seed is canonical unsigned-decimal text, never a JSON/CBOR integer |
 | `DayEventCancelled` | 1 | `event_id`, `reason` | |
 | `DayEventOpenDue` / `DayEventLockDue` | 1 | `event_id`, `due_at`, `observed_at`, `source` | Inert evidence |
 | `DayEventParticipationSubmitted` | 1 | `event_id`, `actor_slot`, `payload`, `phase_id` | |
 | `DayEventParticipationWithdrawn` | 1 | `event_id`, `actor_slot` | Only while Open |
-| `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `reward_keys_applied`, `evidence` | Evidence records host/auto source, policy, seed, and canonical participants. Effects are **sibling events in same txn**, not only embedded opaque blobs |
+| `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `reward_keys_applied`, `evidence` | Evidence records host/auto source, policy, canonical unsigned-decimal seed text when required, and canonical participants. Effects are **sibling events in same txn**, not only embedded opaque blobs |
 | `DayEventNarrativePublished` | 1 | `event_id`, `lifecycle`, `receipt_id`, `post_id` | Service-owned retry receipt; atomically paired with the host-authored `PostSubmitted`; deterministic receipt prevents duplicate publication |
 
 Plus existing kinds used by adapters: `EffectsMarked`, `EffectsCleared`, `SlotStatusChanged`, platform grant fact, channel membership, host-authored `PostSubmitted` (host-notice path; same kind as spectator posts, not player `SubmitPost`).

@@ -168,7 +168,7 @@ export function assertStaleNightFourActionRecoveryProofCase({
     proof.surfaceTestId !== "player-surface" ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
-    proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== scenario.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== scenario.setupPhaseId ||
     proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !==
       scenario.targetSlot ||
@@ -246,7 +246,7 @@ export function liveStaleD02VoteTransitionRecoveryProof({
     status: recovery?.status ?? "passed",
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
-    setupResyncFromSeq: scenario.setupResyncFromSeq,
+    setupAuthoritativeSourceSeq: scenario.setupAuthoritativeSourceSeq,
     setupSnapshotCommandState: setup?.commandState,
     command: {
       game: expectedGame,
@@ -434,9 +434,9 @@ function assertPhaseTransitionPlayerObservationProof({
       hostPhaseTransitionSurface.sourcePlayerRoleUrl ||
     !playerObservationProof.visitedRolePath?.includes("/g/") ||
     playerObservationProof.surfaceTestId !== "player-surface" ||
-    playerObservationProof.resyncFromSeq !== 802 ||
-    !playerObservationProof.resyncKeys?.includes("commandState") ||
-    playerObservationProof.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    playerObservationProof.authoritativeSourceSeq !== 802 ||
+    !playerObservationProof.reconnectRefreshKeys?.includes("commandState") ||
+    playerObservationProof.reconnectedSnapshotCommandState?.phase?.phaseId !== "N02" ||
     playerObservationProof.projectionCommandState?.phase?.phaseId !== "N02" ||
     !String(playerObservationProof.projectionCommandState?.boundary ?? "").includes(
       "AdvancePhase",

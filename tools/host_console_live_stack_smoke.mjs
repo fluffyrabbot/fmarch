@@ -2021,7 +2021,7 @@ async function proveAdditionalRoomDenial({
   }
   const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 2,
+      v: 3,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2671,7 +2671,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
 
   const postAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 2,
+      v: 3,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2747,7 +2747,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   }
   const revokedPostAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 2,
+      v: 3,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2870,7 +2870,7 @@ async function proveDeadChatDenial({
   }
   const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 2,
+      v: 3,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -3284,7 +3284,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     `${frontendBaseUrl}/commands`,
     {
       data: {
-        v: 2,
+        v: 3,
         id: commandEnvelopeId++,
         body: {
           kind: "Command",
@@ -3758,9 +3758,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       );
     });
     await raceVoteSession.page.waitForFunction(() =>
-      typeof window.__fmarchTriggerPlayerResync === "function",
+      typeof window.__fmarchReconnectPlayerLiveProjectionNow === "function",
     );
-    await raceVoteSession.page.evaluate(() => window.__fmarchTriggerPlayerResync(0));
+    await raceVoteSession.page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
     await raceVoteSession.page.waitForFunction(() =>
       window.__fmarchPlayerProjection?.votecount?.some(
         (row) => row.target === "slot_1" && row.count === 3,
@@ -3788,7 +3788,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         () => window.__fmarchPlayerProjection,
       ),
       proof:
-        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the stale race page recovered to authoritative votecount 3 through the player resync hook.",
+        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the stale race page ended its live generation, reconnected, and recovered authoritative votecount 3.",
     };
 
     playerStep = "duplicate-vote-retry";
@@ -3902,7 +3902,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       state: await liveStatusBadge.getAttribute("data-state"),
       message: await liveStatusBadge.innerText(),
     };
-    const reconnectPostBody = `Player reconnect resync proof ${game}`;
+    const reconnectPostBody = `Player reconnect recovery proof ${game}`;
     playerStep = "send-disconnected-thread-post";
     const reconnectCommand = await sendCommand("player-seed", {
       SubmitPost: {
@@ -3920,9 +3920,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       reconnectCommand,
       apiThreadPost,
     };
-    const playerResyncPlan = await page.evaluate(() => ({
+    const playerReconnectPlan = await page.evaluate(() => ({
       coldLoadEndpoints: window.__fmarchPlayerColdLoadEndpoints,
-      resyncKeys: window.__fmarchPlayerResyncKeys,
+      reconnectRefreshKeys: window.__fmarchPlayerReconnectRefreshKeys,
     }));
     let browserThreadPageBeforeReconnect;
     try {
@@ -3957,13 +3957,13 @@ async function drivePlayerBrowser(frontendBaseUrl) {
           }
         },
         {
-          endpoint: playerResyncPlan.coldLoadEndpoints.threadEndpoint,
+          endpoint: playerReconnectPlan.coldLoadEndpoints.threadEndpoint,
           expectedBody: reconnectPostBody,
         },
       );
     } catch (error) {
       browserThreadPageBeforeReconnect = {
-        endpoint: playerResyncPlan.coldLoadEndpoints.threadEndpoint,
+        endpoint: playerReconnectPlan.coldLoadEndpoints.threadEndpoint,
         ok: false,
         status: null,
         evaluateError: error.message,
@@ -3976,7 +3976,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       reconnectCommand,
       apiThreadPost,
       browserThreadPageBeforeReconnect,
-      playerResyncPlan,
+      playerReconnectPlan,
     };
     if (browserThreadPageBeforeReconnect.containsExpectedPost !== true) {
       throw new Error(
@@ -4036,7 +4036,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       reconnectAttempt: 1,
       apiThreadPost,
       browserThreadPageBeforeReconnect,
-      playerResyncPlan,
+      playerReconnectPlan,
       recoveredStatus: await page.evaluate(
         () => window.__fmarchLiveProjectionStatus,
       ),
@@ -5774,8 +5774,7 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
     );
   }
 
-  const resyncFromSeq = 9001;
-  const resyncEvent = await triggerHostResync(page, resyncFromSeq, { expectedCount });
+  const reconnectEvent = await reconnectHostProjection(page, { expectedCount });
   await page.waitForFunction(
     (expectedCount) =>
       window.__fmarchHostVotecountProjection?.some(
@@ -5809,11 +5808,10 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
     apiVoteCount,
     before,
     after,
-    resyncFromSeq,
-    resyncEvent,
+    reconnectEvent,
     sawFreshVoteEvent,
     proof:
-      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly resynced and its votecount projection converged to the API votecount for slot_1. The proof no longer depends on the host socket retaining transient intermediate count events.",
+      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly ended its live generation, reminted a ticket, accepted a new exact Hello, refreshed once, and converged its votecount projection to the API votecount for slot_1. The proof no longer depends on retaining transient intermediate socket events.",
   };
 }
 
@@ -5840,29 +5838,34 @@ function voteCountForProjection(projection, slotId) {
   return row?.count ?? null;
 }
 
-async function triggerHostResync(page, fromSeq, { expectedCount = 1 } = {}) {
-  await page.evaluate(async (seq) => window.__fmarchTriggerHostResync(seq), fromSeq);
+async function reconnectHostProjection(page, { expectedCount = 1 } = {}) {
+  const eventStart = await page.evaluate(
+    () => (window.__fmarchHostLiveProjectionEvents ?? []).length,
+  );
+  await page.evaluate(async () => window.__fmarchReconnectHostLiveProjectionNow());
   await page.waitForFunction(
-    (seq) => {
+    (start) => {
       const events = window.__fmarchHostLiveProjectionEvents ?? [];
-      return events.some(
+      return events.slice(start).some(
         (event) =>
-          event?.kind === "resync-required" &&
-          event.fromSeq === seq &&
+          event?.kind === "reconnect" &&
+          Number.isInteger(event.attempt) &&
+          event.attempt >= 1 &&
           event.state === "recovered",
       );
     },
-    fromSeq,
+    eventStart,
   );
-  const resyncEvent = await page.evaluate((seq) => {
+  const reconnectEvent = await page.evaluate((start) => {
     const events = window.__fmarchHostLiveProjectionEvents ?? [];
-    return events.find(
+    return events.slice(start).find(
       (event) =>
-        event?.kind === "resync-required" &&
-        event.fromSeq === seq &&
+        event?.kind === "reconnect" &&
+        Number.isInteger(event.attempt) &&
+        event.attempt >= 1 &&
         event.state === "recovered",
     );
-  }, fromSeq);
+  }, eventStart);
   await page.waitForFunction(
     (count) =>
       window.__fmarchHostVotecountProjection?.some(
@@ -5870,7 +5873,7 @@ async function triggerHostResync(page, fromSeq, { expectedCount = 1 } = {}) {
       ),
     expectedCount,
   );
-  return resyncEvent;
+  return reconnectEvent;
 }
 
 async function waitForHostConsoleDeadlineDelta(page, deadline) {

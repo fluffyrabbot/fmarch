@@ -257,7 +257,7 @@ test("phase progression shares empty Night 3 and Day 4 survivor assertions", () 
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "survivor role opened D04",
-    expectedResyncFromSeq: 911,
+    expectedAuthoritativeSourceSeq: 911,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${game}/player-command-state?slot_id=slot-5`,
     expectedNotificationsEndpoint:

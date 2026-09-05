@@ -240,7 +240,16 @@ export async function driveDayEventRoomBrowser({
     ),
     outgoingPage.locator('[data-action="submit_post"]').click(),
   ]);
-  await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+  try {
+    await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
+  } catch {
+    throw new Error(`room post did not appear: ${JSON.stringify(await outgoingPage.evaluate(() => ({
+      projection: window.__fmarchPlayerProjection,
+      commands: window.__fmarchPlayerCommandStatus,
+      events: window.__fmarchLiveProjectionEvents,
+      body: document.body.innerText,
+    })))}`);
+  }
 
   await Promise.all([
     outgoingPage.waitForResponse(
@@ -252,9 +261,12 @@ export async function driveDayEventRoomBrowser({
       .locator(`[data-action="withdraw_day_event:${fixture.eventId}"]`)
       .click(),
   ]);
-  await outgoingPage.getByTestId("player-composer-read-only").waitFor({
-    state: "visible",
-  });
+  await outgoingPage.waitForFunction(() =>
+    window.__fmarchLiveProjectionEvents?.some((event) => event.kind === "authorization-lost"),
+  );
+  if (await outgoingPage.getByTestId("player-composer").count()) {
+    throw new Error("withdrawn DayEvent member retained the private composer");
+  }
   if (await outgoingPage.getByText(secret, { exact: false }).count()) {
     throw new Error("withdrawn DayEvent member retained private history in the DOM");
   }
@@ -262,6 +274,9 @@ export async function driveDayEventRoomBrowser({
     throw new Error("withdrawn DayEvent room remained in channel discovery");
   }
 
+  // The retired room has no authority to offer commands. Rejoin from the
+  // public game surface, whose slot authority remains current.
+  await outgoingPage.goto(`${frontendBaseUrl}/g/${fixture.game}`, { waitUntil: "networkidle" });
   await Promise.all([
     outgoingPage.waitForResponse(
       (response) =>
@@ -294,9 +309,6 @@ export async function driveDayEventRoomBrowser({
       outgoing_persona_id: outgoingPersonaId,
       incoming_principal_id: fixture.incoming.principalId,
     },
-  });
-  await outgoingPage.evaluate(async () => {
-    await window.__fmarchTriggerPlayerResync?.();
   });
   await outgoingPage.waitForFunction(
     (channelTestId) =>
@@ -331,7 +343,7 @@ export async function driveDayEventRoomBrowser({
     },
   });
   await incomingPage.evaluate(async () => {
-    await window.__fmarchTriggerPlayerResync?.();
+    await window.__fmarchReconnectPlayerLiveProjectionNow?.();
   });
   await incomingPage.waitForFunction(
     (testId) =>

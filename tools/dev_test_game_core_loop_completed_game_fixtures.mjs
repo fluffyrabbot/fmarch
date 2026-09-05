@@ -43,7 +43,7 @@ export function completedGameEndgameSurfaceFixture({
     transition: completedGameProofReadinessTransition(),
     hostCompleteProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 920,
+      setupAuthoritativeSourceSeq: 920,
       setupPhaseId: "N05",
       setupPhaseState: "open",
       setupSnapshotHost: {
@@ -109,7 +109,7 @@ export function completedGameEndgameSurfaceFixture({
       privateReceipt: false,
       boundary:
         "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
-      resyncFromSeq: 921,
+      authoritativeSourceSeq: 921,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
     ...completedPlayerReloadProofFixtures({
@@ -141,7 +141,7 @@ export function completedGameEndgameSurfaceProofFieldsFixture({
   actionPlayerCompletedProof = {
     id: "action-player-complete",
     projectionCommandState: { gameCompleted: true },
-    resyncSnapshotCommandState: { gameCompleted: true },
+    reconnectedSnapshotCommandState: { gameCompleted: true },
   },
 } = {}) {
   return {
@@ -372,12 +372,12 @@ export function completedHardeningProofFixture(
       coldLoadEndpointsAfterReject: {
         endgameSummaryEndpoint: `/games/${game}-stale-player/endgame-summary`,
       },
-      resyncKeysAfterReject: ["thread", "endgameSummary", "commandState"],
+      reconnectRefreshKeysAfterReject: ["thread", "endgameSummary", "commandState"],
       endgameSummaryAfterReject: completedPlayerEndgameSummaryFixture(),
       endgameSurfaceAfterReject: completedPlayerEndgameSurfaceFixture(),
       apiEndgameSummaryAfterReject: completedPlayerEndgameApiSummaryFixture(),
-      manualEndgameResync: {
-        fromSeq: 0,
+      manualEndgameReconnect: {
+        reconnectEvent: { kind: "reconnect", attempt: 1, state: "recovered" },
         snapshotEndgameSummary: completedPlayerEndgameSummaryFixture(),
         surface: completedPlayerEndgameSurfaceFixture(),
       },
@@ -550,7 +550,7 @@ export function dayFiveNoLynchResolutionSurfaceFixture({
       },
       projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
       projectionDayVoteOutcomes: dayFiveOutcomes.slice(0, 3),
-      setupResyncFromSeq: 917,
+      setupAuthoritativeSourceSeq: 917,
       setupSnapshotCommandState: {
         phase: { phaseId: "D05" },
       },
@@ -568,7 +568,7 @@ export function dayFiveNoLynchResolutionSurfaceFixture({
     },
     hostTransitionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 918,
+      setupAuthoritativeSourceSeq: 918,
       setupPhaseId: "D05",
       setupPhaseState: "open",
       resolveProof: {
@@ -621,7 +621,7 @@ export function dayFiveNoLynchResolutionSurfaceFixture({
       privateReceipt: false,
       boundary:
         "Seeded browser action player observed host AdvancePhase from Day 5 no-lynch into open Night 5 with no legal action.",
-      resyncFromSeq: 920,
+      authoritativeSourceSeq: 920,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
     staleDayFiveVoteRecoveryProof: {
@@ -632,7 +632,7 @@ export function dayFiveNoLynchResolutionSurfaceFixture({
       clickedThroughFromRoleUrl: true,
       clickedAction: "submit_vote:no_lynch",
       commandKind: "SubmitVote",
-      setupResyncFromSeq: 918,
+      setupAuthoritativeSourceSeq: 918,
       setupSnapshotCommandState: {
         phase: { phaseId: "D05" },
         voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
@@ -737,9 +737,9 @@ export function completedHostReloadProofFixture({
     visitedRolePath,
     surfaceTestId: "host-console-surface",
     clickedThroughFromRoleUrl: true,
-    resyncFromSeq: 921,
-    initialResyncSnapshotHost: snapshot.projection,
-    reloadedResyncSnapshotHost: snapshot.projection,
+    authoritativeSourceSeq: 921,
+    initialReconnectedSnapshotHost: snapshot.projection,
+    reloadedReconnectedSnapshotHost: snapshot.projection,
     initialSnapshot: snapshot,
     reloadedSnapshot: snapshot,
     rawInviteTokensVisible: false,
@@ -792,7 +792,7 @@ export function completedHostStaleCommandProofFixture({
       ok: false,
       status: 409,
       body: {
-        v: 2,
+        v: 3,
         id: commandId,
         body: {
           kind: "Reject",
@@ -804,10 +804,10 @@ export function completedHostStaleCommandProofFixture({
         },
       },
     },
-    setupResyncFromSeq: 921,
-    setupResyncSnapshotHost: snapshot.projection,
-    recoveryResyncFromSeq: 921,
-    recoveryResyncSnapshotHost: snapshot.projection,
+    setupAuthoritativeSourceSeq: 921,
+    setupReconnectedSnapshotHost: snapshot.projection,
+    recoveryAuthoritativeSourceSeq: 921,
+    recoveryReconnectedSnapshotHost: snapshot.projection,
     recoverySnapshot: snapshot,
     rawInviteTokensVisible: false,
     releaseReady: false,
@@ -916,9 +916,9 @@ export function completedPlayerReloadProofFixture({
     visitedRolePath,
     surfaceTestId: "player-surface",
     clickedThroughFromRoleUrl: true,
-    resyncFromSeq: 921,
-    initialResyncSnapshotCommandState: snapshot.commandState,
-    reloadedResyncSnapshotCommandState: snapshot.commandState,
+    authoritativeSourceSeq: 921,
+    initialReconnectedSnapshotCommandState: snapshot.commandState,
+    reloadedReconnectedSnapshotCommandState: snapshot.commandState,
     initialSnapshot: snapshot,
     reloadedSnapshot: snapshot,
     rawInviteTokensVisible: false,
@@ -953,7 +953,7 @@ export function completedDeadPlayerStaleVoteRecoveryProofFixture({
       ok: false,
       status: 409,
       body: {
-        v: 2,
+        v: 3,
         id: "completed-dead-player-stale-vote",
         body: {
           kind: "Reject",
@@ -965,10 +965,10 @@ export function completedDeadPlayerStaleVoteRecoveryProofFixture({
         },
       },
     },
-    setupResyncFromSeq: 921,
-    setupResyncSnapshotCommandState: reloadSnapshot.commandState,
-    recoveryResyncFromSeq: 921,
-    recoveryResyncSnapshotCommandState: reloadSnapshot.commandState,
+    setupAuthoritativeSourceSeq: 921,
+    setupReconnectedSnapshotCommandState: reloadSnapshot.commandState,
+    recoveryAuthoritativeSourceSeq: 921,
+    recoveryReconnectedSnapshotCommandState: reloadSnapshot.commandState,
     recoverySnapshot: {
       ...reloadSnapshot,
       commandState: {
@@ -1069,7 +1069,7 @@ export function staleCompletedPlayerCommandProofFixture({
     clickedThroughFromRoleUrl: true,
     clickedAction,
     commandKind,
-    setupResyncFromSeq: 918,
+    setupAuthoritativeSourceSeq: 918,
     setupSnapshotCommandState: {
       phase: { phaseId: "D05" },
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],

@@ -20,7 +20,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
     privateReceiptStatus: "day_vote",
     privateReceiptPhaseId: "D02",
     boundaryText: "target role remained dead",
-    resyncFromSeq: 903,
+    authoritativeSourceSeq: 903,
     errorMessage:
       "core-loop admin proof missing target post-day-vote advance surface",
   }),
@@ -38,7 +38,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
     privateReceiptStatus: "day_vote",
     privateReceiptPhaseId: "D02",
     boundaryText: "normal role stayed alive",
-    resyncFromSeq: 903,
+    authoritativeSourceSeq: 903,
     errorMessage:
       "core-loop admin proof missing normal post-day-vote advance surface",
   }),
@@ -140,9 +140,9 @@ function assertPostDayVoteAdvanceSurfaceProof({
     !String(proof.projectionCommandState?.boundary ?? "").includes(
       surfaceCase.boundaryText,
     ) ||
-    proof.resyncFromSeq !== surfaceCase.resyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== surfaceCase.expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== surfaceCase.phaseId ||
+    proof.authoritativeSourceSeq !== surfaceCase.authoritativeSourceSeq ||
+    proof.reconnectedSnapshotCommandState?.actorSlot !== surfaceCase.expectedSlot ||
+    proof.reconnectedSnapshotCommandState?.phase?.phaseId !== surfaceCase.phaseId ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       `/api/gameplay/games/${expectedGame}/notifications` ||
     proof.coldLoadEndpoints?.commandStateEndpoint !==
@@ -167,7 +167,7 @@ function assertPostDayVoteAdvanceSurfaceProof({
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
       proof.projectionNotifications?.[0]?.status !==
         surfaceCase.privateReceiptStatus ||
-      proof.resyncSnapshotNotifications?.[0]?.status !==
+      proof.reconnectedSnapshotNotifications?.[0]?.status !==
         surfaceCase.privateReceiptStatus)
   ) {
     throwPostDayVoteAdvanceAssertionError({
@@ -180,7 +180,7 @@ function assertPostDayVoteAdvanceSurfaceProof({
     !surfaceCase.privateReceipt &&
     (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
       proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.reconnectedSnapshotNotifications?.length !== 0 ||
       proof.privateNotice !== undefined)
   ) {
     throwPostDayVoteAdvanceAssertionError({

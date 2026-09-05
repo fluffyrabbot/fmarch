@@ -241,6 +241,9 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
         status: "passed",
         connected: capacityOverloadBudgets.websocketConnections,
         resyncConnections: capacityOverloadBudgets.websocketConnections,
+        resyncFrames: capacityOverloadBudgets.websocketConnections,
+        closedConnections: capacityOverloadBudgets.websocketConnections,
+        recoveredConnections: capacityOverloadBudgets.websocketConnections,
         rejectedHandshakeStatus: 503,
         retryAfter: "1",
       },
@@ -259,6 +262,12 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
   };
 
   assert.equal(assertCapacityOverloadReport(report), report);
+  for (const field of ["resyncFrames", "closedConnections", "recoveredConnections"]) {
+    const incomplete = structuredClone(report);
+    incomplete.scenarios.slowWebsocketConsumers[field] = 0;
+    assert.throws(() => assertCapacityOverloadReport(incomplete), /terminal recovery evidence missing/);
+  }
+
   for (const metric of ["p50Ms", "maxMs"]) {
     const drifted = structuredClone(report);
     drifted.scenarios.anonymousCrawler.searchByFilter.all[metric] =

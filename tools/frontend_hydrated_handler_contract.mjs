@@ -264,6 +264,7 @@ async function provePlayerHandlerPath({
     votecount: [],
     notifications: [],
     investigationResults: [],
+    commandState: data.commandState,
   });
   const optimisticStatus = playerCommandPendingStatus(action);
   let commandReceipts = recordPlayerCommandReceipt([], action, optimisticStatus);
@@ -405,10 +406,27 @@ async function proveModeratorHandlerPath({ data, event, outcome }) {
   const windowRef = {};
   const projectionStore = fakeProjectionStore({
     host: {
+      authority: {
+        principalId: data.session.principalId,
+        capabilityKind: data.access.capability.kind,
+        allowedClasses: [],
+        deniedClasses: [],
+      },
+      completed: false,
       phase: { id: "D01" },
-      replacement: null,
+      replacement: event.payload.kind === "modkill_slot"
+        ? {
+            slotId: event.payload.slotId,
+            lifecycleLabel: "Alive",
+            historyLabel: `Slot history remains attached to ${event.payload.slotId}`,
+          }
+        : null,
+      tasks: [],
+      dayEvents: [],
+      dayEventScheduler: null,
     },
     votecount: [],
+    dayVoteOutcomes: [],
     hostPrompts: [
       {
         id: "D01:skip_next_day:slot_1",
@@ -509,11 +527,33 @@ function adminData() {
 
 function playerData({ channel }) {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
     player: { principalId: "player_mira", slotId: "slot-7" },
+    channel: { channel, allowed: true },
+    commandState: {
+      game: "midsummer",
+      actorSlot: "slot-7",
+      actorStatus: "alive",
+      gameCompleted: false,
+      phase: { locked: false },
+      voteTargets: [{ kind: "slot", slotId: "slot-2" }],
+      currentVote: null,
+      actions: [],
+      currentActions: [],
+      dayEvents: [],
+    },
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
+      voteCommands: [
+        {
+          action: "submit_vote",
+          commandKind: "submit_vote",
+          label: "Vote Slot 2",
+          voteTarget: { Slot: "slot-2" },
+        },
+      ],
     },
     threadPager: { pageSize: 50, channel },
   };
@@ -521,8 +561,13 @@ function playerData({ channel }) {
 
 function moderatorData() {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
     session: { principalId: "host_h" },
+    access: {
+      allowed: true,
+      capability: { kind: "HostOf", game: "midsummer" },
+    },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/api/gameplay/games/midsummer/votecount",
@@ -612,6 +657,9 @@ function hostConsoleModkilledProjectionState() {
 function fakeProjectionStore(snapshot) {
   return {
     refreshed: [],
+    isReady() {
+      return true;
+    },
     applyPayload(key, payload) {
       snapshot = {
         ...snapshot,

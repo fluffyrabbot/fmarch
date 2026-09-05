@@ -652,7 +652,7 @@ export function completedActionPlayerSurfaceProofArgs({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "completed game endgame state",
-    expectedResyncFromSeq: 921,
+    expectedAuthoritativeSourceSeq: 921,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=slot-7`,
     expectedNotificationsEndpoint:
@@ -750,7 +750,7 @@ export function assertCompletedGameEndgameSurfaceAssertionCases({
     completedGameEndgameSurface.actionPlayerCompletedProof
       ?.projectionCommandState?.gameCompleted !== true ||
     completedGameEndgameSurface.actionPlayerCompletedProof
-      ?.resyncSnapshotCommandState?.gameCompleted !== true
+      ?.reconnectedSnapshotCommandState?.gameCompleted !== true
   ) {
     throwCompletedScenarioAssertionError({
       message: "core-loop admin proof missing completed player command state",

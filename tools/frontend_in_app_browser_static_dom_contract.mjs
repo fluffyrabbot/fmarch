@@ -469,15 +469,41 @@ function summarizeTarget(target) {
 }
 
 function exactlyOneSelector(root, selector, { label }) {
-  const parsed = parseSimpleSelector(selector);
-  const matches = [...walk(root)].filter((node) => {
-    if (parsed.tag !== null && node.tag !== parsed.tag) {
-      return false;
-    }
-    return node.attrs[parsed.attr] === parsed.value;
-  });
+  const parsed = selector.trim().split(/\s+/u).map(parseSimpleSelector);
+  const matches = [...walk(root)].filter((node) =>
+    matchesDescendantSelector(node, parsed, root)
+  );
   assert.equal(matches.length, 1, `${label} expected one ${selector}, found ${matches.length}`);
   return matches[0];
+}
+
+function matchesDescendantSelector(node, selectors, root) {
+  let candidate = node;
+  if (!matchesSimpleSelector(candidate, selectors.at(-1))) {
+    return false;
+  }
+
+  for (let index = selectors.length - 2; index >= 0; index -= 1) {
+    candidate = candidate.parent;
+    while (
+      candidate !== null &&
+      candidate !== root.parent &&
+      !matchesSimpleSelector(candidate, selectors[index])
+    ) {
+      candidate = candidate.parent;
+    }
+    if (candidate === null || candidate === root.parent) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function matchesSimpleSelector(node, selector) {
+  return (
+    (selector.tag === null || node.tag === selector.tag) &&
+    node.attrs[selector.attr] === selector.value
+  );
 }
 
 function exactlyOne(root, attr, value, label) {

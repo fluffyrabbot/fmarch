@@ -35,7 +35,7 @@ const postDayThreeResolutionSurfaceCaseDefinition = Object.freeze({
   actionPlayerPrivacyScenarioId: "d03-action-player-privacy",
   hostAdvanceCase: Object.freeze({
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 908,
+    setupAuthoritativeSourceSeq: 908,
     setupPhaseId: "D03",
     setupPhaseState: "locked",
     advanceCase: Object.freeze(
@@ -60,7 +60,7 @@ const postDayThreeResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "observed host AdvancePhase",
-    expectedResyncFromSeq: 909,
+    expectedAuthoritativeSourceSeq: 909,
     expectedVoteButtonCount: 0,
     expectedVoteTargetCount: 0,
   }),
@@ -152,7 +152,7 @@ function assertPostDayThreeHostAdvanceProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== hostCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== hostCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== hostCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== hostCase.setupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !== hostCase.setupPhaseState
   ) {
@@ -196,7 +196,7 @@ function assertActionPlayerNightThreeProof({
     expectedPrivateCount: playerCase.expectedPrivateCount,
     expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
     expectedBoundaryText: playerCase.expectedBoundaryText,
-    expectedResyncFromSeq: playerCase.expectedResyncFromSeq,
+    expectedAuthoritativeSourceSeq: playerCase.expectedAuthoritativeSourceSeq,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
     expectedNotificationsEndpoint:

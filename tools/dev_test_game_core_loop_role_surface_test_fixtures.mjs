@@ -128,7 +128,7 @@ export function hostPhaseTransitionSurfaceFixture({
       sourceRoleUrl: hostRoleUrl,
       visitedRolePath: hostRolePath,
       surfaceTestId: "host-console-surface",
-      setupResyncFromSeq: 801,
+      setupAuthoritativeSourceSeq: 801,
       setupSnapshotHost: {
         phase: {
           id: "D02",
@@ -179,8 +179,8 @@ export function hostPhaseTransitionSurfaceFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
       surfaceTestId: "player-surface",
-      resyncFromSeq: 802,
-      resyncKeys: [
+      authoritativeSourceSeq: 802,
+      reconnectRefreshKeys: [
         "thread",
         "votecount",
         "dayVoteOutcomes",
@@ -194,7 +194,7 @@ export function hostPhaseTransitionSurfaceFixture({
         visitedRolePath: `/g/${game}`,
         clickedAction: "submit_vote",
         commandKind: "SubmitVote",
-        setupResyncFromSeq: 801,
+        setupAuthoritativeSourceSeq: 801,
         setupSnapshotCommandState: {
           phase: {
             phaseId: "D02",
@@ -240,7 +240,7 @@ export function hostPhaseTransitionSurfaceFixture({
             phaseId: "N02",
           },
           boundary:
-            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+            "Seeded browser PhaseLocked recovery and player reconnect observed host AdvancePhase into Night 2.",
         },
         checkpointReceiptState: "reject:PhaseLocked",
         checkpointPhaseIdAfterReject: "N02",
@@ -304,7 +304,7 @@ export function hostPhaseTransitionSurfaceFixture({
             phaseId: "N02",
           },
           boundary:
-            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+            "Seeded browser PhaseLocked recovery and player reconnect observed host AdvancePhase into Night 2.",
         },
         checkpointReceiptState: "reject:PhaseLocked",
         checkpointPhaseIdAfterReject: "N02",
@@ -325,7 +325,7 @@ export function hostPhaseTransitionSurfaceFixture({
         sameVisitedRolePath: true,
         rawInviteTokensVisible: false,
       },
-      resyncSnapshotCommandState: {
+      reconnectedSnapshotCommandState: {
         phase: {
           phaseId: "N02",
         },
@@ -335,7 +335,7 @@ export function hostPhaseTransitionSurfaceFixture({
           phaseId: "N02",
         },
         boundary:
-          "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+          "Seeded browser PhaseLocked recovery and player reconnect observed host AdvancePhase into Night 2.",
       },
       checkpointPhaseId: "N02",
       checkpointPhaseState: "open",
@@ -617,8 +617,8 @@ export function privateReceiptProofFixture({ game, scenario }) {
       actions: [],
       boundary: scenario.boundaryText,
     },
-    resyncFromSeq: scenario.resyncFromSeq,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: scenario.authoritativeSourceSeq,
+    reconnectedSnapshotCommandState: {
       actorSlot: scenario.expectedSlot,
       phase: { phaseId: scenario.phaseId },
     },
@@ -640,7 +640,7 @@ export function privateReceiptProofFixture({ game, scenario }) {
       projectionNotifications: [
         { effect: "player_killed", status: scenario.privateReceiptStatus },
       ],
-      resyncSnapshotNotifications: [
+      reconnectedSnapshotNotifications: [
         { effect: "player_killed", status: scenario.privateReceiptStatus },
       ],
     };
@@ -650,7 +650,7 @@ export function privateReceiptProofFixture({ game, scenario }) {
     targetReceiptVisible: false,
     privateEmptyText: "No private results visible",
     projectionNotifications: [],
-    resyncSnapshotNotifications: [],
+    reconnectedSnapshotNotifications: [],
   };
 }
 
@@ -691,14 +691,14 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
       boundary: surfaceCase.boundaryText,
     },
     projectionNotifications: [],
-    resyncFromSeq: surfaceCase.resyncFromSeq,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: surfaceCase.authoritativeSourceSeq,
+    reconnectedSnapshotCommandState: {
       actorSlot: surfaceCase.expectedSlot,
       phase: {
         phaseId: surfaceCase.phaseId,
       },
     },
-    resyncSnapshotNotifications: [],
+    reconnectedSnapshotNotifications: [],
     coldLoadEndpoints: {
       notificationsEndpoint: `/api/gameplay/games/${game}/notifications`,
       commandStateEndpoint:
@@ -717,7 +717,7 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
       projectionNotifications: [
         { effect: "player_killed", status: surfaceCase.privateReceiptStatus },
       ],
-      resyncSnapshotNotifications: [
+      reconnectedSnapshotNotifications: [
         { status: surfaceCase.privateReceiptStatus },
       ],
     };

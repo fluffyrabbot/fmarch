@@ -60,7 +60,7 @@ const dayFourNoLynchVoteProofCaseDefinition = Object.freeze({
   commandKind: "SubmitVote",
   actorSlot: "slot-7",
   target: "NoLynch",
-  setupResyncFromSeq: 911,
+  setupAuthoritativeSourceSeq: 911,
   setupPhaseId: "D04",
   streamSeq: 912,
   expectedRefreshKeys: Object.freeze(["votecount", "commandState"]),
@@ -161,7 +161,7 @@ export function assertDayFourNoLynchVoteProofCase({
       voteCase.expectedVotecountNeeded ||
     proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !==
       voteCase.expectedPriorDayVoteOutcomePhaseId ||
-    proof.setupResyncFromSeq !== voteCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== voteCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== voteCase.setupPhaseId ||
     proof.currentVote?.hasVote !== "true" ||
     !String(proof.currentVote?.text ?? "").includes("No lynch") ||

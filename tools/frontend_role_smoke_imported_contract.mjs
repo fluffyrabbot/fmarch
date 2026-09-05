@@ -2,20 +2,21 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  EXPECTED_COUNTS,
-  expectedThumbZoneCounts,
-} from "./frontend_proof_expectations.mjs";
 import { analyzePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 import {
-  boardScenario,
+  browserRoleScenario,
   forbiddenRoutes,
-  hostSetupScenario,
   routeStateScenarios,
   roles,
   setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
+import {
+  assertHostSetupWorkflowEvidence,
+} from "./frontend_host_setup_proof_contract.mjs";
+import {
+  assertBrowserRoleSmokeEvidence,
+} from "./frontend_role_smoke_evidence_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-role-smoke-imported");
@@ -50,7 +51,7 @@ async function importedPassedEvidence() {
   assert.equal((roleSmoke.setup ?? []).length, setupViewports.length);
   assert.equal((roleSmoke.routeStates ?? []).length, viewports.length * routeStateScenarios.length);
   assert.equal((roleSmoke.playerPrivateChannel ?? []).length, viewports.length);
-  assertSetupEntries();
+  assertHostSetupWorkflowEvidence(roleSmoke.setup);
   assertRoleEntries();
   assertForbiddenRoutes();
   assertRoleSmokeEvidenceComplete();
@@ -71,7 +72,7 @@ async function importedPassedEvidence() {
     status: "imported-passed",
     proof: "frontend-role-smoke-imported-contract",
     boundary:
-      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator/setup, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; setup workbench geometry; tablet thumb-zone geometry; admin cohost confirmation and recovery-gate form evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
+      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator/setup, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; exact guided host-setup workflow geometry; live thumb-zone geometry; admin exception-inbox decision-canvas and native audit-detail navigation evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
     generatedFrom: {
       sourceRoleSmoke: relativeOrAbsolute(sourceRoleSmoke),
     },
@@ -120,49 +121,15 @@ function sourceBlockedEvidence() {
   };
 }
 
-function assertSetupEntries() {
-  const entries = roleSmoke.setup ?? [];
-  assert.equal(entries.length, setupViewports.length);
-  assert.deepEqual(
-    entries.map((entry) => [entry.viewport.name, entry.role, entry.path]),
-    setupViewports.map((viewport) => [
-      viewport.name,
-      hostSetupScenario.role,
-      hostSetupScenario.path,
-    ]),
-  );
-  for (const entry of entries) {
-    const expectedLayout =
-      entry.viewport.width <= 820 ? "stacked" : "co-located-columns";
-    assert.equal(entry.layout, expectedLayout);
-    assert.equal(entry.noHorizontalOverflow, true);
-    assert.equal(entry.overlapCheckedTargets > 0, true);
-    assert.equal(entry.slotCards.length, hostSetupScenario.slotIds.length);
-    assert.deepEqual(
-      entry.slotCards.map((slot) => [
-        slot.slotId,
-        slot.layout,
-        slot.roleCellContainedInCard,
-        slot.assignmentContainedInCard,
-      ]),
-      hostSetupScenario.slotIds.map((slotId) => [
-        slotId,
-        expectedLayout,
-        true,
-        true,
-      ]),
-    );
-  }
-}
-
 function assertRoleEntries() {
   const roleIds = new Set((roleSmoke.roles ?? []).map((entry) => entry.role));
   assert.deepEqual([...roleIds].sort(), roles.map((role) => role.id).sort());
   for (const role of roles) {
+    const browserRole = browserRoleScenario(role);
     const entries = roleSmoke.roles.filter((entry) => entry.role === role.id);
     assert.equal(entries.length, viewports.length);
     for (const entry of entries) {
-      assert.equal(entry.path, role.path);
+      assert.equal(entry.path, browserRole.path);
       assert.equal(entry.overlapCheckedTargets > 0, true);
       assert.equal(Array.isArray(entry.focusTraversal?.focusedTestIds), true);
     }
@@ -181,7 +148,7 @@ function assertForbiddenRoutes() {
 }
 
 function assertRoleSmokeEvidenceComplete() {
-  assert.equal(browserRoleSmokeEvidenceComplete(roleSmoke), true);
+  assertBrowserRoleSmokeEvidence(roleSmoke);
 }
 
 async function validateScreenshot(entry) {
@@ -203,157 +170,6 @@ async function validateScreenshot(entry) {
     screenshot: path.relative(repoRoot, screenshotPath),
     screenshotPixels: pixels,
   };
-}
-
-function browserRoleSmokeEvidenceComplete(smoke) {
-  if (smoke.status !== "passed") {
-    return false;
-  }
-  const roleIds = new Set((smoke.roles ?? []).map((entry) => entry.role));
-  for (const id of ["admin", "player", "moderator"]) {
-    if (!roleIds.has(id)) {
-      return false;
-    }
-  }
-  return (
-    Array.isArray(smoke.board) &&
-    smoke.board.length > 0 &&
-    Array.isArray(smoke.routeStates) &&
-    smoke.routeStates.length > 0 &&
-    (smoke.roles ?? []).every((entry) => entry.screenshotPixels !== undefined) &&
-    roleSmokeThumbZoneEvidenceComplete(smoke) &&
-    adminBrowserOperationalEvidenceComplete(smoke) &&
-    playerBrowserPostEvidenceComplete(smoke) &&
-    playerPrivateChannelBrowserPostEvidenceComplete(smoke) &&
-    playerBrowserMediaEvidenceComplete(smoke) &&
-    moderatorBrowserSlotLifecycleEvidenceComplete(smoke)
-  );
-}
-
-function roleSmokeThumbZoneEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  if (viewportCount === 0) {
-    return false;
-  }
-  return expectedThumbZoneCounts().every(({ role, zones }) => {
-    const entries = (smoke.roles ?? []).filter((entry) => entry.role === role);
-    return (
-      entries.length >= viewportCount &&
-      entries.every((entry) => thumbZonesComplete(entry.thumbZones, zones))
-    );
-  });
-}
-
-
-function thumbZonesComplete(actual, expectedZones) {
-  if (!Array.isArray(actual)) {
-    return false;
-  }
-  const byTestId = new Map(actual.map((zone) => [zone.testId, zone]));
-  return expectedZones.every(([testId, targetCount]) => {
-    const zone = byTestId.get(testId);
-    return zone?.targetCount === targetCount;
-  });
-}
-
-function adminBrowserOperationalEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  const adminEntries = (smoke.roles ?? []).filter((entry) => entry.role === "admin");
-  if (viewportCount === 0 || adminEntries.length < viewportCount) {
-    return false;
-  }
-  return adminEntries.every((entry) =>
-    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-cohost" &&
-    entry.commandResult?.recovery?.state === "ack" &&
-    entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
-      "admin-recovery-confirm-recovery-gate" &&
-    entry.commandResult?.recovery?.form?.action === "?/checkRecoveryGate" &&
-    includesAll(entry.commandResult?.recovery?.form?.fieldNames, [
-      "game",
-      "principalId",
-    ]) &&
-    entry.commandResult?.activity?.acknowledged?.state === "ack",
-  );
-}
-
-function playerBrowserPostEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  const playerEntries = (smoke.roles ?? []).filter((entry) => entry.role === "player");
-  if (viewportCount === 0 || playerEntries.length < viewportCount) {
-    return false;
-  }
-  return playerEntries.every((entry) =>
-    entry.commandResult?.postCommandReceipt?.state === "ack" &&
-    entry.commandResult?.postCommand?.requestCommand?.body ===
-      "Browser smoke player post" &&
-    entry.commandResult?.postCommand?.requestCommand?.channel_id === "main" &&
-    entry.commandResult?.postCommand?.refreshedPostTestId === "thread-post-445",
-  );
-}
-
-function playerPrivateChannelBrowserPostEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  const entries = smoke.playerPrivateChannel ?? [];
-  if (viewportCount === 0 || entries.length < viewportCount) {
-    return false;
-  }
-  return entries.every((entry) =>
-    entry.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
-    entry.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
-    entry.privateReviewHref === "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
-    entry.commandResult?.requestCommand?.game === "midsummer" &&
-    entry.commandResult?.requestCommand?.channel_id === "private:role_pm:slot-7" &&
-    entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
-    entry.commandResult?.requestCommand?.body === "Browser smoke private:role_pm:slot-7 post" &&
-    entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
-    entry.screenshotPixels !== undefined,
-  );
-}
-
-function playerBrowserMediaEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  const playerEntries = (smoke.roles ?? []).filter((entry) => entry.role === "player");
-  if (viewportCount === 0 || playerEntries.length < viewportCount) {
-    return false;
-  }
-  return playerEntries.every((entry) =>
-    entry.commandResult?.media?.renderedVariant === "tablet" &&
-    entry.commandResult?.media?.mediaTestId === "thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" &&
-    entry.commandResult?.media?.requestedOriginal === false &&
-    Array.isArray(entry.commandResult?.media?.requested) &&
-    entry.commandResult.media.requested.length > 0 &&
-    entry.commandResult.media.requested.every((request) =>
-      ["tablet", "small", "thumb", "thumbnail"].includes(request.variant),
-    ),
-  );
-}
-
-function moderatorBrowserSlotLifecycleEvidenceComplete(smoke) {
-  const viewportCount = smoke.viewports?.length ?? 0;
-  const moderatorEntries = (smoke.roles ?? []).filter(
-    (entry) => entry.role === "moderator",
-  );
-  if (viewportCount === 0 || moderatorEntries.length < viewportCount) {
-    return false;
-  }
-  return moderatorEntries.every((entry) =>
-    entry.commandResult?.slotLifecycle?.state === "ack" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.game ===
-      "midsummer" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.slot ===
-      "slot-7" &&
-    entry.commandResult?.slotLifecycle?.requestCommand?.SetSlotStatus?.status ===
-      "modkilled" &&
-    entry.commandResult?.slotLifecycle?.projection?.lifecycleLabel === "Modkilled",
-  );
-}
-
-function includesAll(actual, expected) {
-  if (!Array.isArray(actual)) {
-    return false;
-  }
-  return expected.every((entry) => actual.includes(entry));
 }
 
 function resolveImportedPath(candidate) {

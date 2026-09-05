@@ -247,7 +247,7 @@ test("late action progression assertion checks host resolution and receipt priva
           sourceRoleUrl: `${baseRoleUrl}/host`,
           visitedRolePath: `/g/${game}/host`,
           surfaceTestId: "host-console-surface",
-          setupResyncFromSeq: 914,
+          setupAuthoritativeSourceSeq: 914,
           setupSnapshotHost: { phase: { id: "N04", state: "open" } },
           resolveProof: { id: "host-resolve" },
         },
@@ -318,7 +318,7 @@ function nightFourNoActionProof({ game, baseRoleUrl }) {
     sourceRoleUrl: baseRoleUrl,
     visitedRolePath: `/g/${game}`,
     surfaceTestId: "player-surface",
-    setupResyncFromSeq: 914,
+    setupAuthoritativeSourceSeq: 914,
     setupSnapshotCommandState: {
       phase: { phaseId: "N04" },
       actions: [],
@@ -394,8 +394,8 @@ function nightFourPlayerSurfaceProof({
       boundary,
     },
     projectionDayVoteOutcomes: [{ phaseId: "D04" }],
-    resyncFromSeq: 916,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: 916,
+    reconnectedSnapshotCommandState: {
       actorSlot: slot,
       phase: { phaseId: "N04" },
     },
@@ -419,12 +419,12 @@ function nightFourPlayerSurfaceProof({
               status: "factional_kill",
             },
           ],
-          resyncSnapshotNotifications: [{ status: "factional_kill" }],
+          reconnectedSnapshotNotifications: [{ status: "factional_kill" }],
         }
       : {
           privateEmptyText: "No private results visible",
           projectionNotifications: [],
-          resyncSnapshotNotifications: [],
+          reconnectedSnapshotNotifications: [],
         }),
   };
 }

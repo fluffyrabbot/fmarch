@@ -123,10 +123,10 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
       visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7",
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      resyncFromSeq: reloadScenario.resyncFromSeq,
-      initialResyncSnapshotCommandState:
+      authoritativeSourceSeq: reloadScenario.authoritativeSourceSeq,
+      initialReconnectedSnapshotCommandState:
         completedPrivateReloadSnapshot.commandState,
-      reloadedResyncSnapshotCommandState:
+      reloadedReconnectedSnapshotCommandState:
         completedPrivateReloadSnapshot.commandState,
       initialSnapshot: completedPrivateReloadSnapshot,
       reloadedSnapshot: completedPrivateReloadSnapshot,
@@ -164,7 +164,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
       submitDisabledBeforeReject: false,
       snapshotAfterReject: completedPrivateRejectSnapshot,
       snapshotAfterReload: completedPrivateRejectSnapshot,
-      reloadedResyncSnapshotCommandState:
+      reloadedReconnectedSnapshotCommandState:
         completedPrivateRejectSnapshot.commandState,
       receiptStatusText: staleScenario.commandMessage,
       receiptRefreshKeys: staleScenario.expectedRefreshKeys.join(","),
@@ -783,8 +783,8 @@ test("private receipt role-surface assertion covers target receipt projection", 
       actions: [],
       boundary: scenario.boundaryText,
     },
-    resyncFromSeq: scenario.resyncFromSeq,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: scenario.authoritativeSourceSeq,
+    reconnectedSnapshotCommandState: {
       actorSlot: scenario.expectedSlot,
       phase: { phaseId: "ignored" },
     },
@@ -804,7 +804,7 @@ test("private receipt role-surface assertion covers target receipt projection", 
         status: scenario.privateReceiptStatus,
       },
     ],
-    resyncSnapshotNotifications: [
+    reconnectedSnapshotNotifications: [
       {
         effect: "player_killed",
         status: "ignored",
@@ -870,8 +870,8 @@ test("Day 3 player observation assertion covers target private receipt", () => {
       actions: [],
       boundary: "killed target stayed dead",
     },
-    resyncFromSeq: 906,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: 906,
+    reconnectedSnapshotCommandState: {
       actorSlot: "slot-3",
       phase: { phaseId: "D03" },
     },
@@ -890,7 +890,7 @@ test("Day 3 player observation assertion covers target private receipt", () => {
     projectionNotifications: [
       { effect: "player_killed", status: "factional_kill" },
     ],
-    resyncSnapshotNotifications: [
+    reconnectedSnapshotNotifications: [
       { effect: "player_killed", status: "factional_kill" },
     ],
   };
@@ -979,8 +979,8 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
       boundary: "target observed post-Day 3 private receipt",
     },
     projectionDayVoteOutcomes: [{ phaseId: "D03" }],
-    resyncFromSeq: 910,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq: 910,
+    reconnectedSnapshotCommandState: {
       actorSlot: "slot-2",
       phase: { phaseId: "N03" },
     },
@@ -997,7 +997,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
       detailText: "Phase D03",
     },
     projectionNotifications: [{ effect: "player_killed", status: "day_vote" }],
-    resyncSnapshotNotifications: [
+    reconnectedSnapshotNotifications: [
       { effect: "player_killed", status: "day_vote" },
     ],
   };
@@ -1018,7 +1018,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
       expectedPrivateCount: 1,
       expectedPrivateReceipt: true,
       expectedBoundaryText: "target observed post-Day 3 private receipt",
-      expectedResyncFromSeq: 910,
+      expectedAuthoritativeSourceSeq: 910,
       expectedCommandStateEndpoint:
         proof.coldLoadEndpoints.commandStateEndpoint,
       expectedNotificationsEndpoint:
@@ -1045,7 +1045,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
         expectedPrivateCount: 1,
         expectedPrivateReceipt: true,
         expectedBoundaryText: "target observed post-Day 3 private receipt",
-        expectedResyncFromSeq: 910,
+        expectedAuthoritativeSourceSeq: 910,
         expectedCommandStateEndpoint:
           proof.coldLoadEndpoints.commandStateEndpoint,
         expectedNotificationsEndpoint:

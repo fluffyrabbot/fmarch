@@ -585,7 +585,7 @@ export function completedPlayerCompleteRaceProofLaneDescriptors({ hardening }) {
 }
 
 export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) {
-  const [rejectLane, reloadLane, resyncLane, voteHistoryLane] =
+  const [rejectLane, reloadLane, reconnectLane, voteHistoryLane] =
     completedStalePlayerCompleteHardeningLaneCases();
   return [
     completedGameLaneDescriptor(rejectLane, {
@@ -714,25 +714,35 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
             ) === true,
       },
     ),
-    completedGameLaneDescriptor(resyncLane, {
+    completedGameLaneDescriptor(reconnectLane, {
       game: hardening.stalePlayerComplete?.game ?? null,
-      resyncFromSeq:
-        hardening.stalePlayerComplete?.manualEndgameResync?.fromSeq ?? null,
-      resyncKeys: hardening.stalePlayerComplete?.resyncKeysAfterReject ?? null,
+      reconnectAttempt:
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.reconnectEvent
+          ?.attempt ?? null,
+      reconnectRefreshKeys:
+        hardening.stalePlayerComplete?.reconnectRefreshKeysAfterReject ?? null,
       summaryCompleted:
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.completed ?? null,
       summaryState:
-        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.state ?? null,
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.surface?.state ?? null,
       passed:
         hardening.stalePlayerComplete?.status === "passed" &&
-        hardening.stalePlayerComplete?.resyncKeysAfterReject?.includes(
+        hardening.stalePlayerComplete?.reconnectRefreshKeysAfterReject?.includes(
           "endgameSummary",
         ) === true &&
-        hardening.stalePlayerComplete?.manualEndgameResync?.fromSeq === 0 &&
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.reconnectEvent
+          ?.kind === "reconnect" &&
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.reconnectEvent
+          ?.state === "recovered" &&
+        Number.isInteger(
+          hardening.stalePlayerComplete?.manualEndgameReconnect?.reconnectEvent
+            ?.attempt,
+        ) &&
+        hardening.stalePlayerComplete.manualEndgameReconnect.reconnectEvent.attempt >= 1 &&
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.completed === true &&
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.slots?.some(
             (slot) =>
               slot.slotId === "slot-7" &&
@@ -741,9 +751,9 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
               slot.roleRevealed === true &&
               slot.alignmentRevealed === true,
           ) === true &&
-        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.state ===
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.surface?.state ===
           "revealed" &&
-        hardening.stalePlayerComplete?.manualEndgameResync?.surface?.revealRows?.some(
+        hardening.stalePlayerComplete?.manualEndgameReconnect?.surface?.revealRows?.some(
           (row) =>
             row.testId === "player-endgame-reveal-slot-7" &&
             row.text.includes("Godfather") &&
@@ -753,18 +763,18 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
     completedGameLaneDescriptor(voteHistoryLane, {
       game: hardening.stalePlayerComplete?.game ?? null,
       phaseId:
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.voteHistory?.[0]?.phaseId ?? null,
       status:
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.voteHistory?.[0]?.status ?? null,
       ballotCount: Object.keys(
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.voteHistory?.[0]?.votes ?? {},
       ).length,
       passed:
         hardening.stalePlayerComplete?.status === "passed" &&
-        hardening.stalePlayerComplete?.manualEndgameResync
+        hardening.stalePlayerComplete?.manualEndgameReconnect
           ?.snapshotEndgameSummary?.voteHistory?.some(
             (outcome) =>
               outcome.phaseId === "D01" &&

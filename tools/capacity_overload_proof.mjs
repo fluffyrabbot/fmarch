@@ -17,7 +17,7 @@ import {
   seededSetupRoster,
   seedSetupCommandPlanForGame,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
-import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
+import { decodeServerEnvelopeFrame, normalizeServerEnvelopeMessage } from "../frontend/src/lib/app/live-transport.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
@@ -863,71 +863,77 @@ async function seedPostBurstGame(baseUrl) {
 
 async function proveSlowWebsocketConsumers({ baseUrl }) {
   const wsUrl = baseUrl.replace(/^http/, "ws");
-  const states = Array.from({ length: budgets.websocketConnections }, () => ({
-    resyncs: 0,
-  }));
-  const tickets = await Promise.all(
-    states.map(async () =>
-      await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main"),
-    ),
-  );
-  const excessTicket = await issueWebsocketTicket(
-    baseUrl,
-    "player-mira",
-    postBurstGame,
-    "main",
-  );
-  websocketClients = await Promise.all(
-    states.map(
-      (state, index) =>
-        new Promise((resolve, reject) => {
-          const socket = new WebSocket(
-            `${wsUrl}/ws?ticket=${encodeURIComponent(tickets[index])}&audience=fmarch-live`,
-          );
-          socket.binaryType = "arraybuffer";
-          socket.addEventListener("open", () => resolve(socket), { once: true });
-          socket.addEventListener("error", () => reject(new Error("websocket open failed")), {
-            once: true,
-          });
-          socket.addEventListener("message", async (event) => {
-            try {
-              const envelope = await decodeServerEnvelopeFrame(event.data);
-              if (
-                envelope?.body?.kind === "Delta" &&
-                envelope?.body?.body?.kind === "ResyncRequired"
-              ) {
-                state.resyncs += 1;
-              }
-            } catch {
-              // Malformed/non-CBOR frames are outside the typed server protocol.
-            }
-          });
-        }),
-    ),
-  );
-
+  const states = [];
+  async function connect(ticket) {
+    const state = { hello: false, resyncs: 0, closed: false, error: null };
+    const socket = new WebSocket(
+      `${wsUrl}/ws?ticket=${encodeURIComponent(ticket)}&audience=fmarch-live`,
+    );
+    websocketClients.push(socket);
+    socket.binaryType = "arraybuffer";
+    let messages = Promise.resolve();
+    socket.addEventListener("message", (event) => {
+      messages = messages.then(async () => {
+        const message = normalizeServerEnvelopeMessage(await decodeServerEnvelopeFrame(event.data));
+        assert(message !== null, "slow consumer received an invalid v3 frame");
+        assert(state.resyncs === 0, "retired generation delivered another frame");
+        if (!state.hello) {
+          assert(message.kind === "hello", "first frame must be an exact Hello");
+          assert(message.body.scope.game === postBurstGame &&
+            message.body.scope.channel === "main" && message.body.scope.slotId === null,
+            "Hello scope differs from the issued ticket");
+          state.hello = true;
+        } else if (message.kind === "resync-required") {
+          assert(message.scope.game === postBurstGame && message.scope.channel === "main",
+            "terminal resync scope differs from the issued ticket");
+          state.resyncs += 1;
+        } else {
+          assert(message.kind === "delta", "unexpected live message after Hello");
+        }
+      }).catch((error) => { state.error = error; });
+    });
+    socket.addEventListener("close", () => { state.closed = true; });
+    socket.addEventListener("error", () => { state.error = new Error("websocket failed"); });
+    await waitUntil(() => {
+      if (state.error) throw state.error;
+      return state.hello;
+    }, 8_000, "websocket did not receive an exact Hello");
+    return state;
+  }
+  for (let index = 0; index < budgets.websocketConnections; index += 1) {
+    states.push(await connect(await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main")));
+  }
+  const excessTicket = await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main");
   const rejectedHandshake = await rawWebsocketHandshake(new URL(baseUrl), excessTicket);
-  assert(
-    rejectedHandshake.status === 503,
-    `excess websocket handshake returned ${rejectedHandshake.status}`,
-  );
+  assert(rejectedHandshake.status === 503,
+    `excess websocket handshake returned ${rejectedHandshake.status}`);
+  await Promise.all(Array.from({ length: budgets.websocketBurstPosts }, (_, index) =>
+    submitPostWithRetry({ baseUrl, index, prefix: wsPostPrefix })));
+  await waitUntil(() => states.every((state) => {
+    if (state.error) throw state.error;
+    return state.resyncs === 1 && state.closed;
+  }), 8_000, "slow consumers did not receive terminal ResyncRequired and close");
 
-  await Promise.all(
-    Array.from({ length: budgets.websocketBurstPosts }, (_, index) =>
-      submitPostWithRetry({ baseUrl, index, prefix: wsPostPrefix }),
-    ),
-  );
-  await waitUntil(
-    () => states.every((state) => state.resyncs >= 1),
-    8_000,
-    "slow websocket consumers did not receive ResyncRequired",
-  );
+  let recoveredConnections = 0;
+  for (const state of states) {
+    assert(state.error === null, "retired socket violated terminal delivery");
+    const recovered = await connect(await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main"));
+    // A fresh generation is not recovered until its authoritative REST read completes.
+    const page = await fetchJson(`${baseUrl}/games/${postBurstGame}?limit=100`);
+    assert(page.posts.filter((post) => post.body.startsWith(wsPostPrefix)).length === budgets.websocketBurstPosts,
+      "reconnected authoritative thread omitted burst posts");
+    assert(recovered.error === null && !recovered.closed && recovered.resyncs === 0,
+      "fresh generation retired before its authoritative refresh");
+    recoveredConnections += 1;
+  }
   return {
     status: "passed",
-    connected: websocketClients.length,
+    connected: states.length,
     burstPosts: budgets.websocketBurstPosts,
-    resyncConnections: states.filter((state) => state.resyncs >= 1).length,
+    resyncConnections: states.filter((state) => state.resyncs === 1).length,
     resyncFrames: states.reduce((sum, state) => sum + state.resyncs, 0),
+    closedConnections: states.filter((state) => state.closed).length,
+    recoveredConnections,
     rejectedHandshakeStatus: rejectedHandshake.status,
     retryAfter: rejectedHandshake.headers["retry-after"],
   };
@@ -1123,7 +1129,7 @@ async function sendCommand(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 2,
+      v: 3,
       id: Date.now(),
       body: {
         kind: "Command",

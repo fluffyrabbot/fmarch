@@ -549,7 +549,7 @@ test("host night action transition assertion delegates player observation cases"
 test("Day 4 no-lynch host transition case shares phase and projection facts", () => {
   assert.deepEqual(dayFourNoLynchHostTransitionProofCase(), {
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 912,
+    setupAuthoritativeSourceSeq: 912,
     setupPhaseId: "D04",
     setupPhaseState: "open",
     expectedVotecountTarget: "No lynch",
@@ -593,7 +593,7 @@ test("Day 4 no-lynch host transition assertion covers shared projections", () =>
     sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
     visitedRolePath: "/g/game-a/host",
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 912,
+    setupAuthoritativeSourceSeq: 912,
     setupSnapshotHost: {
       phase: { id: "D04", state: "open" },
     },
@@ -655,7 +655,7 @@ test("Day 4 no-lynch host transition assertion covers shared projections", () =>
 test("empty Night 3 host transition case shares phase facts", () => {
   assert.deepEqual(emptyNightThreeHostTransitionProofCase(), {
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 909,
+    setupAuthoritativeSourceSeq: 909,
     setupPhaseId: "N03",
     setupPhaseState: "open",
     resolveCase: {
@@ -697,7 +697,7 @@ test("empty Night 3 host transition assertion covers resolve and advance ACKs", 
     sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
     visitedRolePath: "/g/game-a/host",
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 909,
+    setupAuthoritativeSourceSeq: 909,
     setupSnapshotHost: {
       phase: { id: "N03", state: "open" },
     },
@@ -766,7 +766,7 @@ test("post-Night 4 transition surface case shares transition and observation fac
       "actionPlayer:D05:no_lynch_controls",
       "stale:N04:submit_action:reject:PhaseLocked",
     ],
-    hostAdvanceSetupResyncFromSeq: 916,
+    hostAdvanceSetupAuthoritativeSourceSeq: 916,
     hostAdvanceSetupPhaseId: "N04",
     hostAdvanceSetupPhaseState: "locked",
     expectedHostAdvanceDayVoteOutcomePhaseId: "D04",
@@ -795,7 +795,7 @@ test("post-Night 4 transition surface case shares transition and observation fac
         expectedPrivateReceipt: true,
         expectedBoundaryText:
           "dead player stayed dead from the N02 factional kill",
-        expectedResyncFromSeq: 917,
+        expectedAuthoritativeSourceSeq: 917,
         expectedVoteButtonCount: 0,
         expectedVoteTargetCount: 0,
         expectedLastVoteOutcomePhaseId: "D04",
@@ -817,7 +817,7 @@ test("post-Night 4 transition surface case shares transition and observation fac
         expectedPrivateCount: 0,
         expectedPrivateReceipt: false,
         expectedBoundaryText: "open Day 5 no-lynch controls",
-        expectedResyncFromSeq: 917,
+        expectedAuthoritativeSourceSeq: 917,
         expectedVoteButtonCount: 1,
         expectedVoteTargetCount: 1,
         expectedLastVoteOutcomePhaseId: "D04",
@@ -859,7 +859,7 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
       sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
       visitedRolePath: "/g/game-a/host",
       surfaceTestId: "host-console-surface",
-      setupResyncFromSeq: 916,
+      setupAuthoritativeSourceSeq: 916,
       setupSnapshotHost: { phase: { id: "N04", state: "locked" } },
       advanceProof: {
         dayVoteOutcomesProjection: [{ phaseId: "D04" }],
@@ -1643,7 +1643,7 @@ test("host stale advance recovery assertion covers refreshed host controls", () 
     sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
     visitedRolePath: "/g/game-a/host",
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 801,
+    setupAuthoritativeSourceSeq: 801,
     setupSnapshotHost: {
       phase: { id: "D02", state: "locked" },
     },

@@ -286,7 +286,7 @@ test("player stale vote recovery assertion covers PhaseLocked transition reject"
     status: "passed",
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
-    setupResyncFromSeq: scenario.setupResyncFromSeq,
+    setupAuthoritativeSourceSeq: scenario.setupAuthoritativeSourceSeq,
     setupSnapshotCommandState: {
       phase: { phaseId: scenario.setupPhaseId },
       voteTargets: [{ slotId: scenario.targetSlot }],

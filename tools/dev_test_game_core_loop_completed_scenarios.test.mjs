@@ -314,7 +314,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete",
     "stale-player-complete-reload",
-    "stale-player-complete-endgame-resync",
+    "stale-player-complete-endgame-reconnect",
     "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(
@@ -437,7 +437,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "public-player-complete-reload",
     "stale-player-complete",
     "stale-player-complete-reload",
-    "stale-player-complete-endgame-resync",
+    "stale-player-complete-endgame-reconnect",
     "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(
@@ -454,7 +454,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
-    "stale-player-complete-endgame-resync",
+    "stale-player-complete-endgame-reconnect",
     "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(completedPlayerSeedDemoOnlyScenarioIds(), [
@@ -468,7 +468,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "concurrent-player-complete-race",
     "public-player-complete-reload",
     "stale-player-complete-reload",
-    "stale-player-complete-endgame-resync",
+    "stale-player-complete-endgame-reconnect",
     "stale-player-complete-vote-history",
   ]);
   assert.deepEqual(completedGameSeedDemoOnlyScenarioIds(), [
@@ -483,7 +483,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     [
       "public-player-complete-reload",
       "stale-player-complete-reload",
-      "stale-player-complete-endgame-resync",
+      "stale-player-complete-endgame-reconnect",
       "stale-player-complete-vote-history",
     ],
   );
@@ -516,7 +516,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     [
       ["stale-player-complete", "reject"],
       ["stale-player-complete-reload", "reload"],
-      ["stale-player-complete-endgame-resync", "resync"],
+      ["stale-player-complete-endgame-reconnect", "reconnect"],
       ["stale-player-complete-vote-history", "vote-history"],
     ],
   );
@@ -1162,7 +1162,7 @@ test("core-loop proof fixture module builds shared host and player proof shapes"
     privateCount: 0,
     privateReceipt: false,
     boundary: "completed game endgame state",
-    resyncFromSeq: 921,
+    authoritativeSourceSeq: 921,
     commandStateEndpoint:
       "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
     notificationsEndpoint:
@@ -1196,7 +1196,7 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
     privateReceiptStatus: "factional_kill",
     privateReceiptPhaseId: "N04",
     boundary: "survivor stayed dead",
-    resyncFromSeq: 917,
+    authoritativeSourceSeq: 917,
   });
 
   assert.equal(
@@ -1218,7 +1218,7 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
 test("core-loop proof fixture module derives seeded host proof shells", () => {
   const proof = seededCoreLoopHostSurfaceFixture({
     game: "game-a",
-    setupResyncFromSeq: 920,
+    setupAuthoritativeSourceSeq: 920,
     setupSnapshotHost: {
       completed: false,
       phase: { id: "N05", state: "open" },
@@ -1229,7 +1229,7 @@ test("core-loop proof fixture module derives seeded host proof shells", () => {
   assert.equal(proof.sourceRoleUrl, "http://127.0.0.1:5173/g/game-a/host");
   assert.equal(proof.visitedRolePath, "/g/game-a/host");
   assert.equal(proof.surfaceTestId, "host-console-surface");
-  assert.equal(proof.setupResyncFromSeq, 920);
+  assert.equal(proof.setupAuthoritativeSourceSeq, 920);
   assert.deepEqual(proof.setupSnapshotHost, {
     completed: false,
     phase: { id: "N05", state: "open" },
@@ -1612,7 +1612,7 @@ test("completed-game scenario module derives action-player completed surface cas
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,
       expectedBoundaryText: "completed game endgame state",
-      expectedResyncFromSeq: 921,
+      expectedAuthoritativeSourceSeq: 921,
       expectedCommandStateEndpoint:
         "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
@@ -1643,7 +1643,7 @@ test("completed-game scenario module derives action-player completed surface cas
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,
       expectedBoundaryText: "completed game endgame state",
-      expectedResyncFromSeq: 921,
+      expectedAuthoritativeSourceSeq: 921,
       expectedCommandStateEndpoint:
         "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
@@ -1882,7 +1882,7 @@ test("completed-game scenario module delegates action-player completed assertion
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,
       expectedBoundaryText: "completed game endgame state",
-      expectedResyncFromSeq: 921,
+      expectedAuthoritativeSourceSeq: 921,
       expectedCommandStateEndpoint:
         "/api/gameplay/games/game-a/player-command-state?slot_id=slot-7",
       expectedNotificationsEndpoint:
@@ -2014,7 +2014,7 @@ function hostCompleteGameProofFixture() {
     sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
     visitedRolePath: "/g/game-a/host",
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 920,
+    setupAuthoritativeSourceSeq: 920,
     setupSnapshotHost: {
       phase: { id: "N05", state: "open" },
       completed: false,

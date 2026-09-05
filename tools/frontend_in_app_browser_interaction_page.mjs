@@ -202,20 +202,25 @@ async function buildSurfaces(bundle) {
 }
 
 async function buildCommandScenarios(bundle, moderatorActionManifest) {
-  const named = await Promise.all(
-    iabCommandScenarioDefs().map(async (def) => ({
+  // Each renderer installs its own synthetic SvelteKit `$page` value. They share
+  // one module-level store, so rendering these fixtures concurrently lets one
+  // scenario observe another scenario's status and route state.
+  const named = [];
+  for (const def of iabCommandScenarioDefs()) {
+    named.push({
       ...def,
       ...(await renderedFragment(bundle[def.render](...(def.renderArgs ?? [])))),
-    })),
-  );
-  return [
-    ...named,
-    ...(await Promise.all(
-      moderatorActionManifest.actions.map((action) =>
-        moderatorCriticalConfirmationScenario(bundle, action),
-      ),
-    )),
-  ];
+    });
+  }
+
+  const moderator = [];
+  for (const action of moderatorActionManifest.actions) {
+    moderator.push(
+      await moderatorCriticalConfirmationScenario(bundle, action),
+    );
+  }
+
+  return [...named, ...moderator];
 }
 
 function buildStabilityChecks(moderatorActionManifest) {
@@ -224,20 +229,27 @@ function buildStabilityChecks(moderatorActionManifest) {
       id: "admin-operator-action-status-floors",
       role: "admin",
       surfaceId: "admin",
-      rootSelector: '[data-testid="iab-surface-admin"]',
+      // The operator inbox intentionally renders one selected task at a time.
+      // The command fixture section contains the selected setup and recovery
+      // states together, so it is the truthful root for cross-task stability.
+      rootSelector: '[data-testid="iab-proof-commands"]',
       mode: ADMIN_SURFACE_CONTRACT.actionTileStabilityMode,
       statusFloorMinBlockSizePx:
         ADMIN_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
       tiles: [
         ...["create-game", "cohost"].map((id) => ({
           id: `admin-setup-${id}`,
-          tileSelector: `[data-testid="admin-setup-${id}"]`,
+          tileSelector:
+            `[data-iab-scenario-id="admin-cohost-confirm-click"] ` +
+            `[data-testid="admin-setup-${id}"]`,
           triggerSelector: `[data-testid="admin-command-trigger-${id}"]`,
           statusFloorSelector: `[data-testid="admin-command-status-floor-${id}"]`,
         })),
         {
           id: "admin-recovery-recovery-gate",
-          tileSelector: '[data-testid="admin-recovery-recovery-gate"]',
+          tileSelector:
+            '[data-iab-scenario-id="admin-recovery-gate-confirm-click"] ' +
+            '[data-testid="admin-recovery-recovery-gate"]',
           triggerSelector: '[data-testid="admin-recovery-trigger-recovery-gate"]',
           statusFloorSelector:
             '[data-testid="admin-recovery-status-floor-recovery-gate"]',
@@ -578,6 +590,13 @@ function renderPage({ css, surfaces, scenarios, hydratedSurfaceScenarios }) {
         min-width: 0;
         max-width: 100%;
         overflow-x: auto;
+        position: relative;
+        /*
+         * Each fragment is a complete app viewport and can contain fixed UI.
+         * Establish a separate containing block so one fixture's action dock
+         * cannot cover controls in another fixture.
+         */
+        transform: translateZ(0);
       }
       .proof-meta {
         color: #4e5c59;
@@ -628,9 +647,27 @@ function renderPage({ css, surfaces, scenarios, hydratedSurfaceScenarios }) {
       };
       window.__fmarchHydratedSurfaceScenarios = window.__fmarchIabProof.hydratedSurfaceScenarios;
       document.addEventListener("click", (event) => {
-        const root = event.target.closest("[data-iab-scenario-id], [data-iab-hydrated-scenario-id]");
         const control = event.target.closest("[data-testid], [data-action]");
-        if (!root || !control) {
+        if (!control) {
+          return;
+        }
+        if (control.matches('button[data-task-id]')) {
+          const workspace = control.closest('[data-component="host-task-workspace"]');
+          const taskId = control.getAttribute("data-task-id");
+          if (workspace && taskId) {
+            for (const task of workspace.querySelectorAll('button[data-task-id]')) {
+              task.setAttribute(
+                "aria-pressed",
+                task.getAttribute("data-task-id") === taskId ? "true" : "false",
+              );
+            }
+            for (const panel of workspace.querySelectorAll('article[data-task-id]')) {
+              panel.hidden = panel.getAttribute("data-task-id") !== taskId;
+            }
+          }
+        }
+        const root = event.target.closest("[data-iab-scenario-id], [data-iab-hydrated-scenario-id]");
+        if (!root) {
           return;
         }
         const tagName = control.tagName.toLowerCase();

@@ -872,7 +872,7 @@ async function sendCommandResult(principalId, command) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 2,
+      v: 3,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -9795,7 +9795,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, recovered a bounded live-projection broadcast lag through a server ResyncRequired frame without reconnecting, then received a later UI post on the same socket with one projected post and one current receipt, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked, then reloads player and host role URLs to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a private-channel stale N01 factional_kill control rejects on D02 with explicit PhaseLocked recovery copy, keeps private-channel scope, and reconnects on the same private route without action controls, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge, then reload both player role URLs, to the same current-vote and projected-votecount truth, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, then reloads action-player and host role URLs to locked N01 dead-target truth, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved two host role pages racing PublishVotecount converge with one official count, one InvalidTarget recovery, and reloaded host/player role URLs still showing one official post, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, recovered two bounded live-projection broadcast lags by treating each server ResyncRequired frame as terminal, reminting a ticket, accepting an exact Hello on a new socket, performing one authoritative refresh, and emitting reconnect state=recovered, then received a later UI post on the new generation with one projected post and one current receipt, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked, then reloads player and host role URLs to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a private-channel stale N01 factional_kill control rejects on D02 with explicit PhaseLocked recovery copy, keeps private-channel scope, and reconnects on the same private route without action controls, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge, then reload both player role URLs, to the same current-vote and projected-votecount truth, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, then reloads action-player and host role URLs to locked N01 dead-target truth, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved two host role pages racing PublishVotecount converge with one official count, one InvalidTarget recovery, and reloaded host/player role URLs still showing one official post, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -12017,8 +12017,8 @@ async function verifyStalePlayerCompleteRecovery({
     const coldLoadEndpointsAfterReject = await stalePlayerPage.evaluate(
       () => window.__fmarchPlayerColdLoadEndpoints,
     );
-    const resyncKeysAfterReject = await stalePlayerPage.evaluate(
-      () => window.__fmarchPlayerResyncKeys,
+    const reconnectRefreshKeysAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerReconnectRefreshKeys,
     );
     const buttonsAfterReject = await playerCommandButtons(stalePlayerPage);
     const phaseAfterReject = await stalePlayerPage.evaluate(
@@ -12038,8 +12038,11 @@ async function verifyStalePlayerCompleteRecovery({
     const apiEndgameSummaryAfterReject = await fetchJson(
       `${apiBaseUrl}/games/${completeGame}/endgame-summary`,
     );
-    const manualResyncSnapshot = await stalePlayerPage.evaluate(
-      () => window.__fmarchTriggerPlayerResync(0),
+    const manualReconnectEventStart = await stalePlayerPage.evaluate(
+      () => (window.__fmarchLiveProjectionEvents ?? []).length,
+    );
+    const manualReconnectSnapshot = await stalePlayerPage.evaluate(
+      () => window.__fmarchReconnectPlayerLiveProjectionNow(),
     );
     await stalePlayerPage.waitForFunction(
       () =>
@@ -12052,9 +12055,21 @@ async function verifyStalePlayerCompleteRecovery({
           .querySelector('[data-testid="player-endgame-summary"]')
           ?.getAttribute("data-state") === "revealed",
     );
-    const manualEndgameResync = {
-      fromSeq: 0,
-      snapshotEndgameSummary: manualResyncSnapshot.endgameSummary,
+    const manualEndgameReconnect = {
+      reconnectEvent: await stalePlayerPage.evaluate(
+        (start) =>
+          (window.__fmarchLiveProjectionEvents ?? [])
+            .slice(start)
+            .find(
+              (event) =>
+                event?.kind === "reconnect" &&
+                event.state === "recovered" &&
+                Number.isInteger(event.attempt) &&
+                event.attempt >= 1,
+            ) ?? null,
+        manualReconnectEventStart,
+      ),
+      snapshotEndgameSummary: manualReconnectSnapshot.endgameSummary,
       surface: await playerEndgameSummarySurface(stalePlayerPage),
     };
     const reloadResponse = await stalePlayerPage.goto(
@@ -12231,16 +12246,16 @@ async function verifyStalePlayerCompleteRecovery({
       endgameSummaryAfterReject,
       endgameSurfaceAfterReject,
       coldLoadEndpointsAfterReject,
-      resyncKeysAfterReject,
+      reconnectRefreshKeysAfterReject,
       apiEndgameSummaryAfterReject,
-      manualEndgameResync,
+      manualEndgameReconnect,
       buttonsAfterReject,
       phaseAfterReject,
       currentVoteAfterReject,
       apiCommandStateAfterReject,
       stalePublicReloadAfterReject,
       proof:
-        "A disposable player role URL froze before completion with a projection-derived vote control after a D01 no-lynch resolved from two other players' ballots, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState plus the reveal-gated endgame summary and vote history, recovered the same summary through explicit live resync, disabled vote/post controls, and reloaded the public player board to completed revealed Endgame truth with durable tallies and actor ballots, no current vote, no vote targets, and no thread mutation.",
+        "A disposable player role URL froze before completion with a projection-derived vote control after a D01 no-lynch resolved from two other players' ballots, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState plus the reveal-gated endgame summary and vote history, recovered the same summary through an explicit generation-ending reconnect, disabled vote/post controls, and reloaded the public player board to completed revealed Endgame truth with durable tallies and actor ballots, no current vote, no vote targets, and no thread mutation.",
     };
     assertCompletedPlayerEndgameRefreshBrowserProof({
       proof,
@@ -12484,19 +12499,19 @@ async function verifyConcurrentHostPublishRace({
 
     await Promise.all([
       playerRacePage.waitForFunction(
-        () => typeof window.__fmarchTriggerPlayerResync === "function",
+        () => typeof window.__fmarchReconnectPlayerLiveProjectionNow === "function",
       ),
       firstHostPage.waitForFunction(
-        () => typeof window.__fmarchTriggerHostResync === "function",
+        () => typeof window.__fmarchReconnectHostLiveProjectionNow === "function",
       ),
       secondHostPage.waitForFunction(
-        () => typeof window.__fmarchTriggerHostResync === "function",
+        () => typeof window.__fmarchReconnectHostLiveProjectionNow === "function",
       ),
     ]);
     await Promise.all([
-      playerRacePage.evaluate(() => window.__fmarchTriggerPlayerResync(0)),
-      firstHostPage.evaluate(() => window.__fmarchTriggerHostResync(0)),
-      secondHostPage.evaluate(() => window.__fmarchTriggerHostResync(0)),
+      playerRacePage.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow()),
+      firstHostPage.evaluate(() => window.__fmarchReconnectHostLiveProjectionNow()),
+      secondHostPage.evaluate(() => window.__fmarchReconnectHostLiveProjectionNow()),
     ]);
     await playerRacePage.waitForFunction(
       (body) =>
@@ -14842,7 +14857,7 @@ async function verifyIncomingReplacementPlayer({
     if (vote.serverEnvelope?.body?.kind !== "Ack") {
       throw new Error(`incoming replacement vote did not ack: ${JSON.stringify(vote)}`);
     }
-    await page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    await page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow?.());
     await page.waitForFunction(
       (targetSlot) =>
         window.__fmarchPlayerProjection?.votecount?.some(
@@ -15138,7 +15153,7 @@ async function verifyReplacementStalePrivateReceipts({
   if (rowanPage === undefined) {
     throw new Error("replacement stale private-receipt proof requires replacement entry");
   }
-  await rowanPage.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+  await rowanPage.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow?.());
   await rowanPage.waitForFunction(
     () => window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7",
   );
@@ -16439,9 +16454,9 @@ async function submitConcurrentHostLifecycleRace({
   }
 
   await Promise.all([
-    deadRacePage.evaluate(() => window.__fmarchTriggerHostResync?.(0)),
-    modkillRacePage.evaluate(() => window.__fmarchTriggerHostResync?.(0)),
-    affectedPlayerPage.evaluate(() => window.__fmarchTriggerPlayerResync?.(0)),
+    deadRacePage.evaluate(() => window.__fmarchReconnectHostLiveProjectionNow?.()),
+    modkillRacePage.evaluate(() => window.__fmarchReconnectHostLiveProjectionNow?.()),
+    affectedPlayerPage.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow?.()),
   ]);
   await Promise.all([
     deadRacePage.waitForFunction(
@@ -18640,10 +18655,6 @@ async function submitStaleHostDeadlineRecovery({
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "PhaseLocked",
     actionId,
   );
-  const resyncAfterReject = await recoverHostProjection(
-    staleHostDeadlinePage,
-    { phaseId: "D02", locked: false },
-  );
   const reject = await staleHostDeadlinePage.evaluate(
     (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
     actionId,
@@ -18684,7 +18695,6 @@ async function submitStaleHostDeadlineRecovery({
     receiptStatusText: activityStatusText,
     activityRow,
     dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
-    resyncAfterReject,
     phaseAfterReject,
     deadlineActionsAfterReject,
     phaseActionsAfterReject,
@@ -18760,10 +18770,6 @@ async function submitStaleHostDeadlineRecovery({
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
-    resyncAfterReject?.event?.kind !== "resync-required" ||
-    resyncAfterReject?.event?.state !== "recovered" ||
-    resyncAfterReject?.phase?.id !== "D02" ||
-    resyncAfterReject?.phase?.locked !== false ||
     staleClickBrowserProof.roleUrl !== staleHostDeadlineSetup.roleUrl ||
     staleClickBrowserProof.clickedActionId !== actionId ||
     staleClickBrowserProof.receiptStatusText !== activityStatusText ||
@@ -18821,7 +18827,6 @@ async function submitStaleHostDeadlineRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
-        resyncAfterReject,
         staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleHostDeadlineReloadAfterReject,
@@ -18844,7 +18849,6 @@ async function submitStaleHostDeadlineRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
-    resyncAfterReject,
     staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleHostDeadlineReloadAfterReject,
@@ -18876,10 +18880,6 @@ async function submitStaleCohostDeadlineRecovery({
       window.__fmarchHostCommandStatuses?.extend_deadline?.state === "reject" &&
       window.__fmarchHostCommandStatuses?.extend_deadline?.error === "PhaseLocked",
   );
-  const resyncAfterReject = await recoverHostProjection(staleCohostPage, {
-    phaseId: "D02",
-    locked: false,
-  });
   const reject = await staleCohostPage.evaluate(
     () => window.__fmarchHostCommandStatuses?.extend_deadline,
   );
@@ -18917,7 +18917,6 @@ async function submitStaleCohostDeadlineRecovery({
     receiptStatusText: activityStatusText,
     activityRow,
     dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
-    resyncAfterReject,
     phaseAfterReject,
     deadlineActionsAfterReject,
     phaseActionsAfterReject,
@@ -19000,10 +18999,6 @@ async function submitStaleCohostDeadlineRecovery({
     activityRow.actionId !== "extend_deadline" ||
     activityRow.dispatchKind !== "extend_deadline" ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
-    resyncAfterReject?.event?.kind !== "resync-required" ||
-    resyncAfterReject?.event?.state !== "recovered" ||
-    resyncAfterReject?.phase?.id !== "D02" ||
-    resyncAfterReject?.phase?.locked !== false ||
     staleClickBrowserProof.roleUrl !== staleCohostDeadlineSetup.roleUrl ||
     staleClickBrowserProof.clickedActionId !== "extend_deadline" ||
     staleClickBrowserProof.receiptStatusText !== activityStatusText ||
@@ -19054,7 +19049,6 @@ async function submitStaleCohostDeadlineRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
-        resyncAfterReject,
         staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleCohostDeadlineReloadAfterReject,
@@ -19077,7 +19071,6 @@ async function submitStaleCohostDeadlineRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
-    resyncAfterReject,
     staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleCohostDeadlineReloadAfterReject,
@@ -19131,17 +19124,21 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
   const browserState = await playerPage.evaluate((start) => {
     const events = (window.__fmarchLiveProjectionEvents ?? []).slice(start);
     return {
-      resyncEvents: events.filter(
+      terminalResyncEvents: events.filter(
         (event) =>
           event?.kind === "resync-required" &&
-          event.fromSeq === 0 &&
-          event.state === "recovered",
+          event.fromEventSeq === 0 &&
+          event.state === "reconnecting",
       ),
       currentSubmitPostReceipts: (window.__fmarchPlayerCommandReceipts ?? []).filter(
         (receipt) => receipt.actionId === "submit_post" && receipt.current === true,
       ),
-      reconnectEvents: events.filter((event) =>
-        ["close", "reconnecting", "reconnect"].includes(event?.kind),
+      recoveredReconnectEvents: events.filter(
+        (event) =>
+          event?.kind === "reconnect" &&
+          Number.isInteger(event.attempt) &&
+          event.attempt >= 1 &&
+          event.state === "recovered",
       ),
       clientMetricsAfter:
         window.__fmarchGetPlayerLiveProjectionMetrics?.() ?? null,
@@ -19175,19 +19172,25 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     episodes.some(
       (episode) =>
         episode.resyncEvent?.kind !== "resync-required" ||
-        episode.resyncEvent.fromSeq !== 0 ||
-        episode.resyncEvent.state !== "recovered" ||
+        episode.resyncEvent.fromEventSeq !== 0 ||
+        episode.resyncEvent.state !== "reconnecting" ||
+        episode.closeEvent?.kind !== "close" ||
+        episode.reconnectEvent?.kind !== "reconnect" ||
+        episode.reconnectEvent?.state !== "recovered" ||
+        !isPositiveReconnectAttempt(episode.reconnectEvent?.attempt) ||
+        episode.recoveredStatus?.state !== "recovered" ||
         episode.continuationDeltaKind !== "ThreadPostsChanged" ||
         episode.projectedPostCount !== 1 ||
         episode.currentSubmitPostReceiptCount !== 1,
     ) ||
-    browserState.resyncEvents.length < 2 ||
+    browserState.terminalResyncEvents.length < 2 ||
     episodes[0].eventIndex >= episodes[1].eventIndex ||
     apiContinuationPostCounts.some((count) => count !== 1) ||
     Object.values(burstPostCounts).some((count) => count !== 1) ||
     new Set(allCommandIds).size !== allCommandIds.length ||
     browserState.currentSubmitPostReceipts.length !== 1 ||
-    browserState.reconnectEvents.length !== 0 ||
+    browserState.recoveredReconnectEvents.length <
+      browserState.terminalResyncEvents.length ||
     !liveProjectionResyncMetricsAreConsistent(clientMetrics)
   ) {
     throw new Error(
@@ -19214,13 +19217,13 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
       ...episode,
       burstCommandIds: episodeBurst.map(({ commandId }) => commandId),
     })),
-    resyncRecoveryCount: browserState.resyncEvents.length,
-    resyncEvents: browserState.resyncEvents,
+    terminalResyncFrameCount: browserState.terminalResyncEvents.length,
+    terminalResyncEvents: browserState.terminalResyncEvents,
     burstCommandIds: burst.map(({ commandId }) => commandId),
     burstPostCounts,
     apiContinuationPostCounts,
     currentSubmitPostReceiptCount: browserState.currentSubmitPostReceipts.length,
-    reconnectEventCount: browserState.reconnectEvents.length,
+    recoveredReconnectCount: browserState.recoveredReconnectEvents.length,
     clientMetricsBefore,
     clientMetricsAfter: browserState.clientMetricsAfter,
     clientMetrics,
@@ -19233,12 +19236,7 @@ function liveProjectionMetricsDelta(before, after) {
   }
   return Object.freeze(
     Object.fromEntries(
-      [
-        "resyncFramesReceived",
-        "resyncRefreshesStarted",
-        "resyncFramesCoalesced",
-        "resyncTrailingRefreshesStarted",
-      ].map((key) => {
+      ["resyncFramesReceived"].map((key) => {
         const beforeValue = Number(before?.[key]);
         const afterValue = Number(after?.[key]);
         if (!Number.isInteger(beforeValue) || !Number.isInteger(afterValue)) {
@@ -19262,8 +19260,9 @@ async function verifyPlayerLagResyncEpisode({
         .slice(start)
         .filter(
           (event) =>
-            event?.kind === "resync-required" &&
-            event.fromSeq === 0 &&
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
             event.state === "recovered",
         ).length,
     eventStart,
@@ -19310,8 +19309,9 @@ async function verifyPlayerLagResyncEpisode({
         .slice(start)
         .filter(
           (event) =>
-            event?.kind === "resync-required" &&
-            event.fromSeq === 0 &&
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
             event.state === "recovered",
         ).length >= expectedCount,
     { start: eventStart, expectedCount: recoveryCountBefore + 1 },
@@ -19325,13 +19325,31 @@ async function verifyPlayerLagResyncEpisode({
         .slice(start)
         .filter(
           ({ event }) =>
-            event?.kind === "resync-required" &&
-            event.fromSeq === 0 &&
+            event?.kind === "reconnect" &&
+            Number.isInteger(event.attempt) &&
+            event.attempt >= 1 &&
             event.state === "recovered",
         );
       const recovered = indexedRecoveries[recoveryIndex];
+      const resync = events
+        .map((event, eventIndex) => ({ event, eventIndex }))
+        .slice(start, recovered?.eventIndex)
+        .toReversed()
+        .find(
+          ({ event }) =>
+            event?.kind === "resync-required" &&
+            event.fromEventSeq === 0 &&
+            event.state === "reconnecting",
+        );
+      const close = events
+        .map((event, eventIndex) => ({ event, eventIndex }))
+        .slice((resync?.eventIndex ?? recovered?.eventIndex ?? 0) + 1, recovered?.eventIndex)
+        .find(({ event }) => event?.kind === "close");
       return {
-        ...recovered,
+        eventIndex: recovered?.eventIndex,
+        closeEvent: close?.event,
+        reconnectEvent: recovered?.event,
+        resyncEvent: resync?.event,
         status: window.__fmarchLiveProjectionStatus,
       };
     },
@@ -19388,7 +19406,9 @@ async function verifyPlayerLagResyncEpisode({
   return {
     episode,
     burst,
-    resyncEvent: recovery.event,
+    resyncEvent: recovery.resyncEvent,
+    closeEvent: recovery.closeEvent,
+    reconnectEvent: recovery.reconnectEvent,
     eventIndex: recovery.eventIndex,
     recoveredStatus: recovery.status,
     continuationBody,
@@ -24394,7 +24414,7 @@ async function verifyIncomingReplacementActionSubmission({
       response: { status: actionRaw.httpStatus },
       serverEnvelope: actionRaw.serverEnvelope,
     });
-    await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    await replacementEntry.page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow?.());
     await replacementEntry.page.waitForFunction(
       ({ actorSlot, phaseId }) =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
@@ -24470,7 +24490,7 @@ async function verifyIncomingReplacementActionSubmission({
         templateId: scenario.templateId,
       },
     );
-    await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    await replacementEntry.page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow?.());
     const replacementNotificationsAfterResolve = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.notifications ?? [],
     );
@@ -25796,8 +25816,8 @@ async function verifyConcurrentVoteRace({
   }
 
   await waitForPlayerVotecount(playerPage, { target: targetSlot, count: 2 });
-  await actionPage.waitForFunction(() => typeof window.__fmarchTriggerPlayerResync === "function");
-  await actionPage.evaluate(() => window.__fmarchTriggerPlayerResync(0));
+  await actionPage.waitForFunction(() => typeof window.__fmarchReconnectPlayerLiveProjectionNow === "function");
+  await actionPage.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
   await waitForPlayerVotecount(actionPage, { target: targetSlot, count: 2 });
   const apiVotecount = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
   const projectedRow = normalizedVotecountRows(apiVotecount).find(
@@ -26514,7 +26534,7 @@ async function sendBrowserCommand(page, { command, commandId }) {
   const result = await page.evaluate(
     async ({ command: browserCommand, commandId: browserCommandId, envelopeId: browserEnvelopeId }) => {
       const requestEnvelope = {
-        v: 2,
+        v: 3,
         id: browserEnvelopeId,
         body: {
           kind: "Command",
@@ -26627,22 +26647,6 @@ async function waitForHostProjectionPhase(page, { phaseId, locked }) {
       window.__fmarchHostProjection?.phase?.locked === expected.locked,
     { phaseId, locked },
   );
-}
-
-async function recoverHostProjection(page, expectedPhase) {
-  await page.waitForFunction(
-    () => typeof window.__fmarchTriggerHostResync === "function",
-  );
-  const recovery = await page.evaluate(async () => {
-    await window.__fmarchTriggerHostResync(0);
-    const events = window.__fmarchHostLiveProjectionEvents ?? [];
-    return {
-      event: events.at(-1) ?? null,
-      phase: window.__fmarchHostProjection?.phase ?? null,
-    };
-  });
-  await waitForHostProjectionPhase(page, expectedPhase);
-  return recovery;
 }
 
 async function confirmHostPhaseAction(

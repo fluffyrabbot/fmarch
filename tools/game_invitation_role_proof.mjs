@@ -178,6 +178,7 @@ let deliveryProvider;
 let subjectKeyRoot;
 let serverOutput = "";
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
+const previousApiInternalUrl = process.env.FMARCH_API_INTERNAL_URL;
 const previousAuthSourceSigningKey = process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
 
 try {
@@ -360,6 +361,11 @@ try {
     delete process.env.FMARCH_API_BASE_URL;
   } else {
     process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
+  }
+  if (previousApiInternalUrl === undefined) {
+    delete process.env.FMARCH_API_INTERNAL_URL;
+  } else {
+    process.env.FMARCH_API_INTERNAL_URL = previousApiInternalUrl;
   }
   if (previousAuthSourceSigningKey === undefined) {
     delete process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
@@ -2545,7 +2551,9 @@ async function driveHostPlayerInviteSurface({
         sameSite: "Lax",
       },
     ]);
-    await page.goto(`${frontendBaseUrl}${hostReturnTo}`, { waitUntil: "networkidle" });
+    const targetUrl = new URL(hostReturnTo, frontendBaseUrl);
+    targetUrl.searchParams.set("slot_id", "slot-7");
+    await page.goto(targetUrl.toString(), { waitUntil: "networkidle" });
     const inviteDrawer = page.getByTestId("host-invite-workflows");
     await inviteDrawer.waitFor({ state: "visible" });
     await inviteDrawer.evaluate((node) => {
@@ -2557,7 +2565,11 @@ async function driveHostPlayerInviteSurface({
     });
     const targetText = await page.getByTestId("host-player-invite-target").innerText();
     if (!targetText.includes("player-mira")) {
-      throw new Error(`host player invite target drifted: ${targetText}`);
+      throw new Error(`host player invite target drifted: ${targetText}; ${JSON.stringify(await page.evaluate(() => ({
+        projection: window.__fmarchHostProjection,
+        events: window.__fmarchHostLiveProjectionEvents,
+        status: window.__fmarchHostLiveProjectionStatus,
+      })))}`);
     }
     await page
       .getByTestId("host-player-invite-account")
@@ -4095,12 +4107,11 @@ async function startApi(applicationUrl, deliveryEndpoint) {
 }
 
 async function startFrontend(apiBaseUrl) {
-  process.env.FMARCH_API_BASE_URL = apiBaseUrl;
+  // Keep browser traffic on the frontend origin under the real CSP. SSR uses
+  // the private API endpoint; Vite forwards the browser websocket to it.
+  delete process.env.FMARCH_API_BASE_URL;
+  process.env.FMARCH_API_INTERNAL_URL = apiBaseUrl;
   process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY = authSourceSigningKey;
-  // This lane proves session-freshness semantics (rotation races, revocation,
-  // disablement) against out-of-band state changes; the SSR resolution cache
-  // would mask them for up to its TTL, so the proof runs cache-disabled.
-  process.env.FMARCH_SESSION_CACHE_TTL_MS = "0";
   const previousCwd = process.cwd();
   process.chdir(frontendRoot);
   try {
@@ -4183,7 +4194,7 @@ async function sendCommand(apiBaseUrl, localProofAuth, id, principalId, command)
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 2,
+      v: 3,
       id,
       body: {
         kind: "Command",

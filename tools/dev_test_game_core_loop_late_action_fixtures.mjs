@@ -91,7 +91,7 @@ export function nightFourNoActionSurfaceFixture({
         { phaseId: "D02" },
         { phaseId: voteCase.expectedPriorDayVoteOutcomePhaseId },
       ],
-      setupResyncFromSeq: voteCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: voteCase.setupAuthoritativeSourceSeq,
       setupSnapshotCommandState: {
         phase: {
           phaseId: voteCase.setupPhaseId,
@@ -111,7 +111,7 @@ export function nightFourNoActionSurfaceFixture({
     },
     hostTransitionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: hostTransitionCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: hostTransitionCase.setupAuthoritativeSourceSeq,
       setupPhaseId: hostTransitionCase.setupPhaseId,
       setupPhaseState: hostTransitionCase.setupPhaseState,
       resolveProof: {
@@ -169,7 +169,7 @@ export function nightFourNoActionSurfaceFixture({
       visitedRolePath: `/g/${game}`,
       surfaceTestId: noActionCase.surfaceTestId,
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: noActionCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: noActionCase.setupAuthoritativeSourceSeq,
       setupSnapshotCommandState: {
         phase: {
           phaseId: noActionCase.setupPhaseId,
@@ -221,7 +221,7 @@ export function nightFourNoActionResolutionSurfaceFixture({
     transition: surfaceCase.transitionFragments.join(" -> "),
     hostResolutionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: hostCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: hostCase.setupAuthoritativeSourceSeq,
       setupPhaseId: hostCase.setupPhaseId,
       setupPhaseState: hostCase.setupPhaseState,
       resolveProof: hostPhaseTransitionActionFixture({
@@ -257,7 +257,7 @@ export function nightFourNoActionResolutionSurfaceFixture({
       privateReceiptStatus: privacyCase.privateReceiptStatus,
       privateReceiptPhaseId: privacyCase.privateReceiptPhaseId,
       boundary: `Seeded browser ${privacyCase.boundaryText}.`,
-      resyncFromSeq: privacyCase.resyncFromSeq,
+      authoritativeSourceSeq: privacyCase.authoritativeSourceSeq,
       commandStateEndpoint:
         `/api/gameplay/games/${game}/player-command-state?slot_id=${privacyCase.expectedSlot}`,
       notificationsEndpoint:
@@ -293,7 +293,7 @@ export function postNightFourTransitionSurfaceFixture({
     transition: surfaceCase.transitionFragments.join(" -> "),
     hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: surfaceCase.hostAdvanceSetupResyncFromSeq,
+      setupAuthoritativeSourceSeq: surfaceCase.hostAdvanceSetupAuthoritativeSourceSeq,
       setupPhaseId: surfaceCase.hostAdvanceSetupPhaseId,
       setupPhaseState: surfaceCase.hostAdvanceSetupPhaseState,
       advanceProof: hostPhaseTransitionActionFixture({
@@ -330,7 +330,7 @@ export function postNightFourTransitionSurfaceFixture({
       privateReceiptPhaseId: deadPlayerCase.expectedPrivateReceiptPhaseId,
       boundary:
         "Seeded browser dead player stayed dead from the N02 factional kill after N04 advanced to Day 5.",
-      resyncFromSeq: deadPlayerCase.expectedResyncFromSeq,
+      authoritativeSourceSeq: deadPlayerCase.expectedAuthoritativeSourceSeq,
       dayVoteOutcomes,
     }),
     actionPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
@@ -348,7 +348,7 @@ export function postNightFourTransitionSurfaceFixture({
       privateReceipt: actionPlayerCase.expectedPrivateReceipt,
       boundary:
         "Seeded browser action player observed open Day 5 no-lynch controls after Night 4 advanced.",
-      resyncFromSeq: actionPlayerCase.expectedResyncFromSeq,
+      authoritativeSourceSeq: actionPlayerCase.expectedAuthoritativeSourceSeq,
       voteButtonCount: actionPlayerCase.expectedVoteButtonCount,
       voteTargets:
         actionPlayerCase.expectedVoteTargetCount > 0
@@ -370,7 +370,7 @@ export function postNightFourTransitionSurfaceFixture({
       clickedThroughFromRoleUrl: true,
       clickedAction: staleActionCase.clickedAction,
       commandKind: staleActionCase.commandKind,
-      setupResyncFromSeq: staleActionCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: staleActionCase.setupAuthoritativeSourceSeq,
       setupSnapshotCommandState: {
         phase: { phaseId: staleActionCase.setupPhaseId },
         actions: [{ targets: [staleActionCase.targetSlot] }],
@@ -457,7 +457,7 @@ function nightFourResolutionPlayerSurfaceFixture({
   privateReceiptStatus,
   privateReceiptPhaseId,
   boundary,
-  resyncFromSeq,
+  authoritativeSourceSeq,
   commandStateEndpoint,
   notificationsEndpoint,
 }) {
@@ -505,14 +505,14 @@ function nightFourResolutionPlayerSurfaceFixture({
         ]
       : [],
     projectionDayVoteOutcomes: lateLoopDayVoteOutcomesFixture(),
-    resyncFromSeq,
-    resyncSnapshotCommandState: {
+    authoritativeSourceSeq,
+    reconnectedSnapshotCommandState: {
       actorSlot: slot,
       phase: {
         phaseId,
       },
     },
-    resyncSnapshotNotifications: privateReceipt
+    reconnectedSnapshotNotifications: privateReceipt
       ? [
           {
             status: privateReceiptStatus,

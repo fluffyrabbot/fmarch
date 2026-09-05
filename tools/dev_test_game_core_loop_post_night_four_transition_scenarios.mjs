@@ -22,7 +22,7 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
     "actionPlayer:D05:no_lynch_controls",
     "stale:N04:submit_action:reject:PhaseLocked",
   ]),
-  hostAdvanceSetupResyncFromSeq: 916,
+  hostAdvanceSetupAuthoritativeSourceSeq: 916,
   hostAdvanceSetupPhaseId: "N04",
   hostAdvanceSetupPhaseState: "locked",
   expectedHostAdvanceDayVoteOutcomePhaseId: "D04",
@@ -51,7 +51,7 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
       expectedPrivateReceipt: true,
       expectedBoundaryText:
         "dead player stayed dead from the N02 factional kill",
-      expectedResyncFromSeq: 917,
+      expectedAuthoritativeSourceSeq: 917,
       expectedVoteButtonCount: 0,
       expectedVoteTargetCount: 0,
       expectedLastVoteOutcomePhaseId: "D04",
@@ -73,7 +73,7 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,
       expectedBoundaryText: "open Day 5 no-lynch controls",
-      expectedResyncFromSeq: 917,
+      expectedAuthoritativeSourceSeq: 917,
       expectedVoteButtonCount: 1,
       expectedVoteTargetCount: 1,
       expectedLastVoteOutcomePhaseId: "D04",
@@ -144,7 +144,7 @@ export function assertPostNightFourTransitionSurfaceCase({
       expectedPrivateCount: playerCase.expectedPrivateCount,
       expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
       expectedBoundaryText: playerCase.expectedBoundaryText,
-      expectedResyncFromSeq: playerCase.expectedResyncFromSeq,
+      expectedAuthoritativeSourceSeq: playerCase.expectedAuthoritativeSourceSeq,
       expectedCommandStateEndpoint:
         `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
       expectedNotificationsEndpoint:
@@ -183,7 +183,7 @@ function assertPostNightFourHostAdvanceProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== surfaceCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== surfaceCase.hostAdvanceSetupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== surfaceCase.hostAdvanceSetupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== surfaceCase.hostAdvanceSetupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !==
       surfaceCase.hostAdvanceSetupPhaseState

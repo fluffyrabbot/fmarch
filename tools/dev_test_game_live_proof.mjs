@@ -2979,20 +2979,36 @@ assert.equal(
   Number(process.env.FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS ?? 500),
 );
 assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync.resyncEvents.every(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .terminalResyncEvents.every(
     (event) =>
       event.kind === "resync-required" &&
-      event.fromSeq === 0 &&
-      event.state === "recovered",
+      event.fromEventSeq === 0 &&
+      event.state === "reconnecting",
   ),
   true,
 );
 assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount,
-  session.verification.multiplayerHardening.liveProjectionLagResync.resyncEvents.length,
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .terminalResyncFrameCount,
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .terminalResyncEvents.length,
 );
 assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount >= 2,
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .terminalResyncFrameCount >= 2,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .recoveryEpisodes.every((episode) => episode.closeEvent?.kind === "close"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .recoveryEpisodes.every(
+      (episode) => episode.recoveredStatus?.state === "recovered",
+    ),
   true,
 );
 assert.deepEqual(
@@ -3025,8 +3041,16 @@ assert.equal(
   1,
 );
 assert.equal(
-  session.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount,
-  0,
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .recoveredReconnectCount,
+  2,
+);
+assert.equal(
+  session.verification.multiplayerHardening.liveProjectionLagResync
+    .recoveredReconnectCount >=
+    session.verification.multiplayerHardening.liveProjectionLagResync
+      .terminalResyncFrameCount,
+  true,
 );
 assert.equal(
   liveProjectionResyncMetricsAreConsistent(

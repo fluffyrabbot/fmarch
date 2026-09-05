@@ -8,7 +8,7 @@ export function completedPrivateChannelReloadScenario() {
     completedPhaseState: "open",
     completedActionState: "disabled:game complete",
     completedThreadBody: "Completed private channel remains readable.",
-    resyncFromSeq: 921,
+    authoritativeSourceSeq: 921,
     routeBoundary:
       "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
     expectedBoundary: "completed private-channel role URL reloaded",

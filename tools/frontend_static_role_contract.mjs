@@ -1488,6 +1488,7 @@ async function provePlayerSurface() {
   ];
   const data = await buildGameRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: "player_mira",
     capabilities,
   });
@@ -1671,21 +1672,33 @@ async function provePlayerSurface() {
   ]);
   const rolePmRoute = await buildGameRouteData({
     game: "midsummer",
+    fixtureMode: true,
     activeChannel: "private:role_pm:slot-7",
     principalId: "player_mira",
     capabilities: [
+      { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
   assert.equal(rolePmRoute.channel.supported, true);
   assert.equal(rolePmRoute.channel.allowed, true);
-  assert.equal(rolePmRoute.channels[0].active, true);
+  assert.equal(
+    rolePmRoute.channels.find((channel) => channel.id === "private:role_pm:slot-7")?.active,
+    true,
+  );
   assert.equal(Object.hasOwn(rolePmRoute, "hostPrompts"), false);
 
   const postRefreshed = [];
   const postProjectionStore = {
+    isReady() {
+      return true;
+    },
     getSnapshot() {
-      return { thread: rolePmRoute.thread, votecount: rolePmRoute.votecount };
+      return {
+        thread: rolePmRoute.thread,
+        votecount: rolePmRoute.votecount,
+        commandState: rolePmRoute.commandState,
+      };
     },
     async refresh(keys) {
       postRefreshed.push(keys);
@@ -1711,12 +1724,21 @@ async function provePlayerSurface() {
     },
   });
   assert.equal(privatePost.commandStatus.state, "ack");
-  assert.deepEqual(postRefreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
+  assert.deepEqual(postRefreshed, [
+    ["thread", "votecount", "commandState", "dayVoteOutcomes", "slotMentions"],
+  ]);
 
   const refreshed = [];
   const projectionStore = {
+    isReady() {
+      return true;
+    },
     getSnapshot() {
-      return { thread: data.thread, votecount: data.votecount };
+      return {
+        thread: data.thread,
+        votecount: data.votecount,
+        commandState: data.commandState,
+      };
     },
     async refresh(keys) {
       refreshed.push(keys);
@@ -1874,6 +1896,7 @@ async function provePlayerSurface() {
 async function proveModeratorSurface() {
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
   });
@@ -1986,6 +2009,10 @@ async function proveModeratorSurface() {
     action.id.startsWith("resolve_host_prompt-"),
   );
   assert.notEqual(hostPromptAction, undefined);
+  const phaseResolutionAction = data.criticalActions.find(
+    (action) => action.id === "resolve_phase",
+  );
+  assert.notEqual(phaseResolutionAction, undefined);
 
   const projectionStore = fakeHostProjectionStore({
     host: {
@@ -1998,8 +2025,8 @@ async function proveModeratorSurface() {
   });
   const command = await sendHostRouteAction({
     event: {
-      actionId: "advance_phase",
-      payload: { kind: "advance_phase", gameId: "midsummer" },
+      actionId: phaseResolutionAction.id,
+      payload: phaseResolutionAction.payload,
     },
     data,
     fetchImpl: async () => null,
@@ -2168,7 +2195,7 @@ async function proveModeratorSurface() {
     confirmationCoverage,
     commandPath: {
       role: "moderator",
-      action: "advance_phase",
+      action: phaseResolutionAction.id,
       state: command.outcome.state,
       message: command.outcome.message,
       projectionApplied: projectionStore.applied.length,
@@ -2404,6 +2431,7 @@ async function proveForbiddenRoutes() {
 
   const playerData = await buildGameRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: null,
     capabilities: [],
   });
@@ -2411,6 +2439,7 @@ async function proveForbiddenRoutes() {
 
   const hostData = await buildHostConsoleRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: FIXTURE_PRINCIPAL_IDS.playerMira,
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
@@ -2439,6 +2468,9 @@ function fakeHostProjectionStore(snapshot) {
   return {
     applied: [],
     refreshed: [],
+    isReady() {
+      return true;
+    },
     applyPayload(key, payload) {
       this.applied.push([key, payload]);
       snapshot = { ...snapshot, [key]: payload };

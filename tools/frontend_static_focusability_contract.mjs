@@ -169,7 +169,7 @@ function isFocusable(node) {
   if (node.tag === "a") {
     return typeof node.attrs.href === "string" && node.attrs.href.length > 0;
   }
-  return ["button", "input", "select", "textarea"].includes(node.tag);
+  return ["button", "input", "select", "summary", "textarea"].includes(node.tag);
 }
 
 function closestTestId(node) {

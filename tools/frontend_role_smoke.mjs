@@ -9,12 +9,16 @@ import {
   encodeServerEnvelopeFrame,
 } from "../frontend/src/lib/app/live-transport.mjs";
 import {
+  HOST_SETUP_WORKFLOW_CONTRACT,
+} from "../frontend/src/routes/g/[game]/setup/setup-workflow-model.mjs";
+import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
 import {
   accessibilitySurfaceContract,
   boardScenario,
+  browserRoleScenario,
   forbiddenRoutes,
   hostSetupScenario,
   navFocusCoverage,
@@ -194,9 +198,7 @@ try {
     await boardContext.close();
 
     for (const roleContract of roles) {
-      const role = roleContract.live === undefined
-        ? roleContract
-        : Object.freeze({ ...roleContract, ...roleContract.live });
+      const role = browserRoleScenario(roleContract);
       const context = await newContextForViewport(viewport, role.token);
       const page = await context.newPage();
       let playerMediaRequests = null;
@@ -204,7 +206,7 @@ try {
         if (harnessName === "playerMedia") {
           playerMediaRequests = await installPlayerMediaNetworkHarness(page);
         } else if (harnessName === "liveProjection") {
-          await installLiveProjectionHarness(page);
+          await installLiveProjectionHarness(page, { roleId: role.id });
         } else {
           throw new Error(`role harness ${harnessName} is not registered`);
         }
@@ -427,6 +429,10 @@ try {
     const privateChannelPage = await privateChannelContext.newPage();
     const privateChannelMediaRequests =
       await installPlayerMediaNetworkHarness(privateChannelPage);
+    await installLiveProjectionHarness(privateChannelPage, {
+      roleId: "player",
+      channel: "private:role_pm:slot-7",
+    });
     const privateChannelCommandRequests = [];
     await installPrivateChannelBrowserRoutes(privateChannelPage, {
       commandRequests: privateChannelCommandRequests,
@@ -1128,7 +1134,7 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
     page.getByTestId("host-setup-stage-canvas"),
     `${scenario.id} canvas`,
   );
-  const stageIds = ["pack", "roster", "roles", "rules", "review"];
+  const stageIds = [...HOST_SETUP_WORKFLOW_CONTRACT.stageIds];
   for (const stageId of stageIds) {
     await assertHitTarget(
       page.getByTestId(`host-setup-step-${stageId}`),
@@ -1462,13 +1468,20 @@ async function runCommandFlow(page, flow, ctx) {
         await resolveFlowTarget(page, step.target).waitFor({ state: "visible" });
         return;
       case "wait-data-state":
-        await page.waitForFunction(
-          ({ testId, state }) => {
-            const node = document.querySelector(`[data-testid="${testId}"]`);
-            return node?.getAttribute("data-state") === state;
-          },
-          { testId: step.target.testId, state: step.state },
-        );
+        try {
+          await page.waitForFunction(
+            ({ testId, state }) => {
+              const node = document.querySelector(`[data-testid="${testId}"]`);
+              return node?.getAttribute("data-state") === state;
+            },
+            { testId: step.target.testId, state: step.state },
+          );
+        } catch (error) {
+          throw new Error(
+            `${ctx.role.id} timed out waiting for ${step.target.testId} data-state=${step.state}`,
+            { cause: error },
+          );
+        }
         return;
       case "assert-data-state-now": {
         const state = await resolveFlowTarget(page, step.target).getAttribute(
@@ -2035,6 +2048,7 @@ async function assertDisclosuresClosed(page, selectors = [], context) {
   const disclosures = [];
   for (const selector of selectors ?? []) {
     const disclosure = page.locator(selector);
+    await disclosure.first().waitFor({ state: "attached" });
     if ((await disclosure.count()) !== 1) {
       throw new Error(
         `${context.role} ${context.viewport} disclosure selector ${selector} did not resolve exactly once`,
@@ -2128,14 +2142,22 @@ async function assertPostInteractionGeometry(
   const documentHeight = await page.evaluate(
     () => document.documentElement.scrollHeight,
   );
+  const anchorUsesViewport =
+    baseline.anchor.fixed === true && anchorAfter.fixed === true;
   const anchorShift = Math.max(
-    Math.abs(anchorAfter.x - baseline.anchor.x),
-    Math.abs(anchorAfter.y - baseline.anchor.y),
+    Math.abs(
+      (anchorUsesViewport ? anchorAfter.viewportX : anchorAfter.x) -
+        (anchorUsesViewport ? baseline.anchor.viewportX : baseline.anchor.x),
+    ),
+    Math.abs(
+      (anchorUsesViewport ? anchorAfter.viewportY : anchorAfter.y) -
+        (anchorUsesViewport ? baseline.anchor.viewportY : baseline.anchor.y),
+    ),
   );
-  const combinedTop = Math.min(anchorAfter.y, targetBox.y);
+  const combinedTop = Math.min(anchorAfter.viewportY, targetBox.viewportY);
   const combinedBottom = Math.max(
-    anchorAfter.y + anchorAfter.height,
-    targetBox.y + targetBox.height,
+    anchorAfter.viewportY + anchorAfter.height,
+    targetBox.viewportY + targetBox.height,
   );
   const combinedSpan = combinedBottom - combinedTop;
   const documentGrowth = Math.max(0, documentHeight - baseline.documentHeight);
@@ -2181,12 +2203,14 @@ async function assertPostInteractionGeometry(
 async function readDocumentBox(locator) {
   return locator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
-    const fixed = window.getComputedStyle(node).position === "fixed";
     return {
-      x: rect.x + (fixed ? 0 : window.scrollX),
-      y: rect.y + (fixed ? 0 : window.scrollY),
+      x: rect.x + window.scrollX,
+      y: rect.y + window.scrollY,
+      viewportX: rect.x,
+      viewportY: rect.y,
       width: rect.width,
       height: rect.height,
+      fixed: window.getComputedStyle(node).position === "fixed",
     };
   });
 }
@@ -2599,7 +2623,7 @@ async function installCommandMock(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: scenario.respond,
         }),
@@ -2610,7 +2634,7 @@ async function installCommandMock(
       status: fallback.status,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: fallback.id.fromEnvelope
           ? commandEnvelope?.id ?? fallback.id.fallback
           : fallback.id.literal,
@@ -2940,7 +2964,19 @@ async function installPlayerMediaNetworkHarness(page) {
 
 async function assertPlayerMediaNetwork(page, { mediaRequests }) {
   const boundary = page.getByTestId("thread-post-media-boundary-442");
-  await boundary.waitFor({ state: "visible" });
+  try {
+    await boundary.waitFor({ state: "visible" });
+  } catch (error) {
+    const renderedThreadTestIds = await page
+      .locator('[data-testid^="thread-post-"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+    throw new Error(
+      `player media post 442 missing on ${new URL(page.url()).pathname}; rendered thread ids ${JSON.stringify(
+        renderedThreadTestIds,
+      )}; media requests ${JSON.stringify(mediaRequests)}`,
+      { cause: error },
+    );
+  }
   const media = page.getByTestId("thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
   await assertVisibleBox(media, "player thread tablet media figure");
   const image = media.locator("img");
@@ -3185,13 +3221,31 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
   };
 }
 
-async function installLiveProjectionHarness(page) {
+async function installLiveProjectionHarness(page, { roleId, channel = "main" }) {
+  const hostProjection = roleId === "moderator";
   const helloFrame = [...encodeServerEnvelopeFrame({
-    v: 2,
+    v: 3,
     id: 0,
     body: {
       kind: "Hello",
-      body: { protocol_v: 2, server: "smoke", caps: [] },
+      body: {
+        protocol_v: 3,
+        server: "smoke",
+        scope: {
+          game: "midsummer",
+          channel,
+          slot_id: hostProjection ? null : "slot-7",
+        },
+        caps: hostProjection
+          ? [{ kind: "HostOf", body: { game: "midsummer" } }]
+          : [
+              {
+                kind: "SlotOccupant",
+                body: { game: "midsummer", slot: "slot-7" },
+              },
+              { kind: "ChannelMember", body: { game: "midsummer", channel } },
+            ],
+      },
     },
   })];
   await page.addInitScript((helloFrameBytes) => {
@@ -3267,26 +3321,32 @@ async function installLiveProjectionHarness(page) {
 async function emitPlayerOfficialThreadPost(page) {
   await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
   const frame = [...encodeServerEnvelopeFrame({
-    v: 2,
-    id: 44,
+    v: 3,
+    id: 1,
     body: {
       kind: "Delta",
       body: {
-        kind: "ThreadPostsChanged",
-        body: {
-          game: "midsummer",
-          posts: [
-            {
-              game: "midsummer",
-              source_seq: 444,
-              stream_seq: 90,
-              channel_id: "main",
-              author: { kind: "host_narrator" },
-              phase_id: "D01",
-              body: "Official votecount for D01\n- slot_2: 1",
-              occurred_at: 1781928000,
-            },
-          ],
+        audience: { Thread: { game: "midsummer", channel: "main" } },
+        delta: {
+          kind: "ThreadPostsChanged",
+          body: {
+            game: "midsummer",
+            posts: [
+              {
+                game: "midsummer",
+                source_seq: 444,
+                stream_seq: 90,
+                channel_id: "main",
+                author: { kind: "host_narrator" },
+                phase_id: "D01",
+                body: "Official votecount for D01\n- slot_2: 1",
+                media: [],
+                quotations: [],
+                citation_count: 0,
+                occurred_at: 1781928000,
+              },
+            ],
+          },
         },
       },
     },

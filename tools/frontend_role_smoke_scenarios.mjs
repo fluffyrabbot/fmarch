@@ -627,6 +627,12 @@ export const roles = Object.freeze([
   }),
 ]);
 
+export function browserRoleScenario(role) {
+  return role.live === undefined
+    ? role
+    : Object.freeze({ ...role, ...role.live });
+}
+
 export const navFocusCoverage = Object.freeze({
   surfaces: Object.freeze([
     navFocusCoverageForScenario({

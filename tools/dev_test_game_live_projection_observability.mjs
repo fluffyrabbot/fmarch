@@ -10,27 +10,15 @@ export const liveProjectionLagServerTraceContract = Object.freeze({
 
 export function liveProjectionResyncMetricsAreConsistent(
   metrics,
-  { minimumFrames = 2, minimumRefreshes = 2 } = {},
+  { minimumFrames = 2 } = {},
 ) {
-  const values = [
-    metrics?.resyncFramesReceived,
-    metrics?.resyncRefreshesStarted,
-    metrics?.resyncFramesCoalesced,
-    metrics?.resyncTrailingRefreshesStarted,
-  ];
-  if (!values.every((value) => Number.isInteger(value) && value >= 0)) {
-    return false;
-  }
-  return (
-    metrics.resyncFramesReceived >= minimumFrames &&
-    metrics.resyncRefreshesStarted >= minimumRefreshes &&
-    metrics.resyncFramesCoalesced <= metrics.resyncFramesReceived &&
-    metrics.resyncTrailingRefreshesStarted <= metrics.resyncFramesCoalesced &&
-    metrics.resyncRefreshesStarted ===
-      metrics.resyncFramesReceived -
-        metrics.resyncFramesCoalesced +
-        metrics.resyncTrailingRefreshesStarted
-  );
+  return metrics !== null &&
+    typeof metrics === "object" &&
+    !Array.isArray(metrics) &&
+    Object.keys(metrics).length === 1 &&
+    Object.hasOwn(metrics, "resyncFramesReceived") &&
+    Number.isInteger(metrics.resyncFramesReceived) &&
+    metrics.resyncFramesReceived >= minimumFrames;
 }
 
 export function liveProjectionLagObservabilityFromProofRun(proofRun) {
@@ -42,6 +30,7 @@ export function liveProjectionLagObservabilityFromProofRun(proofRun) {
     status: lane?.status,
     serverTraceContract: liveProjectionLagServerTraceContract,
     clientMetrics: lane?.evidence?.clientMetrics,
+    recoveredReconnectCount: lane?.evidence?.recoveredReconnectCount,
   });
 }
 
@@ -56,7 +45,9 @@ export function assertLiveProjectionLagObservability(observability) {
       JSON.stringify(liveProjectionLagServerTraceContract.scopeFields) ||
     observability.serverTraceContract?.measurementField !==
       liveProjectionLagServerTraceContract.measurementField ||
-    !liveProjectionResyncMetricsAreConsistent(metrics)
+    !liveProjectionResyncMetricsAreConsistent(metrics) ||
+    !Number.isInteger(observability.recoveredReconnectCount) ||
+    observability.recoveredReconnectCount < metrics.resyncFramesReceived
   ) {
     throw new Error("live projection lag observability evidence drifted");
   }
@@ -65,5 +56,6 @@ export function assertLiveProjectionLagObservability(observability) {
     status: observability.status,
     serverTraceContract: liveProjectionLagServerTraceContract,
     clientMetrics: Object.freeze({ ...metrics }),
+    recoveredReconnectCount: observability.recoveredReconnectCount,
   });
 }

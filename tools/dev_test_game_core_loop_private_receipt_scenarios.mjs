@@ -75,10 +75,10 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N01",
       boundaryText: "target role received factional_kill private receipt",
-      resyncFromSeq: 901,
+      authoritativeSourceSeq: 901,
       assertProjectionPhase: false,
-      assertResyncSnapshotPhase: false,
-      assertResyncNotificationStatus: false,
+      assertReconnectedSnapshotPhase: false,
+      assertReconnectNotificationStatus: false,
     },
     {
       id: "n01-normal-privacy",
@@ -95,8 +95,8 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N01",
       boundaryText: "normal role received no target-only private receipt",
-      resyncFromSeq: 901,
-      assertResyncSnapshotPhase: false,
+      authoritativeSourceSeq: 901,
+      assertReconnectedSnapshotPhase: false,
     },
     {
       id: "d02-target-receipt",
@@ -113,9 +113,9 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "day_vote",
       privateReceiptPhaseId: "D02",
       boundaryText: "target role received day_vote private receipt",
-      resyncFromSeq: 902,
-      assertResyncSnapshotPhase: false,
-      assertResyncNotificationEffect: false,
+      authoritativeSourceSeq: 902,
+      assertReconnectedSnapshotPhase: false,
+      assertReconnectNotificationEffect: false,
     },
     {
       id: "d02-normal-privacy",
@@ -132,8 +132,8 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "day_vote",
       privateReceiptPhaseId: "D02",
       boundaryText: "normal role received no target-only private receipt",
-      resyncFromSeq: 902,
-      assertResyncSnapshotPhase: false,
+      authoritativeSourceSeq: 902,
+      assertReconnectedSnapshotPhase: false,
     },
     {
       id: "n02-target-receipt",
@@ -150,8 +150,8 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N02",
       boundaryText: "night target role received factional_kill private receipt",
-      resyncFromSeq: 904,
-      assertResyncNotificationEffect: false,
+      authoritativeSourceSeq: 904,
+      assertReconnectNotificationEffect: false,
     },
     {
       id: "n02-normal-privacy",
@@ -168,7 +168,7 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N02",
       boundaryText: "normal role received no target-only private receipt",
-      resyncFromSeq: 904,
+      authoritativeSourceSeq: 904,
     },
     {
       id: "d03-target-receipt",
@@ -185,7 +185,7 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "day_vote",
       privateReceiptPhaseId: "D03",
       boundaryText: "target role received day_vote private receipt",
-      resyncFromSeq: 908,
+      authoritativeSourceSeq: 908,
     },
     {
       id: "d03-action-player-privacy",
@@ -202,7 +202,7 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "day_vote",
       privateReceiptPhaseId: "D03",
       boundaryText: "action player stayed alive",
-      resyncFromSeq: 908,
+      authoritativeSourceSeq: 908,
     },
     {
       id: "n04-survivor-receipt",
@@ -219,7 +219,7 @@ export function privateReceiptScenarios() {
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N04",
       boundaryText: "survivor target received factional_kill private receipt",
-      resyncFromSeq: 916,
+      authoritativeSourceSeq: 916,
     },
     {
       id: "n04-action-player-privacy",
@@ -237,7 +237,7 @@ export function privateReceiptScenarios() {
       privateReceiptPhaseId: "N04",
       boundaryText:
         "action player observed locked Night 4 after no-action host resolution with no private receipt",
-      resyncFromSeq: 916,
+      authoritativeSourceSeq: 916,
     },
   ];
 }
@@ -958,7 +958,7 @@ export function liveCompletedPrivateChannelPostRejectProof({
     submitDisabledBeforeReject: outcome?.submitDisabledBeforeReject ?? false,
     snapshotAfterReject,
     snapshotAfterReload,
-    reloadedResyncSnapshotCommandState:
+    reloadedReconnectedSnapshotCommandState:
       outcome?.reloadAfterReject?.recoveredCommandState,
     receiptStatusText: outcome?.receiptStatusText,
     receiptRefreshKeys: refreshKeys.join(","),
@@ -1012,9 +1012,9 @@ export function assertCompletedPrivateChannelReloadProofCase({
     proof.sourceRoleUrl !== sourceRoleUrl ||
     proof.visitedRolePath !== visitedRolePath ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.resyncFromSeq !== scenario.resyncFromSeq ||
-    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+    proof.authoritativeSourceSeq !== scenario.authoritativeSourceSeq ||
+    proof.initialReconnectedSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedReconnectedSnapshotCommandState?.gameCompleted !== true
   ) {
     throwPrivateChannelScenarioAssertionError({
       message: "core-loop admin proof missing completed private reload shell",
@@ -1075,7 +1075,7 @@ export function assertStaleCompletedPrivatePostRecoveryProofCase({
       .toLowerCase()
       .includes(scenario.expectedReceiptStatusFragment) ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
-    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+    proof.reloadedReconnectedSnapshotCommandState?.gameCompleted !== true
   ) {
     throwPrivateChannelScenarioAssertionError({
       message: "core-loop admin proof missing stale completed private post recovery",
@@ -1164,7 +1164,7 @@ export function privateReceiptProofArgs(scenario) {
     principalId: scenario.principalId,
     slotField: scenario.slotField,
     notifications: privateReceiptNotifications(scenario),
-    resyncFromSeq: scenario.resyncFromSeq,
+    authoritativeSourceSeq: scenario.authoritativeSourceSeq,
   };
 }
 
@@ -1187,13 +1187,13 @@ export function privateReceiptAssertionArgs({
     expectedPrivateCount: scenario.privateReceipt ? 1 : 0,
     expectedPrivateReceipt: scenario.privateReceipt,
     expectedBoundaryText: scenario.boundaryText,
-    expectedResyncFromSeq: scenario.resyncFromSeq,
+    expectedAuthoritativeSourceSeq: scenario.authoritativeSourceSeq,
     expectedPrivateReceiptStatus: scenario.privateReceiptStatus,
     expectedPrivateReceiptPhaseId: scenario.privateReceiptPhaseId,
-    expectedResyncNotificationEffect:
-      scenario.assertResyncNotificationEffect === false ? null : "player_killed",
-    expectedResyncNotificationStatus:
-      scenario.assertResyncNotificationStatus === false
+    expectedReconnectNotificationEffect:
+      scenario.assertReconnectNotificationEffect === false ? null : "player_killed",
+    expectedReconnectNotificationStatus:
+      scenario.assertReconnectNotificationStatus === false
         ? null
         : scenario.privateReceiptStatus,
     expectedPrivateQueueBoundaryStatus: privateQueueBoundaryStatus,
@@ -1203,8 +1203,8 @@ export function privateReceiptAssertionArgs({
       scenario.assertProjectionPhase === false
         ? null
         : scenario.phaseState === "locked",
-    expectedResyncSnapshotPhaseId:
-      scenario.assertResyncSnapshotPhase === false ? null : scenario.phaseId,
+    expectedReconnectedSnapshotPhaseId:
+      scenario.assertReconnectedSnapshotPhase === false ? null : scenario.phaseId,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${scenario.expectedSlot}`,
     expectedNotificationsEndpoint:
@@ -1227,15 +1227,15 @@ export function assertPrivateReceiptRoleSurfaceCase({
   expectedPrivateCount,
   expectedPrivateReceipt,
   expectedBoundaryText,
-  expectedResyncFromSeq,
+  expectedAuthoritativeSourceSeq,
   expectedPrivateReceiptStatus,
   expectedPrivateReceiptPhaseId,
-  expectedResyncNotificationEffect,
-  expectedResyncNotificationStatus,
+  expectedReconnectNotificationEffect,
+  expectedReconnectNotificationStatus,
   expectedPrivateQueueBoundaryStatus,
   expectedProjectionPhaseId,
   expectedProjectionLocked,
-  expectedResyncSnapshotPhaseId,
+  expectedReconnectedSnapshotPhaseId,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
   errorMessage,
@@ -1282,11 +1282,11 @@ export function assertPrivateReceiptRoleSurfaceCase({
     !String(proof.projectionCommandState?.boundary ?? "").includes(
       expectedBoundaryText,
     ) ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    (expectedResyncSnapshotPhaseId !== null &&
-      proof.resyncSnapshotCommandState?.phase?.phaseId !==
-        expectedResyncSnapshotPhaseId) ||
+    proof.authoritativeSourceSeq !== expectedAuthoritativeSourceSeq ||
+    proof.reconnectedSnapshotCommandState?.actorSlot !== expectedSlot ||
+    (expectedReconnectedSnapshotPhaseId !== null &&
+      proof.reconnectedSnapshotCommandState?.phase?.phaseId !==
+        expectedReconnectedSnapshotPhaseId) ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       expectedNotificationsEndpoint ||
     proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
@@ -1310,12 +1310,12 @@ export function assertPrivateReceiptRoleSurfaceCase({
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
       proof.projectionNotifications?.[0]?.status !==
         expectedPrivateReceiptStatus ||
-      (expectedResyncNotificationEffect !== null &&
-        proof.resyncSnapshotNotifications?.[0]?.effect !==
-          expectedResyncNotificationEffect) ||
-      (expectedResyncNotificationStatus !== null &&
-        proof.resyncSnapshotNotifications?.[0]?.status !==
-          expectedResyncNotificationStatus))
+      (expectedReconnectNotificationEffect !== null &&
+        proof.reconnectedSnapshotNotifications?.[0]?.effect !==
+          expectedReconnectNotificationEffect) ||
+      (expectedReconnectNotificationStatus !== null &&
+        proof.reconnectedSnapshotNotifications?.[0]?.status !==
+          expectedReconnectNotificationStatus))
   ) {
     throwPrivateChannelScenarioAssertionError({
       message: errorMessage,
@@ -1327,7 +1327,7 @@ export function assertPrivateReceiptRoleSurfaceCase({
     !expectedPrivateReceipt &&
     (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
       proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.reconnectedSnapshotNotifications?.length !== 0 ||
       proof.privateNotice !== undefined)
   ) {
     throwPrivateChannelScenarioAssertionError({
@@ -1389,9 +1389,9 @@ export function assertDayThreePlayerObservationProofCase({
     !String(proof.projectionCommandState?.boundary ?? "").includes(
       expectedBoundaryText,
     ) ||
-    proof.resyncFromSeq !== 906 ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== "D03" ||
+    proof.authoritativeSourceSeq !== 906 ||
+    proof.reconnectedSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.reconnectedSnapshotCommandState?.phase?.phaseId !== "D03" ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       expectedNotificationsEndpoint ||
     proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
@@ -1411,7 +1411,7 @@ export function assertDayThreePlayerObservationProofCase({
       proof.privateNotice.detailText !== "Phase N02" ||
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
       proof.projectionNotifications?.[0]?.status !== "factional_kill" ||
-      proof.resyncSnapshotNotifications?.[0]?.status !== "factional_kill")
+      proof.reconnectedSnapshotNotifications?.[0]?.status !== "factional_kill")
   ) {
     throwPrivateChannelScenarioAssertionError({
       message: "core-loop admin proof missing Day 3 target private receipt",
@@ -1423,7 +1423,7 @@ export function assertDayThreePlayerObservationProofCase({
     !expectedPrivateReceipt &&
     (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
       proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.reconnectedSnapshotNotifications?.length !== 0 ||
       proof.privateNotice !== undefined)
   ) {
     throwPrivateChannelScenarioAssertionError({
@@ -1449,7 +1449,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
   expectedPrivateCount,
   expectedPrivateReceipt,
   expectedBoundaryText,
-  expectedResyncFromSeq,
+  expectedAuthoritativeSourceSeq,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
   expectedVoteButtonCount = 0,
@@ -1498,9 +1498,9 @@ export function assertPostDayThreePlayerSurfaceProofCase({
     ) ||
     proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !==
       expectedLastVoteOutcomePhaseId ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
+    proof.authoritativeSourceSeq !== expectedAuthoritativeSourceSeq ||
+    proof.reconnectedSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.reconnectedSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       expectedNotificationsEndpoint ||
     proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
@@ -1524,7 +1524,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
       proof.projectionNotifications?.[0]?.status !==
         expectedPrivateReceiptStatus ||
-      proof.resyncSnapshotNotifications?.[0]?.status !==
+      proof.reconnectedSnapshotNotifications?.[0]?.status !==
         expectedPrivateReceiptStatus)
   ) {
     throwPrivateChannelScenarioAssertionError({
@@ -1537,7 +1537,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
     !expectedPrivateReceipt &&
     (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
       proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.reconnectedSnapshotNotifications?.length !== 0 ||
       proof.privateNotice !== undefined)
   ) {
     throwPrivateChannelScenarioAssertionError({

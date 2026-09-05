@@ -75,9 +75,48 @@ export function createLiveStackAuth({
     };
   };
 
+  const createGrantedSession = async ({
+    principalId,
+    globalCapabilities = [],
+  }) => {
+    const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
+    const accountId = `live-stack-grant-${authorityPrincipalId}-${uuid()}@example.test`;
+    const password = `live-stack grant password ${uuid()}`;
+    await createAuthAccount({
+      accountId,
+      password,
+      principalId: authorityPrincipalId,
+      globalCapabilities,
+    });
+    const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${rootAdminSessionToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        principal_id: requirePrincipalAuthorityId(
+          authorityPrincipalId,
+          "session grant transport",
+        ),
+        expires_at: 4102444800,
+        global_capabilities: globalCapabilities,
+      }),
+    });
+    return {
+      accountId,
+      principalId: session.principal_id,
+      sessionToken: requiredSessionToken(session),
+      capabilityKinds: (session.capabilities ?? []).map(
+        (capability) => capability.kind,
+      ),
+    };
+  };
+
   return Object.freeze({
     createAccountSession,
     createAuthAccount,
+    createGrantedSession,
   });
 }
 
@@ -112,7 +151,7 @@ export function createLiveStackCommandSender({
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: nextEnvelopeId(),
         body: {
           kind: "Command",

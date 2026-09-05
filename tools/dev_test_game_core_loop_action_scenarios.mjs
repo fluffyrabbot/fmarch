@@ -163,7 +163,7 @@ export function assertPlayerStaleVoteAfterTransitionProofCase({
       proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
-    proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== scenario.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== scenario.setupPhaseId ||
     proof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !==
       scenario.targetSlot ||

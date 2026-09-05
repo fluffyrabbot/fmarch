@@ -175,7 +175,7 @@ function localProofPost(body) {
   return options;
 }
 async function command(api, id, sessionToken, commandBody) {
-  const result = await json(`${api}/commands`, post({ v: 2, id, body: { kind: "Command", body: { command_id: randomUUID(), command: fixturePrincipalTransport(commandBody, "community moderation command transport") } } }, sessionToken));
+  const result = await json(`${api}/commands`, post({ v: 3, id, body: { kind: "Command", body: { command_id: randomUUID(), command: fixturePrincipalTransport(commandBody, "community moderation command transport") } } }, sessionToken));
   if (result.body?.kind !== "Ack") throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
 }
 async function cookie(context, base, value) {

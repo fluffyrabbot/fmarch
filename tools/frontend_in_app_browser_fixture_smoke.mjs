@@ -520,6 +520,13 @@ async function proveStabilityCheck(page, check, viewport) {
     if (await floor.count() !== 1) {
       throw new Error(`${check.id} ${tile.id} ${viewport.name} status floor missing`);
     }
+    const revealedTaskId = await revealDecisionCanvasTile({
+      check,
+      root,
+      tile,
+      tileRoot,
+      viewport,
+    });
     const floorMin = await floor.getAttribute("data-status-floor-min-px");
     if (floorMin !== String(check.statusFloorMinBlockSizePx)) {
       throw new Error(
@@ -550,6 +557,7 @@ async function proveStabilityCheck(page, check, viewport) {
       statusFloorBox: floorBox,
       statusFloorMinBlockSizePx: Number(floorMin),
       triggerPrecedesStatusFloor: true,
+      revealedTaskId,
     });
   }
   return {
@@ -561,6 +569,38 @@ async function proveStabilityCheck(page, check, viewport) {
     tileCount: tiles.length,
     tiles,
   };
+}
+
+async function revealDecisionCanvasTile({ check, root, tile, tileRoot, viewport }) {
+  if (await tileRoot.isVisible()) {
+    return null;
+  }
+
+  const hiddenPanel = tileRoot.locator(
+    "xpath=ancestor::article[@hidden and @data-task-id][1]",
+  );
+  if (await hiddenPanel.count() !== 1) {
+    throw new Error(
+      `${check.id} ${tile.id} ${viewport.name} is hidden without a decision-canvas task`,
+    );
+  }
+  const taskId = await hiddenPanel.getAttribute("data-task-id");
+  if (taskId === null) {
+    throw new Error(
+      `${check.id} ${tile.id} ${viewport.name} hidden panel lacks task identity`,
+    );
+  }
+  const taskControl = root.locator(
+    `button[data-task-id=${JSON.stringify(taskId)}]`,
+  );
+  if (await taskControl.count() !== 1) {
+    throw new Error(
+      `${check.id} ${tile.id} ${viewport.name} task ${taskId} has no unique queue control`,
+    );
+  }
+  await taskControl.click();
+  await tileRoot.waitFor({ state: "visible" });
+  return taskId;
 }
 
 async function runInteractionPageContract() {

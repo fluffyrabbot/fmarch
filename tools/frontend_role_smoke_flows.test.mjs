@@ -4,6 +4,7 @@ import {
   commandFlows,
   commandMockScenarios,
   fixtureApiRoutes,
+  privateChannelFixtureApiRoutes,
   flowHookNames,
   flowRestartStepTypes,
   flowStepTypes,
@@ -121,4 +122,26 @@ test("paginated thread fixture route stays registered last", () => {
     fixtureApiRoutes.indexOf(generic) < fixtureApiRoutes.length - 1,
     "generic thread route must register before the paginated route",
   );
+});
+
+
+test("player browser fixtures supply every private v3 projection", async () => {
+  const schema = await import("../frontend/src/lib/app/gameplay-response-schema.mjs");
+  for (const routes of [fixtureApiRoutes, privateChannelFixtureApiRoutes]) {
+    for (const [endpoint, validate] of [
+      ["slot-mentions", schema.validateSlotMentionsResponse],
+      ["notifications", schema.validatePlayerNotificationsResponse],
+      ["investigation-results", schema.validatePlayerInvestigationResultsResponse],
+      ["player-command-state", schema.validatePlayerCommandStateResponse],
+    ]) {
+      const route = routes.find((row) => row.pattern instanceof RegExp && row.pattern.test(`/games/midsummer/${endpoint}`));
+      assert.ok(route, `missing ${endpoint}`);
+      assert.equal(validate(route.body, { game: "midsummer", actorSlot: "slot-7" }), true, endpoint);
+    }
+  }
+  const thread = fixtureApiRoutes.find((row) => row.body?.posts?.some((post) => post.source_seq === 443));
+  assert.ok(thread, "mention flow requires post 443 in the authoritative thread fixture");
+  assert.equal(schema.validateGameplayThreadPageResponse(thread.body, { game: "midsummer" }), true);
+  assert.deepEqual(thread.body.posts.find((post) => post.source_seq === 443).mentions,
+    [{ slot_id: "slot-2", offset: 0, len: 7 }]);
 });

@@ -149,6 +149,9 @@ import {
   hostVisibleRecoverySummaryCases,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  HOST_SETUP_WORKFLOW_CONTRACT,
+} from "../frontend/src/routes/g/[game]/setup/setup-workflow-model.mjs";
+import {
   assertRecoveryTrace,
   buildCohostDeadlineRaceReloadTrace,
   buildHostConcurrentRaceReloadTrace,
@@ -2483,7 +2486,20 @@ function frontendSetupWorkbenchReadinessFromSummary(summary) {
       ? workbench.local.viewportLayouts.map((entry) => ({
           viewport: String(entry.viewport ?? ""),
           layout: String(entry.layout ?? ""),
-          slotCount: Number(entry.slotCount ?? 0),
+          workflowMode: String(entry.workflowMode ?? ""),
+          stageIds: Array.isArray(entry.stageIds)
+            ? entry.stageIds.map((stageId) => String(stageId))
+            : [],
+          defaultSelectedStageId: String(entry.defaultSelectedStageId ?? ""),
+          correctedStageId: String(entry.correctedStageId ?? ""),
+          rosterCardCount: Number(entry.rosterCardCount ?? 0),
+          roleCardCount: Number(entry.roleCardCount ?? 0),
+          correctionTargets: Array.isArray(entry.correctionTargets)
+            ? entry.correctionTargets.map((target) => ({
+                checkId: String(target.checkId ?? ""),
+                stageId: String(target.stageId ?? ""),
+              }))
+            : [],
           noHorizontalOverflow: entry.noHorizontalOverflow === true,
           screenshot: String(entry.screenshot ?? ""),
         }))
@@ -2503,7 +2519,7 @@ function frontendSetupWorkbenchReadinessFromSummary(summary) {
 function assertFrontendSetupWorkbenchReadiness(workbench) {
   if (
     workbench?.id !== "host-setup-workbench" ||
-    workbench.label !== "Host setup workbench geometry" ||
+    workbench.label !== "Host setup guided workflow geometry" ||
     !["browser_proven", "browser_geometry_missing"].includes(workbench.state) ||
     workbench.route !== "/g/midsummer/setup" ||
     typeof workbench.localStatus !== "string" ||
@@ -2523,14 +2539,21 @@ function assertFrontendSetupWorkbenchReadiness(workbench) {
   );
   for (const [viewport, layout] of [
     ["mobile", "stacked"],
-    ["tablet", "co-located-columns"],
-    ["desktop", "co-located-columns"],
+    ["tablet", "stepper-canvas"],
+    ["desktop", "stepper-canvas"],
   ]) {
     const entry = layouts.get(viewport);
     if (
       entry === undefined ||
       entry.layout !== layout ||
-      entry.slotCount < 2 ||
+      entry.workflowMode !== HOST_SETUP_WORKFLOW_CONTRACT.mode ||
+      !arraysEqual(entry.stageIds, HOST_SETUP_WORKFLOW_CONTRACT.stageIds) ||
+      entry.defaultSelectedStageId !== "roster" ||
+      entry.correctedStageId !== "roles" ||
+      !Number.isInteger(entry.rosterCardCount) ||
+      entry.rosterCardCount < 2 ||
+      entry.roleCardCount !== entry.rosterCardCount ||
+      !setupCorrectionTargetsAreCanonical(entry.correctionTargets) ||
       entry.noHorizontalOverflow !== true ||
       typeof entry.screenshot !== "string" ||
       !entry.screenshot.includes("host-setup")
@@ -2538,6 +2561,25 @@ function assertFrontendSetupWorkbenchReadiness(workbench) {
       throw new Error(`next-action frontend setup workbench ${viewport} layout drifted`);
     }
   }
+}
+
+function arraysEqual(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
+}
+
+function setupCorrectionTargetsAreCanonical(targets) {
+  return (
+    Array.isArray(targets) &&
+    targets.length === 2 &&
+    targets[0]?.checkId === "slots-occupied" &&
+    targets[0]?.stageId === "roster" &&
+    targets[1]?.checkId === "roles-assigned" &&
+    targets[1]?.stageId === "roles"
+  );
 }
 
 function validHostedIdentityFamilyBatchPredicate(batch) {

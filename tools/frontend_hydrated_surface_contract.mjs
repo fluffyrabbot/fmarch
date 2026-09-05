@@ -107,6 +107,7 @@ const adminAuditDetailData = await buildAdminAuditDetailData({
 });
 const playerData = await buildGameRouteData({
   game: "midsummer",
+  fixtureMode: true,
   principalId: "player_mira",
   capabilities: [
     { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
@@ -115,6 +116,7 @@ const playerData = await buildGameRouteData({
 });
 const moderatorData = await buildHostConsoleRouteData({
   game: "midsummer",
+  fixtureMode: true,
   principalId: FIXTURE_PRINCIPAL_IDS.hostH,
   capabilities: [{ kind: "HostOf", game: "midsummer" }],
 });
@@ -487,6 +489,7 @@ async function provePlayerCommandSurfacePath({
     votecount: data.votecount,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
+    commandState: data.commandState,
   });
   const sent = [];
   const result = await submitPlayerRouteCommand({
@@ -555,10 +558,16 @@ async function proveModeratorSurfaceAdapter() {
   let commandOutcomes = [];
   const projectionStore = fakeProjectionStore({
     host: {
+      authority: moderatorData.authority,
+      completed: moderatorData.completed ?? false,
       phase: moderatorData.phase,
       replacement: moderatorData.replacement,
+      tasks: moderatorData.hostTasks ?? [],
+      dayEvents: moderatorData.hostDayEvents ?? [],
+      dayEventScheduler: moderatorData.dayEventScheduler ?? null,
     },
     votecount: moderatorData.votecount,
+    dayVoteOutcomes: moderatorData.dayVoteOutcomes,
     hostPrompts: moderatorData.hostPrompts,
   });
   const result = await sendHostRouteAction({
@@ -669,10 +678,16 @@ async function proveModeratorSlotLifecycleSurfacePath() {
   let commandOutcomes = [];
   const projectionStore = fakeProjectionStore({
     host: {
+      authority: moderatorData.authority,
+      completed: moderatorData.completed ?? false,
       phase: moderatorData.phase,
       replacement: moderatorData.replacement,
+      tasks: moderatorData.hostTasks ?? [],
+      dayEvents: moderatorData.hostDayEvents ?? [],
+      dayEventScheduler: moderatorData.dayEventScheduler ?? null,
     },
     votecount: moderatorData.votecount,
+    dayVoteOutcomes: moderatorData.dayVoteOutcomes,
     hostPrompts: moderatorData.hostPrompts,
   });
   const result = await sendHostRouteAction({
@@ -769,6 +784,9 @@ function headerSummary(header) {
 function fakeProjectionStore(snapshot) {
   return {
     refreshed: [],
+    isReady() {
+      return true;
+    },
     applyPayload(key, payload) {
       snapshot = {
         ...snapshot,

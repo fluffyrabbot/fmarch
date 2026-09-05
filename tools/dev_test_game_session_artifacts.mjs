@@ -571,7 +571,7 @@ export function markdownSessionCard(card) {
         "",
         `Reconnect: attempt ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.attempt} ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.state}`,
         "",
-        `Live lag resync: ${card.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount} recoveries, ${card.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map((episode) => episode.continuationDeltaKind).join("/")}, reconnects ${card.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount}`,
+        `Live lag resync: ${card.verification.multiplayerHardening.liveProjectionLagResync.terminalResyncFrameCount} terminal frames, ${card.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map((episode) => episode.continuationDeltaKind).join("/")}, ${card.verification.multiplayerHardening.liveProjectionLagResync.recoveredReconnectCount} recovered reconnects`,
         "",
         `Stale player vote: ${card.verification.multiplayerHardening.stalePlayerVote.reject.message}`,
         "",
@@ -660,4 +660,3 @@ export function markdownSessionCard(card) {
   }
   return `${lines.join("\n")}\n`;
 }
-

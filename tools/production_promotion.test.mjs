@@ -255,6 +255,19 @@ test("hosted variables require isolated production identity credentials", () => 
     productionFrontend,
   };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  for (const frontend of ["stagingFrontend", "productionFrontend"]) {
+    assert.throws(
+      () =>
+        validateHostedVariables({
+          ...ready,
+          [frontend]: {
+            ...ready[frontend],
+            FMARCH_FRONTEND_FIXTURE_SESSION: "1",
+          },
+        }),
+      /must not enable fixture sessions/,
+    );
+  }
   assert.doesNotThrow(() =>
     validateHostedVariables({
       ...ready,

@@ -89,7 +89,7 @@ export function dayThreeVoteResolutionSurfaceFixture({
           status: "Lynch",
         },
       ],
-      setupResyncFromSeq: voteCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: voteCase.setupAuthoritativeSourceSeq,
       setupSnapshotCommandState: {
         phase: {
           phaseId: voteCase.expectedPhaseId,
@@ -195,7 +195,7 @@ export function postDayThreeResolutionSurfaceFixture({
       privateReceipt: true,
       boundary:
         "Seeded browser target role received day_vote private receipt after D03 resolution.",
-      resyncFromSeq: 908,
+      authoritativeSourceSeq: 908,
     }),
     actionPlayerPrivacyProof: seededCoreLoopPlayerSurfaceFixture({
       game,
@@ -212,11 +212,11 @@ export function postDayThreeResolutionSurfaceFixture({
       privateReceipt: false,
       boundary:
         "Seeded browser action player stayed alive with no target-only D03 receipt after host resolved Day 3.",
-      resyncFromSeq: 908,
+      authoritativeSourceSeq: 908,
     }),
     hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 908,
+      setupAuthoritativeSourceSeq: 908,
       setupPhaseId: "D03",
       setupPhaseState: "locked",
       advanceProof: hostPhaseTransitionActionFixture({
@@ -247,7 +247,7 @@ export function postDayThreeResolutionSurfaceFixture({
       privateReceipt: false,
       boundary:
         "Seeded browser action player observed host AdvancePhase from locked D03 into open N03.",
-      resyncFromSeq: 909,
+      authoritativeSourceSeq: 909,
     }),
     releaseReady: false,
     productionReady: false,
@@ -285,11 +285,11 @@ export function nightThreeEmptyResolutionSurfaceFixture({
         surfaceCase.actionPlayerNoActionCase.expectedPrivateReceipt,
       boundary:
         "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
-      resyncFromSeq: surfaceCase.actionPlayerNoActionCase.expectedResyncFromSeq,
+      authoritativeSourceSeq: surfaceCase.actionPlayerNoActionCase.expectedAuthoritativeSourceSeq,
     }),
     hostTransitionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: hostTransitionCase.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: hostTransitionCase.setupAuthoritativeSourceSeq,
       setupPhaseId: hostTransitionCase.setupPhaseId,
       setupPhaseState: hostTransitionCase.setupPhaseState,
       resolveProof: hostPhaseTransitionActionFixture({
@@ -339,7 +339,7 @@ export function nightThreeEmptyResolutionSurfaceFixture({
       privateReceipt: surfaceCase.actionPlayerDayFourCase.expectedPrivateReceipt,
       boundary:
         "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
-      resyncFromSeq: surfaceCase.actionPlayerDayFourCase.expectedResyncFromSeq,
+      authoritativeSourceSeq: surfaceCase.actionPlayerDayFourCase.expectedAuthoritativeSourceSeq,
       voteButtonCount: surfaceCase.actionPlayerDayFourCase.expectedVoteButtonCount,
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
     }),
@@ -373,7 +373,7 @@ export function dayFourSurvivorRoleSurfaceFixture({
       privateReceipt: survivorCase.expectedPrivateReceipt,
       boundary:
         "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
-      resyncFromSeq: survivorCase.expectedResyncFromSeq,
+      authoritativeSourceSeq: survivorCase.expectedAuthoritativeSourceSeq,
       voteButtonCount: survivorCase.expectedVoteButtonCount,
       voteTargets: [
         { kind: "slot", slotId: "slot-7", label: "Slot 7" },

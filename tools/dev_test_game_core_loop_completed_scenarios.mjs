@@ -164,7 +164,7 @@ export function assertHostCompleteGameProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 920 ||
+    proof.setupAuthoritativeSourceSeq !== 920 ||
     proof.setupSnapshotHost?.phase?.id !== "N05" ||
     proof.setupSnapshotHost?.phase?.state !== "open" ||
     proof.setupSnapshotHost?.completed !== false
@@ -214,9 +214,9 @@ export function assertCompletedHostReloadProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== "host-console-surface" ||
-    proof.resyncFromSeq !== 921 ||
-    proof.initialResyncSnapshotHost?.completed !== true ||
-    proof.reloadedResyncSnapshotHost?.completed !== true
+    proof.authoritativeSourceSeq !== 921 ||
+    proof.initialReconnectedSnapshotHost?.completed !== true ||
+    proof.reloadedReconnectedSnapshotHost?.completed !== true
   ) {
     throwCompletedScenarioAssertionError({
       message: "core-loop admin proof missing completed host reload shell",
@@ -298,12 +298,12 @@ export function assertCompletedHostStaleCommandRecoveryProofCase({
     !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
       "Reject GameAlreadyCompleted: game already completed",
     ) ||
-    proof.setupResyncFromSeq !== 921 ||
-    proof.setupResyncSnapshotHost?.completed !== true ||
-    proof.setupResyncSnapshotHost?.phase?.id !== "N05" ||
-    proof.recoveryResyncFromSeq !== 921 ||
-    proof.recoveryResyncSnapshotHost?.completed !== true ||
-    proof.recoveryResyncSnapshotHost?.phase?.id !== "N05" ||
+    proof.setupAuthoritativeSourceSeq !== 921 ||
+    proof.setupReconnectedSnapshotHost?.completed !== true ||
+    proof.setupReconnectedSnapshotHost?.phase?.id !== "N05" ||
+    proof.recoveryAuthoritativeSourceSeq !== 921 ||
+    proof.recoveryReconnectedSnapshotHost?.completed !== true ||
+    proof.recoveryReconnectedSnapshotHost?.phase?.id !== "N05" ||
     snapshot?.checkpoint?.phaseId !== "N05" ||
     snapshot.checkpoint.phaseState !== "open" ||
     snapshot.checkpoint.deadlineAffordance !== "none" ||
@@ -348,9 +348,9 @@ export function assertCompletedPlayerReloadProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.resyncFromSeq !== 921 ||
-    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+    proof.authoritativeSourceSeq !== 921 ||
+    proof.initialReconnectedSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedReconnectedSnapshotCommandState?.gameCompleted !== true
   ) {
     throwCompletedScenarioAssertionError({
       message: "core-loop admin proof missing completed player reload shell",
@@ -449,14 +449,14 @@ export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
     !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
       "Reject GameAlreadyCompleted: game already completed",
     ) ||
-    proof.setupResyncFromSeq !== 921 ||
-    proof.setupResyncSnapshotCommandState?.actorSlot !==
+    proof.setupAuthoritativeSourceSeq !== 921 ||
+    proof.setupReconnectedSnapshotCommandState?.actorSlot !==
       scenario.expectedSlot ||
-    proof.setupResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.recoveryResyncFromSeq !== 921 ||
-    proof.recoveryResyncSnapshotCommandState?.actorSlot !==
+    proof.setupReconnectedSnapshotCommandState?.gameCompleted !== true ||
+    proof.recoveryAuthoritativeSourceSeq !== 921 ||
+    proof.recoveryReconnectedSnapshotCommandState?.actorSlot !==
       scenario.expectedSlot ||
-    proof.recoveryResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.recoveryReconnectedSnapshotCommandState?.gameCompleted !== true ||
     snapshot?.checkpoint?.phaseId !== "N05" ||
     snapshot.checkpoint.phaseState !== "open" ||
     snapshot.checkpoint.actorSlot !== scenario.expectedSlot ||
@@ -516,7 +516,7 @@ export function assertStaleCompletedGamePlayerCommandRecoveryProofCase({
     proof.surfaceTestId !== "player-surface" ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
-    proof.setupResyncFromSeq !== 918 ||
+    proof.setupAuthoritativeSourceSeq !== 918 ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
     proof.command?.game !== expectedGame ||
     proof.command.actor_slot !== "slot-7" ||

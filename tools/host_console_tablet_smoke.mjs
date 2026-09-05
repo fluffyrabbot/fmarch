@@ -617,7 +617,7 @@ async function postCommand(
     "tablet seed command transport",
   );
   const envelope = {
-    v: 2,
+    v: 3,
     id,
     body: {
       kind: "Command",

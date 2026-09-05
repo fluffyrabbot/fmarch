@@ -92,7 +92,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
     commandKind: "SubmitVote",
     actorSlot: "slot-7",
     target: "NoLynch",
-    setupResyncFromSeq: 917,
+    setupAuthoritativeSourceSeq: 917,
     setupPhaseId: "D05",
     streamSeq: 918,
     expectedRefreshKeys: Object.freeze(["votecount", "commandState"]),
@@ -104,7 +104,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
   }),
   hostTransitionCase: Object.freeze({
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 918,
+    setupAuthoritativeSourceSeq: 918,
     setupPhaseId: "D05",
     setupPhaseState: "open",
     expectedVotecountTarget: "No lynch",
@@ -147,7 +147,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
     expectedBoundaryText: "open Night 5 with no legal action",
-    expectedResyncFromSeq: 920,
+    expectedAuthoritativeSourceSeq: 920,
     expectedLastVoteOutcomePhaseId: "D05",
   }),
   staleDayFiveVoteCase: Object.freeze({
@@ -156,7 +156,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
     commandKind: "SubmitVote",
     actorSlot: "slot-7",
     target: "NoLynch",
-    setupResyncFromSeq: 918,
+    setupAuthoritativeSourceSeq: 918,
     setupPhaseId: "D05",
     finalState: "reject",
     error: "PhaseLocked",
@@ -277,7 +277,7 @@ export function assertDayFiveNoLynchResolutionSurfaceProof({
     expectedPrivateCount: playerCase.expectedPrivateCount,
     expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
     expectedBoundaryText: playerCase.expectedBoundaryText,
-    expectedResyncFromSeq: playerCase.expectedResyncFromSeq,
+    expectedAuthoritativeSourceSeq: playerCase.expectedAuthoritativeSourceSeq,
     expectedCommandStateEndpoint:
       `/api/gameplay/games/${expectedGame}/player-command-state?slot_id=${playerCase.expectedSlot}`,
     expectedNotificationsEndpoint:
@@ -343,7 +343,7 @@ export function assertDayFiveNoLynchVoteProofCase({
       voteCase.expectedVotecountNeeded ||
     proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !==
       voteCase.expectedPriorDayVoteOutcomePhaseId ||
-    proof.setupResyncFromSeq !== voteCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== voteCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== voteCase.setupPhaseId ||
     proof.currentVote?.hasVote !== "true" ||
     !String(proof.currentVote?.text ?? "").includes("No lynch") ||
@@ -380,7 +380,7 @@ export function assertDayFiveNoLynchHostTransitionProofCase({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== hostCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== hostCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== hostCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotHost?.phase?.id !== hostCase.setupPhaseId ||
     proof.setupSnapshotHost?.phase?.state !== hostCase.setupPhaseState
   ) {
@@ -441,7 +441,7 @@ export function assertStaleDayFiveVoteRecoveryProofCase({
     proof.surfaceTestId !== staleCase.surfaceTestId ||
     proof.clickedAction !== staleCase.clickedAction ||
     proof.commandKind !== staleCase.commandKind ||
-    proof.setupResyncFromSeq !== staleCase.setupResyncFromSeq ||
+    proof.setupAuthoritativeSourceSeq !== staleCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== staleCase.setupPhaseId ||
     proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
     proof.command?.game !== expectedGame ||

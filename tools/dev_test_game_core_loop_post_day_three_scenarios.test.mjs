@@ -17,7 +17,7 @@ test("post-Day 3 resolution case shares transition and observation facts", () =>
     actionPlayerPrivacyScenarioId: "d03-action-player-privacy",
     hostAdvanceCase: {
       surfaceTestId: "host-console-surface",
-      setupResyncFromSeq: 908,
+      setupAuthoritativeSourceSeq: 908,
       setupPhaseId: "D03",
       setupPhaseState: "locked",
       advanceCase: {
@@ -44,7 +44,7 @@ test("post-Day 3 resolution case shares transition and observation facts", () =>
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,
       expectedBoundaryText: "observed host AdvancePhase",
-      expectedResyncFromSeq: 909,
+      expectedAuthoritativeSourceSeq: 909,
       expectedVoteButtonCount: 0,
       expectedVoteTargetCount: 0,
     },
@@ -83,7 +83,7 @@ test("post-Day 3 resolution assertion delegates receipts, host advance, and Nigh
       sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
       visitedRolePath: "/g/game-a/host",
       surfaceTestId: "host-console-surface",
-      setupResyncFromSeq: 908,
+      setupAuthoritativeSourceSeq: 908,
       setupSnapshotHost: { phase: { id: "D03", state: "locked" } },
       advanceProof: { id: "advance" },
     },

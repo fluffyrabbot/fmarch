@@ -157,12 +157,12 @@ export function completedPlayerReloadHardeningLaneCaseDefinitions() {
       proofStep: "reload",
     },
     {
-      id: "stale-player-complete-endgame-resync",
-      label: "Completed player endgame summary survives live resync",
+      id: "stale-player-complete-endgame-reconnect",
+      label: "Completed player endgame summary survives a new live generation",
       family: "completed-player-reload",
       seedGroup: "required",
       proofGroup: "stale-player-complete",
-      proofStep: "resync",
+      proofStep: "reconnect",
     },
     {
       id: "stale-player-complete-vote-history",
@@ -236,7 +236,7 @@ export function completedPlayerEndgameRefreshScenario() {
   }
   return freezeScenarioCase({
     ...staleVote,
-    expectedResyncKey: "endgameSummary",
+    expectedReconnectRefreshKey: "endgameSummary",
     expectedSummaryState: "revealed",
     expectedRevealSlot: "slot-7",
     expectedRoleKey: "godfather",
@@ -256,12 +256,12 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
 }) {
   const summaries = [
     proof?.endgameSummaryAfterReject,
-    proof?.manualEndgameResync?.snapshotEndgameSummary,
+    proof?.manualEndgameReconnect?.snapshotEndgameSummary,
     proof?.stalePublicReloadAfterReject?.recoveredEndgameSummary,
   ];
   const surfaces = [
     proof?.endgameSurfaceAfterReject,
-    proof?.manualEndgameResync?.surface,
+    proof?.manualEndgameReconnect?.surface,
     proof?.stalePublicReloadAfterReject?.endgameSurface,
   ];
   const summariesMatch = summaries.every((summary) => {
@@ -318,8 +318,11 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
     ) ||
     proof?.coldLoadEndpointsAfterReject?.endgameSummaryEndpoint !==
       `/games/${proof?.game}/endgame-summary` ||
-    !proof?.resyncKeysAfterReject?.includes(scenario.expectedResyncKey) ||
-    proof?.manualEndgameResync?.fromSeq !== 0 ||
+    !proof?.reconnectRefreshKeysAfterReject?.includes(scenario.expectedReconnectRefreshKey) ||
+    proof?.manualEndgameReconnect?.reconnectEvent?.kind !== "reconnect" ||
+    proof?.manualEndgameReconnect?.reconnectEvent?.state !== "recovered" ||
+    !Number.isInteger(proof?.manualEndgameReconnect?.reconnectEvent?.attempt) ||
+    proof.manualEndgameReconnect.reconnectEvent.attempt < 1 ||
     !summariesMatch ||
     !surfacesMatch ||
     proof?.apiEndgameSummaryAfterReject?.completed !== true ||

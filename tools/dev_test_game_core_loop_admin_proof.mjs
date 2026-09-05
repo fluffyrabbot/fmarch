@@ -756,7 +756,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -774,7 +774,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -792,7 +792,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -809,7 +809,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-lifecycle-control-reject",
         body: {
           kind: "Reject",
@@ -1190,7 +1190,7 @@ async function installHostLifecycleStaleRejectBrowserRoutes(
         status: 409,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -1209,7 +1209,7 @@ async function installHostLifecycleStaleRejectBrowserRoutes(
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-lifecycle-stale-reject",
         body: {
           kind: "Reject",
@@ -1462,11 +1462,11 @@ async function proveDayThreePlayerObservation({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(906);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       ({ slot }) =>
@@ -1524,9 +1524,9 @@ async function proveDayThreePlayerObservation({
       },
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 906,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 906,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -1619,10 +1619,10 @@ async function proveDayThreePlayerVoteSubmission({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(906);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -1702,7 +1702,7 @@ async function proveDayThreePlayerVoteSubmission({
       projectionCommandState: projection?.commandState ?? null,
       projectionVotecount: projection?.votecount ?? null,
       projectionDayVoteOutcomes: projection?.dayVoteOutcomes ?? null,
-      setupResyncFromSeq: 906,
+      setupAuthoritativeSourceSeq: 906,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       currentVote: {
         hasVote: currentVoteHasVote,
@@ -1838,7 +1838,7 @@ async function provePostDayThreeResolutionSurface({
         "Seeded browser action player observed host AdvancePhase from locked D03 into open N03.",
     }),
     notifications: [],
-    resyncFromSeq: 909,
+    authoritativeSourceSeq: 909,
     threadBody: "Night 3 has opened.",
   });
   return {
@@ -1877,7 +1877,7 @@ async function proveNightThreeEmptyResolutionSurface({
         "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
     }),
     notifications: [],
-    resyncFromSeq: 909,
+    authoritativeSourceSeq: 909,
     threadBody: "Night 3 has opened.",
   });
   const hostTransitionProof = await proveNightThreeEmptyHostTransition({
@@ -1898,7 +1898,7 @@ async function proveNightThreeEmptyResolutionSurface({
         "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
     }),
     notifications: [],
-    resyncFromSeq: 911,
+    authoritativeSourceSeq: 911,
     threadBody: "Day 4 has opened.",
     expectedVoteButtonCount: 1,
   });
@@ -1935,7 +1935,7 @@ async function proveDayFourSurvivorRoleSurface({
         "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
     }),
     notifications: [],
-    resyncFromSeq: 911,
+    authoritativeSourceSeq: 911,
     threadBody: "Day 4 has opened.",
     expectedVoteButtonCount: 2,
   });
@@ -2061,7 +2061,7 @@ async function provePostNightFourTransitionSurface({
         status: "factional_kill",
       },
     ],
-    resyncFromSeq: 917,
+    authoritativeSourceSeq: 917,
     threadBody: "Day 5 has opened.",
     dayVoteOutcomesRows: [
       ...dayTwoVoteOutcomeRows(),
@@ -2082,7 +2082,7 @@ async function provePostNightFourTransitionSurface({
         "Seeded browser action player observed open Day 5 no-lynch controls after Night 4 advanced.",
     }),
     notifications: [],
-    resyncFromSeq: 917,
+    authoritativeSourceSeq: 917,
     threadBody: "Day 5 has opened.",
     expectedVoteButtonCount: 1,
     dayVoteOutcomesRows: [
@@ -2143,7 +2143,7 @@ async function proveDayFiveNoLynchResolutionSurface({
         "Seeded browser action player observed host AdvancePhase from Day 5 no-lynch into open Night 5 with no legal action.",
     }),
     notifications: [],
-    resyncFromSeq: 920,
+    authoritativeSourceSeq: 920,
     threadBody: "Night 5 has opened.",
     dayVoteOutcomesRows: [
       ...dayTwoVoteOutcomeRows(),
@@ -2220,7 +2220,7 @@ async function proveCompletedGameEndgameSurface({
         "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
     }),
     notifications: [],
-    resyncFromSeq: 921,
+    authoritativeSourceSeq: 921,
     threadBody: "The game is complete.",
     dayVoteOutcomesRows: [
       ...dayTwoVoteOutcomeRows(),
@@ -2297,10 +2297,10 @@ async function proveNightFourHostResolution({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(914);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -2335,7 +2335,7 @@ async function proveNightFourHostResolution({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 914,
+      setupAuthoritativeSourceSeq: 914,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       resolveProof,
       rawInviteTokensVisible: false,
@@ -2376,10 +2376,10 @@ async function proveDayFourNoLynchVoteSubmission({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(911);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -2460,7 +2460,7 @@ async function proveDayFourNoLynchVoteSubmission({
       projectionCommandState: projection?.commandState ?? null,
       projectionVotecount: projection?.votecount ?? null,
       projectionDayVoteOutcomes: projection?.dayVoteOutcomes ?? null,
-      setupResyncFromSeq: 911,
+      setupAuthoritativeSourceSeq: 911,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       currentVote: {
         hasVote: currentVoteHasVote,
@@ -2508,10 +2508,10 @@ async function proveDayFourNoLynchHostTransition({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(912);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -2554,7 +2554,7 @@ async function proveDayFourNoLynchHostTransition({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 912,
+      setupAuthoritativeSourceSeq: 912,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       resolveProof,
       advanceProof,
@@ -2596,10 +2596,10 @@ async function proveDayFiveNoLynchVoteSubmission({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(917);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -2680,7 +2680,7 @@ async function proveDayFiveNoLynchVoteSubmission({
       projectionCommandState: projection?.commandState ?? null,
       projectionVotecount: projection?.votecount ?? null,
       projectionDayVoteOutcomes: projection?.dayVoteOutcomes ?? null,
-      setupResyncFromSeq: 917,
+      setupAuthoritativeSourceSeq: 917,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       currentVote: {
         hasVote: currentVoteHasVote,
@@ -2728,10 +2728,10 @@ async function proveDayFiveNoLynchHostTransition({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(918);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -2774,7 +2774,7 @@ async function proveDayFiveNoLynchHostTransition({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 918,
+      setupAuthoritativeSourceSeq: 918,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       resolveProof,
       advanceProof,
@@ -2814,10 +2814,10 @@ async function proveStaleDayFiveVoteRecovery({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(918);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -2874,7 +2874,7 @@ async function proveStaleDayFiveVoteRecovery({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 918,
+      setupAuthoritativeSourceSeq: 918,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
@@ -2915,10 +2915,10 @@ async function proveHostCompleteGameFromNightFive({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(920);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -2954,7 +2954,7 @@ async function proveHostCompleteGameFromNightFive({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 920,
+      setupAuthoritativeSourceSeq: 920,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       completeProof,
       rawInviteTokensVisible: false,
@@ -2991,11 +2991,11 @@ async function proveCompletedHostRoleReload({
       state: "visible",
       timeout: 15000,
     });
-    const initialResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+    const initialReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(921);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3010,11 +3010,11 @@ async function proveCompletedHostRoleReload({
       state: "visible",
       timeout: 15000,
     });
-    const reloadedResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable after reload");
+    const reloadedReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable after reload");
       }
-      return window.__fmarchTriggerHostResync(921);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3034,9 +3034,9 @@ async function proveCompletedHostRoleReload({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotHost: initialResyncSnapshot?.host ?? null,
-      reloadedResyncSnapshotHost: reloadedResyncSnapshot?.host ?? null,
+      authoritativeSourceSeq: 921,
+      initialReconnectedSnapshotHost: initialReconnectedSnapshot?.host ?? null,
+      reloadedReconnectedSnapshotHost: reloadedReconnectedSnapshot?.host ?? null,
       initialSnapshot,
       reloadedSnapshot,
       rawInviteTokensVisible: false,
@@ -3100,11 +3100,11 @@ async function proveCompletedHostStaleCommandRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const setupResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+    const setupReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(921);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3123,7 +3123,7 @@ async function proveCompletedHostStaleCommandRecovery({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: scenario.commandId,
           body: {
             kind: "IssueCommand",
@@ -3139,11 +3139,11 @@ async function proveCompletedHostStaleCommandRecovery({
         body: await response.json(),
       };
     }, { game: expectedGame, scenario });
-    const recoveryResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable after reject");
+    const recoveryReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable after reject");
       }
-      return window.__fmarchTriggerHostResync(921);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3169,10 +3169,10 @@ async function proveCompletedHostStaleCommandRecovery({
       commandKind: scenario.commandKind,
       command: commandRequests.at(-1)?.[scenario.commandKind] ?? null,
       commandResponse,
-      setupResyncFromSeq: 921,
-      setupResyncSnapshotHost: setupResyncSnapshot?.host ?? null,
-      recoveryResyncFromSeq: 921,
-      recoveryResyncSnapshotHost: recoveryResyncSnapshot?.host ?? null,
+      setupAuthoritativeSourceSeq: 921,
+      setupReconnectedSnapshotHost: setupReconnectedSnapshot?.host ?? null,
+      recoveryAuthoritativeSourceSeq: 921,
+      recoveryReconnectedSnapshotHost: recoveryReconnectedSnapshot?.host ?? null,
       recoverySnapshot,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -3235,10 +3235,10 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(918);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       (selector) =>
@@ -3301,7 +3301,7 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 918,
+      setupAuthoritativeSourceSeq: 918,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       stalePostBody: scenario.postBody,
       rawInviteTokensVisible: false,
@@ -3382,11 +3382,11 @@ async function proveCompletedPlayerRoleReload({
       state: "visible",
       timeout: 15000,
     });
-    const initialResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const initialReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(921);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3401,11 +3401,11 @@ async function proveCompletedPlayerRoleReload({
       state: "visible",
       timeout: 15000,
     });
-    const reloadedResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable after reload");
+    const reloadedReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable after reload");
       }
-      return window.__fmarchTriggerPlayerResync(921);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3428,11 +3428,11 @@ async function proveCompletedPlayerRoleReload({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotCommandState:
-        initialResyncSnapshot?.commandState ?? null,
-      reloadedResyncSnapshotCommandState:
-        reloadedResyncSnapshot?.commandState ?? null,
+      authoritativeSourceSeq: 921,
+      initialReconnectedSnapshotCommandState:
+        initialReconnectedSnapshot?.commandState ?? null,
+      reloadedReconnectedSnapshotCommandState:
+        reloadedReconnectedSnapshot?.commandState ?? null,
       initialSnapshot,
       reloadedSnapshot,
       rawInviteTokensVisible: false,
@@ -3464,7 +3464,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
         await fulfillJson(
           route,
           {
-            v: 2,
+            v: 3,
             id: commandEnvelope.id,
             body: {
               kind: "Reject",
@@ -3483,7 +3483,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id:
             commandEnvelope?.id ??
             "completed-dead-player-stale-vote-recovery-reject",
@@ -3531,8 +3531,8 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const setupResyncSnapshot = await triggerPlayerResync(page, 921, {
-      unavailableMessage: "player resync hook is unavailable",
+    const setupReconnectedSnapshot = await reconnectPlayerProjection(page, {
+      unavailableMessage: "player reconnect hook is unavailable",
     });
     await page.waitForFunction(
       (expectedSlot) =>
@@ -3548,7 +3548,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            v: 2,
+            v: 3,
             id: "completed-dead-player-stale-vote",
             body: {
               kind: "IssueCommand",
@@ -3572,8 +3572,8 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       },
       { expectedGame, scenario },
     );
-    const recoveryResyncSnapshot = await triggerPlayerResync(page, 921, {
-      unavailableMessage: "player resync hook is unavailable after reject",
+    const recoveryReconnectedSnapshot = await reconnectPlayerProjection(page, {
+      unavailableMessage: "player reconnect hook is unavailable after reject",
     });
     await page.waitForFunction(
       () =>
@@ -3604,12 +3604,12 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       commandKind: scenario.commandKind,
       command: commandRequests.at(-1)?.SubmitVote ?? null,
       commandResponse,
-      setupResyncFromSeq: 921,
-      setupResyncSnapshotCommandState:
-        setupResyncSnapshot?.commandState ?? null,
-      recoveryResyncFromSeq: 921,
-      recoveryResyncSnapshotCommandState:
-        recoveryResyncSnapshot?.commandState ?? null,
+      setupAuthoritativeSourceSeq: 921,
+      setupReconnectedSnapshotCommandState:
+        setupReconnectedSnapshot?.commandState ?? null,
+      recoveryAuthoritativeSourceSeq: 921,
+      recoveryReconnectedSnapshotCommandState:
+        recoveryReconnectedSnapshot?.commandState ?? null,
       recoverySnapshot,
       rawInviteTokensVisible: false,
       targetOnlyActionVisible: false,
@@ -3621,14 +3621,13 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
   }
 }
 
-async function triggerPlayerResync(
+async function reconnectPlayerProjection(
   page,
-  fromSeq,
-  { unavailableMessage = "player resync hook is unavailable" } = {},
+  { unavailableMessage = "player reconnect hook is unavailable" } = {},
 ) {
   try {
     await page.waitForFunction(
-      () => typeof window.__fmarchTriggerPlayerResync === "function",
+      () => typeof window.__fmarchReconnectPlayerLiveProjectionNow === "function",
       null,
       { timeout: 15000 },
     );
@@ -3636,8 +3635,7 @@ async function triggerPlayerResync(
     throw new Error(unavailableMessage);
   }
   return await page.evaluate(
-    async (seq) => window.__fmarchTriggerPlayerResync(seq),
-    fromSeq,
+    async () => window.__fmarchReconnectPlayerLiveProjectionNow(),
   );
 }
 
@@ -3670,10 +3668,10 @@ async function proveNightFourPlayerNoActionSurface({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(914);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -3704,7 +3702,7 @@ async function proveNightFourPlayerNoActionSurface({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 914,
+      setupAuthoritativeSourceSeq: 914,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       checkpoint,
       projectionCommandState: await page.evaluate(
@@ -3748,10 +3746,10 @@ async function proveNightThreeEmptyHostTransition({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(909);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -3794,7 +3792,7 @@ async function proveNightThreeEmptyHostTransition({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 909,
+      setupAuthoritativeSourceSeq: 909,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       resolveProof,
       advanceProof,
@@ -3817,7 +3815,7 @@ async function provePostDayThreePlayerSurface({
   slotField,
   commandState,
   notifications,
-  resyncFromSeq,
+  authoritativeSourceSeq,
   threadBody,
   expectedVoteButtonCount = 0,
   dayVoteOutcomesRows = [...dayTwoVoteOutcomeRows(), dayThreeVoteOutcomeRow()],
@@ -3829,7 +3827,7 @@ async function provePostDayThreePlayerSurface({
       commandState,
       notifications,
       threadBody,
-      threadSeq: resyncFromSeq,
+      threadSeq: authoritativeSourceSeq,
       dayVoteOutcomesRows,
     });
     await page.context().addCookies([
@@ -3848,12 +3846,12 @@ async function provePostDayThreePlayerSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async (fromSeq) => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(fromSeq);
-    }, resyncFromSeq);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
+    });
     await page.waitForFunction(
       ({ slot, phaseId }) =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === slot &&
@@ -3923,9 +3921,9 @@ async function provePostDayThreePlayerSurface({
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
       projectionDayVoteOutcomes: projection?.dayVoteOutcomes ?? null,
-      resyncFromSeq,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -3989,10 +3987,10 @@ async function provePostNightFourHostAdvance({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(916);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -4027,7 +4025,7 @@ async function provePostNightFourHostAdvance({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 916,
+      setupAuthoritativeSourceSeq: 916,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       advanceProof,
       rawInviteTokensVisible: false,
@@ -4068,12 +4066,12 @@ async function proveStaleNightFourActionRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const setupSnapshot = await page.evaluate(async (fromSeq) => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(fromSeq);
-    }, scenario.setupResyncFromSeq);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
+    });
     await page.waitForFunction(
       (proofScenario) =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId ===
@@ -4133,7 +4131,7 @@ async function proveStaleNightFourActionRecovery({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: scenario.setupResyncFromSeq,
+      setupAuthoritativeSourceSeq: scenario.setupAuthoritativeSourceSeq,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
@@ -4172,10 +4170,10 @@ async function provePostDayThreeHostAdvance({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(908);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -4210,7 +4208,7 @@ async function provePostDayThreeHostAdvance({
       visitedRolePath,
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 908,
+      setupAuthoritativeSourceSeq: 908,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       advanceProof,
       rawInviteTokensVisible: false,
@@ -4351,10 +4349,10 @@ async function proveHostStaleAdvanceAfterTransition({
       timeout: 15000,
     });
     const setupSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerHostResync !== "function") {
-        throw new Error("host resync hook is unavailable");
+      if (typeof window.__fmarchReconnectHostLiveProjectionNow !== "function") {
+        throw new Error("host reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerHostResync(801);
+      return window.__fmarchReconnectHostLiveProjectionNow();
     });
     await page.waitForFunction(
       (expectedDeadlineAffordance) => {
@@ -4437,7 +4435,7 @@ async function proveHostStaleAdvanceAfterTransition({
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       surfaceTestId: "host-console-surface",
-      setupResyncFromSeq: 801,
+      setupAuthoritativeSourceSeq: 801,
       setupSnapshotHost: setupSnapshot?.host ?? null,
       clickedAction: "advance_phase",
       commandKind: command === null ? null : "AdvancePhase",
@@ -4469,7 +4467,7 @@ async function installHostStaleAdvanceBrowserRoutes(page, { commandRequests }) {
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -4488,7 +4486,7 @@ async function installHostStaleAdvanceBrowserRoutes(page, { commandRequests }) {
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-stale-advance-reject",
         body: {
           kind: "Reject",
@@ -4535,7 +4533,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     if (command?.ResolvePhase !== undefined) {
       hostPhaseState = "resolved";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4549,7 +4547,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     if (command?.AdvancePhase !== undefined) {
       hostPhaseState = "advanced";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4564,7 +4562,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-phase-transition-reject",
         body: {
           kind: "Reject",
@@ -4614,7 +4612,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       hostPhaseState = "resolved";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4628,7 +4626,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       hostPhaseState = "advanced";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4643,7 +4641,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-night-action-transition-reject",
         body: {
           kind: "Reject",
@@ -4732,11 +4730,11 @@ async function provePlayerPhaseTransitionObservation({
       roleUrl,
       visitedRolePath,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(802);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -4747,7 +4745,7 @@ async function provePlayerPhaseTransitionObservation({
       null,
       { timeout: 15000 },
     );
-    const resyncKeys = await page.evaluate(() => window.__fmarchPlayerResyncKeys);
+    const reconnectRefreshKeys = await page.evaluate(() => window.__fmarchPlayerReconnectRefreshKeys);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
     const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
@@ -4764,8 +4762,8 @@ async function provePlayerPhaseTransitionObservation({
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       surfaceTestId: "player-surface",
-      resyncFromSeq: 802,
-      resyncKeys,
+      authoritativeSourceSeq: 802,
+      reconnectRefreshKeys,
       staleVoteRecoveryProof,
       staleActionRecoveryProof,
       staleTransitionRecoveryRoleUrlConsistency: {
@@ -4781,7 +4779,7 @@ async function provePlayerPhaseTransitionObservation({
           staleActionRecoveryProof.visitedRolePath === visitedRolePath,
         rawInviteTokensVisible: false,
       },
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
       projectionCommandState: projection?.commandState ?? null,
       checkpointPhaseId,
       checkpointPhaseState,
@@ -4804,10 +4802,10 @@ async function provePlayerStaleVoteAfterTransition({
   visitedRolePath,
 }) {
   const setupSnapshot = await page.evaluate(async () => {
-    if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-      throw new Error("player resync hook is unavailable");
+    if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+      throw new Error("player reconnect hook is unavailable");
     }
-    return window.__fmarchTriggerPlayerResync(801);
+    return window.__fmarchReconnectPlayerLiveProjectionNow();
   });
   await page.waitForFunction(
     () =>
@@ -4842,7 +4840,7 @@ async function provePlayerStaleVoteAfterTransition({
   });
   return {
     ...proof,
-    setupResyncFromSeq: 801,
+    setupAuthoritativeSourceSeq: 801,
     setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
   };
 }
@@ -5100,7 +5098,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5120,7 +5118,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5139,7 +5137,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "player-stale-action-transition-reject",
         body: {
           kind: "Reject",
@@ -5187,7 +5185,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
           })
         : seededActionOpenCommandState({
             boundary:
-              "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+              "Seeded browser PhaseLocked recovery and player reconnect observed host AdvancePhase into Night 2.",
           }),
     );
   });
@@ -5305,7 +5303,7 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -5322,7 +5320,7 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "player-action-submission-reject",
         body: {
           kind: "Reject",
@@ -5467,7 +5465,7 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
         status: 409,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5486,7 +5484,7 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "player-invalid-action-reject",
         body: {
           kind: "Reject",
@@ -5537,11 +5535,11 @@ async function proveTargetResolutionReceiptSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(901);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -5619,9 +5617,9 @@ async function proveTargetResolutionReceiptSurface({
       },
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 901,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 901,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -5704,11 +5702,11 @@ async function proveNormalResolutionPrivacySurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(901);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -5779,9 +5777,9 @@ async function proveNormalResolutionPrivacySurface({
       targetReceiptVisible: false,
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 901,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 901,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -5858,11 +5856,11 @@ async function proveTargetDayVoteReceiptSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(902);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -5940,9 +5938,9 @@ async function proveTargetDayVoteReceiptSurface({
       },
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 902,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 902,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -5994,11 +5992,11 @@ async function proveNormalDayVotePrivacySurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(902);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -6069,9 +6067,9 @@ async function proveNormalDayVotePrivacySurface({
       targetReceiptVisible: false,
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 902,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 902,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -6117,11 +6115,11 @@ async function proveTargetPostDayVoteAdvanceSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(903);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -6200,9 +6198,9 @@ async function proveTargetPostDayVoteAdvanceSurface({
       },
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 903,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 903,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -6254,11 +6252,11 @@ async function proveNormalPostDayVoteAdvanceSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(903);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -6332,9 +6330,9 @@ async function proveNormalPostDayVoteAdvanceSurface({
       targetReceiptVisible: false,
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 903,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 903,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -6380,11 +6378,11 @@ async function proveNightActionResolutionReceiptSurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(904);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -6463,9 +6461,9 @@ async function proveNightActionResolutionReceiptSurface({
       },
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 904,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 904,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -6517,11 +6515,11 @@ async function proveNormalNightActionResolutionPrivacySurface({
       state: "visible",
       timeout: 15000,
     });
-    const resyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const reconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(904);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -6593,9 +6591,9 @@ async function proveNormalNightActionResolutionPrivacySurface({
       targetReceiptVisible: false,
       projectionCommandState: projection?.commandState ?? null,
       projectionNotifications: projection?.notifications ?? null,
-      resyncFromSeq: 904,
-      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
-      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      authoritativeSourceSeq: 904,
+      reconnectedSnapshotCommandState: reconnectedSnapshot?.commandState ?? null,
+      reconnectedSnapshotNotifications: reconnectedSnapshot?.notifications ?? null,
       coldLoadEndpoints,
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -6784,7 +6782,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6799,7 +6797,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-three-vote-submission-reject",
         body: {
           kind: "Reject",
@@ -6872,7 +6870,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6887,7 +6885,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-four-no-lynch-vote-reject",
         body: {
           kind: "Reject",
@@ -6963,7 +6961,7 @@ async function installDayThreeHostVoteResolutionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       resolved = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6978,7 +6976,7 @@ async function installDayThreeHostVoteResolutionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-three-host-resolution-reject",
         body: {
           kind: "Reject",
@@ -7033,7 +7031,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-d04";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7047,7 +7045,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-n04";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7062,7 +7060,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-four-no-lynch-host-transition-reject",
         body: {
           kind: "Reject",
@@ -7130,7 +7128,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7145,7 +7143,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-five-no-lynch-vote-reject",
         body: {
           kind: "Reject",
@@ -7222,7 +7220,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-d05";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7236,7 +7234,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-n05";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7251,7 +7249,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "day-five-no-lynch-host-transition-reject",
         body: {
           kind: "Reject",
@@ -7323,7 +7321,7 @@ async function installNightFourNoActionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "night-four-no-action-surface-reject",
         body: {
           kind: "Reject",
@@ -7397,7 +7395,7 @@ async function installNightFourHostResolutionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       resolved = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7412,7 +7410,7 @@ async function installNightFourHostResolutionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "night-four-host-resolution-reject",
         body: {
           kind: "Reject",
@@ -7466,7 +7464,7 @@ async function installPostNightFourHostAdvanceBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       advanced = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7481,7 +7479,7 @@ async function installPostNightFourHostAdvanceBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "post-night-four-host-advance-reject",
         body: {
           kind: "Reject",
@@ -7537,7 +7535,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7557,7 +7555,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "stale-night-four-action-recovery-reject",
         body: {
           kind: "Reject",
@@ -7640,7 +7638,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7660,7 +7658,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "stale-day-five-vote-recovery-reject",
         body: {
           kind: "Reject",
@@ -7750,7 +7748,7 @@ async function installHostCompleteGameFromNightFiveBrowserRoutes(
     if (command?.CompleteGame !== undefined) {
       completed = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7765,7 +7763,7 @@ async function installHostCompleteGameFromNightFiveBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "host-complete-game-reject",
         body: {
           kind: "Reject",
@@ -7815,7 +7813,7 @@ async function installCompletedHostRoleReloadBrowserRoutes(page) {
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "completed-host-reload-reject",
         body: {
           kind: "Reject",
@@ -7870,7 +7868,7 @@ async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7889,7 +7887,7 @@ async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? `${scenario.commandId}-reject`,
         body: {
           kind: "Reject",
@@ -7945,7 +7943,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7964,7 +7962,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? `stale-completed-game-${scenario.commandKind}-reject`,
         body: {
           kind: "Reject",
@@ -8138,7 +8136,7 @@ async function installPostDayThreeHostAdvanceBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       advanced = true;
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8153,7 +8151,7 @@ async function installPostDayThreeHostAdvanceBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "post-day-three-host-advance-reject",
         body: {
           kind: "Reject",
@@ -8203,7 +8201,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-n03";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8217,7 +8215,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-d04";
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8232,7 +8230,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "night-three-empty-host-transition-reject",
         body: {
           kind: "Reject",
@@ -8889,11 +8887,11 @@ async function proveCompletedPrivateChannelReload({
       state: "visible",
       timeout: 15000,
     });
-    const initialResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
+    const initialReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(921);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       (completedThreadBody) =>
@@ -8910,11 +8908,11 @@ async function proveCompletedPrivateChannelReload({
       state: "visible",
       timeout: 15000,
     });
-    const reloadedResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable after reload");
+    const reloadedReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable after reload");
       }
-      return window.__fmarchTriggerPlayerResync(921);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       (completedThreadBody) =>
@@ -8936,11 +8934,11 @@ async function proveCompletedPrivateChannelReload({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotCommandState:
-        initialResyncSnapshot?.commandState ?? null,
-      reloadedResyncSnapshotCommandState:
-        reloadedResyncSnapshot?.commandState ?? null,
+      authoritativeSourceSeq: 921,
+      initialReconnectedSnapshotCommandState:
+        initialReconnectedSnapshot?.commandState ?? null,
+      reloadedReconnectedSnapshotCommandState:
+        reloadedReconnectedSnapshot?.commandState ?? null,
       initialSnapshot,
       reloadedSnapshot,
       rawInviteTokensVisible: false,
@@ -9028,11 +9026,11 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const reloadedResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable after completed reject reload");
+    const reloadedReconnectedSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchReconnectPlayerLiveProjectionNow !== "function") {
+        throw new Error("player reconnect hook is unavailable after completed reject reload");
       }
-      return window.__fmarchTriggerPlayerResync(921);
+      return window.__fmarchReconnectPlayerLiveProjectionNow();
     });
     await page.waitForFunction(
       () =>
@@ -9061,8 +9059,8 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       submitDisabledBeforeReject,
       snapshotAfterReject,
       snapshotAfterReload,
-      reloadedResyncSnapshotCommandState:
-        reloadedResyncSnapshot?.commandState ?? null,
+      reloadedReconnectedSnapshotCommandState:
+        reloadedReconnectedSnapshot?.commandState ?? null,
       receiptStatusText,
       receiptRefreshKeys,
       rawInviteTokensVisible: false,
@@ -9086,7 +9084,7 @@ async function installPrivateChannelBrowserRoutes(
     commandRequests.push(command);
     if (command?.SubmitPost !== undefined) {
       await fulfillJson(route, {
-        v: 2,
+        v: 3,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -9101,7 +9099,7 @@ async function installPrivateChannelBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "private-channel-role-reject",
         body: {
           kind: "Reject",
@@ -9158,7 +9156,7 @@ async function installPrivateChannelStalePostBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9177,7 +9175,7 @@ async function installPrivateChannelStalePostBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "private-channel-stale-post-reject",
         body: {
           kind: "Reject",
@@ -9252,7 +9250,7 @@ async function installPrivateChannelInvalidActionBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9271,7 +9269,7 @@ async function installPrivateChannelInvalidActionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "private-channel-invalid-action-reject",
         body: {
           kind: "Reject",
@@ -9326,7 +9324,7 @@ async function installCompletedPrivateChannelBrowserRoutes(page, { roleUrl }) {
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "completed-private-channel-reject",
         body: {
           kind: "Reject",
@@ -9358,7 +9356,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 2,
+          v: 3,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9377,7 +9375,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 2,
+        v: 3,
         id: commandEnvelope?.id ?? "completed-private-channel-stale-reject",
         body: {
           kind: "Reject",
@@ -10890,7 +10888,7 @@ function assertDayThreePlayerObservationProof({
   expectedBoundaryText,
   expectedPhaseId,
   expectedPhaseState,
-  expectedResyncFromSeq,
+  expectedAuthoritativeSourceSeq,
   expectedPrivateReceiptStatus,
   expectedPrivateReceiptPhaseId,
   expectedPrivateQueueBoundaryStatus,
@@ -11070,7 +11068,7 @@ function assertPostDayThreePlayerSurfaceProof({
   expectedPrivateCount,
   expectedPrivateReceipt,
   expectedBoundaryText,
-  expectedResyncFromSeq,
+  expectedAuthoritativeSourceSeq,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
   expectedVoteButtonCount = 0,
@@ -11094,7 +11092,7 @@ function assertPostDayThreePlayerSurfaceProof({
     expectedPrivateCount,
     expectedPrivateReceipt,
     expectedBoundaryText,
-    expectedResyncFromSeq,
+    expectedAuthoritativeSourceSeq,
     expectedCommandStateEndpoint,
     expectedNotificationsEndpoint,
     expectedVoteButtonCount,

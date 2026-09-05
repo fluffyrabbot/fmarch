@@ -343,6 +343,7 @@ async function provePlayerPath({ trace, data, composerBody, outcome }) {
     votecount: [],
     notifications: [],
     investigationResults: [],
+    commandState: data.commandState,
   });
   const pendingReceipts = recordPlayerCommandReceipt(
     [],
@@ -383,10 +384,21 @@ async function proveModeratorDispatchBridge() {
   const sent = [];
   const projectionStore = fakeProjectionStore({
     host: {
+      authority: {
+        principalId: "host_h",
+        capabilityKind: "HostOf",
+        allowedClasses: [],
+        deniedClasses: [],
+      },
+      completed: false,
       phase: { id: "D01" },
       replacement: null,
+      tasks: [],
+      dayEvents: [],
+      dayEventScheduler: null,
     },
     votecount: [],
+    dayVoteOutcomes: [],
     hostPrompts: [
       {
         id: "D01:skip_next_day:slot_1",
@@ -471,14 +483,25 @@ async function proveModeratorSlotLifecyclePath({ event }) {
   const sent = [];
   const projectionStore = fakeProjectionStore({
     host: {
+      authority: {
+        principalId: "host_h",
+        capabilityKind: "HostOf",
+        allowedClasses: [],
+        deniedClasses: [],
+      },
+      completed: false,
       phase: { id: "D01" },
       replacement: {
         slotId: "slot-7",
         lifecycleLabel: "Alive",
         historyLabel: "Slot history remains attached to slot-7",
       },
+      tasks: [],
+      dayEvents: [],
+      dayEventScheduler: null,
     },
     votecount: [],
+    dayVoteOutcomes: [],
     hostPrompts: [],
   });
   let dispatched = appendHostActionEvent([], event);
@@ -592,11 +615,33 @@ function adminData() {
 
 function playerData({ channel }) {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
     player: { principalId: "player_mira", slotId: "slot-7" },
+    channel: { channel, allowed: true },
+    commandState: {
+      game: "midsummer",
+      actorSlot: "slot-7",
+      actorStatus: "alive",
+      gameCompleted: false,
+      phase: { locked: false },
+      voteTargets: [{ kind: "slot", slotId: "slot-2" }],
+      currentVote: null,
+      actions: [],
+      currentActions: [],
+      dayEvents: [],
+    },
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
+      voteCommands: [
+        {
+          action: "submit_vote",
+          commandKind: "submit_vote",
+          label: "Vote Slot 2",
+          voteTarget: { Slot: "slot-2" },
+        },
+      ],
     },
     threadPager: { pageSize: 50, channel },
   };
@@ -604,8 +649,13 @@ function playerData({ channel }) {
 
 function moderatorData() {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
     session: { principalId: "host_h" },
+    access: {
+      allowed: true,
+      capability: { kind: "HostOf", game: "midsummer" },
+    },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/api/gameplay/games/midsummer/votecount",
@@ -712,6 +762,9 @@ function moderatorSlotLifecycleEvent() {
 function fakeProjectionStore(snapshot) {
   return {
     refreshed: [],
+    isReady() {
+      return true;
+    },
     applyPayload(key, payload) {
       snapshot = { ...snapshot, [key]: payload };
       return snapshot;

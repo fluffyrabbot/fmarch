@@ -13,7 +13,6 @@ import {
   accessibilitySurfaceContract,
   boardScenario,
   forbiddenRoutes,
-  hostSetupScenario,
   navFocusCoverage,
   publicGameScenario,
   publicationViewports,
@@ -60,6 +59,14 @@ import {
 import {
   HOST_TASK_WORKSPACE_CONTRACT,
 } from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
+import {
+  FIXTURE_PRINCIPAL_IDS,
+} from "../frontend/src/lib/principal-id.mjs";
+import {
+  HOST_SETUP_ROLE_SMOKE_CONTRACT,
+  assertHostSetupWorkflowEvidence,
+  expectedHostSetupLayout,
+} from "./frontend_host_setup_proof_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const staticContractPath = path.join(
@@ -534,9 +541,9 @@ test("static role contract artifact records shared nav focus and route state mat
       },
       {
         surface: "admin-setup",
-        actionId: "cohost",
-        statusKey: "cohost",
-        dispatchKind: "add_cohost",
+        actionId: "create-game",
+        statusKey: "create-game",
+        dispatchKind: "create_game",
       },
       {
         surface: "moderator-host",
@@ -564,7 +571,7 @@ test("static role contract artifact records shared nav focus and route state mat
         actionId: "submit_post",
         statusKey: "submit_post",
         dispatchKind: "submit_post",
-        projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+        projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes", "slotMentions"],
       },
     ],
   });
@@ -848,11 +855,11 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: "Hosting as @host_h",
+    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     label: "Technical access",
-    value: "HostOf(midsummer) · @host_h",
+    value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
-    principalId: "host_h",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -1260,6 +1267,9 @@ test("route-state render artifact covers every forced board and role page state"
       capabilityLabel: "SlotOccupant or ChannelMember(main)",
       actorSlot: "slot-7",
     },
+    dayEventRailTestId: "player-day-event-rail",
+    dayEventCardTestId: "player-day-event-event-cookie",
+    dayEventDockTestId: "player-dock-events",
     threadPager: {
       component: PLAYER_THREAD_PAGER_CONTRACT.component,
       rootTestId: PLAYER_THREAD_PAGER_CONTRACT.rootTestId,
@@ -1442,6 +1452,7 @@ test("route-state render artifact covers every forced board and role page state"
     taskTestIds: [
       "deadline",
       "engine-host-prompt-D01-skip_next_day-slot_1",
+      "day-event-resolve-event-cookie",
       "replacement",
       "phase",
       "votecount",
@@ -1464,10 +1475,12 @@ test("route-state render artifact covers every forced board and role page state"
       "moderator-control-engine-host-prompt-D01-skip_next_day-slot_1",
     hostPromptActionTestId:
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
+    dayEventWorkspaceTestId: "host-day-event-workspace-event-cookie",
+    dayEventParticipantTestId: "day-event-winner-event-cookie-slot-1",
     commandContext: {
       testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
-      principalId: "host_h",
+      principalId: FIXTURE_PRINCIPAL_IDS.hostH,
       capabilityLabel: "HostOf(midsummer)",
       commandEndpoint: "/commands",
     },
@@ -1562,11 +1575,26 @@ test("route-state render artifact covers every forced board and role page state"
   assert.deepEqual(routeStateRender.confirmationMarkup.adminSetup, {
     role: "admin",
     surface: "setup",
-    confirmTestIds: ["admin-command-confirm-cohost"],
-    cancelTestIds: ["admin-command-cancel-cohost"],
-    messageTestIds: ["admin-command-confirmation-message-cohost"],
+    confirmTestIds: [
+      "admin-command-confirm-create-game",
+      "admin-command-confirm-cohost",
+    ],
+    cancelTestIds: [
+      "admin-command-cancel-create-game",
+      "admin-command-cancel-cohost",
+    ],
+    messageTestIds: [
+      "admin-command-confirmation-message-create-game",
+      "admin-command-confirmation-message-cohost",
+    ],
     formFieldTestIds: [],
     focusContracts: [
+      {
+        initialFocusTestId: "admin-command-confirm-create-game",
+        returnFocusTestId: "admin-command-trigger-create-game",
+        escapeCancels: true,
+        tabContainment: "local-confirmation-controls",
+      },
       {
         initialFocusTestId: "admin-command-confirm-cohost",
         returnFocusTestId: "admin-command-trigger-cohost",
@@ -1678,7 +1706,6 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
     },
     commandKind: "AddCohost",
     commandEndpoint: "/commands",
-    principalId: "admin_a",
     optimisticState: "pending",
     finalState: "ack",
     projectionRefreshKeys: [],
@@ -1728,6 +1755,7 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
     "resolve_host_prompt",
   );
   assert.deepEqual(dispatchBridge.rolePlans.moderator.projectionRefreshKeys, [
+    "host",
     "hostPrompts",
   ]);
   assert.equal(dispatchBridge.rolePlans.moderator.dispatchedCount, 1);
@@ -1940,7 +1968,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
           statusTestId:
             "host-command-activity-status-resolve_host_prompt-D01-skip_next_day-slot_1",
         },
-        ackRefreshKeys: ["hostPrompts"],
+        ackRefreshKeys: ["host", "hostPrompts"],
         rejectRefreshKeys: [
           ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
         ],
@@ -2549,7 +2577,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       zone.descendantCount,
     ]),
     [
-      ["admin-setup-action-zone", "admin-setup-actions", 2],
+      ["admin-setup-action-zone", "admin-setup-actions", 1],
       ["admin-recovery-action-zone", "admin-recovery-actions", 1],
     ],
   );
@@ -2642,7 +2670,7 @@ test("no-bind keyboard traversal artifact records tab order evidence or a Chromi
   }
 });
 
-test("route live contract records Svelte onMount websocket and resync evidence", async () => {
+test("route live contract records Svelte onMount terminal-frame reconnect evidence", async () => {
   const routeLive = await readJsonArtifact(routeLivePath);
 
   assert.equal(routeLive.status, "passed");
@@ -2668,32 +2696,37 @@ test("route live contract records Svelte onMount websocket and resync evidence",
       "cbor-ws-projection-deltas-with-resync-and-reconnect",
     ],
   );
-  assert.deepEqual(routeLive.runtime.player.resyncKeys, [
+  assert.deepEqual(routeLive.runtime.player.reconnectRefreshKeys, [
     "thread",
     "votecount",
     "dayVoteOutcomes",
     "endgameSummary",
     "notifications",
     "investigationResults",
+    "slotMentions",
     "commandState",
   ]);
-  assert.deepEqual(routeLive.runtime.moderator.resyncKeys, [
+  assert.deepEqual(routeLive.runtime.moderator.reconnectRefreshKeys, [
     "host",
     "votecount",
     "dayVoteOutcomes",
     "hostPrompts",
   ]);
   assert.deepEqual(routeLive.runtime.player.eventKinds, [
-    "open",
     "hello",
     "delta",
     "resync-required",
+    "close",
+    "reconnecting",
+    "reconnect",
   ]);
   assert.deepEqual(routeLive.runtime.moderator.eventKinds, [
-    "open",
     "hello",
     "delta",
     "resync-required",
+    "close",
+    "reconnecting",
+    "reconnect",
   ]);
   assert.equal(routeLive.runtime.player.finalStatus.state, "recovered");
   assert.equal(routeLive.runtime.moderator.finalStatus.state, "recovered");
@@ -4204,7 +4237,7 @@ test("browser acceptance boundary records blocked and prepared browser lanes", a
   );
   assert.equal(
     boundary.promotionRule,
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin cohost confirmation and recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots; screenshot pixel evidence; exact guided-stage-canvas setup evidence for /g/midsummer/setup across the contracted mobile, tablet, and desktop layouts, stages, scenario roster/role cards, correction targets, and overflow boundary; overlap-checked target evidence; live thumb-zone geometry evidence; admin exception-inbox decision-canvas and native audit-detail navigation evidence; player main-thread SubmitPost ACK refresh evidence; player private:role_pm:slot-7 SubmitPost ACK evidence; player tablet-media browser request evidence; and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   );
   const laneById = new Map(boundary.lanes.map((lane) => [lane.id, lane]));
   assert.deepEqual([...laneById.keys()], [
@@ -4471,6 +4504,9 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
   const moderatorRequirement = audit.requirements.find(
     (requirement) => requirement.id === "moderator-host-surface",
   );
+  const adminRequirement = audit.requirements.find(
+    (requirement) => requirement.id === "admin-operator-surface",
+  );
   const routeErrorRequirement = audit.requirements.find(
     (requirement) => requirement.id === "route-error-shell",
   );
@@ -4494,7 +4530,13 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
   ]);
   assert.deepEqual(hostSetupRequirement.evidence, [
     "roleSmoke.setup",
-    "roleSmoke.setup[*].slotCards",
+    "roleSmoke.setup[*].workflowMode",
+    "roleSmoke.setup[*].stageIds",
+    "roleSmoke.setup[*].layout",
+    "roleSmoke.setup[*].rosterCards",
+    "roleSmoke.setup[*].roleCards",
+    "roleSmoke.setup[*].correctionTargets",
+    "roleSmoke.setup[*].noHorizontalOverflow",
     "roleSmoke.setup[*].screenshotPixels",
     "importedRoleSmoke.validated.setupCount",
     "importedRoleSmoke.validated.screenshotChecks",
@@ -4504,7 +4546,14 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
   assert.equal(
     hostSetupRequirement.proven.some((entry) =>
       entry.includes("/g/midsummer/setup") &&
-      entry.includes("slot workbench"),
+      entry.includes("guided-stage-canvas"),
+    ),
+    true,
+  );
+  assert.equal(
+    adminRequirement.proven.some((entry) =>
+      entry.includes("exception-inbox decision-canvas") &&
+      entry.includes("native audit-detail"),
     ),
     true,
   );
@@ -4608,7 +4657,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
   );
   assert.deepEqual(summary.shared.hostSetupWorkbench.requirement, {
     id: "host-setup-workbench",
-    label: "Host setup workbench geometry",
+    label: "Host setup guided workflow geometry",
     state:
       summary.status === "passed"
         ? "browser_proven"
@@ -4620,14 +4669,29 @@ test("frontend readiness summary reports role proof layers without promoting bro
     summary.shared.hostSetupWorkbench.local.viewportLayouts.map((entry) => [
       entry.viewport,
       entry.layout,
-      entry.slotCount,
+      entry.workflowMode,
+      entry.stageIds,
+      entry.defaultSelectedStageId,
+      entry.correctedStageId,
+      entry.rosterCardCount,
+      entry.roleCardCount,
+      entry.correctionTargets,
       entry.noHorizontalOverflow,
     ]),
-    [
-      ["mobile", "stacked", 2, true],
-      ["tablet", "co-located-columns", 2, true],
-      ["desktop", "co-located-columns", 2, true],
-    ],
+    HOST_SETUP_ROLE_SMOKE_CONTRACT.viewports.map((viewport) => [
+      viewport.name,
+      expectedHostSetupLayout(viewport),
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.workflowMode,
+      [...HOST_SETUP_ROLE_SMOKE_CONTRACT.stageIds],
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.defaultSelectedStageId,
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.correctedStageId,
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.scenario.slotIds.length,
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.scenario.slotIds.length,
+      HOST_SETUP_ROLE_SMOKE_CONTRACT.correctionTargets.map((target) => ({
+        ...target,
+      })),
+      true,
+    ]),
   );
   assert.equal(
     summary.shared.hostSetupWorkbench.local.screenshotCount >= 3,
@@ -4728,11 +4792,11 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "roleSmoke.status == passed",
       "roleSmoke.roles includes admin, player, and moderator",
       "roleSmoke.board is nonempty",
-      "roleSmoke.setup includes /g/midsummer/setup workbench geometry for mobile, tablet, and desktop",
+      "roleSmoke.setup includes the exact /g/midsummer/setup guided-stage-canvas contract for mobile, tablet, and desktop",
       "roleSmoke.routeStates is nonempty",
       "all roleSmoke role entries include screenshotPixels",
-      "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
-      "admin roleSmoke entries include cohost confirmation and recovery-gate ACK evidence",
+      "roleSmoke admin/player/moderator entries include live thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
+      "admin roleSmoke entries include exception-inbox decision-canvas and native audit-detail navigation evidence",
       "player roleSmoke entries include SubmitPost ACK and refreshed thread evidence",
       "playerPrivateChannel roleSmoke entries include private:role_pm:slot-7 SubmitPost ACK evidence",
       "player roleSmoke entries include tablet-media browser request evidence without original/full/desktop URLs",
@@ -4772,7 +4836,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     importedRoleSmokeRequires: [
       "importedRoleSmoke.status == imported-passed",
       "importedRoleSmoke.validated.boardCount covers every proof viewport",
-      "importedRoleSmoke.validated.setupCount covers setup workbench geometry",
+      "importedRoleSmoke validation covers guided setup workflow evidence",
       "importedRoleSmoke.validated.roleCount covers admin, player, and moderator for every proof viewport",
       "importedRoleSmoke.validated.playerPrivateChannelCount covers every proof viewport",
       "importedRoleSmoke.validated.routeStateCount and forbiddenRouteCount are nonempty",
@@ -4964,9 +5028,9 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
-          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
+          "localhostBrowser: roleSmoke.setup missing exact /g/midsummer/setup guided-stage-canvas evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing exception-inbox decision-canvas or native audit-detail navigation evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5018,9 +5082,9 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
-          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
+          "localhostBrowser: roleSmoke.setup missing exact /g/midsummer/setup guided-stage-canvas evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing exception-inbox decision-canvas or native audit-detail navigation evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5072,9 +5136,9 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
-          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
+          "localhostBrowser: roleSmoke.setup missing exact /g/midsummer/setup guided-stage-canvas evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing exception-inbox decision-canvas or native audit-detail navigation evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5296,9 +5360,9 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "roleSmoke.roles missing player",
         "roleSmoke.roles missing moderator",
         "roleSmoke.board is empty or absent",
-        "roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
+        "roleSmoke.setup missing exact /g/midsummer/setup guided-stage-canvas evidence",
         "roleSmoke.routeStates is empty or absent",
-        "roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
+        "roleSmoke.roles[admin] missing exception-inbox decision-canvas or native audit-detail navigation evidence",
         "roleSmoke.roles missing tablet thumb-zone geometry evidence",
         "roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
         "roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5803,47 +5867,11 @@ function assertPixelEvidence(entries, label) {
 
 function assertBrowserSetupWorkbenchEvidence(setupEntries) {
   assert.equal(
-    Array.isArray(setupEntries),
-    true,
-    "host setup browser geometry evidence missing",
+    assertHostSetupWorkflowEvidence(setupEntries),
+    setupEntries,
+    "host setup guided workflow evidence missing",
   );
-  assert.equal(setupEntries.length, setupViewports.length);
-  assert.deepEqual(
-    setupEntries.map((entry) => [entry.viewport.name, entry.role, entry.path]),
-    setupViewports.map((viewport) => [
-      viewport.name,
-      hostSetupScenario.role,
-      hostSetupScenario.path,
-    ]),
-  );
-
-  for (const entry of setupEntries) {
-    const expectedLayout =
-      entry.viewport.width <= 820 ? "stacked" : "stepper-canvas";
-    assert.equal(entry.surfaceTestId, hostSetupScenario.surfaceTestId);
-    assert.equal(entry.capabilityTestId, hostSetupScenario.capabilityTestId);
-    assert.equal(entry.layout, expectedLayout);
-    assert.equal(entry.workflowMode, "guided-stage-canvas");
-    assert.deepEqual(entry.stageIds, ["pack", "roster", "roles", "rules", "review"]);
-    assert.equal(entry.defaultSelectedStageId, "roster");
-    assert.equal(entry.correctedStageId, "roles");
-    assert.deepEqual(entry.correctionTargets, [
-      { checkId: "slots-occupied", stageId: "roster" },
-      { checkId: "roles-assigned", stageId: "roles" },
-    ]);
-    assert.equal(entry.noHorizontalOverflow, true);
-    assert.equal(entry.overflow.scrollWidth <= entry.overflow.clientWidth + 1, true);
-    assert.equal(entry.overlapCheckedTargets >= 3, true);
-    assert.deepEqual(
-      entry.rosterCards.map((slot) => slot.slotId),
-      hostSetupScenario.slotIds,
-    );
-    assert.deepEqual(
-      entry.roleCards.map((slot) => slot.slotId),
-      hostSetupScenario.slotIds,
-    );
-    assertPixelEvidence([entry], "host setup workbench screenshots");
-  }
+  assertPixelEvidence(setupEntries, "host setup guided workflow screenshots");
 }
 
 function assertBrowserPublicGamePublicationEvidence(entries) {

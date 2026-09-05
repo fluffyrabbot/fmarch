@@ -41,7 +41,7 @@ test("Day 3 vote resolution case shares vote and host resolution facts", () => {
       previousOutcomePhaseId: "D02",
       expectedBoundaryText: "Day 3 vote ACK",
       expectedRefreshKeys: ["votecount", "commandState"],
-      setupResyncFromSeq: 906,
+      setupAuthoritativeSourceSeq: 906,
       expectedReceiptRefreshKeys: "votecount,commandState",
     },
     hostResolutionCase: {
@@ -135,7 +135,7 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
       },
       projectionVotecount: [{ target: "slot-4 / Rowan", count: 2, needed: 2 }],
       projectionDayVoteOutcomes: [{ phaseId: "D02" }],
-      setupResyncFromSeq: 906,
+      setupAuthoritativeSourceSeq: 906,
       setupSnapshotCommandState: { phase: { phaseId: "D03" } },
       currentVote: { hasVote: "true", text: "Slot 4 / Rowan" },
       receiptCount: 1,

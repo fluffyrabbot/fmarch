@@ -1943,7 +1943,7 @@ async function sendCommand(principalId, command) {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        v: 2,
+        v: 3,
         id: commandId++,
         body: {
           kind: "Command",
