@@ -1,4 +1,40 @@
-export const WIRE_PROTOCOL_VERSION = 2;
+import { CommandOutcomeUnknownError } from "./command-interruption.mjs";
+
+export const WIRE_PROTOCOL_VERSION = 3;
+const MAX_SAFE_WIRE_INTEGER = Number.MAX_SAFE_INTEGER;
+const REJECT_CODES = new Set([
+  "NotAuthorized",
+  "NotYourSlot",
+  "NotHost",
+  "CohostPermissionDenied",
+  "PhaseLocked",
+  "SlotNotAlive",
+  "VoteNotAllowed",
+  "InvalidTarget",
+  "InvalidArgument",
+  "ActionAlreadySubmitted",
+  "InvalidRole",
+  "StreamConflict",
+  "CommandIdConflict",
+  "UnknownGame",
+  "UnknownSlot",
+  "UnknownPrompt",
+  "PromptAlreadyResolved",
+  "GameAlreadyCompleted",
+  "InvalidPromptDecision",
+  "UnknownDayEvent",
+  "DayEventAlreadyExists",
+  "DayEventStateConflict",
+  "DuplicateParticipation",
+  "ParticipationNotFound",
+  "ParticipationNotAllowed",
+  "DayEventValidation",
+  "DayProgramValidation",
+  "PackValidation",
+  "DayProgramAlreadyAttached",
+  "EffectSpecValidation",
+  "Internal",
+]);
 
 export function buildCommandEnvelope({
   command,
@@ -7,7 +43,7 @@ export function buildCommandEnvelope({
 }) {
   return Object.freeze({
     v: WIRE_PROTOCOL_VERSION,
-    id: envelopeId,
+    id: requiredWireInteger(envelopeId, "envelopeId"),
     body: Object.freeze({
       kind: "Command",
       body: Object.freeze({
@@ -238,13 +274,56 @@ export async function sendCommand({
     body: JSON.stringify(requestEnvelope),
     signal,
   });
-  const serverEnvelope = await response.json();
-  return normalizeCommandResponse({
+  return await readCommandResponse({
     commandId,
     requestEnvelope,
     response,
-    serverEnvelope,
   });
+}
+
+/**
+ * Reads one command response without converting transport ambiguity into a
+ * terminal command result. Once the POST is dispatched, every malformed,
+ * mismatched, or server-error response must retain the original command ID.
+ */
+export async function readCommandResponse({
+  commandId,
+  requestEnvelope,
+  response,
+}) {
+  if (!isJsonResponse(response)) {
+    throw unknownCommandOutcome("unsupported_response", {
+      commandId,
+      requestEnvelope,
+    });
+  }
+
+  let serverEnvelope;
+  try {
+    serverEnvelope = await response.json();
+  } catch (cause) {
+    throw unknownCommandOutcome("response_parse_failure", {
+      commandId,
+      requestEnvelope,
+      cause,
+    });
+  }
+
+  try {
+    return normalizeCommandResponse({
+      commandId,
+      requestEnvelope,
+      response,
+      serverEnvelope,
+    });
+  } catch (cause) {
+    if (cause instanceof CommandOutcomeUnknownError) throw cause;
+    throw unknownCommandOutcome("protocol_mismatch", {
+      commandId,
+      requestEnvelope,
+      cause,
+    });
+  }
 }
 
 export function normalizeCommandResponse({
@@ -253,9 +332,40 @@ export function normalizeCommandResponse({
   response,
   serverEnvelope,
 }) {
+  requiredString(commandId, "commandId");
+  const requestEnvelopeId = requiredWireInteger(
+    requestEnvelope?.id,
+    "requestEnvelope.id",
+  );
+  if (!validHttpStatus(response?.status)) {
+    throw new TypeError("command response status must be a valid HTTP status");
+  }
+  if (response.status >= 500) {
+    throw unknownCommandOutcome("unsupported_response", {
+      commandId,
+      requestEnvelope,
+    });
+  }
+  requireExactObject(serverEnvelope, ["v", "id", "body"], "serverEnvelope");
+  if (serverEnvelope.v !== WIRE_PROTOCOL_VERSION) {
+    throw new TypeError(`unsupported command response protocol: ${serverEnvelope.v}`);
+  }
+  if (serverEnvelope.id !== requestEnvelopeId) {
+    throw new TypeError(
+      `command response envelope id ${String(serverEnvelope.id)} does not match ${requestEnvelopeId}`,
+    );
+  }
+  requireExactObject(serverEnvelope.body, ["kind", "body"], "serverEnvelope.body");
   const body = serverEnvelope?.body;
   if (body?.kind === "Ack") {
-    const streamSeqs = body.body?.stream_seqs ?? [];
+    requireExactObject(body.body, ["stream_seqs"], "Ack.body");
+    if (
+      !Array.isArray(body.body.stream_seqs) ||
+      !body.body.stream_seqs.every(validPositiveWireInteger)
+    ) {
+      throw new TypeError("Ack.stream_seqs must contain positive safe integers");
+    }
+    const streamSeqs = body.body.stream_seqs;
     return Object.freeze({
       state: "ack",
       commandId,
@@ -269,7 +379,19 @@ export function normalizeCommandResponse({
   }
 
   if (body?.kind === "Reject") {
+    requireExactObject(
+      body.body,
+      ["error", "retryable", "message"],
+      "Reject.body",
+    );
     const reject = body.body;
+    if (!REJECT_CODES.has(reject.error)) {
+      throw new TypeError(`unsupported command reject code: ${String(reject.error)}`);
+    }
+    if (typeof reject.retryable !== "boolean") {
+      throw new TypeError("Reject.retryable must be boolean");
+    }
+    requiredString(reject.message, "Reject.message");
     const retryable = reject.retryable === true;
     return Object.freeze({
       state: "reject",
@@ -355,6 +477,51 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function requiredWireInteger(value, field) {
+  if (!validPositiveWireInteger(value)) {
+    throw new TypeError(`${field} must be a positive safe integer`);
+  }
+  return value;
+}
+
+function validPositiveWireInteger(value) {
+  return Number.isSafeInteger(value) && value > 0 && value <= MAX_SAFE_WIRE_INTEGER;
+}
+
+function validHttpStatus(value) {
+  return Number.isInteger(value) && value >= 100 && value <= 599;
+}
+
+function isJsonResponse(response) {
+  if (!validHttpStatus(response?.status)) return false;
+  const contentType = response?.headers?.get?.("content-type");
+  if (typeof contentType !== "string") return false;
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  return mediaType === "application/json" || mediaType.endsWith("+json");
+}
+
+function requireExactObject(value, keys, field) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((key, index) => key !== expected[index])
+  ) {
+    throw new TypeError(`${field} must contain exactly ${expected.join(", ")}`);
+  }
+}
+
+function unknownCommandOutcome(reason, { commandId, requestEnvelope, cause } = {}) {
+  return new CommandOutcomeUnknownError(reason, {
+    commandId,
+    requestEnvelope,
+    cause,
+  });
 }
 
 function postBody(value, media, actionConfig, quotations = [], embed) {

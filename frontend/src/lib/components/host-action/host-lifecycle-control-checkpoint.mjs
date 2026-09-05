@@ -19,11 +19,15 @@ export function buildHostLifecycleControlCheckpoint({
   actionGroups = [],
   commandContext = {},
 } = {}) {
+  const replacementState =
+    replacement !== null && typeof replacement === "object" ? replacement : {};
   const phaseActionIds = actionIdsForGroup(actionGroups, "phase");
   const lifecycleActionIds = actionIdsForGroup(actionGroups, "slot-lifecycle");
   const phaseState = phaseStateLabel(phase);
-  const slotId = String(replacement.slotId ?? "slot-7");
-  const lifecycleLabel = String(replacement.lifecycleLabel ?? "Unknown lifecycle");
+  const slotId = String(replacementState.slotId ?? "No slot selected");
+  const lifecycleLabel = String(
+    replacementState.lifecycleLabel ?? "Unknown lifecycle",
+  );
   const enabled = lifecycleActionIds.length > 0;
   const disabledReason = enabled
     ? ""

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import {
   appendHostActionEvent,
   appendHostCommandOutcome,
   buildHostCommandDispatchBridgePlan,
+  buildHostCommandRequest,
   buildHostDerivedState,
   buildHostProjectionColdLoads,
   buildHostProjectionInitialSnapshot,
@@ -14,15 +16,21 @@ import {
   persistHostInterruptedCommands,
   hostPostAckRefreshKeys,
   hostPostCommandRefreshKeys,
-  hostProjectionResyncKeys,
+  hostReconnectRefreshKeys,
   recordHostCommandStatus,
+  revokedHostProjection,
   restoreHostInterruptedCommands,
   clearHostCommandStatus,
+  dispatchHostRouteAction,
+  recoverHostRouteAction,
   sendHostRouteAction,
 } from "./host-route-controller.mjs";
 
 const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
-import { CommandInterruptedError } from "../../../../lib/app/command-interruption.mjs";
+import {
+  CommandInterruptedError,
+  CommandProjectionRecoveryTimeoutError,
+} from "../../../../lib/app/command-interruption.mjs";
 
 test("host interrupted command keeps confirmation and can be dismissed", () => {
   const event = {
@@ -69,11 +77,19 @@ test("host interrupted commands survive sessionStorage reload with the same comm
   persistHostInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: HOST_PRINCIPAL_ID,
     attempts: {
       extend_deadline: {
         commandId: "host-command-1",
         actionId: "extend_deadline",
         interruption: "timeout",
+        command: {
+          ExtendDeadline: {
+            game: "midsummer",
+            phase: "D01",
+            at: 1_800_000_000,
+          },
+        },
         event,
       },
     },
@@ -82,12 +98,20 @@ test("host interrupted commands survive sessionStorage reload with the same comm
   const restored = restoreHostInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: HOST_PRINCIPAL_ID,
   });
 
   assert.equal(restored.attempts.extend_deadline.commandId, "host-command-1");
   assert.equal(restored.commandStatuses.extend_deadline.commandId, "host-command-1");
   assert.equal(restored.commandStatuses.extend_deadline.state, "interrupted");
   assert.equal(restored.attempts.extend_deadline.event.hours, 12);
+  assert.deepEqual(restored.attempts.extend_deadline.command, {
+    ExtendDeadline: {
+      game: "midsummer",
+      phase: "D01",
+      at: 1_800_000_000,
+    },
+  });
 });
 
 test("host route controller builds projection store boundaries from route data", () => {
@@ -113,12 +137,54 @@ test("host route controller builds projection store boundaries from route data",
     "dayVoteOutcomes",
     "hostPrompts",
   ]);
-  assert.deepEqual(hostProjectionResyncKeys(), [
+  assert.deepEqual(hostReconnectRefreshKeys(), [
     "host",
     "votecount",
     "dayVoteOutcomes",
     "hostPrompts",
   ]);
+  const coldLoads = buildHostProjectionColdLoads(data);
+  assert.deepEqual(coldLoads.host.revoke(), revokedHostProjection());
+  assert.deepEqual(coldLoads.hostPrompts.revoke, []);
+  assert.deepEqual(
+    buildHostDerivedState({
+      gameId: data.game.id,
+      snapshot: {
+        host: coldLoads.host.revoke(),
+        votecount: [],
+        dayVoteOutcomes: [],
+        hostPrompts: [],
+      },
+    }).criticalActions,
+    [],
+  );
+});
+
+test("host cold load normalizes an empty game after authority revocation", () => {
+  const data = fixtureData();
+  const host = buildHostProjectionColdLoads(data).host.normalize(
+    {
+      game: "midsummer",
+      authority: {
+        principal_id: HOST_PRINCIPAL_ID,
+        capability: "HostOf",
+        allowed_classes: [],
+        denied_classes: [],
+      },
+      completed: false,
+      phase: null,
+      slots: [],
+      thread_posts: [],
+      day_event_scheduler: null,
+      day_events: [],
+      tasks: [],
+    },
+    revokedHostProjection(),
+  );
+
+  assert.equal(host.replacement, null);
+  assert.equal(host.authority.principalId, HOST_PRINCIPAL_ID);
+  assert.equal(host.authority.capabilityKind, "HostOf");
 });
 
 test("host route controller derives action groups from live host projections", () => {
@@ -398,10 +464,147 @@ test("host route controller reports stale phase reject refreshes in dispatch pla
   assert.deepEqual(plan.projectionRefreshKeys, ["host"]);
 });
 
+test("host route controller refuses commands before dispatch when route authority is disabled", async () => {
+  let fetchCalls = 0;
+  let sendCalls = 0;
+
+  await assert.rejects(
+    sendHostRouteAction({
+      event: {
+        actionId: "lock_thread",
+        payload: { kind: "lock_thread", gameId: "midsummer" },
+      },
+      data: {
+        ...fixtureData(),
+        commandsEnabled: false,
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        throw new Error("disabled host commands must not reach fetch");
+      },
+      projectionStore: fakeProjectionStore(),
+      sendHostActionCommandImpl: async () => {
+        sendCalls += 1;
+        throw new Error("disabled host commands must not reach dispatch");
+      },
+    }),
+    /host commands are disabled without an authoritative route snapshot/,
+  );
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(sendCalls, 0);
+});
+
+test("host interrupted retry sends the persisted wire body or refuses mapper drift locally", async () => {
+  const event = {
+    actionId: "lock_thread",
+    payload: { kind: "lock_thread", gameId: "midsummer" },
+  };
+  const data = fixtureData();
+  const preparedCommand = buildHostCommandRequest({ event, data }).command;
+  const sent = [];
+
+  const outcome = await dispatchHostRouteAction({
+    event,
+    data,
+    projectionStore: fakeProjectionStore(buildHostProjectionInitialSnapshot(data)),
+    preparedCommand,
+    commandIdFactory: () => "persisted-host-command-id",
+    sendHostActionCommandImpl: async (request) => {
+      sent.push(request);
+      return { state: "ack", commandId: request.commandIdFactory(), message: "Ack" };
+    },
+  });
+  assert.equal(outcome.state, "ack");
+  assert.equal(sent[0].preparedCommand, preparedCommand);
+  assert.equal(sent[0].commandIdFactory(), "persisted-host-command-id");
+  assert.equal("stateEndpoint" in sent[0], false);
+
+  let driftedSendCalls = 0;
+  await assert.rejects(
+    dispatchHostRouteAction({
+      event,
+      data,
+      projectionStore: fakeProjectionStore(buildHostProjectionInitialSnapshot(data)),
+      preparedCommand,
+      mapHostActionToWireCommandImpl: () => ({
+        LockThreadV2: { game: "midsummer", expected_revision: 4 },
+      }),
+      sendHostActionCommandImpl: async () => {
+        driftedSendCalls += 1;
+        return { state: "ack", message: "must not dispatch" };
+      },
+    }),
+    /no longer matches the interrupted command body/,
+  );
+  assert.equal(driftedSendCalls, 0);
+});
+
+test("host ACK remains committed when projection recovery exceeds its independent 12s lease", async () => {
+  let refreshStarted = false;
+  const projectionStore = fakeProjectionStore();
+  projectionStore.refresh = () => {
+    refreshStarted = true;
+    return new Promise(() => {});
+  };
+
+  const result = await recoverHostRouteAction({
+    event: {
+      actionId: "resolve_phase",
+      payload: { kind: "resolve_phase", gameId: "midsummer" },
+    },
+    outcome: {
+      state: "ack",
+      commandId: "confirmed-host-command",
+      message: "Ack: stream seq 8",
+    },
+    projectionStore,
+    projectionRecoveryTimeoutMs: 12_000,
+    executeProjectionRecoveryImpl: async ({ timeoutMs, operation }) => {
+      assert.equal(timeoutMs, 12_000);
+      operation({ signal: new AbortController().signal });
+      throw new CommandProjectionRecoveryTimeoutError();
+    },
+  });
+
+  assert.equal(refreshStarted, true);
+  assert.equal(result.outcome.state, "ack");
+  assert.equal(result.outcome.commandId, "confirmed-host-command");
+  assert.equal(result.outcome.projectionUnavailable, true);
+  assert.equal(result.outcome.retryable, false);
+  assert.match(result.outcome.message, /Do not retry/);
+  assert.equal(
+    projectionStore.invalidated.at(-1)[1].reason,
+    "confirmed_host_command_projection_recovery_failed",
+  );
+});
+
+test("host page journals exact wire commands and clears recovery before projection recovery", async () => {
+  const source = await readFile(new URL("./+page.svelte", import.meta.url), "utf8");
+  const handler = source.slice(
+    source.indexOf("async function handleDispatch"),
+    source.indexOf("async function retryHostCommand"),
+  );
+
+  assert.match(
+    handler,
+    /command: buildHostCommandRequest\(\{ event, data \}\)\.command/u,
+  );
+  assert.match(
+    handler,
+    /const recoveryPersisted = commitHostCommandRecovery\(\{[\s\S]*?\[event\.actionId\]:[\s\S]*?\}\);\s*if \(recoveryPersisted !== true\) \{[\s\S]*?return;\s*\}\s*try \{\s*const confirmedOutcome = await executeCommandAttempt/u,
+  );
+  assert.match(handler, /preparedCommand: attempt\.command/u);
+  assert.match(
+    handler,
+    /delete nextAttempts\[event\.actionId\];\s*commitHostCommandRecovery\(nextAttempts\);\s*const result = await recoverHostRouteAction/u,
+  );
+});
+
 test("host route controller sends commands and applies acked host projection state", async () => {
   const sent = [];
   const projectionStore = fakeProjectionStore({
-    host: { phase: { id: "D01" }, replacement: null },
+    host: { phase: { id: "D01", locked: true, state: "locked" }, replacement: null },
   });
   const projectionState = {
     phase: { id: "N01" },
@@ -409,7 +612,10 @@ test("host route controller sends commands and applies acked host projection sta
   };
 
   const result = await sendHostRouteAction({
-    event: { actionId: "advance_phase", payload: { kind: "advance_phase" } },
+    event: {
+      actionId: "advance_phase",
+      payload: { kind: "advance_phase", gameId: "midsummer" },
+    },
     data: fixtureData(),
     fetchImpl: async () => null,
     projectionStore,
@@ -427,7 +633,7 @@ test("host route controller sends commands and applies acked host projection sta
   assert.equal(sent.length, 1);
   assert.equal("principalId" in sent[0], false);
   assert.equal(sent[0].endpoint, "/commands");
-  assert.equal(sent[0].stateEndpoint, "/games/midsummer/host-console-state");
+  assert.equal("stateEndpoint" in sent[0], false);
   assert.equal(result.outcome.state, "ack");
   assert.deepEqual(result.snapshot.host, projectionState);
   assert.deepEqual(projectionStore.applied, [["host", projectionState]]);
@@ -673,7 +879,10 @@ test("host route controller refreshes host projection after stale phase rejects"
   });
 
   const result = await sendHostRouteAction({
-    event: { actionId: "lock_thread", payload: { kind: "lock_thread" } },
+    event: {
+      actionId: "lock_thread",
+      payload: { kind: "lock_thread", gameId: "midsummer" },
+    },
     data: fixtureData(),
     fetchImpl: async () => null,
     projectionStore,
@@ -703,7 +912,12 @@ test("host route controller refreshes host projection after stale deadline targe
   const result = await sendHostRouteAction({
     event: {
       actionId: "advance_phase_by_deadline",
-      payload: { kind: "advance_phase_by_deadline" },
+      payload: {
+        kind: "advance_phase_by_deadline",
+        gameId: "midsummer",
+        phaseId: "D01",
+        observedAt: 1781928001,
+      },
     },
     data: fixtureData(),
     fetchImpl: async () => null,
@@ -734,7 +948,7 @@ test("host route controller refreshes host projection after stale advance target
   const result = await sendHostRouteAction({
     event: {
       actionId: "advance_phase",
-      payload: { kind: "advance_phase" },
+      payload: { kind: "advance_phase", gameId: "midsummer" },
     },
     data: fixtureData(),
     fetchImpl: async () => null,
@@ -764,15 +978,15 @@ test("host route controller preserves non-phase reject outcomes without projecti
 
   const result = await sendHostRouteAction({
     event: {
-      actionId: "process_replacement",
-      payload: { kind: "process_replacement" },
+      actionId: "publish_votecount",
+      payload: { kind: "publish_votecount", gameId: "midsummer" },
     },
     data: fixtureData(),
     fetchImpl: async () => null,
     projectionStore,
     sendHostActionCommandImpl: async () => ({
       state: "reject",
-      actionId: "process_replacement",
+      actionId: "publish_votecount",
       error: "InvalidTarget",
       message: "Reject InvalidTarget",
     }),
@@ -790,7 +1004,14 @@ test("host route controller preserves non-phase reject outcomes without projecti
 
 function fixtureData(overrides = {}) {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
+    deadlineClock: { nowSeconds: 1781928001 },
+    commandPrincipalId: HOST_PRINCIPAL_ID,
+    access: {
+      allowed: true,
+      capability: { kind: "HostOf", game: "midsummer" },
+    },
     session: { principalId: HOST_PRINCIPAL_ID },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
@@ -818,6 +1039,13 @@ function fakeProjectionStore(snapshot) {
   return {
     applied: [],
     refreshed: [],
+    invalidated: [],
+    isReady() {
+      return true;
+    },
+    invalidate(keys, options) {
+      this.invalidated.push([keys, options]);
+    },
     applyPayload(key, payload) {
       this.applied.push([key, payload]);
       snapshot = { ...snapshot, [key]: payload };

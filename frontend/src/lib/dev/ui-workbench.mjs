@@ -1,4 +1,5 @@
 import { APP_ROUTE_STATE_CONTRACT } from "../app/app-route-state-model.mjs";
+import { frontendFixtureMode } from "../server/runtime-mode.mjs";
 
 export const UI_WORKBENCH_PATH = "/_dev/ui";
 export const UI_WORKBENCH_SESSION_PATH = `${UI_WORKBENCH_PATH}/session`;
@@ -111,7 +112,7 @@ const SCENARIOS_BY_ID = new Map(
 );
 
 export function uiWorkbenchEnabled(env = process.env) {
-  return env?.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  return frontendFixtureMode(env);
 }
 
 export function uiWorkbenchScenario(id) {

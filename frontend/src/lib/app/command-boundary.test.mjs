@@ -10,6 +10,7 @@ import {
   buildPlayerCommand,
   sendCommand,
 } from "./command-boundary.mjs";
+import { CommandOutcomeUnknownError } from "./command-interruption.mjs";
 
 test("player actions map to Rust wire command variants", () => {
   assert.deepEqual(
@@ -349,7 +350,7 @@ test("generic command envelope uses the Rust ClientEnvelope shape", () => {
   });
 
   assert.deepEqual(envelope, {
-    v: 2,
+    v: 3,
     id: 10,
     body: {
       kind: "Command",
@@ -509,7 +510,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 11,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 11,
         body: { kind: "Ack", body: { stream_seqs: [44] } },
       }),
@@ -528,7 +529,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 12,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 12,
         body: {
           kind: "Reject",
@@ -562,7 +563,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 13,
         body: {
           kind: "Reject",
@@ -595,7 +596,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 16,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 16,
         body: {
           kind: "Reject",
@@ -629,7 +630,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 18,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 18,
         body: {
           kind: "Reject",
@@ -658,7 +659,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 17,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 17,
         body: {
           kind: "Reject",
@@ -686,7 +687,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 14,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 14,
         body: {
           kind: "Reject",
@@ -715,7 +716,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 15,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 15,
         body: {
           kind: "Reject",
@@ -743,7 +744,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 13,
         body: {
           kind: "Reject",
@@ -772,7 +773,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 14,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 14,
         body: {
           kind: "Reject",
@@ -789,6 +790,87 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     retryableRejectWithGuidance.message,
     "Reject StreamConflict: reload and retry",
   );
+});
+
+test("command sender preserves the original command identity for every ambiguous response", async () => {
+  const commandId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const command = buildPlayerCommand({
+    action: "withdraw_vote",
+    game: "00000000-0000-0000-0000-000000000001",
+    actorSlot: "slot-7",
+  });
+  const cases = [
+    {
+      reason: "unsupported_response",
+      response: {
+        ok: false,
+        status: 503,
+        headers: new Headers({ "content-type": "application/json" }),
+        async json() {
+          return {
+            v: 3,
+            id: 91,
+            body: {
+              kind: "Reject",
+              body: {
+                error: "Internal",
+                retryable: true,
+                message: "command commit outcome is unknown",
+              },
+            },
+          };
+        },
+      },
+    },
+    {
+      reason: "unsupported_response",
+      response: {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "text/html" }),
+        async json() {
+          return null;
+        },
+      },
+    },
+    {
+      reason: "response_parse_failure",
+      response: {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        async json() {
+          throw new SyntaxError("truncated response");
+        },
+      },
+    },
+    {
+      reason: "protocol_mismatch",
+      response: jsonResponse({
+        v: 3,
+        id: 92,
+        body: { kind: "Ack", body: { stream_seqs: [44] } },
+      }),
+    },
+  ];
+
+  for (const { reason, response } of cases) {
+    await assert.rejects(
+      sendCommand({
+        command,
+        commandIdFactory: () => commandId,
+        envelopeIdFactory: () => 91,
+        fetchImpl: async () => response,
+      }),
+      (error) => {
+        assert.ok(error instanceof CommandOutcomeUnknownError);
+        assert.equal(error.reason, reason);
+        assert.equal(error.commandId, commandId);
+        assert.equal(error.requestEnvelope.id, 91);
+        return true;
+      },
+    );
+  }
 });
 
 test("player and admin builders emit tags present in generated wire Command union", () => {
@@ -894,6 +976,7 @@ function jsonResponse(body) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return body;
     },

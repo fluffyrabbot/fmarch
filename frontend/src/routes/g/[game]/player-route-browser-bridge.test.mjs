@@ -7,7 +7,6 @@ import {
   exposePlayerProjection,
   exposePlayerThreadPageStatus,
   recordPlayerLiveProjectionEvent,
-  triggerPlayerLiveProjectionResync,
 } from "./player-route-browser-bridge.mjs";
 
 test("player browser bridge records live projection events and latest snapshot", () => {
@@ -58,55 +57,6 @@ test("player browser bridge preserves player projection for null live snapshots"
 
   assert.equal(windowRef.__fmarchPlayerProjection, projection);
   assert.deepEqual(windowRef.__fmarchLiveProjectionEvents, [{ kind: "close" }]);
-});
-
-test("player browser bridge triggers manual live resync through the store adapter", async () => {
-  const calls = [];
-  const windowRef = {};
-  const projectionStore = { id: "store" };
-  const fetchImpl = async () => null;
-  const snapshot = {
-    thread: { posts: [{ seq: 10, body: "resynced" }] },
-    votecount: [],
-  };
-
-  const result = await triggerPlayerLiveProjectionResync({
-    windowRef,
-    projectionStore,
-    resyncKeys: ["thread", "votecount"],
-    fetchImpl,
-    fromSeq: 99,
-    currentStatus: { state: "updated", message: "before" },
-    recoverLiveProjectionImpl: async (request) => {
-      calls.push(request);
-      return {
-        message: { kind: "resync-required", fromSeq: 99, state: "recovered" },
-        snapshot,
-      };
-    },
-    statusForEvent: (message, previous) => ({
-      state: message.state,
-      message: `${previous.state}:${message.fromSeq}`,
-    }),
-  });
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].projectionStore, projectionStore);
-  assert.deepEqual(calls[0].resyncKeys, ["thread", "votecount"]);
-  assert.equal(calls[0].fetchImpl, fetchImpl);
-  assert.deepEqual(calls[0].message, {
-    kind: "resync-required",
-    fromSeq: 99,
-  });
-  assert.deepEqual(result.liveStatus, {
-    state: "recovered",
-    message: "updated:99",
-  });
-  assert.equal(result.snapshot, snapshot);
-  assert.equal(windowRef.__fmarchPlayerProjection, snapshot);
-  assert.deepEqual(windowRef.__fmarchLiveProjectionEvents, [
-    { kind: "resync-required", fromSeq: 99, state: "recovered" },
-  ]);
 });
 
 test("player browser bridge exposes command and thread paging status", () => {

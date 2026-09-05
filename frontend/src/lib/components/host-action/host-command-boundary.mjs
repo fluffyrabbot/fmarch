@@ -1,24 +1,24 @@
 import { normalizeDayEventRoom } from "../../app/day-event-room.mjs";
+import {
+  buildCommandEnvelope,
+  normalizeCommandResponse,
+  readCommandResponse,
+  WIRE_PROTOCOL_VERSION,
+} from "../../app/command-boundary.mjs";
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
 
 export const HOST_COMMAND_ENDPOINT = "/commands";
-export const WIRE_PROTOCOL_VERSION = 2;
+export { WIRE_PROTOCOL_VERSION };
 
 export function buildHostCommandEnvelope({
   actionEvent,
   commandId,
   envelopeId,
 }) {
-  return Object.freeze({
-    v: WIRE_PROTOCOL_VERSION,
-    id: envelopeId,
-    body: Object.freeze({
-      kind: "Command",
-      body: Object.freeze({
-        command_id: commandId,
-        command: mapHostActionToWireCommand(actionEvent),
-      }),
-    }),
+  return buildCommandEnvelope({
+    command: mapHostActionToWireCommand(actionEvent),
+    commandId,
+    envelopeId,
   });
 }
 
@@ -47,32 +47,66 @@ export async function sendHostActionCommand({
     body: JSON.stringify(envelope),
     signal,
   });
-  const serverEnvelope = await response.json();
-  const outcome = normalizeServerCommandEnvelope({
-    actionId: actionEvent.actionId,
+  const commandOutcome = await readCommandResponse({
     commandId,
     requestEnvelope: envelope,
     response,
-    serverEnvelope,
+  });
+  const outcome = Object.freeze({
+    ...commandOutcome,
+    actionId: actionEvent.actionId,
+    ...(commandOutcome.state === "reject"
+      ? {
+          message: rejectMessage(
+            commandOutcome.serverEnvelope.body.body,
+            commandOutcome.retryable,
+            { requestEnvelope: envelope },
+          ),
+        }
+      : {}),
   });
   if (outcome.state !== "ack" || stateEndpoint === undefined || stateEndpoint === null) {
     return outcome;
   }
 
-  const stateResponse = await fetchImpl(stateEndpoint, { signal });
+  let stateResponse;
+  try {
+    stateResponse = await fetchImpl(stateEndpoint, { signal });
+  } catch {
+    return Object.freeze({
+      ...outcome,
+      projectionUnavailable: true,
+      retryable: false,
+      message:
+        "Command committed; authoritative host state refresh is unavailable. Do not retry.",
+    });
+  }
   if (!stateResponse.ok) {
     return Object.freeze({
       ...outcome,
-      state: "reject",
-      error: "StateRefreshFailed",
-      retryable: true,
-      message: `Ack committed, but host console state refresh failed with ${stateResponse.status}`,
+      projectionUnavailable: true,
+      retryable: false,
+      message:
+        "Command committed; authoritative host state refresh is unavailable. Do not retry.",
+    });
+  }
+
+  let projectionState;
+  try {
+    projectionState = await stateResponse.json();
+  } catch {
+    return Object.freeze({
+      ...outcome,
+      projectionUnavailable: true,
+      retryable: false,
+      message:
+        "Command committed; authoritative host state refresh is unavailable. Do not retry.",
     });
   }
 
   return Object.freeze({
     ...outcome,
-    projectionState: await stateResponse.json(),
+    projectionState,
   });
 }
 
@@ -197,39 +231,23 @@ export function normalizeServerCommandEnvelope({
   response,
   serverEnvelope,
 }) {
-  const body = serverEnvelope?.body;
-  if (body?.kind === "Ack") {
-    return Object.freeze({
-      state: "ack",
-      actionId,
-      commandId,
-      envelopeId: requestEnvelope.id,
-      httpStatus: response.status,
-      streamSeqs: Object.freeze(body.body.stream_seqs ?? []),
-      message: `Ack: stream seqs ${(body.body.stream_seqs ?? []).join(", ")}`,
-      requestEnvelope,
-      serverEnvelope,
-    });
-  }
-
-  if (body?.kind === "Reject") {
-    const reject = body.body;
-    const retryable = reject.retryable === true;
-    return Object.freeze({
-      state: "reject",
-      actionId,
-      commandId,
-      envelopeId: requestEnvelope.id,
-      httpStatus: response.status,
-      error: reject.error,
-      retryable,
-      message: rejectMessage(reject, retryable, { requestEnvelope }),
-      requestEnvelope,
-      serverEnvelope,
-    });
-  }
-
-  throw new TypeError("server response must be a wire Ack or Reject envelope");
+  const outcome = normalizeCommandResponse({
+    commandId,
+    requestEnvelope,
+    response,
+    serverEnvelope,
+  });
+  return Object.freeze({
+    ...outcome,
+    actionId,
+    ...(outcome.state === "reject"
+      ? {
+          message: rejectMessage(serverEnvelope.body.body, outcome.retryable, {
+            requestEnvelope,
+          }),
+        }
+      : {}),
+  });
 }
 
 function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
@@ -313,6 +331,7 @@ export function projectHostConsoleState(state, fallback) {
     : [];
   const slot = slots[0] ?? null;
   const posts = Array.isArray(state.thread_posts) ? state.thread_posts : [];
+  const fallbackReplacement = fallback?.replacement ?? null;
   const preservedSlotHistory =
     slot !== null && posts.some((post) =>
       post?.author?.kind === "slot" && post.author.slot_id === slot.slot_id,
@@ -334,22 +353,27 @@ export function projectHostConsoleState(state, fallback) {
         ? state.completed
         : fallback.completed === true,
     phase: projectHostConsolePhase(phase, fallback?.phase ?? null),
-    replacement: Object.freeze({
-      ...fallback.replacement,
-      slotId: slot?.slot_id ?? fallback.replacement.slotId,
-      occupantLabel: slot?.public_name ?? fallback.replacement.occupantLabel,
-      personaId: slot?.persona_id ?? fallback.replacement.personaId,
-      assignedPrincipalId:
-        slot?.assigned_principal_id
-        ?? fallback.replacement.assignedPrincipalId,
-      lifecycleLabel:
-        typeof slot?.status === "string"
-          ? lifecycleLabel(slot.status, slot.alive)
-          : fallback.replacement.lifecycleLabel,
-      historyLabel: preservedSlotHistory
-        ? `Slot history remains attached to ${slot.slot_id}`
-        : fallback.replacement.historyLabel,
-    }),
+    replacement:
+      slot === null && fallbackReplacement === null
+        ? null
+        : Object.freeze({
+            ...(fallbackReplacement ?? {}),
+            slotId: slot?.slot_id ?? fallbackReplacement?.slotId ?? null,
+            occupantLabel:
+              slot?.public_name ?? fallbackReplacement?.occupantLabel ?? null,
+            personaId: slot?.persona_id ?? fallbackReplacement?.personaId ?? null,
+            assignedPrincipalId:
+              slot?.assigned_principal_id
+              ?? fallbackReplacement?.assignedPrincipalId
+              ?? null,
+            lifecycleLabel:
+              typeof slot?.status === "string"
+                ? lifecycleLabel(slot.status, slot.alive)
+                : fallbackReplacement?.lifecycleLabel ?? null,
+            historyLabel: preservedSlotHistory
+              ? `Slot history remains attached to ${slot.slot_id}`
+              : fallbackReplacement?.historyLabel ?? null,
+          }),
     slots: Object.freeze(slots),
     threadPosts: Object.freeze(posts),
   });
@@ -647,7 +671,9 @@ function normalizeHostDayEvent(event) {
         event.lock_observed_at ?? event.lockObservedAt,
       ),
     }),
-    autoSeed: finiteNumberOrNull(event.auto_seed ?? event.autoSeed),
+    autoSeed: canonicalDayEventAuditSeedOrNull(
+      event.auto_seed ?? event.autoSeed,
+    ),
     resolutionEvidence:
       resolutionEvidence !== null && typeof resolutionEvidence === "object"
         ? Object.freeze({
@@ -660,7 +686,7 @@ function normalizeHostDayEvent(event) {
               resolutionPolicy === null
                 ? null
                 : Number(resolutionPolicy.winners ?? 0),
-            seed: finiteNumberOrNull(resolutionEvidence.seed),
+            seed: canonicalDayEventAuditSeedOrNull(resolutionEvidence.seed),
             participantSlots: Object.freeze(
               Array.isArray(
                 resolutionEvidence.participant_slots ??
@@ -802,6 +828,19 @@ function finiteNumberOrNull(value) {
   return value === null || value === undefined || !Number.isFinite(number)
     ? null
     : number;
+}
+
+const MAX_U64_DECIMAL = "18446744073709551615";
+
+function canonicalDayEventAuditSeedOrNull(value) {
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]*)$/.test(value)) {
+    return null;
+  }
+  if (value.length > MAX_U64_DECIMAL.length ||
+      (value.length === MAX_U64_DECIMAL.length && value > MAX_U64_DECIMAL)) {
+    return null;
+  }
+  return value;
 }
 
 export function normalizeHostTasks(tasks, fallback = []) {

@@ -1,5 +1,9 @@
 import { normalizeThreadPost as normalizeProjectionThreadPost } from "./cold-load.mjs";
-import { decode, encode } from "cbor-x";
+import { Decoder, encode } from "cbor-x";
+
+// Rust encodes safe u64 values above u32 as CBOR int64. Validators below
+// reject unsafe numbers; safe wire integers must not become JS bigint.
+const liveDecoder = new Decoder({ int64AsNumber: true, mapsAsObjects: true });
 
 export const LIVE_PROTOCOL_VERSION = 3;
 
@@ -410,7 +414,7 @@ export async function decodeServerEnvelopeFrame(frame) {
   if (bytes.byteLength > LIVE_PROJECTION_MAX_FRAME_BYTES) {
     throw new TypeError("live websocket frame exceeds the maximum byte length");
   }
-  return decode(bytes);
+  return liveDecoder.decode(bytes);
 }
 
 export function projectionPatchForLiveEnvelope(envelope, previousSnapshot) {
@@ -1396,7 +1400,7 @@ function isCanonicalThreadPost(post) {
         "citation_count",
         "occurred_at",
       ],
-      ["embed"],
+      ["embed", "mentions"],
     ) ||
     !isIdentifier(post.game) ||
     !isPositiveSafeInteger(post.source_seq) ||
@@ -1409,12 +1413,23 @@ function isCanonicalThreadPost(post) {
     !post.media.every(isCanonicalThreadPostMedia) ||
     !Array.isArray(post.quotations) ||
     !post.quotations.every(isCanonicalQuotation) ||
+    (post.mentions !== undefined &&
+      (!Array.isArray(post.mentions) || !post.mentions.every(isCanonicalThreadPostMention))) ||
     !isNonNegativeSafeInteger(post.citation_count) ||
     !isNonNegativeSafeInteger(post.occurred_at)
   ) {
     return false;
   }
-  return post.embed === undefined || isCanonicalPostEmbed(post.embed);
+  return post.embed == null || isCanonicalPostEmbed(post.embed);
+}
+
+function isCanonicalThreadPostMention(mention) {
+  return (
+    hasExactKeys(mention, ["slot_id", "offset", "len"]) &&
+    isIdentifier(mention.slot_id) &&
+    isNonNegativeSafeInteger(mention.offset) &&
+    isPositiveSafeInteger(mention.len)
+  );
 }
 
 function isCanonicalGameThreadAuthor(author) {

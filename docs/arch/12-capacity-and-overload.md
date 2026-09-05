@@ -13,7 +13,7 @@ caller or the service is saturated.
 | Global HTTP admission exhausted | `503 Service Unavailable` + `Retry-After` | The service has no request slot before the queue deadline. |
 | Request deadline exhausted | `503 Service Unavailable` + `Retry-After` | The admitted request did not complete inside its end-to-end server budget. |
 | WebSocket connection capacity exhausted | `503 Service Unavailable` + `Retry-After` during handshake | The live-connection budget is full; cold REST reads remain available. |
-| WebSocket receiver falls behind | `ResyncRequired` on the same socket | The bounded broadcast discarded deltas; the client cold-loads current projections. |
+| WebSocket receiver falls behind | Terminal `ResyncRequired`, then socket close | The bounded broadcast discarded deltas; the client retires that generation, remints a ticket, accepts an exact Hello on a new socket, and performs one authoritative refresh before consuming new deltas. |
 
 `429` is never a substitute for service saturation, and `503` is never used to punish one
 caller. Health checks bypass HTTP admission so an orchestrator can distinguish a live saturated
@@ -38,7 +38,7 @@ The defaults are conservative starting points, not claims about hosted capacity:
 | Authority-bearing transactions | pool − 3 | `FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT` | Retryable `503`; the ceiling accounts for LISTEN and leaves two pool connections outside this workload. |
 | Live-delivery fence transactions | min(authority − 1, 4) | `FMARCH_WS_DELIVERY_MAX_IN_FLIGHT` | Backpressure; one shared authority permit remains available to commands and cutoffs. |
 | Gameplay commands | 32 | `FMARCH_COMMAND_MAX_IN_FLIGHT` | Retryable `503`, with an additional one-command-per-principal admission fence. |
-| Deltas retained per receiver | 256 | `FMARCH_LIVE_PROJECTION_CAPACITY` | Lagging receiver gets `ResyncRequired`. |
+| Deltas retained per receiver | 256 | `FMARCH_LIVE_PROJECTION_CAPACITY` | Lagging receiver gets a terminal `ResyncRequired`; delivery resumes only in a fresh generation after reconnect and refresh. |
 
 Configuration is strict at startup for the database and HTTP budgets. Invalid or out-of-range
 values fail the process rather than silently changing the capacity model. `FMARCH_WS_MAX_CONNECTIONS`
@@ -90,8 +90,8 @@ to reuse the exact command id; idempotent receipts resolve the latter safely.
 - Concurrent commands on one game stream use optimistic concurrency and bounded server retry.
   They may never produce duplicate committed posts or an internal error merely because they raced.
 - Live broadcast storage is independent of connection count. Per-event connection work is bounded
-  by `FMARCH_WS_MAX_CONNECTIONS`; a receiver that cannot keep up is converted to one resync
-  obligation instead of receiving an unbounded queue.
+  by `FMARCH_WS_MAX_CONNECTIONS`; a receiver that cannot keep up receives one terminal
+  `ResyncRequired` for the retired socket generation instead of an unbounded queue.
 
 ## Required signals
 
@@ -111,8 +111,9 @@ request paths are forbidden. Exact cardinality would require another database op
 not worth adding to the read path.
 
 The next broader hosted observability pass must aggregate these with DB pool acquire latency, statement
-latency, command transaction duration, append conflicts/retries, live connection count, resync
-rate, CPU, memory, and Postgres I/O pressure. Secrets, principals, post bodies, and projection
+latency, command transaction duration, append conflicts/retries, live connection count, terminal
+`ResyncRequired` rate, recovered reconnect rate, CPU, memory, and Postgres I/O pressure. Secrets,
+principals, post bodies, and projection
 payloads do not belong in capacity logs.
 
 ## Reproducible local proof
@@ -182,8 +183,9 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
 4. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
 5. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
-   every client receives `ResyncRequired`, while a fifth WebSocket handshake receives retryable
-   `503`.
+   every client receives terminal `ResyncRequired`, observes the old socket close, remints a ticket,
+   accepts an exact Hello on a new socket, and refreshes authoritatively before new deltas; a fifth
+   WebSocket handshake receives retryable `503`.
 6. **Global HTTP saturation:** eight admitted requests are held on a database lock; the ninth gets
    retryable `503`, `/healthz` remains `200`, and admitted requests recover after lock release.
 7. **Caller rate limiting:** two failed credential attempts are followed by `429` with

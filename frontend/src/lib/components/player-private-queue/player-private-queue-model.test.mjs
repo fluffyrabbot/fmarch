@@ -11,13 +11,31 @@ test("player private queue model derives scoped private projection boundary", ()
   const snapshot = {
     notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
     investigationResults: [{ mode: "tracker", target_slot: "slot-4" }],
+    slotMentions: [
+      {
+        game: "midsummer",
+        audience_slot: "slot-7",
+        channel_id: "private:faction:mafia",
+        source_seq: 443,
+        phase_id: "D02",
+        occurred_at: 1781928000,
+      },
+      {
+        game: "midsummer",
+        audience_slot: "slot-7",
+        channel_id: "main",
+        source_seq: 12,
+        phase_id: null,
+        occurred_at: 1781920000,
+      },
+    ],
   };
 
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Night results and notices are delivered to you alone.",
-    count: 2,
+      "Night results, notices, and seats you were addressed as are delivered to you alone.",
+    count: 4,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [
     {
@@ -29,6 +47,22 @@ test("player private queue model derives scoped private projection boundary", ()
       buttonLabel: "Review",
     },
     {
+      id: "slot-mention-1",
+      kind: "slot-mention",
+      label: "Addressed as slot-7",
+      value: "private:faction:mafia",
+      detail: "Phase Day 2",
+      buttonLabel: "Review",
+    },
+    {
+      id: "slot-mention-2",
+      kind: "slot-mention",
+      label: "Addressed as slot-7",
+      value: "Main thread",
+      detail: "Addressed outside a phase",
+      buttonLabel: "Review",
+    },
+    {
       id: "investigation-1",
       kind: "investigation-result",
       label: "tracker",
@@ -37,6 +71,34 @@ test("player private queue model derives scoped private projection boundary", ()
       buttonLabel: "Review",
     },
   ]);
+});
+
+test("a delivered slot mention names a seat and a room, never an occupant", () => {
+  const [item] = buildPrivateQueue({
+    slotMentions: [
+      {
+        game: "midsummer",
+        audience_slot: "slot-7",
+        channel_id: "main",
+        source_seq: 443,
+        phase_id: "D02",
+        occurred_at: 1781928000,
+      },
+    ],
+  });
+
+  // RFC 0007 §7 invariant 11: the row stores no principal, persona, or
+  // occupancy, so the rail cannot render one even by accident. Occupancy was
+  // resolved upstream, at read time, by the reader's own capabilities.
+  const rendered = JSON.stringify(item);
+  for (const forbidden of ["principal", "persona", "profile", "handle", "account"]) {
+    assert.equal(
+      rendered.includes(forbidden),
+      false,
+      `slot mention rail row leaked ${forbidden}`,
+    );
+  }
+  assert.equal(item.label, "Addressed as slot-7");
 });
 
 test("player private queue model builds disclosure view state without host leakage", () => {

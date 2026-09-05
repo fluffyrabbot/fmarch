@@ -93,7 +93,11 @@ export type RewardAssignment = { slot: SlotId, reward_key: RewardKey, };
 
 export type DayEventDecision = { "kind": "select_winners", slots: Array<SlotId>, } | { "kind": "select_mapping", assignments: Array<RewardAssignment>, } | { "kind": "cancel_instead", reason: string, };
 
-export type DayEventEvent = { "kind": "scheduled", event: DayEvent, } | { "kind": "opened", event_id: DayEventId, phase_id: PhaseId, opened_at: UnixSeconds, } | { "kind": "locked", event_id: DayEventId, locked_at: UnixSeconds, } | { "kind": "cancelled", event_id: DayEventId, reason: string, } | { "kind": "open_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "lock_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "participation_submitted", event_id: DayEventId, actor_slot: SlotId, payload: ParticipationPayload, phase_id: PhaseId, } | { "kind": "participation_withdrawn", event_id: DayEventId, actor_slot: SlotId, } | { "kind": "resolved", event_id: DayEventId, decision: DayEventDecision, winner_slots: Array<SlotId>, reward_keys_applied: Array<RewardKey>, evidence: DayEventResolutionEvidence, };
+export type DayEventAuditSeed = string;
+
+export type DayEventResolutionEvidence = { "kind": "host_decision", participant_slots: Array<SlotId>, } | { "kind": "auto", policy: AutoResolvePolicy, seed: DayEventAuditSeed | null, participant_slots: Array<SlotId>, };
+
+export type DayEventEvent = { "kind": "scheduled", event: DayEvent, } | { "kind": "opened", event_id: DayEventId, phase_id: PhaseId, opened_at: UnixSeconds, } | { "kind": "locked", event_id: DayEventId, locked_at: UnixSeconds, auto_seed: DayEventAuditSeed | null, } | { "kind": "cancelled", event_id: DayEventId, reason: string, } | { "kind": "open_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "lock_due", event_id: DayEventId, due_at: UnixSeconds, observed_at: UnixSeconds, source: string, } | { "kind": "participation_submitted", event_id: DayEventId, actor_slot: SlotId, payload: ParticipationPayload, phase_id: PhaseId, } | { "kind": "participation_withdrawn", event_id: DayEventId, actor_slot: SlotId, } | { "kind": "resolved", event_id: DayEventId, decision: DayEventDecision, winner_slots: Array<SlotId>, reward_keys_applied: Array<RewardKey>, evidence: DayEventResolutionEvidence, };
 
 export type VoteTarget = { "Slot": string } | "NoLynch";
 
@@ -161,7 +165,9 @@ export type GameThreadAuthor = { "kind": "slot", slot_id: string, } | { "kind": 
 
 export type ThreadPostsDelta = { game: string, posts: Array<ThreadPost>, };
 
-export type PostCitationsChangedDelta = { quoted: PostRef, citation_count: bigint, };
+export type ThreadPostRemovedDelta = { game: string, channel: string, source_seq: bigint, };
+
+export type PostCitationsChangedDelta = { channel: string, quoted: PostRef, citation_count: bigint, };
 
 export type DayVoteOutcomeDelta = { game: string, phase_id: PhaseId, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: Array<string>, tallies: { [key in string]: number }, votes: { [key in string]: string }, weights: { [key in string]: number }, majority: number | null, thresholds: { [key in string]: number }, total_weight: number, tiebreak: string | null, reason: string | null, };
 
@@ -200,7 +206,7 @@ export type HostDayEventDelta = { event_id: string, state: string, phase_id: Pha
  * The derived private room and its current membership posture. Public
  * events have no room descriptor because their narratives live in main.
  */
-room: DayEventRoomDelta | null, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: bigint | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, narratives: Array<DayEventNarrativeDelta>, };
+room: DayEventRoomDelta | null, participant_slots: Array<string>, open_due_at: bigint | null, open_observed_at: bigint | null, lock_due_at: bigint | null, lock_observed_at: bigint | null, auto_seed: DayEventAuditSeed | null, resolution_evidence: DayEventResolutionEvidence | null, winner_slots: Array<string>, reward_keys_applied: Array<string>, narratives: Array<DayEventNarrativeDelta>, };
 
 export type HostTaskKind = "engine_host_prompt" | "day_event_resolve";
 
@@ -246,7 +252,12 @@ export type HostPromptsDelta = { game: string, prompts: Array<HostPromptDelta>, 
 
 export type ThreadPostMention = { slot_id: string, offset: bigint, len: bigint, };
 
-export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author: GameThreadAuthor, phase_id: PhaseId | null, body: string, media: Array<ThreadPostMedia>, quotations: Array<Quotation>, mentions: Array<ThreadPostMention>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
+export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author: GameThreadAuthor, phase_id: PhaseId | null, body: string, media: Array<ThreadPostMedia>, quotations: Array<Quotation>,
+/**
+ * Seats this post addressed, decided at write time. Renderers walk this
+ * list; they never scan the body for `@`.
+ */
+mentions: Array<ThreadPostMention>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
 
 export type ThreadPostMedia = { content_id: string, alt: string, variants: { [key in string]: ThreadPostMediaVariant }, };
 
@@ -328,6 +339,19 @@ export type InvestigationResultBody = string | InvestigationResultFields;
 
 export type PlayerInvestigationResult = { game: string, phase_id: PhaseId, event_index: number, audience_slot: string, mode: string, target_slot: string, result: InvestigationResultBody, };
 
+export type PlayerNotificationsDelta = { game: string, notifications: Array<PlayerNotification>, };
+
+export type PlayerInvestigationResultsDelta = { game: string, results: Array<PlayerInvestigationResult>, };
+
+export type SlotMentionNotification = { game: string, audience_slot: string, channel_id: string, source_seq: bigint,
+/**
+ * Setup discussion is deliberately outside a phase, so a mention made
+ * there names no phase rather than being forced into one.
+ */
+phase_id: PhaseId | null, occurred_at: bigint, };
+
+export type SlotMentionsDelta = { game: string, mentions: Array<SlotMentionNotification>, };
+
 export type JsonAtom = null | boolean | number | string | Array<JsonAtom> | { [key in string]: JsonAtom };
 
 export type HostPhaseControl = { game: string, source_seq: bigint, stream_seq: bigint, prompt_id: string, prompt_kind: string | null, prompt_reason: string | null, source_phase_id: PhaseId, target_phase_id: PhaseId, reason: string, skipped_phase_id: PhaseId | null, resolved_at: bigint | null, occurred_at: bigint, };
@@ -348,12 +372,20 @@ export type ResolutionTraceInspectionRun = { phase_id: PhaseId, run_id: string, 
 
 export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
 
-export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostConsoleHeaderChanged", "body": HostConsoleHeaderDelta } | { "kind": "HostConsoleSlotsChanged", "body": HostConsoleSlotsDelta } | { "kind": "HostConsoleThreadPostsChanged", "body": HostConsoleThreadPostsDelta } | { "kind": "HostConsoleThreadPostRemoved", "body": HostConsoleThreadPostRemovedDelta } | { "kind": "HostConsoleDayEventsChanged", "body": HostConsoleDayEventsDelta } | { "kind": "HostConsoleSchedulerChanged", "body": HostConsoleSchedulerDelta } | { "kind": "HostConsoleTasksChanged", "body": HostConsoleTasksDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
+export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostConsoleHeaderChanged", "body": HostConsoleHeaderDelta } | { "kind": "HostConsoleSlotsChanged", "body": HostConsoleSlotsDelta } | { "kind": "HostConsoleThreadPostsChanged", "body": HostConsoleThreadPostsDelta } | { "kind": "HostConsoleThreadPostRemoved", "body": HostConsoleThreadPostRemovedDelta } | { "kind": "HostConsoleDayEventsChanged", "body": HostConsoleDayEventsDelta } | { "kind": "HostConsoleSchedulerChanged", "body": HostConsoleSchedulerDelta } | { "kind": "HostConsoleTasksChanged", "body": HostConsoleTasksDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "SlotMentionsChanged", "body": SlotMentionsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta };
 
-export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { slot: string, } } | { "kind": "ChannelMember", "body": { channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } } | { "kind": "SpectatorOf", "body": { game: string, } };
+export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { game: string, slot: string, } } | { "kind": "ChannelMember", "body": { game: string, channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } } | { "kind": "SpectatorOf", "body": { game: string, } };
 
-export type Hello = { protocol_v: number, server: string, caps: Array<CapabilityGrant>, };
+export type LiveScope = { game: string, channel: string, slot_id: string | null, };
 
-export type ServerMsg = { "kind": "Hello", "body": Hello } | { "kind": "Ack", "body": AckMsg } | { "kind": "Reject", "body": RejectMsg } | { "kind": "Delta", "body": ProjectionDelta };
+export type LiveAudience = { "Game": { game: string, } } | { "Thread": { game: string, channel: string, } } | { "Host": { game: string, } } | { "PlayerSlot": { game: string, slot_id: string, } };
+
+export type LiveProjectionDelta = { audience: LiveAudience, delta: ProjectionDelta, };
+
+export type LiveResyncRequired = { scope: LiveScope, audiences: Array<LiveAudience>, from_event_seq: bigint, };
+
+export type Hello = { protocol_v: number, server: string, scope: LiveScope, caps: Array<CapabilityGrant>, };
+
+export type ServerMsg = { "kind": "Hello", "body": Hello } | { "kind": "Ack", "body": AckMsg } | { "kind": "Reject", "body": RejectMsg } | { "kind": "Delta", "body": LiveProjectionDelta } | { "kind": "ResyncRequired", "body": LiveResyncRequired };
 
 export type ServerEnvelope = { v: number, id: bigint, body: ServerMsg, };

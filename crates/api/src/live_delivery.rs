@@ -2022,12 +2022,41 @@ fn server_envelope_frame(envelope: &ServerEnvelope) -> Result<Message, String> {
         .validate_live()
         .map_err(|error| error.to_string())?;
     let mut bytes = Vec::new();
-    ciborium::into_writer(envelope, &mut bytes).map_err(|error| error.to_string())?;
+    // CBOR carries the same scalar vocabulary as REST: in particular UUIDs
+    // remain canonical text, not serde's binary UUID representation.
+    let payload = serde_json::to_value(envelope).map_err(|error| error.to_string())?;
+    ciborium::into_writer(&payload, &mut bytes).map_err(|error| error.to_string())?;
     Ok(Message::Binary(bytes.into()))
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_cbor_preserves_the_browser_json_scalar_vocabulary() {
+        let game = uuid::Uuid::new_v4();
+        let scope = wire::LiveScope::new(game, "main", Some("slot-1".into())).unwrap();
+        let hello = wire::Hello::new(
+            "test",
+            scope,
+            vec![wire::CapabilityGrant::SlotOccupant {
+                game,
+                slot: "slot-1".into(),
+            }],
+        )
+        .unwrap();
+        let envelope = wire::ServerEnvelope::new(0, wire::ServerMsg::Hello(hello));
+        let axum::extract::ws::Message::Binary(bytes) =
+            super::server_envelope_frame(&envelope).unwrap()
+        else {
+            panic!("live frame must be binary");
+        };
+        let decoded: serde_json::Value = ciborium::from_reader(bytes.as_ref()).unwrap();
+        assert_eq!(decoded, serde_json::to_value(&envelope).unwrap());
+        assert_eq!(decoded["body"]["body"]["scope"]["game"], game.to_string());
+        let round_trip: wire::ServerEnvelope = ciborium::from_reader(bytes.as_ref()).unwrap();
+        assert_eq!(round_trip, envelope);
+    }
+
     use super::{
         delivery_claim_authorized, guarded_application_send, live_delivery_deadline_at,
         live_delivery_deadline_bounded_by_at, Capability, CapabilitySet, ControlFrameBudget,

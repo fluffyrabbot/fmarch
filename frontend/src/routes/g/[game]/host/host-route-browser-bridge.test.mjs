@@ -6,7 +6,6 @@ import {
   exposeHostLiveProjectionEndpoint,
   exposeHostRouteWindowState,
   recordHostLiveProjectionEvent,
-  triggerHostLiveProjectionResync,
 } from "./host-route-browser-bridge.mjs";
 
 test("host browser bridge exposes host route projections for smoke evidence", () => {
@@ -102,63 +101,6 @@ test("host browser bridge preserves previous live projections for null snapshots
   assert.deepEqual(windowRef.__fmarchHostPromptsProjection, [
     { id: "prompt-1" },
   ]);
-});
-
-test("host browser bridge triggers manual live resync through the store adapter", async () => {
-  const calls = [];
-  const windowRef = {};
-  const projectionStore = { id: "store" };
-  const fetchImpl = async () => null;
-  const snapshot = {
-    host: { replacement: { occupantLabel: "player-rowan" } },
-    votecount: [{ target: "slot-7" }],
-    dayVoteOutcomes: [{ phaseId: "D01", winnerSlot: "slot-7" }],
-    hostPrompts: [{ id: "prompt-3" }],
-  };
-
-  const result = await triggerHostLiveProjectionResync({
-    windowRef,
-    projectionStore,
-    resyncKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
-    fetchImpl,
-    fromSeq: 42,
-    currentStatus: { state: "updated", message: "before" },
-    recoverLiveProjectionImpl: async (request) => {
-      calls.push(request);
-      return {
-        message: { kind: "resync-required", fromSeq: 42, state: "recovered" },
-        snapshot,
-      };
-    },
-    statusForEvent: (message, previous) => ({
-      state: message.state,
-      message: `${previous.state}:${message.fromSeq}`,
-    }),
-  });
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].projectionStore, projectionStore);
-  assert.deepEqual(calls[0].resyncKeys, [
-    "host",
-    "votecount",
-    "dayVoteOutcomes",
-    "hostPrompts",
-  ]);
-  assert.equal(calls[0].fetchImpl, fetchImpl);
-  assert.deepEqual(calls[0].message, {
-    kind: "resync-required",
-    fromSeq: 42,
-  });
-  assert.deepEqual(result.liveStatus, {
-    state: "recovered",
-    message: "updated:42",
-  });
-  assert.equal(result.snapshot, snapshot);
-  assert.deepEqual(windowRef.__fmarchHostLiveProjectionEvents, [
-    { kind: "resync-required", fromSeq: 42, state: "recovered" },
-  ]);
-  assert.equal(windowRef.__fmarchHostProjection, snapshot.host);
-  assert.equal(windowRef.__fmarchHostVotecountProjection, snapshot.votecount);
 });
 
 test("host browser bridge dispatches command-result events when available", () => {

@@ -9,8 +9,8 @@ different cognitive jobs. Visual primitives are shared; page composition is not.
   thumb-reachable action shortcuts.
 - The host surface is an exception-driven task queue with one active decision
   canvas.
-- Game setup is a guided workflow with a purpose-built roster editor inside the
-  roster and role steps.
+- Game setup is a six-stage `guided-stage-canvas` workflow with purpose-built
+  editors inside the roster, roles, rules, and optional-content Program stages.
 - Public game pages are reading publications: a compact masthead followed by a
   stable-width public record.
 - Administration is an exception inbox with one decision canvas. Dashboard-like
@@ -76,15 +76,23 @@ task. Command feedback uses a shared status selector and each action reserves a
 stable status floor, so pending and recovery messages do not move neighboring
 controls.
 
+A host link can select an authoritative roster seat with `?slot_id=<seat>`.
+The server loads that seat's current projection, and subsequent refreshes and
+invite issuance retain the selected seat. An absent or unassigned seat never
+falls back to a fixture occupant.
+
 ## Setup workflow
 
-Setup is a five-stage workflow: Pack, Roster, Roles, Rules, then Review and
-start. A persistent stepper shows readiness for every stage while exactly one
-working canvas is visible. Roster owns slot creation, occupant assignment, and
-invitations; Roles owns role assignment; Rules owns posting policy. Review turns
-blocked readiness checks into correction links that select the stage where the
-problem can be fixed. Starting the game remains an explicit,
-consequence-previewed confirmation.
+Setup is a six-stage `guided-stage-canvas` workflow: Pack, Roster, Roles, Rules,
+Program, then Review and start. A persistent stepper shows readiness for every
+stage while exactly one working stage canvas is visible. At or below 820px the
+stepper stacks above the canvas; wider viewports use the stepper-and-canvas
+layout. Roster owns slot creation, occupant assignment, and invitations; Roles
+owns role assignment; Rules owns posting policy; Program owns optional Day
+Program selection and attachment. An empty Program stage is valid for games
+without a Day Program. Review turns blocked readiness checks into correction
+links that select the stage where the problem can be fixed. Starting the game
+remains an explicit, consequence-previewed confirmation.
 
 ## Public game publication
 
@@ -156,6 +164,9 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
   and forced-colors emulation.
 - Admin task activation preserves a single tab stop and moves focus to the
   labelled decision canvas; public skip navigation focuses the first post.
+- Host setup proof records the exact six-stage `guided-stage-canvas`, stacked
+  mobile and stepper-canvas wider layouts, readiness correction routing, and
+  distinct roster and role cards rather than legacy co-located slot columns.
 - Proof lanes exercise player and host tasks rather than requiring legacy panel
   topology.
 
@@ -165,7 +176,7 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
    frame, game bar, channel tabs, content-following sheets, and action dock.
 2. Replace the host wall of controls with `HostTask` navigation and a decision
    canvas.
-3. Convert setup to the guided workflow. Complete.
+3. Convert setup to the six-stage `guided-stage-canvas` workflow. Complete.
 4. Reassess public and admin surfaces independently; do not force either through
    the gameplay composition. Complete: public uses a publication, admin uses an
    exception inbox.

@@ -8,11 +8,11 @@ test("same-origin command proxy derives bearer authority from the httpOnly sessi
     cookies: { get: (name) => (name === "fmarch_session" ? "opaque-session" : undefined) },
     request: new Request("https://app.example/commands", {
       method: "POST",
-      body: JSON.stringify({ v: 2, id: 7, body: { kind: "Command", body: {} } }),
+      body: JSON.stringify({ v: 3, id: 7, body: { kind: "Command", body: {} } }),
     }),
     fetch: async (url, init) => {
       calls.push({ url, init });
-      return Response.json({ v: 2, id: 7, body: { kind: "Ack", body: {} } });
+      return Response.json({ v: 3, id: 7, body: { kind: "Ack", body: {} } });
     },
   });
 

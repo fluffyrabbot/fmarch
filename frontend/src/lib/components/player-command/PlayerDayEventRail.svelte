@@ -44,6 +44,7 @@
           </div>
           <button
             type="button"
+            class="fm-touch-button player-day-event-rail__action"
             data-action={item.action}
             data-command-recovery-return={item.action}
             data-min-touch-target-px={item.minTouchTargetPx}

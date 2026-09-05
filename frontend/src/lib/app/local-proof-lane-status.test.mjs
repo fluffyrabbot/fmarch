@@ -447,6 +447,17 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
 
   assert.equal(
     hardeningLaneStatus({
+      id: "live-projection-lag-resync",
+      status: "passed",
+      evidence: {
+        clientMetrics: { resyncFramesReceived: 2 },
+        recoveredReconnectCount: 2,
+      },
+    }),
+    "passed: terminal resync frames 2, recovered reconnects 2",
+  );
+  assert.equal(
+    hardeningLaneStatus({
       id: staleActionConflictMessageLaneId,
       status: "passed",
       evidence: staleConflictEvidence(staleActionConflictMessageLaneId),

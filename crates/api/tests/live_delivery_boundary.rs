@@ -146,9 +146,7 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     let delivery_guard = &live_delivery[delivery_guard_start..delivery_guard_end];
     let lease_deadline = delivery_guard
         .find("let lease_deadline = live_delivery_deadline(claim.access_expires_at)")
-        .or_else(|| {
-            delivery_guard.find("let Some(lease_deadline) = live_delivery_deadline(")
-        })
+        .or_else(|| delivery_guard.find("let Some(lease_deadline) = live_delivery_deadline("))
         .expect("complete live-delivery lease deadline");
     assert!(
         lease_deadline < delivery_guard.find(".acquire_owned()").unwrap()

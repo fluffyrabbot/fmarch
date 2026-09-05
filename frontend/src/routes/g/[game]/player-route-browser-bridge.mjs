@@ -1,6 +1,5 @@
 import {
   liveProjectionStatusForEvent,
-  recoverLiveProjection,
 } from "../../../lib/app/live-transport.mjs";
 
 export function recordPlayerLiveProjectionEvent({
@@ -23,36 +22,6 @@ export function recordPlayerLiveProjectionEvent({
     windowRef.__fmarchPlayerProjection = snapshot;
   }
   return liveStatus;
-}
-
-export async function triggerPlayerLiveProjectionResync({
-  windowRef,
-  projectionStore,
-  resyncKeys,
-  fetchImpl,
-  fromSeq = 0,
-  currentStatus,
-  recoverLiveProjectionImpl = recoverLiveProjection,
-  statusForEvent = liveProjectionStatusForEvent,
-}) {
-  const recovery = await recoverLiveProjectionImpl({
-    projectionStore,
-    resyncKeys,
-    fetchImpl,
-    message: { kind: "resync-required", fromSeq },
-  });
-  const liveStatus = recordPlayerLiveProjectionEvent({
-    windowRef,
-    message: recovery.message,
-    snapshot: recovery.snapshot,
-    currentStatus,
-    statusForEvent,
-  });
-  return Object.freeze({
-    liveStatus,
-    message: recovery.message,
-    snapshot: recovery.snapshot,
-  });
 }
 
 export function exposePlayerProjection({ windowRef, snapshot }) {

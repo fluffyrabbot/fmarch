@@ -5,7 +5,7 @@
 //! slot-addressed, so replacement carries a pending mention with the seat.
 
 use commands::{handle, Command, Reject};
-use content_reference::{MentionSpan, SlotMentionCandidate, SlotMention};
+use content_reference::{MentionSpan, SlotMention, SlotMentionCandidate};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -77,18 +77,20 @@ async fn submit_post_decides_a_slot_mention_and_delivers_it_to_the_seat(pool: Pg
         "the decision is stored as a typed fact, never re-derived from prose",
     );
     assert!(
-        mentioning.get("author").and_then(|author| author.get("slot_id")).is_some(),
+        mentioning
+            .get("author")
+            .and_then(|author| author.get("slot_id"))
+            .is_some(),
         "authorship is the slot",
     );
 
-    let stored: serde_json::Value = sqlx::query_scalar(
-        "SELECT mentions FROM thread_view WHERE game_id = $1 AND body = $2",
-    )
-    .bind(game)
-    .bind("@slot_2 explain the wagon")
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let stored: serde_json::Value =
+        sqlx::query_scalar("SELECT mentions FROM thread_view WHERE game_id = $1 AND body = $2")
+            .bind(game)
+            .bind("@slot_2 explain the wagon")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(
         serde_json::from_value::<Vec<SlotMention>>(stored).unwrap(),
         vec![SlotMention {
@@ -163,7 +165,9 @@ async fn every_mention_failure_is_the_same_non_disclosing_reject(pool: PgPool) {
         );
     }
     assert!(
-        delivered_source_seqs(&pool, game, addressed).await.is_empty(),
+        delivered_source_seqs(&pool, game, addressed)
+            .await
+            .is_empty(),
         "a rejected post delivers nothing",
     );
 }
@@ -194,9 +198,13 @@ async fn a_private_room_refuses_a_non_member_exactly_as_it_refuses_a_stranger(po
     };
 
     // The author reads their own room, so this proves the room is postable.
-    handle(&pool, &user(occupant), private_post(Vec::new(), "checking in"))
-        .await
-        .expect("a member posts into their own room");
+    handle(
+        &pool,
+        &user(occupant),
+        private_post(Vec::new(), "checking in"),
+    )
+    .await
+    .expect("a member posts into their own room");
 
     let non_member = handle(
         &pool,
@@ -220,7 +228,9 @@ async fn a_private_room_refuses_a_non_member_exactly_as_it_refuses_a_stranger(po
         "the room must not disclose which side of the check failed",
     );
     assert!(
-        delivered_source_seqs(&pool, game, outsider).await.is_empty(),
+        delivered_source_seqs(&pool, game, outsider)
+            .await
+            .is_empty(),
         "nothing reaches a seat outside the room",
     );
 }
@@ -305,15 +315,14 @@ async fn replacement_transfers_a_pending_mention_without_a_new_event(pool: PgPoo
     assert!(!outgoing_caps.grants(&caps::Capability::SlotOccupant(addressed.to_string())));
 
     // Nothing about the delivery names a human at all.
-    let rows: Vec<String> = sqlx::query(
-        "SELECT audience_slot FROM slot_mention_notification WHERE game_id = $1",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap()
-    .into_iter()
-    .map(|row| row.get::<String, _>("audience_slot"))
-    .collect();
+    let rows: Vec<String> =
+        sqlx::query("SELECT audience_slot FROM slot_mention_notification WHERE game_id = $1")
+            .bind(game)
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| row.get::<String, _>("audience_slot"))
+            .collect();
     assert_eq!(rows, vec![addressed.to_string()]);
 }

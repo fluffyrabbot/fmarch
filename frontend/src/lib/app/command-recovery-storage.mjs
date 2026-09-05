@@ -1,44 +1,75 @@
-export const COMMAND_RECOVERY_STORAGE_VERSION = 1;
-export const COMMAND_RECOVERY_STORAGE_PREFIX = "fmarch:command-recovery:v1:";
+export const COMMAND_RECOVERY_STORAGE_VERSION = 2;
+export const COMMAND_RECOVERY_STORAGE_PREFIX = "fmarch:command-recovery:v2:";
 export const COMMAND_RECOVERY_SURFACES = Object.freeze(["player", "moderator"]);
 
 export function commandRecoveryStorageKey({ game, surface }) {
   return `${COMMAND_RECOVERY_STORAGE_PREFIX}${requiredSurface(surface)}:${requiredString(game, "game")}`;
 }
 
+export function commandRecoveryStorageAvailable(storage) {
+  if (!isStorage(storage)) return false;
+  try {
+    storage.getItem(`${COMMAND_RECOVERY_STORAGE_PREFIX}availability-probe`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCommandRecoveryStorage(windowRef = globalThis.window) {
+  let storage;
+  try {
+    storage = windowRef?.sessionStorage;
+  } catch {
+    return null;
+  }
+  return commandRecoveryStorageAvailable(storage) ? storage : null;
+}
+
 export function persistInterruptedCommandAttempts({
   storage,
   game,
   surface,
+  authority,
   attempts,
 }) {
   if (!isStorage(storage)) {
     return false;
   }
   const key = commandRecoveryStorageKey({ game, surface });
-  const normalized = normalizeAttempts(attempts);
-  if (Object.keys(normalized).length === 0) {
-    storage.removeItem(key);
-    return true;
-  }
-  storage.setItem(
-    key,
-    JSON.stringify({
+  const normalizedAuthority = requiredString(authority, "authority");
+  try {
+    const normalized = normalizeAttempts(attempts);
+    if (Object.keys(normalized).length === 0) {
+      storage.removeItem(key);
+      return true;
+    }
+    const serialized = JSON.stringify({
       v: COMMAND_RECOVERY_STORAGE_VERSION,
       game: requiredString(game, "game"),
       surface: requiredSurface(surface),
+      authority: normalizedAuthority,
       attempts: normalized,
-    }),
-  );
-  return true;
+    });
+    storage.setItem(key, serialized);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function readInterruptedCommandAttempts({ storage, game, surface }) {
+export function readInterruptedCommandAttempts({ storage, game, surface, authority }) {
   if (!isStorage(storage)) {
     return Object.freeze({});
   }
   const key = commandRecoveryStorageKey({ game, surface });
-  const raw = storage.getItem(key);
+  const normalizedAuthority = requiredString(authority, "authority");
+  let raw;
+  try {
+    raw = storage.getItem(key);
+  } catch {
+    return Object.freeze({});
+  }
   if (typeof raw !== "string" || raw.trim() === "") {
     return Object.freeze({});
   }
@@ -47,14 +78,15 @@ export function readInterruptedCommandAttempts({ storage, game, surface }) {
     if (
       parsed?.v !== COMMAND_RECOVERY_STORAGE_VERSION ||
       parsed?.game !== game ||
-      parsed?.surface !== surface
+      parsed?.surface !== surface ||
+      parsed?.authority !== normalizedAuthority
     ) {
-      storage.removeItem(key);
+      bestEffortRemove(storage, key);
       return Object.freeze({});
     }
     return normalizeAttempts(parsed.attempts);
   } catch {
-    storage.removeItem(key);
+    bestEffortRemove(storage, key);
     return Object.freeze({});
   }
 }
@@ -63,8 +95,10 @@ export function clearInterruptedCommandAttempts({ storage, game, surface }) {
   if (!isStorage(storage)) {
     return false;
   }
-  storage.removeItem(commandRecoveryStorageKey({ game, surface }));
-  return true;
+  return bestEffortRemove(
+    storage,
+    commandRecoveryStorageKey({ game, surface }),
+  );
 }
 
 function normalizeAttempts(attempts) {
@@ -92,11 +126,16 @@ function normalizeAttempt(actionId, attempt) {
   const interruption = COMMAND_INTERRUPTIONS.includes(attempt.interruption)
     ? attempt.interruption
     : "connection_lost";
+  const command = isRecord(attempt.command) ? freezeJson(attempt.command) : null;
+  if (command === null) {
+    return null;
+  }
   return Object.freeze({
     commandId,
     actionId: requiredString(attempt.actionId ?? attempt.action ?? actionId, "actionId"),
     action: requiredString(attempt.action ?? attempt.actionId ?? actionId, "action"),
     interruption,
+    command,
     ...(typeof attempt.composerBody === "string"
       ? { composerBody: attempt.composerBody }
       : {}),
@@ -111,18 +150,35 @@ function normalizeAttempt(actionId, attempt) {
   });
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function freezeJson(value) {
   return Object.freeze(JSON.parse(JSON.stringify(value)));
 }
 
 function isStorage(storage) {
-  return (
-    storage !== undefined &&
-    storage !== null &&
-    typeof storage.getItem === "function" &&
-    typeof storage.setItem === "function" &&
-    typeof storage.removeItem === "function"
-  );
+  try {
+    return (
+      storage !== undefined &&
+      storage !== null &&
+      typeof storage.getItem === "function" &&
+      typeof storage.setItem === "function" &&
+      typeof storage.removeItem === "function"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function bestEffortRemove(storage, key) {
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function requiredSurface(value) {

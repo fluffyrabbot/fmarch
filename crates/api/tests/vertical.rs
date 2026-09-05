@@ -1728,21 +1728,68 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         )
         .await,
     );
-    let terminal: Option<()> = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let resynced = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            match socket.next().await {
-                Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(_))) => continue,
-                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
-                | Some(Ok(tokio_tungstenite::tungstenite::Message::Text(_)))
-                | None
-                | Some(Err(_)) => return None,
-                Some(Ok(_)) => return None,
+            let frame = socket
+                .next()
+                .await
+                .expect("live outcome before close")
+                .unwrap();
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
+            if let ServerMsg::ResyncRequired(ref resync) = envelope.body {
+                assert_eq!(resync.scope().game(), game);
+                assert_eq!(resync.scope().channel(), channel_id.as_str());
+                loop {
+                    match socket.next().await {
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
+                            return true
+                        }
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Ping(_)))
+                        | Some(Ok(tokio_tungstenite::tungstenite::Message::Pong(_))) => continue,
+                        frame => {
+                            panic!("terminal resync must close without further data: {frame:?}")
+                        }
+                    }
+                }
+            }
+            if let Some(ProjectionDelta::ThreadPostsChanged(delta)) =
+                envelope.body.projection_delta()
+            {
+                assert_eq!(delta.game, game);
+                if delta.posts.iter().any(|post| {
+                    post.body == "incoming Role PM post" && post.channel_id == channel_id.as_str()
+                }) {
+                    return false;
+                }
             }
         }
     })
     .await
-    .expect("generation should terminate promptly");
-    assert!(terminal.is_none());
+    .expect("incoming occupant receives its private-channel delta or terminal resync");
+    if resynced {
+        let ticket = issue_websocket_ticket(&app, &incoming_token, game, channel_id.as_str()).await;
+        let (fresh, _) = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
+        ))
+        .await
+        .unwrap();
+        socket = fresh;
+        let hello: ServerEnvelope = decode_server_envelope(
+            tokio::time::timeout(std::time::Duration::from_secs(3), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+        );
+        let ServerMsg::Hello(hello) = hello.body else {
+            panic!("fresh generation requires Hello");
+        };
+        assert_eq!(hello.scope().game(), game);
+        assert_eq!(hello.scope().channel(), channel_id.as_str());
+        // The authoritative thread and media checks below complete recovery.
+    }
 
     let (mut stale_socket, _) = tokio_tungstenite::connect_async(format!(
         "ws://{addr}/ws?ticket={stale_outgoing_ticket}&audience=fmarch-live"
@@ -2524,21 +2571,68 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
         .await,
     );
     command_id += 1;
-    let terminal: Option<()> = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let resynced = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            match socket.next().await {
-                Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(_))) => continue,
-                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
-                | Some(Ok(tokio_tungstenite::tungstenite::Message::Text(_)))
-                | None
-                | Some(Err(_)) => return None,
-                Some(Ok(_)) => return None,
+            let frame = socket
+                .next()
+                .await
+                .expect("live outcome before close")
+                .unwrap();
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
+            if let ServerMsg::ResyncRequired(ref resync) = envelope.body {
+                assert_eq!(resync.scope().game(), game);
+                assert_eq!(resync.scope().channel(), "dead");
+                loop {
+                    match socket.next().await {
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
+                            return true
+                        }
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Ping(_)))
+                        | Some(Ok(tokio_tungstenite::tungstenite::Message::Pong(_))) => continue,
+                        frame => {
+                            panic!("terminal resync must close without further data: {frame:?}")
+                        }
+                    }
+                }
+            }
+            if let Some(ProjectionDelta::ThreadPostsChanged(delta)) =
+                envelope.body.projection_delta()
+            {
+                assert_eq!(delta.game, game);
+                if delta.posts.iter().any(|post| {
+                    post.body == "incoming dead-chat live delta" && post.channel_id == "dead"
+                }) {
+                    return false;
+                }
             }
         }
     })
     .await
-    .expect("generation should terminate promptly");
-    assert!(terminal.is_none());
+    .expect("incoming occupant receives its private-channel delta or terminal resync");
+    if resynced {
+        let ticket = issue_websocket_ticket(&app, &incoming_token, game, "dead").await;
+        let (fresh, _) = tokio_tungstenite::connect_async(format!(
+            "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
+        ))
+        .await
+        .unwrap();
+        socket = fresh;
+        let hello: ServerEnvelope = decode_server_envelope(
+            tokio::time::timeout(std::time::Duration::from_secs(3), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+        );
+        let ServerMsg::Hello(hello) = hello.body else {
+            panic!("fresh generation requires Hello");
+        };
+        assert_eq!(hello.scope().game(), game);
+        assert_eq!(hello.scope().channel(), "dead");
+        // The authoritative thread and media checks below complete recovery.
+    }
 
     let thread = get_as_dev_principal(
         &app,
@@ -7020,7 +7114,8 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                 }
             }
         }
-    })    .await
+    })
+    .await
     .expect("hide must follow the tombstone with a visibility-filtered thread snapshot");
     assert!(
         hidden_snapshot
@@ -7031,9 +7126,9 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     );
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let Some(envelope) = decode_server_envelope_opt(
-                moderator_socket.next().await.unwrap().unwrap(),
-            ) else {
+            let Some(envelope) =
+                decode_server_envelope_opt(moderator_socket.next().await.unwrap().unwrap())
+            else {
                 continue;
             };
             if let Some(ProjectionDelta::HostConsoleThreadPostRemoved(delta)) =

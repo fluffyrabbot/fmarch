@@ -20,19 +20,28 @@ import {
   playerRefreshKeysForAction,
   playerRefreshKeysForCommandOutcome,
   playerRefreshKeysForLiveDelta,
-  playerResyncKeys,
+  playerReconnectRefreshKeys,
   recordPlayerCommandReceipt,
   restorePlayerInterruptedCommands,
+  revokedPlayerCommandState,
   clearPlayerCommandReceipt,
   playerThreadErrorStatus,
   playerThreadNoOlderStatus,
   playerThreadPendingStatus,
+  recoverPlayerRouteCommand,
   staleSlotOwnershipCommandState,
   submitPlayerRouteCommand,
   togglePrivateItemExpansion,
   uploadPlayerPostMedia,
 } from "./player-route-controller.mjs";
-import { CommandInterruptedError } from "../../../lib/app/command-interruption.mjs";
+import {
+  CommandInterruptedError,
+  CommandProjectionRecoveryTimeoutError,
+} from "../../../lib/app/command-interruption.mjs";
+import {
+  createProjectionStore,
+  ProjectionRefreshError,
+} from "../../../lib/app/projection-store.mjs";
 
 test("player composer draft clears body, media, quotations, and mentions after ack", () => {
   assert.deepEqual(clearedPlayerComposerDraft(), {
@@ -126,11 +135,20 @@ test("player interrupted commands survive sessionStorage reload with the same co
   persistPlayerInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: "principal-a",
+    actorSlot: "slot-7",
     attempts: {
       submit_vote: {
         commandId: "player-command-1",
         action: "submit_vote",
         interruption: "connection_lost",
+        command: {
+          SubmitVote: {
+            game: "midsummer",
+            actor_slot: "slot-7",
+            target: { Slot: "slot-2" },
+          },
+        },
         data: { stale: true },
       },
     },
@@ -139,10 +157,19 @@ test("player interrupted commands survive sessionStorage reload with the same co
   const restored = restorePlayerInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: "principal-a",
+    actorSlot: "slot-7",
   });
 
   assert.equal(restored.attempts.submit_vote.commandId, "player-command-1");
   assert.equal(restored.attempts.submit_vote.data, undefined);
+  assert.deepEqual(restored.attempts.submit_vote.command, {
+    SubmitVote: {
+      game: "midsummer",
+      actor_slot: "slot-7",
+      target: { Slot: "slot-2" },
+    },
+  });
   assert.equal(restored.commandStatus.commandId, "player-command-1");
   assert.equal(restored.commandStatus.state, "interrupted");
   assert.equal(restored.commandReceipts[0].actionId, "submit_vote");
@@ -158,32 +185,122 @@ test("player route controller builds projection store boundaries from route data
     endgameSummary: data.endgameSummary,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
+    slotMentions: data.slotMentions,
     commandState: data.commandState,
   });
-  assert.deepEqual(Object.keys(buildPlayerProjectionColdLoads(data)), [
+  const coldLoads = buildPlayerProjectionColdLoads(data);
+  assert.deepEqual(Object.keys(coldLoads), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
     "endgameSummary",
     "notifications",
     "investigationResults",
+    "slotMentions",
     "commandState",
   ]);
-  assert.deepEqual(playerResyncKeys(data), [
+  const notification = {
+    game: data.game.id,
+    phase_id: "N01",
+    event_index: 1,
+    audience_slot: data.player.slotId,
+    effect: "Commuted",
+    status: "Delivered",
+  };
+  assert.equal(coldLoads.notifications.validate([notification]), true);
+  assert.equal(
+    coldLoads.notifications.validate([
+      { ...notification, audience_slot: "slot-other" },
+    ]),
+    false,
+  );
+  assert.equal(
+    coldLoads.notifications.validateLiveDelta({
+      kind: "PlayerNotificationsChanged",
+      body: {
+        game: "other-game",
+        notifications: [notification],
+      },
+    }),
+    false,
+  );
+  // A slot mention is delivered to the seat, so a delta naming another seat
+  // is refused by the same audience check the sibling private families use.
+  assert.equal(
+    coldLoads.slotMentions.validateLiveDelta({
+      kind: "SlotMentionsChanged",
+      body: {
+        game: "midsummer",
+        mentions: [
+          {
+            game: "midsummer",
+            audience_slot: "slot-7",
+            channel_id: "main",
+            source_seq: 443,
+            phase_id: "D02",
+            occurred_at: 1781928000,
+          },
+        ],
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    coldLoads.slotMentions.validateLiveDelta({
+      kind: "SlotMentionsChanged",
+      body: {
+        game: "midsummer",
+        mentions: [
+          {
+            game: "midsummer",
+            audience_slot: "slot-2",
+            channel_id: "main",
+            source_seq: 443,
+            phase_id: "D02",
+            occurred_at: 1781928000,
+          },
+        ],
+      },
+    }),
+    false,
+  );
+  assert.deepEqual(playerReconnectRefreshKeys(data), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
     "endgameSummary",
     "notifications",
     "investigationResults",
+    "slotMentions",
     "commandState",
   ]);
+  assert.equal(Object.hasOwn(coldLoads.thread, "revoke"), false);
+  assert.deepEqual(coldLoads.notifications.revoke, []);
+  assert.deepEqual(coldLoads.investigationResults.revoke, []);
+  assert.deepEqual(coldLoads.slotMentions.revoke, []);
+  assert.deepEqual(
+    coldLoads.commandState.revoke(),
+    revokedPlayerCommandState({
+      game: data.game.id,
+      actorSlot: data.player.slotId,
+    }),
+  );
+
+  const privateColdLoads = buildPlayerProjectionColdLoads({
+    ...data,
+    threadPager: { ...data.threadPager, channel: "private:mafia" },
+  });
+  assert.deepEqual(privateColdLoads.thread.revoke(), {
+    posts: [],
+    nextBeforeSeq: null,
+  });
 
   const anonymousData = fixtureData({
     coldLoad: {
       ...fixtureData().coldLoad,
       notificationsEndpoint: null,
       investigationResultsEndpoint: null,
+      slotMentionsEndpoint: null,
       commandStateEndpoint: null,
     },
   });
@@ -193,7 +310,7 @@ test("player route controller builds projection store boundaries from route data
     "dayVoteOutcomes",
     "endgameSummary",
   ]);
-  assert.deepEqual(playerResyncKeys(anonymousData), [
+  assert.deepEqual(playerReconnectRefreshKeys(anonymousData), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
@@ -248,7 +365,7 @@ test("player command-state authorization loss clears all private authority", () 
   assert.deepEqual(revoked.dayEventRooms, []);
   assert.equal(
     normalizePlayerCommandStateRefreshError({ status: 503, previous }),
-    previous,
+    undefined,
   );
 });
 
@@ -477,6 +594,190 @@ test("player route controller derives dispatch bridge plans from command request
   });
 });
 
+test("player route controller refuses commands before dispatch when route authority is disabled", async () => {
+  let fetchCalls = 0;
+  let sendCalls = 0;
+
+  await assert.rejects(
+    submitPlayerRouteCommand({
+      action: "submit_vote",
+      composerBody: "##vote slot-2",
+      data: {
+        ...fixtureData(),
+        commandsEnabled: false,
+      },
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        throw new Error("disabled player commands must not reach fetch");
+      },
+      projectionStore: fakeProjectionStore(),
+      sendCommandImpl: async () => {
+        sendCalls += 1;
+        throw new Error("disabled player commands must not reach dispatch");
+      },
+    }),
+    /player commands are disabled without an authoritative route snapshot/,
+  );
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(sendCalls, 0);
+});
+
+test("player route controller treats missing route authority as disabled", async () => {
+  await assert.rejects(
+    submitPlayerRouteCommand({
+      action: "submit_vote",
+      data: { ...fixtureData(), commandsEnabled: undefined },
+      projectionStore: fakeProjectionStore(),
+      sendCommandImpl: async () => {
+        throw new Error("missing authority must fail before dispatch");
+      },
+    }),
+    /disabled without an authoritative route snapshot/,
+  );
+});
+
+test("player interrupted retry refuses a changed command body under the old command id", async () => {
+  const data = fixtureData();
+  let sendCalls = 0;
+
+  await assert.rejects(
+    submitPlayerRouteCommand({
+      action: "submit_vote",
+      data,
+      projectionStore: fakeProjectionStore(),
+      preparedCommand: {
+        SubmitVote: {
+          game: data.game.id,
+          actor_slot: data.player.slotId,
+          target: { Slot: "slot-99" },
+        },
+      },
+      sendCommandImpl: async () => {
+        sendCalls += 1;
+        return { state: "ack", message: "must not dispatch" };
+      },
+    }),
+    /no longer matches the interrupted command body/,
+  );
+
+  assert.equal(sendCalls, 0);
+});
+
+test("player refresh failure revokes dispatch and a validated refresh restores it", async () => {
+  const data = fixtureData();
+  const store = createProjectionStore({
+    initialSnapshot: { commandState: data.commandState },
+    coldLoads: {
+      commandState: { url: "/player-command-state" },
+    },
+  });
+  await assert.rejects(
+    store.refresh(undefined, {
+      fetchImpl: async () => ({ ok: false, status: 503 }),
+    }),
+    ProjectionRefreshError,
+  );
+  let sendCalls = 0;
+  await assert.rejects(
+    submitPlayerRouteCommand({
+      action: "withdraw_vote",
+      data,
+      projectionStore: store,
+      sendCommandImpl: async () => {
+        sendCalls += 1;
+        return { state: "reject", error: "InvalidTarget", message: "reject" };
+      },
+    }),
+    /projection freshness is restored/,
+  );
+  assert.equal(sendCalls, 0);
+
+  await store.refresh(undefined, {
+    fetchImpl: async () => jsonResponse(data.commandState),
+  });
+  await submitPlayerRouteCommand({
+    action: "withdraw_vote",
+    data,
+    projectionStore: store,
+    sendCommandImpl: async () => {
+      sendCalls += 1;
+      return { state: "reject", error: "InvalidTarget", message: "reject" };
+    },
+  });
+  assert.equal(sendCalls, 1);
+});
+
+test("player ACK remains committed when its authoritative refresh fails", async () => {
+  const data = fixtureData();
+  const store = createProjectionStore({
+    initialSnapshot: {
+      votecount: data.votecount,
+      commandState: data.commandState,
+    },
+    coldLoads: {
+      votecount: { url: "/votecount" },
+      commandState: { url: "/player-command-state" },
+    },
+  });
+  const result = await submitPlayerRouteCommand({
+    action: "submit_vote",
+    data,
+    projectionStore: store,
+    fetchImpl: async () => ({ ok: false, status: 503 }),
+    sendCommandImpl: async () => ({ state: "ack", message: "Ack: stream seq 7" }),
+  });
+
+  assert.equal(result.commandStatus.state, "ack");
+  assert.equal(result.commandStatus.projectionUnavailable, true);
+  assert.equal(result.commandStatus.retryable, false);
+  assert.match(result.commandStatus.message, /Do not retry/);
+  assert.equal(store.isReady(), false);
+});
+
+test("player ACK remains committed when projection recovery exceeds its independent 12s lease", async () => {
+  const data = fixtureData();
+  let refreshStarted = false;
+  let invalidationReason = null;
+  const projectionStore = fakeProjectionStore({
+    refresh() {
+      refreshStarted = true;
+      return new Promise(() => {});
+    },
+    invalidate(_keys, options) {
+      invalidationReason = options.reason;
+    },
+  });
+
+  const result = await recoverPlayerRouteCommand({
+    action: "submit_vote",
+    data,
+    projectionStore,
+    commandStatus: {
+      state: "ack",
+      commandId: "confirmed-player-command",
+      message: "Ack: stream seq 7",
+    },
+    projectionRecoveryTimeoutMs: 12_000,
+    executeProjectionRecoveryImpl: async ({ timeoutMs, operation }) => {
+      assert.equal(timeoutMs, 12_000);
+      operation({ signal: new AbortController().signal });
+      throw new CommandProjectionRecoveryTimeoutError();
+    },
+  });
+
+  assert.equal(refreshStarted, true);
+  assert.equal(result.commandStatus.state, "ack");
+  assert.equal(result.commandStatus.commandId, "confirmed-player-command");
+  assert.equal(result.commandStatus.projectionUnavailable, true);
+  assert.equal(result.commandStatus.retryable, false);
+  assert.match(result.commandStatus.message, /Do not retry/);
+  assert.equal(
+    invalidationReason,
+    "confirmed_player_command_projection_recovery_failed",
+  );
+});
+
 test("player route controller refreshes only projections touched by acked commands", async () => {
   const refreshed = [];
   const commandRequests = [];
@@ -511,6 +812,7 @@ test("player route controller refreshes only projections touched by acked comman
     "votecount",
     "commandState",
     "dayVoteOutcomes",
+    "slotMentions",
   ]);
   assert.deepEqual(playerRefreshKeysForAction("submit_vote:no_lynch"), [
     "votecount",
@@ -706,7 +1008,7 @@ test("player route controller clears local commands after slot ownership rejects
         return patch;
       },
       getSnapshot: () => ({
-        commandState: patches.at(-1)?.commandState,
+        commandState: patches.at(-1)?.commandState ?? fixtureData().commandState,
       }),
     }),
     sendCommandImpl: async () => ({
@@ -862,7 +1164,13 @@ test("player route controller handles no-older and local view statuses", async (
       actionId: "submit_post",
       statusKey: "submit_post",
       dispatchKind: "submit_post",
-      projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+      projectionRefreshKeys: [
+        "thread",
+        "votecount",
+        "commandState",
+        "dayVoteOutcomes",
+        "slotMentions",
+      ],
     },
   });
   assert.deepEqual(playerCommandTrace("withdraw_vote"), {
@@ -919,7 +1227,13 @@ test("player route controller records one current command receipt per action", (
         actionId: "submit_post",
         statusKey: "submit_post",
         dispatchKind: "submit_post",
-        projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+        projectionRefreshKeys: [
+          "thread",
+          "votecount",
+          "commandState",
+          "dayVoteOutcomes",
+          "slotMentions",
+        ],
       },
       current: false,
     },
@@ -971,6 +1285,7 @@ test("player route controller toggles private item expansion and validates priva
 
 function fixtureData(overrides = {}) {
   return {
+    commandsEnabled: true,
     game: { id: "midsummer" },
     player: { principalId: "player_mira", slotId: "slot-7" },
     composer: {
@@ -1011,15 +1326,45 @@ function fixtureData(overrides = {}) {
       ],
     },
     threadPager: { pageSize: 50, channel: "main" },
+    channel: { channel: "main", allowed: true },
     thread: { nextBeforeSeq: 41, posts: [] },
     votecount: [],
     dayVoteOutcomes: [],
     endgameSummary: null,
     notifications: [],
     investigationResults: [],
+    slotMentions: [],
     commandState: {
+      game: "midsummer",
+      actorSlot: "slot-7",
+      actorAlive: true,
+      actorStatus: "alive",
+      gameCompleted: false,
       phase: { phaseId: "N01", phaseKind: "Night", phaseNumber: 1, locked: false },
-      actions: [],
+      actions: [
+        {
+          action: "submit_action:factional_kill",
+          actionId: "browser_factional_kill_n01",
+          templateId: "factional_kill",
+          targets: ["slot-2"],
+          targetOptions: ["slot-2"],
+        },
+        {
+          action: "submit_invalid_action:factional_kill",
+          actionId: "invalid_self_factional_kill",
+          templateId: "factional_kill",
+          targets: ["slot-7"],
+          targetOptions: ["slot-7"],
+        },
+      ],
+      currentActions: [],
+      voteTargets: [
+        { kind: "slot", slotId: "slot-2", label: "slot-2" },
+        { kind: "no_lynch", slotId: null, label: "No lynch" },
+      ],
+      currentVote: { kind: "slot", slotId: "slot-2", label: "slot-2" },
+      dayEvents: [],
+      postPolicies: [{ channelId: "main", allowMediaOnly: true }],
     },
     coldLoad: {
       threadEndpoint: "/api/gameplay/games/midsummer?limit=50",
@@ -1029,6 +1374,7 @@ function fixtureData(overrides = {}) {
       endgameSummaryEndpoint: "/api/gameplay/games/midsummer/endgame-summary",
       notificationsEndpoint: "/api/gameplay/games/midsummer/notifications",
       investigationResultsEndpoint: "/api/gameplay/games/midsummer/investigation-results",
+      slotMentionsEndpoint: "/api/gameplay/games/midsummer/slot-mentions",
       commandStateEndpoint: "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
     },
     ...overrides,
@@ -1039,8 +1385,12 @@ function fakeProjectionStore(overrides = {}) {
   let snapshot = {
     thread: { nextBeforeSeq: null, posts: [] },
     votecount: [],
+    commandState: fixtureData().commandState,
   };
   return {
+    isReady() {
+      return true;
+    },
     getSnapshot() {
       return snapshot;
     },
@@ -1057,6 +1407,13 @@ function jsonResponse(body) {
   return {
     ok: true,
     status: 200,
+    headers: {
+      get(name) {
+        return name.toLowerCase() === "content-type"
+          ? "application/json"
+          : null;
+      },
+    },
     async json() {
       return body;
     },

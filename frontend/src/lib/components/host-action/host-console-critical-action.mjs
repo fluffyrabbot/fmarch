@@ -1,4 +1,8 @@
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+import {
+  FIXTURE_PRINCIPAL_IDS,
+  canonicalPrincipalId,
+} from "../../principal-id.mjs";
 
 export const EXTEND_DEADLINE_PRESETS = Object.freeze([
   Object.freeze({ id: "extend_deadline_24h", label: "Extend +24h", hours: 24 }),
@@ -40,28 +44,10 @@ export function buildHostConsoleCriticalActions(
   const deadlineActions = buildExtendDeadlineActions(gameId, phase, nowSeconds);
   const phaseActions = buildPhaseActions(gameId, phase);
   const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
-  const replacementSlotId = replacement?.slotId ?? "slot-7";
-  const outgoingPersonaId = replacement?.personaId ?? "";
-  const incomingPrincipalId = replacement?.incomingPrincipalId ?? "player-rowan";
-  const outgoingPublicName = replacement?.occupantLabel ?? "current persona";
+  const replacementAction = buildProcessReplacementAction(gameId, replacement);
   const actions = [
     ...deadlineActions,
-    freezeHostAction({
-      id: "process_replacement",
-      label: "Process replacement",
-      objectLabel: `${replacementSlotId} / ${outgoingPublicName}`,
-      outcomeLabel: `replace ${outgoingPublicName} and preserve slot history`,
-      confirmationText:
-        `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: replace ${outgoingPublicName} and preserve slot history.`,
-      irreversible: true,
-      payload: {
-        kind: "process_replacement",
-        gameId,
-        slotId: replacementSlotId,
-        outgoingPersonaId,
-        incomingPrincipalId,
-      },
-    }),
+    ...(replacementAction === null ? [] : [replacementAction]),
     ...phaseActions,
     freezeHostAction({
       id: "publish_votecount",
@@ -103,6 +89,37 @@ export function buildHostConsoleCriticalActions(
       ),
     ),
   );
+}
+
+function buildProcessReplacementAction(gameId, replacement) {
+  const replacementSlotId = optionalNonEmptyString(replacement?.slotId);
+  const outgoingPersonaId = optionalNonEmptyString(replacement?.personaId);
+  const incomingPrincipalId = canonicalPrincipalId(replacement?.incomingPrincipalId);
+  if (
+    replacementSlotId === null ||
+    outgoingPersonaId === null ||
+    incomingPrincipalId === null
+  ) {
+    return null;
+  }
+  const outgoingPublicName = optionalNonEmptyString(replacement?.occupantLabel)
+    ?? "current persona";
+  return freezeHostAction({
+    id: "process_replacement",
+    label: "Process replacement",
+    objectLabel: `${replacementSlotId} / ${outgoingPublicName}`,
+    outcomeLabel: `replace ${outgoingPublicName} and preserve slot history`,
+    confirmationText:
+      `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: replace ${outgoingPublicName} and preserve slot history.`,
+    irreversible: true,
+    payload: {
+      kind: "process_replacement",
+      gameId,
+      slotId: replacementSlotId,
+      outgoingPersonaId,
+      incomingPrincipalId,
+    },
+  });
 }
 
 function buildExtendDeadlineActions(gameId, phase, nowSeconds) {
@@ -295,33 +312,37 @@ function buildSlotLifecycleActions(gameId, replacement) {
   if (!replacementAllowsTerminalLifecycleActions(replacement)) {
     return [];
   }
+  const slotId = optionalNonEmptyString(replacement?.slotId);
+  if (slotId === null) {
+    return [];
+  }
   return [
     freezeHostAction({
       id: "mark_dead",
       label: "Mark dead",
-      objectLabel: "Slot 7",
+      objectLabel: slotId,
       outcomeLabel: "set lifecycle to dead",
-      confirmationText: "Mark Slot 7 dead: set lifecycle to dead for Slot 7.",
+      confirmationText: `Mark ${slotId} dead: set lifecycle to dead for ${slotId}.`,
       irreversible: true,
       payload: {
         kind: "mark_dead",
         gameId,
-        slotId: "slot-7",
+        slotId,
         status: "dead",
       },
     }),
     freezeHostAction({
       id: "modkill_slot",
       label: "Modkill slot",
-      objectLabel: "Slot 7",
+      objectLabel: slotId,
       outcomeLabel: "set lifecycle to modkilled",
       confirmationText:
-        "Modkill Slot 7: set lifecycle to modkilled for Slot 7.",
+        `Modkill ${slotId}: set lifecycle to modkilled for ${slotId}.`,
       irreversible: true,
       payload: {
         kind: "modkill_slot",
         gameId,
-        slotId: "slot-7",
+        slotId,
         status: "modkilled",
       },
     }),
@@ -329,10 +350,17 @@ function buildSlotLifecycleActions(gameId, replacement) {
 }
 
 function replacementAllowsTerminalLifecycleActions(replacement) {
-  const lifecycleLabel = String(replacement?.lifecycleLabel ?? "Alive")
+  if (replacement === null || typeof replacement !== "object") {
+    return false;
+  }
+  const lifecycleLabel = String(replacement.lifecycleLabel ?? "")
     .trim()
     .toLowerCase();
   return lifecycleLabel === "" || lifecycleLabel === "alive";
+}
+
+function optionalNonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 function buildPhaseActions(gameId, phase) {
@@ -563,6 +591,13 @@ export const HOST_CONSOLE_CRITICAL_ACTIONS =
       id: "D01",
       locked: false,
       deadline: HOST_ACTION_FIXTURE_DEADLINE_SECONDS,
+    }),
+    replacement: Object.freeze({
+      slotId: "slot-7",
+      personaId: "persona-mira",
+      occupantLabel: "Mira",
+      incomingPrincipalId: FIXTURE_PRINCIPAL_IDS.playerRowan,
+      lifecycleLabel: "Alive",
     }),
   });
 

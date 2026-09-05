@@ -158,9 +158,20 @@ function isThreadPostFor(value, { game, channel }) {
     value.media.every(isThreadPostMedia) &&
     Array.isArray(value.quotations) &&
     value.quotations.every(isQuotation) &&
-    (value.embed === undefined || isPostEmbed(value.embed)) &&
+    (value.mentions === undefined ||
+      (Array.isArray(value.mentions) && value.mentions.every(isThreadPostMention))) &&
+    (value.embed == null || isPostEmbed(value.embed)) &&
     isSafeInteger(value.citation_count) &&
     isSafeInteger(value.occurred_at)
+  );
+}
+
+function isThreadPostMention(mention) {
+  return (
+    isPlainObject(mention) &&
+    nonEmptyString(mention.slot_id) &&
+    Number.isSafeInteger(mention.offset) && mention.offset >= 0 &&
+    Number.isSafeInteger(mention.len) && mention.len > 0
   );
 }
 

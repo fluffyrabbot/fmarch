@@ -8,16 +8,22 @@ export const PLAYER_PRIVATE_QUEUE_CONTRACT = Object.freeze({
 export function buildPrivateQueueBoundary({
   notifications = [],
   investigationResults = [],
+  slotMentions = [],
 } = {}) {
   return Object.freeze({
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Night results and notices are delivered to you alone.",
-    count: notifications.length + investigationResults.length,
+      "Night results, notices, and seats you were addressed as are delivered to you alone.",
+    count:
+      notifications.length + investigationResults.length + slotMentions.length,
   });
 }
 
-export function buildPrivateQueue({ notifications = [], investigationResults = [] } = {}) {
+export function buildPrivateQueue({
+  notifications = [],
+  investigationResults = [],
+  slotMentions = [],
+} = {}) {
   return Object.freeze([
     ...notifications.map((notification, index) => {
       const phaseLabel = phaseLabelFromId(notification.phase_id);
@@ -29,6 +35,24 @@ export function buildPrivateQueue({ notifications = [], investigationResults = [
         detail:
           phaseLabel === null
             ? "Sent only to you"
+            : `Phase ${phaseLabel}`,
+        buttonLabel: "Review",
+      });
+    }),
+    // RFC 0007 §7: the delivered row names a seat, not a person. It reaches
+    // this rail because the API resolved current occupancy at read time, so a
+    // seat that changed hands carries its pending mentions to whoever holds it
+    // now and no row is ever rewritten.
+    ...slotMentions.map((mention, index) => {
+      const phaseLabel = phaseLabelFromId(mention.phase_id);
+      return Object.freeze({
+        id: `slot-mention-${index + 1}`,
+        kind: "slot-mention",
+        label: `Addressed as ${mention.audience_slot}`,
+        value: channelLabel(mention.channel_id),
+        detail:
+          phaseLabel === null
+            ? "Addressed outside a phase"
             : `Phase ${phaseLabel}`,
         buttonLabel: "Review",
       });
@@ -93,4 +117,14 @@ export function buildPlayerPrivateQueueViewModel({
     ),
   });
 }
+/// A room the reader can already see, named as the composer names it. The
+/// mention row carries no prose, so this is a pointer, never a preview.
+function channelLabel(channelId) {
+  const channel = String(channelId ?? "").trim();
+  if (channel === "") {
+    return "A room you can read";
+  }
+  return channel === "main" ? "Main thread" : channel;
+}
+
 import { phaseLabelFromId } from "../../phase-id.mjs";

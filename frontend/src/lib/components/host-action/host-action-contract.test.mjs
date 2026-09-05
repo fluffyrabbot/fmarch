@@ -487,7 +487,7 @@ test("host console deadline extension actions follow the projected phase", () =>
 
 test("host console hides terminal slot lifecycle commands", () => {
   const aliveActions = buildHostConsoleCriticalActions("midsummer", {
-    replacement: { lifecycleLabel: "Alive" },
+    replacement: { slotId: "slot-7", lifecycleLabel: "Alive" },
   });
   assert.deepEqual(
     aliveActions
@@ -497,7 +497,7 @@ test("host console hides terminal slot lifecycle commands", () => {
   );
 
   const deadActions = buildHostConsoleCriticalActions("midsummer", {
-    replacement: { lifecycleLabel: "Dead" },
+    replacement: { slotId: "slot-7", lifecycleLabel: "Dead" },
   });
   assert.deepEqual(
     deadActions
@@ -507,7 +507,7 @@ test("host console hides terminal slot lifecycle commands", () => {
   );
 
   const modkilledActions = buildHostConsoleCriticalActions("midsummer", {
-    replacement: { lifecycleLabel: "Modkilled" },
+    replacement: { slotId: "slot-7", lifecycleLabel: "Modkilled" },
   });
   assert.deepEqual(
     modkilledActions
@@ -650,6 +650,11 @@ test("host console action groups turn typed commands into moderator control bays
     buildHostConsoleCriticalActions("midsummer", {
       capabilityKind: "CohostOf",
       allowedPermissionClasses: ["replacement"],
+      replacement: {
+        slotId: "slot-7",
+        personaId: "persona-mira",
+        incomingPrincipalId: "ef2c585a-07a4-5436-aa1f-abe4c8c3170b",
+      },
     }).map((action) => action.id),
     ["process_replacement"],
   );

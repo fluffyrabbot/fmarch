@@ -12,6 +12,7 @@ import {
   projectHostConsoleState,
   sendHostActionCommand,
 } from "./host-command-boundary.mjs";
+import { CommandOutcomeUnknownError } from "../../app/command-interruption.mjs";
 
 const EXTEND_EVENT = Object.freeze({
   actionId: "extend_deadline",
@@ -312,7 +313,7 @@ test("host command envelope uses the Rust wire ClientEnvelope shape", () => {
   });
 
   assert.deepEqual(envelope, {
-    v: 2,
+    v: 3,
     id: 7,
     body: {
       kind: "Command",
@@ -341,7 +342,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     fetchImpl: async (url, init) => {
       sent.push({ url, envelope: JSON.parse(init.body) });
       return jsonResponse({
-        v: 2,
+        v: 3,
         id: 7,
         body: { kind: "Ack", body: { stream_seqs: [101, 102] } },
       });
@@ -361,7 +362,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 8,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 8,
         body: {
           kind: "Reject",
@@ -385,7 +386,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 10,
         body: {
           kind: "Reject",
@@ -411,7 +412,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 15,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 15,
         body: {
           kind: "Reject",
@@ -438,7 +439,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 16,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 16,
         body: {
           kind: "Reject",
@@ -465,7 +466,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 17,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 17,
         body: {
           kind: "Reject",
@@ -492,7 +493,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 11,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 11,
         body: {
           kind: "Reject",
@@ -518,7 +519,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 12,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 12,
         body: {
           kind: "Reject",
@@ -544,7 +545,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 13,
         body: {
           kind: "Reject",
@@ -571,7 +572,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 9,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 9,
         body: {
           kind: "Reject",
@@ -597,7 +598,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
       jsonResponse({
-        v: 2,
+        v: 3,
         id: 10,
         body: {
           kind: "Reject",
@@ -617,6 +618,67 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
   );
 });
 
+test("host command sender retains its command ID when the server outcome is indeterminate", async () => {
+  const commandId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  await assert.rejects(
+    sendHostActionCommand({
+      actionEvent: EXTEND_EVENT,
+      commandIdFactory: () => commandId,
+      envelopeIdFactory: () => 71,
+      fetchImpl: async () => ({
+        ok: false,
+        status: 503,
+        headers: new Headers({ "content-type": "application/json" }),
+        async json() {
+          return {
+            v: 3,
+            id: 71,
+            body: {
+              kind: "Reject",
+              body: {
+                error: "Internal",
+                retryable: true,
+                message: "command commit outcome is unknown",
+              },
+            },
+          };
+        },
+      }),
+    }),
+    (error) => {
+      assert.ok(error instanceof CommandOutcomeUnknownError);
+      assert.equal(error.commandId, commandId);
+      assert.equal(error.requestEnvelope.id, 71);
+      return true;
+    },
+  );
+});
+
+test("host state refresh failure stays a committed Ack and forbids command retry", async () => {
+  const outcome = await sendHostActionCommand({
+    actionEvent: EXTEND_EVENT,
+    stateEndpoint: "/host-state",
+    commandIdFactory: () => "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    envelopeIdFactory: () => 72,
+    fetchImpl: async (url) =>
+      url === "/commands"
+        ? jsonResponse({
+            v: 3,
+            id: 72,
+            body: { kind: "Ack", body: { stream_seqs: [55] } },
+          })
+        : {
+            ok: false,
+            status: 503,
+          },
+  });
+
+  assert.equal(outcome.state, "ack");
+  assert.equal(outcome.projectionUnavailable, true);
+  assert.equal(outcome.retryable, false);
+  assert.match(outcome.message, /Do not retry/);
+});
+
 test("host command sender can refresh projected host console state after ack", async () => {
   const sent = [];
   const ack = await sendHostActionCommand({
@@ -631,7 +693,7 @@ test("host command sender can refresh projected host console state after ack", a
       sent.push({ url, init });
       if (url === "/commands") {
         return jsonResponse({
-          v: 2,
+          v: 3,
           id: 9,
           body: { kind: "Ack", body: { stream_seqs: [201] } },
         });
@@ -691,6 +753,13 @@ test("host console projection maps deadline and stable slot history to labels", 
       day_events: [{
         event_id: "event-cookie",
         state: "locked",
+        auto_seed: "9007199254740993",
+        resolution_evidence: {
+          kind: "auto",
+          policy: { kind: "seeded_random", winners: 1 },
+          seed: "9007199254740993",
+          participant_slots: ["slot-7"],
+        },
         definition: {
           id: "event-cookie",
           template_key: "theme.raffle",
@@ -762,6 +831,11 @@ test("host console projection maps deadline and stable slot history to labels", 
 
   assert.equal(projection.completed, true);
   assert.equal(projection.dayEventScheduler.autoResolvePending, false);
+  assert.equal(projection.dayEvents[0].autoSeed, "9007199254740993");
+  assert.equal(
+    projection.dayEvents[0].resolutionEvidence.seed,
+    "9007199254740993",
+  );
   assert.deepEqual(projection.dayEvents[0].room, {
     eventId: "event-cookie",
     channelId: "private:event:event-cookie",
@@ -1028,6 +1102,7 @@ function jsonResponse(body) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return body;
     },
