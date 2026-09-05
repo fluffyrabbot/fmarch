@@ -6516,7 +6516,8 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       game: "midsummer",
       channel_id: "main",
       actor_slot: "slot-7",
-      body: "Browser smoke player post",
+      body: "@slot-2 Browser smoke player post",
+      mentions: [{ slot_id: "slot-2", offset: 0, len: 7 }],
     });
     assert.deepEqual(entry.commandResult.postCommand.statusRegion, {
       state: "ack",
