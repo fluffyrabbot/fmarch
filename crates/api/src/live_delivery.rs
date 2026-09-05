@@ -1,5 +1,5 @@
 //! Authenticated WebSocket live transport: tickets, admission, session loop,
-//! hydration, LISTEN/NOTIFY wake, durable seq catch-up, lag resync, and
+//! LISTEN/NOTIFY wake, durable seq catch-up, terminal resync, and
 //! binary-CBOR framing.
 //!
 //! Live change classification and broadcast publication remain in
@@ -13,7 +13,7 @@ use super::auth_http::{
 use super::authentication::enforce_public_request_limit;
 use super::live_projection::{self, LiveProjectionPublisher, LiveProjectionReceive};
 use super::{capacity_unavailable_response, game_http, ApiError, ApiState};
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{FromRef, Query, State};
 
 use axum::response::{IntoResponse, Response};
@@ -24,7 +24,7 @@ use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgListener, PgPool};
 use sqlx::{Postgres, Transaction};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -32,8 +32,9 @@ use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta,
-    HostPromptsDelta, PlayerInvestigationResultsDelta, PlayerNotificationsDelta, ProjectionDelta,
-    RejectCode, ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
+    HostPromptsDelta, LiveAudience, LiveProjectionDelta, LiveResyncRequired, LiveScope,
+    PlayerInvestigationResultsDelta, PlayerNotificationsDelta, ProjectionDelta, RejectCode,
+    ServerEnvelope, ServerMsg, SlotMentionsDelta, LIVE_HEARTBEAT_ENVELOPE_ID,
 };
 
 /// Wake source for the durable cross-instance event catch-up in the live
@@ -218,6 +219,7 @@ pub(super) struct LiveDeliveryState {
     live_delivery_transaction_slots: Arc<Semaphore>,
     authority_transaction_slots: Arc<Semaphore>,
     websocket_poll_interval: Duration,
+    websocket_heartbeat_interval: Duration,
     live_event_wake: GameEventWakeHub,
 }
 
@@ -241,6 +243,7 @@ impl LiveDeliveryState {
             live_delivery_transaction_slots: state.live_delivery_transaction_slots.clone(),
             authority_transaction_slots: state.authority_transaction_slots.clone(),
             websocket_poll_interval: state.websocket_poll_interval,
+            websocket_heartbeat_interval: state.websocket_heartbeat_interval,
             live_event_wake: state.live_event_wake.clone(),
         }
     }
@@ -285,9 +288,7 @@ struct WebsocketTicketClaim {
     session_reference: String,
     access_expires_at: i64,
     principal_id: PrincipalId,
-    game: Uuid,
-    channel: String,
-    slot_id: Option<String>,
+    scope: LiveScope,
     after_seq: i64,
 }
 
@@ -450,14 +451,24 @@ async fn create_websocket_ticket(
     .await?;
     let audience = request.audience.trim();
     let channel = request.channel.trim();
+    let scope = LiveScope::new(
+        request.game,
+        channel,
+        request
+            .slot_id
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_string),
+    );
     if audience != state.auth.websocket_audience
-        || channel.is_empty()
         || channel.len() > 256
         || request.after_seq < 0
+        || request.after_seq > wire::MAX_SAFE_LIVE_INTEGER
         || request
             .slot_id
             .as_deref()
-            .is_some_and(|slot| slot.trim().is_empty() || slot.len() > 256)
+            .is_some_and(|slot| slot.len() > 256)
+        || scope.is_err()
     {
         return Err(ApiError::Reject {
             status: axum::http::StatusCode::BAD_REQUEST,
@@ -476,17 +487,16 @@ async fn create_websocket_ticket(
         )
         .await?;
     }
-    if let Some(slot_id) = request.slot_id.as_deref() {
+    if let Some(slot_id) = request.slot_id.as_deref().map(str::trim) {
         let capabilities = caps::resolve(
             &state.pool,
             &Principal::authenticated(principal_id),
             request.game,
         )
         .await?;
-        if !capabilities.grants(&Capability::SlotOccupant(slot_id.to_string()))
-            && !capabilities.grants(&Capability::HostOf(request.game))
-            && !capabilities.grants(&Capability::CohostOf(request.game))
-        {
+        if !capabilities.iter().any(
+            |capability| matches!(capability, Capability::SlotOccupant(held) if held == slot_id),
+        ) {
             return Err(ApiError::Reject {
                 status: axum::http::StatusCode::FORBIDDEN,
                 error: RejectCode::NotAuthorized,
@@ -662,13 +672,22 @@ async fn redeem_websocket_ticket(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_session)?;
+    let scope = LiveScope::new(row.1, row.2, row.3).map_err(|error| {
+        tracing::warn!(event = "live_ticket_scope_invalid", %error);
+        unauthorized_session()
+    })?;
+    if !(0..=wire::MAX_SAFE_LIVE_INTEGER).contains(&row.4) {
+        tracing::warn!(
+            event = "live_ticket_cursor_invalid",
+            ticket_after_seq = row.4,
+        );
+        return Err(unauthorized_session());
+    }
     let claim = WebsocketTicketClaim {
         session_reference,
         access_expires_at: row.0,
         principal_id: authorization.principal_id,
-        game: row.1,
-        channel: row.2,
-        slot_id: row.3,
+        scope,
         after_seq: row.4,
     };
     tx.commit().await?;
@@ -677,26 +696,6 @@ async fn redeem_websocket_ticket(
         principal_slots,
         principal_permit,
     })
-}
-
-async fn websocket_session_active(state: &LiveDeliveryState, claim: &WebsocketTicketClaim) -> bool {
-    websocket_authorization_context(state, claim)
-        .await
-        .is_some()
-}
-
-/// Cheap liveness checks keep idle sockets closing promptly. Byte emission has
-/// a stronger transaction-held [`SessionDeliveryGuard`] below.
-struct SessionGate;
-
-impl SessionGate {
-    fn new() -> Self {
-        Self
-    }
-
-    async fn active(&mut self, state: &LiveDeliveryState, claim: &WebsocketTicketClaim) -> bool {
-        websocket_session_active(state, claim).await
-    }
 }
 
 /// Read-only authority lease for one outbound WebSocket batch. The shared row
@@ -716,37 +715,66 @@ impl SessionDeliveryGuard {
         if claim.access_expires_at <= checked_at {
             return None;
         }
+        // This single absolute deadline covers every await from local capacity
+        // admission through transaction acquisition, authority fencing, and
+        // the eventual socket write/transaction finish. A queued semaphore or
+        // exhausted pool must never turn a bounded authority lease into an
+        // unbounded blocker for revocation.
+        let lease_deadline = live_delivery_deadline(claim.access_expires_at)?;
         // Backpressure healthy fan-out instead of treating local DB-fence
         // capacity as an authorization failure. The outer delivery semaphore
         // keeps the shared pool queue bounded; the shared authority budget
         // leaves connections available for the revocation writer.
-        let delivery_permit = state
-            .live_delivery_transaction_slots
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("live delivery semaphore is never closed");
-        let authority_permit = state
-            .authority_transaction_slots
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("authority transaction semaphore is never closed");
-        let mut tx = match state.pool.begin().await {
-            Ok(tx) => tx,
-            Err(error) => {
+        let delivery_permit = match tokio::time::timeout_at(
+            lease_deadline,
+            state
+                .live_delivery_transaction_slots
+                .clone()
+                .acquire_owned(),
+        )
+        .await
+        {
+            Ok(Ok(permit)) => permit,
+            Ok(Err(error)) => {
+                tracing::warn!(event = "live_delivery_semaphore_closed", %error);
+                return None;
+            }
+            Err(_) => {
+                tracing::warn!(event = "live_delivery_capacity_wait_timed_out");
+                return None;
+            }
+        };
+        let authority_permit = match tokio::time::timeout_at(
+            lease_deadline,
+            state.authority_transaction_slots.clone().acquire_owned(),
+        )
+        .await
+        {
+            Ok(Ok(permit)) => permit,
+            Ok(Err(error)) => {
+                tracing::warn!(event = "live_delivery_authority_semaphore_closed", %error);
+                return None;
+            }
+            Err(_) => {
+                tracing::warn!(event = "live_delivery_authority_capacity_wait_timed_out");
+                return None;
+            }
+        };
+        let mut tx = match tokio::time::timeout_at(lease_deadline, state.pool.begin()).await {
+            Ok(Ok(tx)) => tx,
+            Ok(Err(error)) => {
                 tracing::warn!(event = "live_delivery_fence_failed", %error);
+                return None;
+            }
+            Err(_) => {
+                tracing::warn!(event = "live_delivery_pool_wait_timed_out");
                 return None;
             }
         };
         // The five-second deadline bounds the complete authority lease, not
         // merely the eventual socket write. Starting it before the first
-        // cutoff gate prevents staged database blockers from extending a
-        // principal/key retirement wait by one lock timeout per relation.
-        let Some(lease_deadline) = live_delivery_deadline(claim.access_expires_at) else {
-            let _ = tx.rollback().await;
-            return None;
-        };
+        // capacity wait prevents staged local/database blockers from extending
+        // a principal/key retirement wait by one timeout per resource.
         let fenced = tokio::time::timeout_at(lease_deadline, async {
             if let Err(error) =
                 identity::session::lock_live_delivery_cutoff_gates(&mut tx, &claim.principal_id)
@@ -775,7 +803,7 @@ impl SessionDeliveryGuard {
             let mut capabilities = match caps::resolve_live_delivery_in_tx(
                 &mut tx,
                 &Principal::authenticated(authorization.principal_id),
-                claim.game,
+                claim.scope.game(),
             )
             .await
             {
@@ -796,9 +824,9 @@ impl SessionDeliveryGuard {
                 tracing::info!(
                     event = "live_delivery_scope_revoked",
                     principal_id = %claim.principal_id,
-                    game_id = %claim.game,
-                    channel = %claim.channel,
-                    slot_id = ?claim.slot_id,
+                    game_id = %claim.scope.game(),
+                    channel = %claim.scope.channel(),
+                    slot_id = ?claim.scope.slot_id(),
                 );
                 return None;
             }
@@ -808,12 +836,29 @@ impl SessionDeliveryGuard {
         let (authorization, capabilities) = match fenced {
             Ok(Some(fenced)) => fenced,
             Ok(None) => {
-                let _ = tx.rollback().await;
+                match tokio::time::timeout_at(lease_deadline, tx.rollback()).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        tracing::warn!(event = "live_delivery_fence_rollback_failed", %error);
+                    }
+                    Err(_) => {
+                        tracing::warn!(event = "live_delivery_fence_rollback_timed_out");
+                    }
+                }
                 return None;
             }
             Err(_) => {
                 tracing::warn!(event = "live_delivery_authority_lease_timed_out");
-                let _ = tx.rollback().await;
+                // Dropping the timed-out SQLx rollback future drops its owned
+                // transaction. SQLx then queues rollback-on-drop before the
+                // pooled connection can be reused, while the local permits are
+                // released immediately with this failed guard acquisition.
+                if tokio::time::timeout_at(lease_deadline, tx.rollback())
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(event = "live_delivery_fence_rollback_timed_out");
+                }
                 return None;
             }
         };
@@ -822,7 +867,12 @@ impl SessionDeliveryGuard {
             .min(authorization.expires_at)
             .min(authorization.idle_expires_at);
         let Some(deadline) = live_delivery_deadline_bounded_by(valid_until, lease_deadline) else {
-            let _ = tx.rollback().await;
+            if tokio::time::timeout_at(lease_deadline, tx.rollback())
+                .await
+                .is_err()
+            {
+                tracing::warn!(event = "live_delivery_fence_rollback_timed_out");
+            }
             return None;
         };
         Some(Self {
@@ -839,18 +889,33 @@ impl SessionDeliveryGuard {
     }
 
     async fn release(self) -> bool {
-        match self.tx.commit().await {
-            Ok(()) => true,
-            Err(error) => {
+        let deadline = self.deadline;
+        match tokio::time::timeout_at(deadline, self.tx.commit()).await {
+            Ok(Ok(())) => true,
+            Ok(Err(error)) => {
                 tracing::warn!(event = "live_delivery_fence_release_failed", %error);
+                false
+            }
+            Err(_) => {
+                // Cancellation drops the owned transaction and invokes SQLx's
+                // rollback-on-drop path; an indeterminate COMMIT is terminal
+                // for this generation and no later frame may be sent.
+                tracing::warn!(event = "live_delivery_fence_release_timed_out");
                 false
             }
         }
     }
 
     async fn abort(self) {
-        if let Err(error) = self.tx.rollback().await {
-            tracing::warn!(event = "live_delivery_fence_rollback_failed", %error);
+        let deadline = self.deadline;
+        match tokio::time::timeout_at(deadline, self.tx.rollback()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(event = "live_delivery_fence_rollback_failed", %error);
+            }
+            Err(_) => {
+                tracing::warn!(event = "live_delivery_fence_rollback_timed_out");
+            }
         }
     }
 }
@@ -935,15 +1000,54 @@ async fn ws(
 
 async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: WebsocketTicketClaim) {
     let connection_id = Uuid::new_v4();
-    let mut session = SessionGate::new();
+    let game = claim.scope.game();
+
+    // Subscribe before any durable baseline or Hello. A command that commits
+    // during admission is therefore represented either by the durable cursor
+    // comparison or by the subscribed wake stream, never lost in a handshake
+    // gap.
+    let mut live_projection_rx = state.live_projection.subscribe();
+    let mut event_wake = NotifyEventWake::new(
+        game,
+        state.live_event_wake.subscribe(),
+        state.websocket_poll_interval,
+    );
+    let Ok(mut observed_seq) = current_game_event_seq(&state, game).await else {
+        return;
+    };
+    if !(0..=wire::MAX_SAFE_LIVE_INTEGER).contains(&observed_seq) {
+        tracing::warn!(event = "live_durable_cursor_invalid", observed_seq);
+        return;
+    }
+    if claim.after_seq > observed_seq {
+        tracing::warn!(
+            event = "live_ticket_cursor_ahead_of_durable_state",
+            ticket_after_seq = claim.after_seq,
+            observed_seq,
+        );
+        return;
+    }
+    let Ok(mut observed_visibility_change_id) = (if claim.scope.channel() == "main" {
+        current_thread_visibility_change_id(&state, game).await
+    } else {
+        Ok(0)
+    }) else {
+        return;
+    };
+
     let Some(guard) = SessionDeliveryGuard::acquire(&state, &claim).await else {
         return;
     };
-    let host_console_interested =
-        socket_has_host_console_interest(guard.capabilities(), claim.game);
-    let hello = hello_for(&state, guard.capabilities());
-    let Some(frame) = server_envelope_frame(&ServerEnvelope::new(0, ServerMsg::Hello(hello)))
+    let Ok(Some(plan)) = LiveDeliveryPlan::from_capabilities(&state, &claim, guard.capabilities())
     else {
+        guard.abort().await;
+        return;
+    };
+    let Ok(frame) = server_envelope_frame(&ServerEnvelope::new(
+        LIVE_HEARTBEAT_ENVELOPE_ID,
+        ServerMsg::Hello(plan.hello.clone()),
+    )) else {
+        guard.abort().await;
         return;
     };
     if !guarded_application_send(&guard, socket.send(frame)).await {
@@ -957,110 +1061,74 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         return;
     }
 
-    let game = claim.game;
-
-    // Subscribe before hydration so commands cannot publish into a handshake gap.
-    let mut live_projection_rx = state.live_projection.subscribe();
-    let mut event_wake = NotifyEventWake::new(
-        game,
-        state.live_event_wake.subscribe(),
-        state.websocket_poll_interval,
-    );
-    let mut observed_seq = current_game_event_seq(&state, game)
-        .await
-        .unwrap_or(claim.after_seq);
-    let mut observed_visibility_change_id = if claim.channel == "main" {
-        current_thread_visibility_change_id(&state, game)
-            .await
-            .unwrap_or_default()
-    } else {
-        0
-    };
-    let mut next_envelope_id = 1;
+    let host_console_interested = plan
+        .allowed_audiences
+        .contains(&LiveAudience::Host { game });
+    let mut last_envelope_id = LIVE_HEARTBEAT_ENVELOPE_ID;
     let mut last_host_console: Option<HostConsoleStateDelta> = None;
-    macro_rules! send_or_return {
-        ($deltas:expr) => {
-            match send_projection_deltas(&mut socket, &state, &claim, next_envelope_id, $deltas)
-                .await
-            {
-                GuardedSendOutcome::Continue(next) => next,
-                GuardedSendOutcome::Close(_) | GuardedSendOutcome::DropSocket => return,
-            }
-        };
-    }
-    if claim.channel == "main" {
-        let hidden_posts = current_hidden_thread_post_deltas(&state, game)
-            .await
-            .unwrap_or_default();
-        if !hidden_posts.is_empty() {
-            if !session.active(&state, &claim).await {
-                return;
-            }
-            let sent_to = send_or_return!(hidden_posts);
-            if sent_to == next_envelope_id {
-                return;
-            }
-            next_envelope_id = sent_to;
-        }
-    }
-    if let Ok(deltas) = game_http::current_votecount_deltas(&state.pool, game).await {
-        if !session.active(&state, &claim).await {
-            return;
-        }
-        next_envelope_id = send_or_return!(deltas);
-    }
-    if let Some(delta) = thread_posts_delta_for_ws(
-        &state,
-        game,
-        Some(claim.principal_id),
-        claim.channel.as_str(),
-    )
-    .await
-    {
-        if !session.active(&state, &claim).await {
-            return;
-        }
-        next_envelope_id = send_or_return!(vec![delta]);
-    }
-    if host_console_interested {
-        if let Some((deltas, current)) =
-            host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref(), true).await
-        {
-            last_host_console = Some(current);
-            if !session.active(&state, &claim).await {
-                return;
-            }
-            next_envelope_id = send_or_return!(deltas);
-        }
-    }
-    if let Some(delta) = host_prompts_delta_for_ws(&state, &claim).await {
-        if !session.active(&state, &claim).await {
-            return;
-        }
-        next_envelope_id = send_or_return!(vec![delta]);
-    }
-    let private_deltas = player_private_deltas_for_ws(&state, game, Some(claim.principal_id)).await;
-    if !private_deltas.is_empty() {
-        if !session.active(&state, &claim).await {
-            return;
-        }
-        next_envelope_id = send_or_return!(private_deltas);
-    }
 
-    macro_rules! send_or_break {
+    macro_rules! send_deltas_or_break {
         ($deltas:expr) => {
-            match send_projection_deltas(&mut socket, &state, &claim, next_envelope_id, $deltas)
-                .await
+            match send_projection_deltas(
+                &mut socket,
+                &state,
+                &claim,
+                &plan,
+                last_envelope_id,
+                $deltas,
+            )
+            .await
             {
-                GuardedSendOutcome::Continue(next) => next,
+                GuardedSendOutcome::Continue(last) => last,
                 GuardedSendOutcome::Close(_) | GuardedSendOutcome::DropSocket => break,
             }
         };
     }
 
+    macro_rules! assembly_or_break {
+        ($result:expr) => {
+            match $result {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::warn!(event = "live_generation_assembly_failed", %error);
+                    let _ = close_live_socket(
+                        &mut socket,
+                        last_envelope_id,
+                        1011,
+                        "live generation assembly failed",
+                    )
+                    .await;
+                    break;
+                }
+            }
+        };
+    }
+
+    if host_console_interested {
+        let (_, current) = match host_console_deltas_for_ws(&state, &claim, None).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(event = "live_host_console_baseline_failed", %error);
+                return;
+            }
+        };
+        last_host_console = Some(current);
+    }
+
     let mut control_budget = ControlFrameBudget::new();
+    let mut heartbeat = tokio::time::interval_at(
+        tokio::time::Instant::now() + state.websocket_heartbeat_interval,
+        state.websocket_heartbeat_interval,
+    );
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         let receive = tokio::select! {
+            _ = heartbeat.tick() => {
+                if !send_generation_heartbeat(&mut socket, &state, &claim, &plan).await {
+                    break;
+                }
+                continue;
+            }
             inbound = socket.recv() => {
                 match inbound {
                     Some(Ok(Message::Ping(payload))) => {
@@ -1089,25 +1157,56 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             update = live_projection::receive(&mut live_projection_rx) => Some(update),
             _ = event_wake.wait() => live_projection::try_receive(&mut live_projection_rx),
         };
-        if !session.active(&state, &claim).await {
-            break;
-        }
         let Some(receive) = receive else {
             if state.live_projection.has_inflight(game) {
                 continue;
             }
-            let latest_seq = current_game_event_seq(&state, game)
-                .await
-                .unwrap_or(observed_seq);
-            let visibility_changes = if claim.channel == "main" {
-                thread_visibility_changes_after(&state, game, observed_visibility_change_id)
-                    .await
-                    .unwrap_or_default()
+            let Ok(latest_seq) = current_game_event_seq(&state, game).await else {
+                break;
+            };
+            if !(0..=wire::MAX_SAFE_LIVE_INTEGER).contains(&latest_seq) {
+                let _ = close_live_socket(
+                    &mut socket,
+                    last_envelope_id,
+                    1011,
+                    "live durable cursor invalid",
+                )
+                .await;
+                break;
+            }
+            let visibility_changes = if claim.scope.channel() == "main" {
+                let Ok(changes) =
+                    thread_visibility_changes_after(&state, game, observed_visibility_change_id)
+                        .await
+                else {
+                    break;
+                };
+                changes
             } else {
                 Vec::new()
             };
             if latest_seq <= observed_seq && visibility_changes.is_empty() {
                 continue;
+            }
+            if latest_seq > observed_seq {
+                eprintln!(
+                    "RESYNC_TRIGGER no_receive observed_seq={} latest_seq={} game={} channel={} slot={:?}",
+                    observed_seq,
+                    latest_seq,
+                    game,
+                    claim.scope.channel(),
+                    claim.scope.slot_id(),
+                );
+                let _ = send_resync_required(
+                    &mut socket,
+                    &state,
+                    &claim,
+                    &plan,
+                    last_envelope_id,
+                    observed_seq,
+                )
+                .await;
+                break;
             }
             if !visibility_changes.is_empty() {
                 let delivered_visibility_change_id = visibility_changes
@@ -1124,123 +1223,73 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                     .map(|change| {
                         ProjectionDelta::ThreadPostRemoved(wire::ThreadPostRemovedDelta {
                             game,
+                            channel: claim.scope.channel().to_string(),
                             source_seq: change.source_seq,
                         })
                     })
                     .collect::<Vec<_>>();
-                if !tombstones.is_empty() {
-                    let sent_to = send_or_break!(tombstones);
-                    if sent_to == next_envelope_id {
-                        break;
-                    }
-                    next_envelope_id = sent_to;
-                }
-                let Some(delta) = thread_posts_delta_for_ws(
-                    &state,
-                    game,
-                    Some(claim.principal_id),
-                    claim.channel.as_str(),
-                )
-                .await
-                else {
-                    continue;
-                };
-                if !session.active(&state, &claim).await {
-                    break;
-                }
-                let sent_to = send_or_break!(vec![delta]);
-                if sent_to == next_envelope_id {
-                    break;
-                }
-                next_envelope_id = sent_to;
-                let citation_deltas = post_citations_deltas_for_ws(
-                    &state,
-                    game,
-                    Some(claim.principal_id),
-                    claim.channel.as_str(),
-                    &hidden_quoting_seqs,
-                )
-                .await;
-                if !citation_deltas.is_empty() {
-                    if !session.active(&state, &claim).await {
-                        break;
-                    }
-                    let sent_to = send_or_break!(citation_deltas);
-                    if sent_to == next_envelope_id {
-                        break;
-                    }
-                    next_envelope_id = sent_to;
-                }
-                if host_console_interested {
-                    if let Some((deltas, current)) = host_console_deltas_for_ws(
+                let mut batch = tombstones;
+                batch.push(assembly_or_break!(
+                    thread_posts_delta_for_ws(
                         &state,
-                        &claim,
-                        last_host_console.as_ref(),
-                        false,
+                        game,
+                        Some(claim.principal_id),
+                        claim.scope.channel(),
                     )
                     .await
-                    {
-                        last_host_console = Some(current);
-                        if !deltas.is_empty() {
-                            if !session.active(&state, &claim).await {
-                                break;
-                            }
-                            let sent_to = send_or_break!(deltas);
-                            if sent_to == next_envelope_id {
-                                break;
-                            }
-                            next_envelope_id = sent_to;
-                        }
-                    }
+                ));
+                batch.extend(assembly_or_break!(
+                    post_citations_deltas_for_ws(
+                        &state,
+                        game,
+                        Some(claim.principal_id),
+                        claim.scope.channel(),
+                        &hidden_quoting_seqs,
+                    )
+                    .await
+                ));
+                let mut next_host_console = None;
+                if host_console_interested {
+                    let (deltas, current) = assembly_or_break!(
+                        host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref(),)
+                            .await
+                    );
+                    batch.extend(deltas);
+                    next_host_console = Some(current);
+                }
+                last_envelope_id = send_deltas_or_break!(batch);
+                if let Some(current) = next_host_console {
+                    last_host_console = Some(current);
                 }
                 observed_visibility_change_id = delivered_visibility_change_id;
-                if latest_seq <= observed_seq {
-                    continue;
-                }
+                continue;
             }
-            observed_seq = latest_seq;
-            let sent_to = send_or_break!(vec![ProjectionDelta::ResyncRequired {
-                from_seq: claim.after_seq,
-            }]);
-            if sent_to == next_envelope_id {
-                break;
-            }
-            next_envelope_id = sent_to;
-            let snapshot = send_current_projection_snapshot(
-                &mut socket,
-                &state,
-                &claim,
-                next_envelope_id,
-                host_console_interested,
-                &mut last_host_console,
-            )
-            .await;
-            next_envelope_id = match snapshot {
-                GuardedSendOutcome::Continue(next) => next,
-                GuardedSendOutcome::Close(_) | GuardedSendOutcome::DropSocket => break,
-            };
             continue;
         };
-        observed_seq = current_game_event_seq(&state, game)
-            .await
-            .unwrap_or(observed_seq);
         let update = match receive {
-            LiveProjectionReceive::Update(update) => update,
+            LiveProjectionReceive::Update(update) => {
+                eprintln!("LIVE_UPDATE_RECEIVED game={} deltas_len={} thread_dirty={} host_console_dirty={} host_prompts_dirty={} player_private_dirty={} player_command_state_dirty={}", update.game, update.deltas.len(), update.thread_dirty, update.host_console_dirty, update.host_prompts_dirty, update.player_private_dirty, update.player_command_state_dirty);
+                update
+            }
             LiveProjectionReceive::Lagged { dropped_messages } => {
                 tracing::warn!(
                     event = "live_projection_receiver_lagged",
                     game_id = %game,
                     connection_id = %connection_id,
                     dropped_messages,
-                    next_envelope_id,
+                    last_envelope_id,
                     "live projection receiver lagged; requesting client resync"
                 );
-                let sent_to = send_or_break!(vec![ProjectionDelta::ResyncRequired { from_seq: 0 }]);
-                if sent_to == next_envelope_id {
-                    break;
-                }
-                next_envelope_id = sent_to;
-                continue;
+                let _ = send_resync_required(
+                    &mut socket,
+                    &state,
+                    &claim,
+                    &plan,
+                    last_envelope_id,
+                    observed_seq,
+                )
+                .await;
+                break;
             }
             LiveProjectionReceive::Closed => break,
         };
@@ -1250,119 +1299,99 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         if update.game != game {
             continue;
         }
-        if !session.active(&state, &claim).await {
+        let Ok(latest_seq) = current_game_event_seq(&state, game).await else {
+            let _ = close_live_socket(
+                &mut socket,
+                last_envelope_id,
+                1011,
+                "live durable cursor unavailable",
+            )
+            .await;
+            break;
+        };
+        if !(0..=wire::MAX_SAFE_LIVE_INTEGER).contains(&latest_seq) {
+            let _ = close_live_socket(
+                &mut socket,
+                last_envelope_id,
+                1011,
+                "live durable cursor invalid",
+            )
+            .await;
             break;
         }
-        let sent_to = send_or_break!(update.deltas);
-        if sent_to == next_envelope_id
-            && update.thread_after_seq.is_none()
-            && !update.thread_dirty
-            && !update.host_console_dirty
-            && !update.host_prompts_dirty
-            && !update.player_private_dirty
-            && !update.player_command_state_dirty
-        {
+        if update.player_command_state_dirty {
+            let _ = send_resync_required(
+                &mut socket,
+                &state,
+                &claim,
+                &plan,
+                last_envelope_id,
+                observed_seq,
+            )
+            .await;
             break;
         }
-        next_envelope_id = sent_to;
+        let mut batch = update.deltas;
         let thread_delta = if let Some(after_seq) = update.thread_after_seq {
-            thread_posts_after_delta_for_ws(
-                &state,
-                game,
-                Some(claim.principal_id),
-                claim.channel.as_str(),
-                after_seq,
+            assembly_or_break!(
+                thread_posts_after_delta_for_ws(
+                    &state,
+                    game,
+                    Some(claim.principal_id),
+                    claim.scope.channel(),
+                    after_seq,
+                )
+                .await
             )
-            .await
         } else if update.thread_dirty {
-            thread_posts_delta_for_ws(
-                &state,
-                game,
-                Some(claim.principal_id),
-                claim.channel.as_str(),
-            )
-            .await
+            Some(assembly_or_break!(
+                thread_posts_delta_for_ws(
+                    &state,
+                    game,
+                    Some(claim.principal_id),
+                    claim.scope.channel(),
+                )
+                .await
+            ))
         } else {
             None
         };
         if let Some(delta) = thread_delta {
-            if !session.active(&state, &claim).await {
-                break;
-            }
-            let sent_to = send_or_break!(vec![delta]);
-            if sent_to == next_envelope_id {
-                break;
-            }
-            next_envelope_id = sent_to;
-            let citation_deltas = post_citations_deltas_for_ws(
-                &state,
-                game,
-                Some(claim.principal_id),
-                claim.channel.as_str(),
-                &[],
-            )
-            .await;
-            if !citation_deltas.is_empty() {
-                if !session.active(&state, &claim).await {
-                    break;
-                }
-                let sent_to = send_or_break!(citation_deltas);
-                if sent_to == next_envelope_id {
-                    break;
-                }
-                next_envelope_id = sent_to;
-            }
+            batch.push(delta);
+            batch.extend(assembly_or_break!(
+                post_citations_deltas_for_ws(
+                    &state,
+                    game,
+                    Some(claim.principal_id),
+                    claim.scope.channel(),
+                    &[],
+                )
+                .await
+            ));
         }
+        let mut next_host_console = None;
         if update.host_console_dirty && host_console_interested {
-            if let Some((deltas, current)) =
-                host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref(), false).await
-            {
-                last_host_console = Some(current);
-                if !deltas.is_empty() {
-                    if !session.active(&state, &claim).await {
-                        break;
-                    }
-                    let sent_to = send_or_break!(deltas);
-                    if sent_to == next_envelope_id {
-                        break;
-                    }
-                    next_envelope_id = sent_to;
-                }
-            }
+            let (deltas, current) = assembly_or_break!(
+                host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref()).await
+            );
+            batch.extend(deltas);
+            next_host_console = Some(current);
         }
-        if update.host_prompts_dirty {
-            if let Some(delta) = host_prompts_delta_for_ws(&state, &claim).await {
-                if !session.active(&state, &claim).await {
-                    break;
-                }
-                let sent_to = send_or_break!(vec![delta]);
-                if sent_to == next_envelope_id {
-                    break;
-                }
-                next_envelope_id = sent_to;
-            }
+        if update.host_prompts_dirty && host_console_interested {
+            batch.push(assembly_or_break!(
+                host_prompts_delta_for_ws(&state, &claim).await
+            ));
         }
         if update.player_private_dirty {
-            let deltas = player_private_deltas_for_ws(&state, game, Some(claim.principal_id)).await;
-            if deltas.is_empty() {
-                continue;
-            }
-            if !session.active(&state, &claim).await {
-                break;
-            }
-            let sent_to = send_or_break!(deltas);
-            if sent_to == next_envelope_id {
-                break;
-            }
-            next_envelope_id = sent_to;
+            batch.extend(assembly_or_break!(
+                player_private_deltas_for_ws(&state, &claim).await
+            ));
         }
-        if update.player_command_state_dirty {
-            let sent_to = send_or_break!(vec![ProjectionDelta::ResyncRequired { from_seq: 0 }]);
-            if sent_to == next_envelope_id {
-                break;
-            }
-            next_envelope_id = sent_to;
+        last_envelope_id = send_deltas_or_break!(batch);
+        if let Some(current) = next_host_console {
+            last_host_console = Some(current);
         }
+        observed_seq = latest_seq;
     }
 }
 
@@ -1380,6 +1409,10 @@ struct ThreadVisibilityChange {
     visibility: String,
 }
 
+fn live_assembly_api_error(error: ApiError) -> String {
+    format!("{error:?}")
+}
+
 async fn current_thread_visibility_change_id(
     state: &LiveDeliveryState,
     game: Uuid,
@@ -1390,30 +1423,6 @@ async fn current_thread_visibility_change_id(
     .bind(game)
     .fetch_one(&state.pool)
     .await
-}
-
-async fn current_hidden_thread_post_deltas(
-    state: &LiveDeliveryState,
-    game: Uuid,
-) -> Result<Vec<ProjectionDelta>, sqlx::Error> {
-    let source_seqs = sqlx::query_scalar::<_, i64>(
-        r#"
-        SELECT source_seq
-        FROM moderation_target_state
-        WHERE surface_id = $1
-          AND visibility = 'hidden'
-        ORDER BY source_seq
-        "#,
-    )
-    .bind(game)
-    .fetch_all(&state.pool)
-    .await?;
-    Ok(source_seqs
-        .into_iter()
-        .map(|source_seq| {
-            ProjectionDelta::ThreadPostRemoved(wire::ThreadPostRemovedDelta { game, source_seq })
-        })
-        .collect())
 }
 
 async fn thread_visibility_changes_after(
@@ -1443,81 +1452,22 @@ async fn thread_visibility_changes_after(
         .collect())
 }
 
-async fn send_current_projection_snapshot(
-    socket: &mut WebSocket,
-    state: &LiveDeliveryState,
-    claim: &WebsocketTicketClaim,
-    mut next_envelope_id: u64,
-    host_console_interested: bool,
-    last_host_console: &mut Option<HostConsoleStateDelta>,
-) -> GuardedSendOutcome {
-    macro_rules! snapshot_send {
-        ($deltas:expr) => {
-            match send_projection_deltas(socket, state, claim, next_envelope_id, $deltas).await {
-                GuardedSendOutcome::Continue(next) => next,
-                close @ GuardedSendOutcome::Close(_) => return close,
-                GuardedSendOutcome::DropSocket => return GuardedSendOutcome::DropSocket,
-            }
-        };
-    }
-    if let Ok(deltas) = game_http::current_votecount_deltas(&state.pool, claim.game).await {
-        if !websocket_session_active(state, claim).await {
-            return close_guarded_delivery(socket, next_envelope_id).await;
-        }
-        next_envelope_id = snapshot_send!(deltas);
-    }
-    if let Some(delta) = thread_posts_delta_for_ws(
-        state,
-        claim.game,
-        Some(claim.principal_id),
-        claim.channel.as_str(),
-    )
-    .await
-    {
-        if !websocket_session_active(state, claim).await {
-            return close_guarded_delivery(socket, next_envelope_id).await;
-        }
-        next_envelope_id = snapshot_send!(vec![delta]);
-    }
-    if host_console_interested {
-        if let Some((deltas, current)) =
-            host_console_deltas_for_ws(state, claim, last_host_console.as_ref(), true).await
-        {
-            *last_host_console = Some(current);
-            if !websocket_session_active(state, claim).await {
-                return close_guarded_delivery(socket, next_envelope_id).await;
-            }
-            next_envelope_id = snapshot_send!(deltas);
-        }
-    }
-    if let Some(delta) = host_prompts_delta_for_ws(state, claim).await {
-        if !websocket_session_active(state, claim).await {
-            return close_guarded_delivery(socket, next_envelope_id).await;
-        }
-        next_envelope_id = snapshot_send!(vec![delta]);
-    }
-    let deltas = player_private_deltas_for_ws(state, claim.game, Some(claim.principal_id)).await;
-    if !websocket_session_active(state, claim).await {
-        return close_guarded_delivery(socket, next_envelope_id).await;
-    }
-    send_projection_deltas(socket, state, claim, next_envelope_id, deltas).await
-}
-
 async fn thread_posts_delta_for_ws(
     state: &LiveDeliveryState,
     game: Uuid,
     principal_id: Option<PrincipalId>,
     channel: &str,
-) -> Option<ProjectionDelta> {
+) -> Result<ProjectionDelta, String> {
     if channel != "main" {
-        let principal_id = principal_id?;
+        let principal_id = principal_id
+            .ok_or_else(|| "private thread delivery requires a principal".to_string())?;
         game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
             .await
-            .ok()?;
+            .map_err(live_assembly_api_error)?;
     }
     game_http::current_thread_posts_delta(&state.pool, game, channel)
         .await
-        .ok()
+        .map_err(|error| error.to_string())
 }
 
 async fn thread_posts_after_delta_for_ws(
@@ -1526,17 +1476,17 @@ async fn thread_posts_after_delta_for_ws(
     principal_id: Option<PrincipalId>,
     channel: &str,
     after_seq: i64,
-) -> Option<ProjectionDelta> {
+) -> Result<Option<ProjectionDelta>, String> {
     if channel != "main" {
-        let principal_id = principal_id?;
+        let principal_id = principal_id
+            .ok_or_else(|| "private thread delivery requires a principal".to_string())?;
         game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
             .await
-            .ok()?;
+            .map_err(live_assembly_api_error)?;
     }
     game_http::current_thread_posts_after_delta(&state.pool, game, channel, after_seq)
         .await
-        .ok()
-        .flatten()
+        .map_err(|error| error.to_string())
 }
 
 async fn post_citations_deltas_for_ws(
@@ -1545,121 +1495,131 @@ async fn post_citations_deltas_for_ws(
     principal_id: Option<PrincipalId>,
     channel: &str,
     extra_quoting_seqs: &[i64],
-) -> Vec<ProjectionDelta> {
+) -> Result<Vec<ProjectionDelta>, String> {
     if channel != "main" {
-        let Some(principal_id) = principal_id else {
-            return Vec::new();
-        };
-        if game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
+        let principal_id = principal_id
+            .ok_or_else(|| "private citation delivery requires a principal".to_string())?;
+        game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
             .await
-            .is_err()
-        {
-            return Vec::new();
-        }
+            .map_err(live_assembly_api_error)?;
     }
     game_http::current_post_citations_deltas(&state.pool, game, channel, extra_quoting_seqs)
         .await
-        .unwrap_or_default()
+        .map_err(|error| error.to_string())
 }
 
 fn socket_has_host_console_interest(capabilities: &CapabilitySet, game: Uuid) -> bool {
-    capabilities.grants(&Capability::CohostOf(game))
+    capabilities.grants(&Capability::HostOf(game))
+        || capabilities.grants(&Capability::CohostOf(game))
+        || capabilities
+            .iter()
+            .any(|capability| matches!(capability, Capability::GlobalAdmin | Capability::GlobalMod))
 }
 
 async fn host_console_deltas_for_ws(
     state: &LiveDeliveryState,
     claim: &WebsocketTicketClaim,
     previous: Option<&HostConsoleStateDelta>,
-    full_snapshot: bool,
-) -> Option<(Vec<ProjectionDelta>, HostConsoleStateDelta)> {
-    let authorization = websocket_authorization_context(state, claim).await?;
+) -> Result<(Vec<ProjectionDelta>, HostConsoleStateDelta), String> {
+    let authorization = websocket_authorization_context(state, claim)
+        .await
+        .ok_or_else(|| "host-console session authority is no longer valid".to_string())?;
     let game_authorization = game_http::GameAuthorization::from_context(&authorization);
+    let game = claim.scope.game();
     let authority =
-        game_http::resolve_host_console_authority(&state.pool, claim.game, &game_authorization)
+        game_http::resolve_host_console_authority(&state.pool, game, &game_authorization)
             .await
-            .ok()??;
+            .map_err(live_assembly_api_error)?
+            .ok_or_else(|| "host-console authority is no longer valid".to_string())?;
     let current = HostConsoleStateDelta::from(
         game_http::load_host_console_state(
             &state.pool,
-            claim.game,
+            game,
             authority,
-            claim.slot_id.as_deref(),
+            claim.scope.slot_id(),
             Some(25),
         )
         .await
-        .ok()?,
+        .map_err(live_assembly_api_error)?,
     );
-    let previous = if full_snapshot { None } else { previous };
-    Some((host_console_patches(previous, &current), current))
+    Ok((host_console_patches(previous, &current), current))
 }
 
 async fn host_prompts_delta_for_ws(
     state: &LiveDeliveryState,
     claim: &WebsocketTicketClaim,
-) -> Option<ProjectionDelta> {
-    let authorization = websocket_authorization_context(state, claim).await?;
+) -> Result<ProjectionDelta, String> {
+    let authorization = websocket_authorization_context(state, claim)
+        .await
+        .ok_or_else(|| "host-prompt session authority is no longer valid".to_string())?;
     let game_authorization = game_http::GameAuthorization::from_context(&authorization);
+    let game = claim.scope.game();
     game_http::require_host_audit_access(
         &state.pool,
-        claim.game,
+        game,
         &game_authorization,
         "principal cannot read host prompts for this game",
     )
     .await
-    .ok()?;
+    .map_err(live_assembly_api_error)?;
 
-    projections::host_prompts(&state.pool, claim.game)
+    let prompts = projections::host_prompts(&state.pool, game)
         .await
-        .ok()
-        .and_then(|rows| {
-            rows.into_iter()
-                .map(HostPromptDelta::try_from)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| {
-                    tracing::warn!(
-                        game_id = %claim.game,
-                        error = %error,
-                        "host prompt projection adapter failed; skipping live prompt delta"
-                    );
-                    error
-                })
-                .ok()
-        })
-        .map(|prompts| HostPromptsDelta {
-            game: claim.game,
-            prompts,
-        })
-        .map(ProjectionDelta::HostPromptsChanged)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(HostPromptDelta::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(ProjectionDelta::HostPromptsChanged(HostPromptsDelta {
+        game,
+        prompts,
+    }))
 }
 
 async fn player_private_deltas_for_ws(
     state: &LiveDeliveryState,
-    game: Uuid,
-    principal_id: Option<PrincipalId>,
-) -> Vec<ProjectionDelta> {
-    let Some(principal_id) = principal_id else {
-        return Vec::new();
+    claim: &WebsocketTicketClaim,
+) -> Result<Vec<ProjectionDelta>, String> {
+    let Some(slot_id) = claim.scope.slot_id() else {
+        return Ok(Vec::new());
     };
+    let game = claim.scope.game();
+    let principal_id = claim.principal_id;
 
     let mut deltas = Vec::new();
-    if let Ok(notifications) =
-        game_http::player_notifications_for_principal(&state.pool, game, principal_id).await
-    {
-        deltas.push(ProjectionDelta::PlayerNotificationsChanged(
-            PlayerNotificationsDelta {
-                game,
-                notifications,
-            },
-        ));
-    }
-    if let Ok(results) =
-        game_http::player_investigation_results_for_principal(&state.pool, game, principal_id).await
-    {
-        deltas.push(ProjectionDelta::PlayerInvestigationResultsChanged(
-            PlayerInvestigationResultsDelta { game, results },
-        ));
-    }
-    deltas
+    let mut notifications =
+        game_http::player_notifications_for_principal(&state.pool, game, principal_id)
+            .await
+            .map_err(live_assembly_api_error)?;
+    notifications.retain(|notification| notification.audience_slot == slot_id);
+    deltas.push(ProjectionDelta::PlayerNotificationsChanged(
+        PlayerNotificationsDelta {
+            game,
+            notifications,
+        },
+    ));
+    let mut results =
+        game_http::player_investigation_results_for_principal(&state.pool, game, principal_id)
+            .await
+            .map_err(live_assembly_api_error)?;
+    results.retain(|result| result.audience_slot == slot_id);
+    deltas.push(ProjectionDelta::PlayerInvestigationResultsChanged(
+        PlayerInvestigationResultsDelta { game, results },
+    ));
+    // The read resolves occupancy from this principal's capabilities, so the
+    // seat this socket is scoped to is the only one it can be handed. The
+    // retain is the same scope narrowing the sibling families apply, not a
+    // second authorization.
+    let mut mentions =
+        game_http::slot_mention_notifications_for_principal(&state.pool, game, principal_id)
+            .await
+            .map_err(live_assembly_api_error)?;
+    mentions.retain(|mention| mention.audience_slot == slot_id);
+    deltas.push(ProjectionDelta::SlotMentionsChanged(SlotMentionsDelta {
+        game,
+        mentions,
+    }));
+    Ok(deltas)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1669,28 +1629,102 @@ enum GuardedSendOutcome {
     DropSocket,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LiveDeliveryPlan {
+    scope: LiveScope,
+    hello: Hello,
+    allowed_audiences: BTreeSet<LiveAudience>,
+}
+
+impl LiveDeliveryPlan {
+    fn from_capabilities(
+        state: &LiveDeliveryState,
+        claim: &WebsocketTicketClaim,
+        capabilities: &CapabilitySet,
+    ) -> Result<Option<Self>, wire::LiveWireError> {
+        if !delivery_claim_authorized(capabilities, claim) {
+            return Ok(None);
+        }
+        let game = claim.scope.game();
+        let caps = capabilities
+            .iter()
+            .filter(|capability| capability_applies_to_scope(capability, &claim.scope))
+            .map(|capability| CapabilityGrant::for_game(capability, game))
+            .collect::<Result<Vec<_>, _>>()?;
+        let hello = Hello::new(state.server_name.clone(), claim.scope.clone(), caps)?;
+        let mut allowed_audiences = BTreeSet::from([
+            LiveAudience::Game { game },
+            LiveAudience::Thread {
+                game,
+                channel: claim.scope.channel().to_string(),
+            },
+        ]);
+        if claim.scope.slot_id().is_none() && socket_has_host_console_interest(capabilities, game) {
+            allowed_audiences.insert(LiveAudience::Host { game });
+        }
+        if let Some(slot_id) = claim.scope.slot_id() {
+            if capabilities.iter().any(
+                |capability| matches!(capability, Capability::SlotOccupant(held) if held == slot_id),
+            ) {
+                allowed_audiences.insert(LiveAudience::PlayerSlot {
+                    game,
+                    slot_id: slot_id.to_string(),
+                });
+            }
+        }
+        Ok(Some(Self {
+            scope: claim.scope.clone(),
+            hello,
+            allowed_audiences,
+        }))
+    }
+}
+
+fn capability_applies_to_scope(capability: &Capability, scope: &LiveScope) -> bool {
+    match capability {
+        Capability::GlobalAdmin | Capability::GlobalMod => true,
+        Capability::HostOf(game) | Capability::CohostOf(game) => {
+            *game == scope.game() && scope.slot_id().is_none()
+        }
+        Capability::SlotOccupant(slot_id) => scope.slot_id() == Some(slot_id.as_str()),
+        Capability::ChannelMember(channel) => channel == scope.channel(),
+        Capability::DeadViewer(game) => *game == scope.game() && scope.channel() == "dead",
+        Capability::SpectatorOf(game) => *game == scope.game() && scope.channel() == "spectator",
+    }
+}
+
 fn delivery_claim_authorized(capabilities: &CapabilitySet, claim: &WebsocketTicketClaim) -> bool {
-    let game_operator = capabilities.grants(&Capability::CohostOf(claim.game));
-    let channel_authorized = claim.channel == "main"
+    let game = claim.scope.game();
+    let channel = claim.scope.channel();
+    let game_operator = capabilities.grants(&Capability::CohostOf(game));
+    let channel_authorized = channel == "main"
         || game_operator
-        || capabilities.grants(&Capability::ChannelMember(claim.channel.clone()))
-        || (claim.channel == "dead" && capabilities.grants(&Capability::DeadViewer(claim.game)))
-        || (claim.channel == "spectator"
-            && capabilities.grants(&Capability::SpectatorOf(claim.game)));
-    let slot_authorized = claim.slot_id.as_ref().is_none_or(|slot_id| {
-        game_operator || capabilities.grants(&Capability::SlotOccupant(slot_id.clone()))
+        || capabilities.grants(&Capability::ChannelMember(channel.to_string()))
+        || (channel == "dead" && capabilities.grants(&Capability::DeadViewer(game)))
+        || (channel == "spectator" && capabilities.grants(&Capability::SpectatorOf(game)));
+    let slot_authorized = claim.scope.slot_id().is_none_or(|slot_id| {
+        capabilities.iter().any(
+            |capability| matches!(capability, Capability::SlotOccupant(held) if held == slot_id),
+        )
     });
     channel_authorized && slot_authorized
 }
 
-fn delivery_deltas_authorized(
-    capabilities: &CapabilitySet,
-    claim: &WebsocketTicketClaim,
-    deltas: &[ProjectionDelta],
-) -> bool {
-    let game_operator = capabilities.grants(&Capability::CohostOf(claim.game));
-    deltas.iter().all(|delta| match delta {
-        ProjectionDelta::HostConsoleStateChanged(_)
+fn live_projection_delta_for_plan(
+    plan: &LiveDeliveryPlan,
+    delta: ProjectionDelta,
+) -> Result<Option<LiveProjectionDelta>, wire::LiveWireError> {
+    let game = plan.scope.game();
+    let live = match delta {
+        delta @ (ProjectionDelta::VoteCountChanged(_)
+        | ProjectionDelta::VoteCountCleared(_)
+        | ProjectionDelta::DayVoteOutcomeApplied(_)) => LiveProjectionDelta::game(game, delta)?,
+        delta @ (ProjectionDelta::ThreadPostsChanged(_)
+        | ProjectionDelta::ThreadPostRemoved(_)
+        | ProjectionDelta::PostCitationsChanged(_)) => {
+            LiveProjectionDelta::thread(game, plan.scope.channel(), delta)?
+        }
+        delta @ (ProjectionDelta::HostConsoleStateChanged(_)
         | ProjectionDelta::HostConsoleHeaderChanged(_)
         | ProjectionDelta::HostConsoleSlotsChanged(_)
         | ProjectionDelta::HostConsoleThreadPostsChanged(_)
@@ -1698,57 +1732,211 @@ fn delivery_deltas_authorized(
         | ProjectionDelta::HostConsoleDayEventsChanged(_)
         | ProjectionDelta::HostConsoleSchedulerChanged(_)
         | ProjectionDelta::HostConsoleTasksChanged(_)
-        | ProjectionDelta::HostPromptsChanged(_) => game_operator,
-        ProjectionDelta::PlayerNotificationsChanged(delta) => {
-            game_operator
-                || delta.notifications.iter().all(|notification| {
-                    capabilities.grants(&Capability::SlotOccupant(
-                        notification.audience_slot.clone(),
-                    ))
-                })
+        | ProjectionDelta::HostPromptsChanged(_)) => {
+            let audience = LiveAudience::Host { game };
+            if !plan.allowed_audiences.contains(&audience) {
+                return Ok(None);
+            }
+            LiveProjectionDelta::host(game, delta)?
         }
-        ProjectionDelta::PlayerInvestigationResultsChanged(delta) => {
-            game_operator
-                || delta.results.iter().all(|result| {
-                    capabilities.grants(&Capability::SlotOccupant(result.audience_slot.clone()))
-                })
+        ProjectionDelta::PlayerNotificationsChanged(mut body) => {
+            let Some(slot_id) = plan.scope.slot_id() else {
+                return Ok(None);
+            };
+            let audience = LiveAudience::PlayerSlot {
+                game,
+                slot_id: slot_id.to_string(),
+            };
+            if !plan.allowed_audiences.contains(&audience) {
+                return Ok(None);
+            }
+            body.notifications
+                .retain(|notification| notification.audience_slot == slot_id);
+            LiveProjectionDelta::player_slot(
+                game,
+                slot_id,
+                ProjectionDelta::PlayerNotificationsChanged(body),
+            )?
         }
-        ProjectionDelta::VoteCountChanged(_)
-        | ProjectionDelta::VoteCountCleared(_)
-        | ProjectionDelta::ThreadPostsChanged(_)
-        | ProjectionDelta::ThreadPostRemoved(_)
-        | ProjectionDelta::PostCitationsChanged(_)
-        | ProjectionDelta::DayVoteOutcomeApplied(_)
-        | ProjectionDelta::ResyncRequired { .. } => true,
-    })
+        ProjectionDelta::PlayerInvestigationResultsChanged(mut body) => {
+            let Some(slot_id) = plan.scope.slot_id() else {
+                return Ok(None);
+            };
+            let audience = LiveAudience::PlayerSlot {
+                game,
+                slot_id: slot_id.to_string(),
+            };
+            if !plan.allowed_audiences.contains(&audience) {
+                return Ok(None);
+            }
+            body.results
+                .retain(|result| result.audience_slot == slot_id);
+            LiveProjectionDelta::player_slot(
+                game,
+                slot_id,
+                ProjectionDelta::PlayerInvestigationResultsChanged(body),
+            )?
+        }
+        ProjectionDelta::SlotMentionsChanged(mut body) => {
+            let Some(slot_id) = plan.scope.slot_id() else {
+                return Ok(None);
+            };
+            let audience = LiveAudience::PlayerSlot {
+                game,
+                slot_id: slot_id.to_string(),
+            };
+            if !plan.allowed_audiences.contains(&audience) {
+                return Ok(None);
+            }
+            body.mentions
+                .retain(|mention| mention.audience_slot == slot_id);
+            LiveProjectionDelta::player_slot(
+                game,
+                slot_id,
+                ProjectionDelta::SlotMentionsChanged(body),
+            )?
+        }
+    };
+    if plan.allowed_audiences.contains(live.audience()) {
+        Ok(Some(live))
+    } else {
+        Ok(None)
+    }
 }
 
 async fn send_projection_deltas(
     socket: &mut WebSocket,
     state: &LiveDeliveryState,
     claim: &WebsocketTicketClaim,
-    mut next_envelope_id: u64,
+    plan: &LiveDeliveryPlan,
+    last_envelope_id: u64,
     deltas: Vec<ProjectionDelta>,
 ) -> GuardedSendOutcome {
-    let Some(guard) = SessionDeliveryGuard::acquire(state, claim).await else {
-        return close_guarded_delivery(socket, next_envelope_id).await;
-    };
-    if deltas.is_empty() {
-        return if guard.release().await {
-            GuardedSendOutcome::Continue(next_envelope_id)
-        } else {
-            close_guarded_delivery(socket, next_envelope_id).await
-        };
-    }
-    if !delivery_deltas_authorized(guard.capabilities(), claim, &deltas) {
-        let _ = guard.release().await;
-        return close_guarded_delivery(socket, next_envelope_id).await;
-    }
+    let mut prepared = Vec::new();
+    let mut prepared_last_id = last_envelope_id;
     for delta in deltas {
-        let envelope = ServerEnvelope::new(next_envelope_id, ServerMsg::Delta(delta));
-        let Some(frame) = server_envelope_frame(&envelope) else {
-            continue;
+        let live = match live_projection_delta_for_plan(plan, delta) {
+            Ok(Some(live)) => live,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(event = "live_projection_delta_rejected", %error);
+                return close_guarded_delivery(socket, last_envelope_id).await;
+            }
         };
+        let Some(envelope_id) = wire::next_live_data_envelope_id(prepared_last_id) else {
+            tracing::warn!(event = "live_envelope_id_exhausted", last_envelope_id);
+            return close_guarded_delivery(socket, last_envelope_id).await;
+        };
+        let envelope = ServerEnvelope::new(envelope_id, ServerMsg::Delta(live));
+        let frame = match server_envelope_frame(&envelope) {
+            Ok(frame) => frame,
+            Err(error) => {
+                tracing::warn!(event = "live_projection_encode_failed", %error);
+                return close_guarded_delivery(socket, last_envelope_id).await;
+            }
+        };
+        prepared.push(frame);
+        prepared_last_id = envelope_id;
+    }
+    send_prepared_generation_frames(
+        socket,
+        state,
+        claim,
+        plan,
+        last_envelope_id,
+        prepared_last_id,
+        prepared,
+    )
+    .await
+}
+
+async fn send_resync_required(
+    socket: &mut WebSocket,
+    state: &LiveDeliveryState,
+    claim: &WebsocketTicketClaim,
+    plan: &LiveDeliveryPlan,
+    last_envelope_id: u64,
+    from_event_seq: i64,
+) -> GuardedSendOutcome {
+    let resync = match LiveResyncRequired::new(
+        plan.scope.clone(),
+        plan.allowed_audiences.iter().cloned().collect(),
+        from_event_seq,
+    ) {
+        Ok(resync) => resync,
+        Err(error) => {
+            tracing::warn!(event = "live_resync_rejected", %error);
+            return close_guarded_delivery(socket, last_envelope_id).await;
+        }
+    };
+    let Some(envelope_id) = wire::next_live_data_envelope_id(last_envelope_id) else {
+        tracing::warn!(event = "live_envelope_id_exhausted", last_envelope_id);
+        return close_guarded_delivery(socket, last_envelope_id).await;
+    };
+    let frame = match server_envelope_frame(&ServerEnvelope::new(
+        envelope_id,
+        ServerMsg::ResyncRequired(resync),
+    )) {
+        Ok(frame) => frame,
+        Err(error) => {
+            tracing::warn!(event = "live_resync_encode_failed", %error);
+            return close_guarded_delivery(socket, last_envelope_id).await;
+        }
+    };
+    let outcome = send_prepared_generation_frames(
+        socket,
+        state,
+        claim,
+        plan,
+        last_envelope_id,
+        envelope_id,
+        vec![frame],
+    )
+    .await;
+    match outcome {
+        GuardedSendOutcome::Continue(last_id) => {
+            close_live_socket(socket, last_id, 1012, "live resync required").await
+        }
+        other => other,
+    }
+}
+
+async fn send_prepared_generation_frames(
+    socket: &mut WebSocket,
+    state: &LiveDeliveryState,
+    claim: &WebsocketTicketClaim,
+    plan: &LiveDeliveryPlan,
+    previous_last_id: u64,
+    prepared_last_id: u64,
+    frames: Vec<Message>,
+) -> GuardedSendOutcome {
+    let Some(guard) = SessionDeliveryGuard::acquire(state, claim).await else {
+        return close_guarded_delivery(socket, previous_last_id).await;
+    };
+    let current_plan = LiveDeliveryPlan::from_capabilities(state, claim, guard.capabilities());
+    if !matches!(current_plan, Ok(Some(ref current)) if current == plan) {
+        eprintln!(
+            "PLAN_MISMATCH ticket_scope={:?} claim_slot={:?} claim_channel={} current={:?} expected={:?}",
+            claim.scope,
+            claim.scope.slot_id(),
+            claim.scope.channel(),
+            current_plan,
+            plan,
+        );
+        guard.abort().await;
+        return close_guarded_delivery(socket, previous_last_id).await;
+    }
+    // Even an empty batch is an authority checkpoint. Without this release,
+    // an idle socket could outlive a revoked session until some unrelated
+    // projection generated a frame.
+    if frames.is_empty() {
+        return if guard.release().await {
+            GuardedSendOutcome::Continue(previous_last_id)
+        } else {
+            close_guarded_delivery(socket, previous_last_id).await
+        };
+    }
+    for frame in frames {
         if !guarded_application_send(&guard, socket.send(frame)).await {
             // The send future is gone while the authorization fence is still
             // held. Roll back, then force the caller to drop this socket: a
@@ -1756,37 +1944,86 @@ async fn send_projection_deltas(
             guard.abort().await;
             return GuardedSendOutcome::DropSocket;
         }
-        next_envelope_id += 1;
     }
     if guard.release().await {
-        GuardedSendOutcome::Continue(next_envelope_id)
+        GuardedSendOutcome::Continue(prepared_last_id)
     } else {
         // Bytes already accepted by the socket are irreversible, so preserve
         // the advanced cursor while refusing every later application batch.
-        close_guarded_delivery(socket, next_envelope_id).await
+        close_guarded_delivery(socket, prepared_last_id).await
     }
+}
+
+async fn send_generation_heartbeat(
+    socket: &mut WebSocket,
+    state: &LiveDeliveryState,
+    claim: &WebsocketTicketClaim,
+    plan: &LiveDeliveryPlan,
+) -> bool {
+    let frame = match server_envelope_frame(&ServerEnvelope::new(
+        LIVE_HEARTBEAT_ENVELOPE_ID,
+        ServerMsg::Hello(plan.hello.clone()),
+    )) {
+        Ok(frame) => frame,
+        Err(error) => {
+            tracing::warn!(event = "live_heartbeat_encode_failed", %error);
+            return false;
+        }
+    };
+    let Some(guard) = SessionDeliveryGuard::acquire(state, claim).await else {
+        let _ = close_guarded_delivery(socket, LIVE_HEARTBEAT_ENVELOPE_ID).await;
+        return false;
+    };
+    let current_plan = LiveDeliveryPlan::from_capabilities(state, claim, guard.capabilities());
+    if !matches!(current_plan, Ok(Some(ref current)) if current == plan) {
+        guard.abort().await;
+        let _ = close_guarded_delivery(socket, LIVE_HEARTBEAT_ENVELOPE_ID).await;
+        return false;
+    }
+    if !guarded_application_send(&guard, socket.send(frame)).await {
+        guard.abort().await;
+        return false;
+    }
+    guard.release().await
 }
 
 async fn close_guarded_delivery(
     socket: &mut WebSocket,
-    next_envelope_id: u64,
+    last_envelope_id: u64,
 ) -> GuardedSendOutcome {
-    let _ = bounded_control_send(socket, Message::Close(None)).await;
-    GuardedSendOutcome::Close(next_envelope_id)
+    close_live_socket(
+        socket,
+        last_envelope_id,
+        1008,
+        "live generation authority changed",
+    )
+    .await
 }
 
-fn server_envelope_frame(envelope: &ServerEnvelope) -> Option<Message> {
+async fn close_live_socket(
+    socket: &mut WebSocket,
+    last_envelope_id: u64,
+    code: u16,
+    reason: &'static str,
+) -> GuardedSendOutcome {
+    let _ = bounded_control_send(
+        socket,
+        Message::Close(Some(CloseFrame {
+            code,
+            reason: reason.into(),
+        })),
+    )
+    .await;
+    GuardedSendOutcome::Close(last_envelope_id)
+}
+
+fn server_envelope_frame(envelope: &ServerEnvelope) -> Result<Message, String> {
+    envelope
+        .validate_live()
+        .map_err(|error| error.to_string())?;
     let mut bytes = Vec::new();
-    ciborium::into_writer(envelope, &mut bytes).ok()?;
-    Some(Message::Binary(bytes.into()))
-}
-
-fn hello_for(state: &LiveDeliveryState, capabilities: &CapabilitySet) -> Hello {
-    Hello {
-        protocol_v: PROTOCOL_VERSION,
-        server: state.server_name.clone(),
-        caps: capabilities.iter().map(CapabilityGrant::from).collect(),
-    }
+    ciborium::into_writer(envelope, &mut bytes).map_err(|error| error.to_string())?;
+    Ok(Message::Binary(bytes.into()))
 }
 
 #[cfg(test)]
@@ -1794,7 +2031,7 @@ mod tests {
     use super::{
         delivery_claim_authorized, guarded_application_send, live_delivery_deadline_at,
         live_delivery_deadline_bounded_by_at, Capability, CapabilitySet, ControlFrameBudget,
-        DeliveryDeadline, EventWake, GameEventWakeHub, NotifyEventWake, PrincipalId,
+        DeliveryDeadline, EventWake, GameEventWakeHub, LiveScope, NotifyEventWake, PrincipalId,
         WebsocketTicketClaim,
     };
     use std::future::Future;
@@ -1870,9 +2107,7 @@ mod tests {
             session_reference: "0".repeat(64),
             access_expires_at: i64::MAX,
             principal_id: PrincipalId::random(),
-            game,
-            channel: channel.to_string(),
-            slot_id: None,
+            scope: LiveScope::new(game, channel, None).unwrap(),
             after_seq: 0,
         };
 
@@ -1883,6 +2118,30 @@ mod tests {
         let spectator = CapabilitySet::from_iter([Capability::SpectatorOf(game)]);
         assert!(delivery_claim_authorized(&spectator, &claim("spectator")));
         assert!(!delivery_claim_authorized(&spectator, &claim("dead")));
+    }
+
+    #[test]
+    fn host_authority_cannot_impersonate_a_player_slot_scope() {
+        let game = Uuid::new_v4();
+        let claim = WebsocketTicketClaim {
+            session_reference: "0".repeat(64),
+            access_expires_at: i64::MAX,
+            principal_id: PrincipalId::random(),
+            scope: LiveScope::new(game, "main", Some("slot_7".to_string())).unwrap(),
+            after_seq: 0,
+        };
+
+        let host = CapabilitySet::from_iter([Capability::HostOf(game)]);
+        assert!(!delivery_claim_authorized(&host, &claim));
+
+        let global = CapabilitySet::from_iter([Capability::GlobalAdmin]);
+        assert!(!delivery_claim_authorized(&global, &claim));
+
+        let occupant = CapabilitySet::from_iter([Capability::SlotOccupant("slot_7".into())]);
+        assert!(delivery_claim_authorized(&occupant, &claim));
+
+        let sibling = CapabilitySet::from_iter([Capability::SlotOccupant("slot_8".into())]);
+        assert!(!delivery_claim_authorized(&sibling, &claim));
     }
 
     #[test]

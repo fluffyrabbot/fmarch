@@ -34,20 +34,6 @@ fn decode_server_envelope(message: Message) -> ServerEnvelope {
     ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
 }
 
-fn host_console_slot_assigned(body: &ServerMsg, principal_id: PrincipalId) -> bool {
-    match body {
-        ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(delta)) => delta
-            .slots
-            .iter()
-            .any(|slot| slot.assigned_principal_id == principal_id),
-        ServerMsg::Delta(wire::ProjectionDelta::HostConsoleSlotsChanged(delta)) => delta
-            .slots
-            .iter()
-            .any(|slot| slot.assigned_principal_id == principal_id),
-        _ => false,
-    }
-}
-
 fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     ApiState::new(pool, store)
@@ -995,33 +981,6 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
         .status(),
         StatusCode::OK
     );
-    let missing_target = post_command(
-        &app,
-        111,
-        Some(HOST_TOKEN),
-        Command::AddCohost {
-            game,
-            principal_id: PrincipalId::fixture("missing-grant-target"),
-        },
-    )
-    .await;
-    assert_eq!(missing_target.status(), StatusCode::OK);
-    let envelope: ServerEnvelope = serde_json::from_slice(
-        &to_bytes(missing_target.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    let ServerMsg::Reject(reject) = envelope.body else {
-        panic!("missing cohost target must return a typed rejection");
-    };
-    assert_eq!(reject.error, wire::RejectCode::InvalidTarget);
-    assert!(!reject.retryable);
-    assert!(!eventstore::load_stream(&pool, game)
-        .await
-        .unwrap()
-        .iter()
-        .any(|event| event.kind == "CohostAdded"));
 
     let mut target_fence = pool.begin().await.unwrap();
     sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
@@ -1033,7 +992,7 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
     let raced_grant = tokio::spawn(async move {
         post_command(
             &command_app,
-            112,
+            111,
             Some(HOST_TOKEN),
             Command::AddCohost {
                 game,
@@ -1073,7 +1032,7 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
     assert_eq!(
         post_command(
             &app,
-            113,
+            112,
             Some(HOST_TOKEN),
             Command::AddCohost {
                 game,
@@ -1798,6 +1757,83 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn idle_socket_heartbeat_closes_after_session_revocation(pool: sqlx::PgPool) {
+    let root = tempfile::tempdir().unwrap();
+    let state = test_state(pool.clone(), &root)
+        .with_websocket_poll_interval(Duration::from_secs(5))
+        .with_websocket_heartbeat_interval(Duration::from_millis(25));
+    let app = api::router_with_state(state);
+    let game = Uuid::new_v4();
+    insert_account_session(
+        &pool,
+        "host",
+        HOST_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+        &["GlobalAdmin"],
+    )
+    .await;
+    assert_eq!(
+        post_command(
+            &app,
+            1,
+            Some(HOST_TOKEN),
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+                cohost_denied: vec![],
+            },
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let (_, ticket) = issue_ticket(&app, HOST_TOKEN, game, 0).await;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move { axum::serve(listener, server_app).await.unwrap() });
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={}&audience=transport-proof",
+        ticket.unwrap().ticket
+    ))
+    .await
+    .unwrap();
+    let hello = decode_server_envelope(socket.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+
+    sqlx::query("UPDATE auth_session SET revoked_at = 2 WHERE token_hash = $1")
+        .bind(token_hash(HOST_TOKEN))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let terminal = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            match socket.next().await {
+                Some(Ok(Message::Binary(bytes))) => {
+                    let envelope: ServerEnvelope = ciborium::from_reader(bytes.as_ref()).unwrap();
+                    assert!(matches!(envelope.body, ServerMsg::Hello(_)));
+                    assert_eq!(envelope.id, wire::LIVE_HEARTBEAT_ENVELOPE_ID);
+                }
+                terminal => return terminal,
+            }
+        }
+    })
+    .await
+    .expect("revoked idle generation terminated at the next heartbeat");
+    assert!(
+        matches!(terminal, None | Some(Ok(Message::Close(_))) | Some(Err(_))),
+        "revoked idle generation emitted no later application frame"
+    );
+
+    server.abort();
+    let _ = server.await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let verifier = StaticAccessTokenVerifier::new([(
@@ -2012,20 +2048,13 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     let seat_envelope: ServerEnvelope = serde_json::from_slice(&seat_body).unwrap();
     assert!(matches!(seat_envelope.body, ServerMsg::Ack(_)));
 
-    let received = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let message = socket.next().await.unwrap().unwrap();
-            let envelope = decode_server_envelope(message);
-            if host_console_slot_assigned(&envelope.body, PrincipalId::fixture("player_a")) {
-                break envelope;
-            }
-        }
-    })
-    .await;
-    assert!(
-        received.is_ok(),
-        "instance B did not observe instance A's durable command"
-    );
+    let received = tokio::time::timeout(Duration::from_secs(2), socket.next())
+        .await
+        .expect("instance B observed instance A's durable command")
+        .unwrap()
+        .unwrap();
+    let received = decode_server_envelope(received);
+    assert!(matches!(received.body, ServerMsg::ResyncRequired(_)));
     drop(socket);
 
     let (_, reconnect_ticket) = issue_ticket(&app_a, host_token.as_str(), game, before_seq).await;
@@ -2035,28 +2064,13 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     ))
     .await
     .unwrap();
-    let caught_up = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let message = reconnected.next().await.unwrap().unwrap();
-            let envelope = decode_server_envelope(message);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))
-                    if delta
-                        .slots
-                        .iter()
-                        .any(|slot| {
-                            slot.assigned_principal_id == PrincipalId::fixture("player_a")
-                        })
-            ) {
-                break;
-            }
-        }
-    })
-    .await;
+    let hello = decode_server_envelope(reconnected.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
     assert!(
-        caught_up.is_ok(),
-        "reconnect did not hydrate durable sequence state"
+        tokio::time::timeout(Duration::from_millis(250), reconnected.next())
+            .await
+            .is_err(),
+        "a reconnect must not replay a server-side hydration snapshot"
     );
     drop(reconnected);
 

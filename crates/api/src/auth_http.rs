@@ -762,7 +762,6 @@ struct RevokeAuthSession {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct CreateAuthInvite {
     invite_token: String,
     account_id: String,
@@ -3527,7 +3526,10 @@ async fn create_game_invitation(
 ) -> Result<Json<AuthInviteResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller = &auth.context;
-    let initiating_session = caller.initiating_session();
+    let caller_is_global_admin = caller
+        .global_capabilities
+        .iter()
+        .any(|capability| capability == "GlobalAdmin");
     let invited_by_principal_id = caller.principal_id;
 
     let invite_token = request.invite_token.trim();
@@ -3551,48 +3553,46 @@ async fn create_game_invitation(
                 .to_string(),
         });
     }
+    if !caller_is_global_admin && request.game.is_none() {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "invite issuance requires GlobalAdmin or HostOf(game)".to_string(),
+        });
+    }
+    let account_principal_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT principal_id
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+    let account_principal_id = PrincipalId::from_uuid(account_principal_id);
+    if account_principal_id != expected_principal_id {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::StreamConflict,
+            message: "invite account no longer matches the expected principal; refresh the target and try again"
+                .to_string(),
+        });
+    }
+
     let invite_hash = hash_session_token(invite_token);
     let mut tx = identity::session::begin_authority_transaction(&state.pool).await?;
-
-    // A game invite is a two-owner identity mutation: the issuing session and
-    // the target account. Lock both owners in stable order before any session,
-    // account, invite, or delivery row so reciprocal invite operations cannot
-    // deadlock and erasure cannot race the account binding.
-    let mut participant_principals = vec![invited_by_principal_id, expected_principal_id];
-    participant_principals.sort_unstable();
-    participant_principals.dedup();
-    let mut locked_caller_owner = None;
-    let mut target_owner_is_active = false;
-    for principal_id in participant_principals {
-        match identity::methods::lock_identity_mutation(
-            &mut tx,
-            &principal_id,
-            identity::methods::IdentityMutationExtent::Owner,
-        )
-        .await
-        {
-            Ok(owner) => {
-                if principal_id == expected_principal_id {
-                    target_owner_is_active = owner.require_active().is_ok();
-                }
-                if principal_id == invited_by_principal_id {
-                    locked_caller_owner = Some(owner);
-                }
-            }
-            Err(identity::IdentityFlowError::Unauthorized)
-                if principal_id == expected_principal_id
-                    && principal_id != invited_by_principal_id => {}
-            Err(error) => return Err(error.into()),
-        }
-    }
-    let locked_caller_owner = locked_caller_owner.ok_or_else(unauthorized_session)?;
-    let locked_caller = identity::session::revalidate_initiating_session_after_owner_lock(
+    let locked_caller = identity::session::validate_session_for_update(
         &mut tx,
-        &locked_caller_owner,
-        &initiating_session,
+        auth.bearer.as_str(),
         &state.session_policy,
     )
     .await?;
+    if locked_caller.principal_id != invited_by_principal_id {
+        return Err(unauthorized_session());
+    }
     let locked_is_global_admin = locked_caller
         .global_capabilities
         .iter()
@@ -3617,34 +3617,6 @@ async fn create_game_invitation(
             });
         }
     }
-    let account_principal_id = if target_owner_is_active {
-        sqlx::query_scalar::<_, Uuid>(
-            r#"
-            SELECT principal_id
-            FROM auth_account
-            WHERE account_id = $1
-              AND principal_id = $2
-              AND disabled_at IS NULL
-            FOR UPDATE
-            "#,
-        )
-        .bind(account_id)
-        .bind(expected_principal_id.as_uuid())
-        .fetch_optional(&mut *tx)
-        .await?
-        .map(PrincipalId::from_uuid)
-    } else {
-        None
-    };
-    if account_principal_id != Some(expected_principal_id) {
-        return Err(ApiError::Reject {
-            status: StatusCode::CONFLICT,
-            error: RejectCode::StreamConflict,
-            message: "invite account no longer matches the expected principal; refresh the target and try again"
-                .to_string(),
-        });
-    }
-    let account_principal_id = expected_principal_id;
     let inserted = sqlx::query(
         r#"
         INSERT INTO game_invitation (
@@ -4204,8 +4176,13 @@ async fn auth_session_response(
         Some(game) => caps::resolve(&state.pool, &Principal::authenticated(principal_id), game)
             .await?
             .iter()
-            .map(CapabilityGrant::from)
-            .collect(),
+            .map(|capability| CapabilityGrant::for_game(capability, game))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| wire::ProjectionAdapterError {
+                kind: "AuthSessionResponse",
+                field: "capabilities",
+                source: error.to_string(),
+            })?,
         None => Vec::new(),
     };
     capabilities.extend(game_capabilities);

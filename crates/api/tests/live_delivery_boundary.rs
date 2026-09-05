@@ -19,6 +19,10 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     assert!(live_delivery.contains("struct NotifyEventWake"));
     assert!(live_delivery.contains("struct GameEventWakeHub"));
     assert!(live_delivery.contains("event_wake.wait()"));
+    assert!(live_delivery.contains("websocket_heartbeat_interval"));
+    assert!(live_delivery.contains("heartbeat.tick()"));
+    assert!(composition_root.contains("FMARCH_WS_HEARTBEAT_INTERVAL_MS"));
+    assert!(composition_root.contains("with_websocket_heartbeat_interval"));
     assert!(live_delivery.contains("live_projection::receive"));
     assert!(live_delivery.contains("live_projection::try_receive"));
     assert!(live_delivery.contains("inbound = socket.recv()"));
@@ -39,7 +43,10 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         "control_budget.admit_at(",
         "caps::resolve_live_delivery_in_tx(",
         "delivery_claim_authorized(",
-        "delivery_deltas_authorized(",
+        "LiveDeliveryPlan::from_capabilities(",
+        "send_generation_heartbeat(",
+        "send_resync_required(",
+        "wire::next_live_data_envelope_id(",
     ] {
         assert!(
             live_delivery.contains(admission_contract),
@@ -55,13 +62,10 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         "enum GuardedSendOutcome",
         "async fn create_websocket_ticket(",
         "async fn redeem_websocket_ticket(",
-        "async fn websocket_session_active(",
         "async fn websocket_authorization_context(",
         "async fn ws(",
         "async fn ws_session(",
         "async fn current_game_event_seq(",
-        "async fn current_hidden_thread_post_deltas(",
-        "async fn send_current_projection_snapshot(",
         "async fn thread_posts_delta_for_ws(",
         "async fn thread_posts_after_delta_for_ws(",
         "fn socket_has_host_console_interest(",
@@ -70,11 +74,13 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         "async fn host_prompts_delta_for_ws(",
         "async fn player_private_deltas_for_ws(",
         "fn delivery_claim_authorized(",
-        "fn delivery_deltas_authorized(",
+        "fn live_projection_delta_for_plan(",
         "async fn send_projection_deltas(",
+        "async fn send_resync_required(",
+        "async fn send_prepared_generation_frames(",
+        "async fn send_generation_heartbeat(",
         "async fn close_guarded_delivery(",
         "fn server_envelope_frame(",
-        "fn hello_for(",
     ] {
         assert!(
             live_delivery.contains(owned_symbol),
@@ -87,7 +93,6 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     }
 
     for shared_adapter in [
-        "game_http::current_votecount_deltas(&state.pool",
         "game_http::current_thread_posts_delta(&state.pool",
         "game_http::current_thread_posts_after_delta(",
         "game_http::current_post_citations_deltas(",
@@ -106,6 +111,15 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
 
     assert!(!live_delivery.contains("fn publish("));
     assert!(!live_delivery.contains("fn assemble_update("));
+    assert!(!live_delivery.contains("send_current_projection_snapshot("));
+    assert!(!live_delivery.contains("current_hidden_thread_post_deltas("));
+    assert!(!live_delivery.contains("full_snapshot"));
+    assert!(!live_delivery.contains("ProjectionDelta::ResyncRequired"));
+    assert!(!live_delivery.contains("next_envelope_id += 1"));
+    assert!(live_delivery.contains("let mut batch = update.deltas;"));
+    assert!(live_delivery.contains("last_envelope_id = send_deltas_or_break!(batch);"));
+    assert!(live_delivery.contains("live_generation_assembly_failed"));
+    assert!(!live_delivery.contains("continue;\n        };\n        if !guarded_application_send"));
     assert!(live_projection.contains("struct LiveProjectionPublisher"));
     assert!(live_projection.contains("fn assemble_update("));
     assert!(
@@ -114,8 +128,8 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
             && !live_delivery.contains("#[allow(clippy"),
         "the live delivery boundary must not hide ownership or lint debt"
     );
-    assert!(live_delivery.contains("GuardedSendOutcome::Close(next_envelope_id)"));
-    assert!(live_delivery.contains("bounded_control_send(socket, Message::Close(None))"));
+    assert!(live_delivery.contains("GuardedSendOutcome::Close(last_envelope_id)"));
+    assert!(live_delivery.contains("live generation authority changed"));
     assert!(live_delivery.contains("if inner.strong_count() == 0"));
     assert!(live_delivery.contains("inner: &std::sync::Weak<GameEventWakeInner>"));
     assert!(!live_delivery.contains("listen_live_events(&pool, &hub)"));
@@ -130,6 +144,28 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         .map(|offset| delivery_guard_start + offset)
         .expect("delivery guard boundary");
     let delivery_guard = &live_delivery[delivery_guard_start..delivery_guard_end];
+    let lease_deadline = delivery_guard
+        .find("let lease_deadline = live_delivery_deadline(claim.access_expires_at)")
+        .or_else(|| {
+            delivery_guard.find("let Some(lease_deadline) = live_delivery_deadline(")
+        })
+        .expect("complete live-delivery lease deadline");
+    assert!(
+        lease_deadline < delivery_guard.find(".acquire_owned()").unwrap()
+            && lease_deadline < delivery_guard.find("state.pool.begin()").unwrap(),
+        "the complete delivery lease must start before semaphore and pool waits"
+    );
+    for bounded_operation in [
+        "timeout_at(\n            lease_deadline,\n            state",
+        "timeout_at(lease_deadline, state.pool.begin())",
+        "timeout_at(deadline, self.tx.commit())",
+        "timeout_at(deadline, self.tx.rollback())",
+    ] {
+        assert!(
+            delivery_guard.contains(bounded_operation),
+            "unbounded live-delivery guard operation: {bounded_operation}"
+        );
+    }
     assert!(
         delivery_guard
             .find("lock_live_delivery_cutoff_gates(")
@@ -150,7 +186,7 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         .find("async fn redeem_websocket_ticket(")
         .unwrap();
     let redemption_end = live_delivery[redemption_start..]
-        .find("async fn websocket_session_active(")
+        .find("struct SessionDeliveryGuard")
         .map(|offset| redemption_start + offset)
         .unwrap();
     let redemption = &live_delivery[redemption_start..redemption_end];
@@ -167,6 +203,20 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
                 .find("DELETE FROM auth_websocket_ticket")
                 .unwrap(),
         "ticket expiry must be sampled again after the session/ticket locks"
+    );
+
+    let ticket_start = live_delivery
+        .find("async fn create_websocket_ticket(")
+        .unwrap();
+    let ticket_end = live_delivery[ticket_start..]
+        .find("async fn redeem_websocket_ticket(")
+        .map(|offset| ticket_start + offset)
+        .unwrap();
+    let ticket = &live_delivery[ticket_start..ticket_end];
+    assert!(ticket.contains("Capability::SlotOccupant(held) if held == slot_id"));
+    assert!(
+        !ticket.contains("capabilities.grants(&Capability::SlotOccupant"),
+        "global or host authority must not mint a player-slot claim"
     );
 }
 

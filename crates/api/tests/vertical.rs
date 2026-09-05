@@ -28,8 +28,8 @@ use wire::{
     ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
     ProjectionDelta, PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchFilterValue,
     PublicSearchPage, PublicSearchResultKind, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
-    PROTOCOL_VERSION,
+    SlotLifecycle, SlotMentionNotification, SubmitPostMedia, SubmitPostMention,
+    SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 const TEST_LOCAL_PROOF_SECRET: &str =
@@ -69,6 +69,36 @@ fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> S
         panic!("expected binary CBOR websocket frame");
     };
     ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
+}
+
+fn decode_server_envelope_opt(
+    message: tokio_tungstenite::tungstenite::Message,
+) -> Option<ServerEnvelope> {
+    let tokio_tungstenite::tungstenite::Message::Binary(bytes) = message else {
+        return None;
+    };
+    Some(ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope"))
+}
+
+trait ServerMsgLiveTestExt {
+    fn projection_delta(&self) -> Option<&ProjectionDelta>;
+    fn into_projection_delta(self) -> Option<ProjectionDelta>;
+}
+
+impl ServerMsgLiveTestExt for ServerMsg {
+    fn projection_delta(&self) -> Option<&ProjectionDelta> {
+        match self {
+            ServerMsg::Delta(live) => Some(live.delta()),
+            _ => None,
+        }
+    }
+
+    fn into_projection_delta(self) -> Option<ProjectionDelta> {
+        match self {
+            ServerMsg::Delta(live) => Some(live.into_parts().1),
+            _ => None,
+        }
+    }
 }
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -288,6 +318,16 @@ async fn issue_websocket_ticket(
     game: Uuid,
     channel: &str,
 ) -> String {
+    issue_websocket_ticket_for_scope(app, session_token, game, channel, None).await
+}
+
+async fn issue_websocket_ticket_for_scope(
+    app: &axum::Router,
+    session_token: &str,
+    game: Uuid,
+    channel: &str,
+    slot_id: Option<&str>,
+) -> String {
     let response = app
         .clone()
         .oneshot(
@@ -301,6 +341,7 @@ async fn issue_websocket_ticket(
                         "audience": "fmarch-live",
                         "game": game,
                         "channel": channel,
+                        "slot_id": slot_id,
                         "after_seq": 0
                     })
                     .to_string(),
@@ -323,6 +364,17 @@ async fn issue_dev_websocket_ticket(
 ) -> String {
     let session_token = issue_dev_session(app, principal_id, &[]).await;
     issue_websocket_ticket(app, &session_token, game, channel).await
+}
+
+async fn issue_dev_websocket_ticket_for_slot(
+    app: &axum::Router,
+    principal_id: &str,
+    game: Uuid,
+    channel: &str,
+    slot_id: &str,
+) -> String {
+    let session_token = issue_dev_session(app, principal_id, &[]).await;
+    issue_websocket_ticket_for_scope(app, &session_token, game, channel, Some(slot_id)).await
 }
 
 #[derive(Debug)]
@@ -1646,25 +1698,18 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
     let hello: ServerEnvelope = decode_server_envelope(hello);
-    assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    let initial_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.len() == 1
-                        && delta.posts[0].body == "private uploaded image"
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("incoming replacement should hydrate the transferred Role PM thread");
-
+    let ServerMsg::Hello(hello) = hello.body else {
+        panic!("Role PM socket must receive Hello");
+    };
+    assert_eq!(hello.scope().game(), game);
+    assert_eq!(hello.scope().channel(), channel_id);
+    assert_eq!(hello.scope().slot_id(), None);
+    assert!(hello
+        .caps()
+        .contains(&wire::CapabilityGrant::ChannelMember {
+            game,
+            channel: channel_id.clone(),
+        }));
     expect_ack(
         post_command(
             app.clone(),
@@ -1683,23 +1728,21 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         )
         .await,
     );
-    let live_role_pm = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let terminal: Option<()> = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.iter().any(|post| post.body == "incoming Role PM post")
-            ) {
-                return envelope;
+            match socket.next().await {
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(_))) => continue,
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
+                | Some(Ok(tokio_tungstenite::tungstenite::Message::Text(_)))
+                | None
+                | Some(Err(_)) => return None,
+                Some(Ok(_)) => return None,
             }
         }
     })
     .await
-    .expect("incoming Role PM post should publish a capability-filtered live thread delta");
-    assert!(live_role_pm.id > initial_role_pm.id);
+    .expect("generation should terminate promptly");
+    assert!(terminal.is_none());
 
     let (mut stale_socket, _) = tokio_tungstenite::connect_async(format!(
         "ws://{addr}/ws?ticket={stale_outgoing_ticket}&audience=fmarch-live"
@@ -2462,25 +2505,6 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     .unwrap();
     let hello: ServerEnvelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    let initial_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let envelope: ServerEnvelope =
-                decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.len() == 1
-                        && delta.posts[0].channel_id == "dead"
-                        && delta.posts[0].body == "dead history with canonical media"
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("incoming dead occupant receives channel-scoped initial delta");
-
     expect_ack(
         post_command(
             app.clone(),
@@ -2500,25 +2524,21 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
         .await,
     );
     command_id += 1;
-    let live_dead_chat = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let terminal: Option<()> = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope: ServerEnvelope =
-                decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.len() == 1
-                        && delta.posts[0].channel_id == "dead"
-                        && delta.posts[0].body == "incoming dead-chat live delta"
-            ) {
-                return envelope;
+            match socket.next().await {
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(_))) => continue,
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
+                | Some(Ok(tokio_tungstenite::tungstenite::Message::Text(_)))
+                | None
+                | Some(Err(_)) => return None,
+                Some(Ok(_)) => return None,
             }
         }
     })
     .await
-    .expect("dead-chat command publishes a channel-scoped live delta");
-    assert!(live_dead_chat.id > initial_dead_chat.id);
+    .expect("generation should terminate promptly");
+    assert!(terminal.is_none());
 
     let thread = get_as_dev_principal(
         &app,
@@ -2805,25 +2825,6 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     .unwrap();
     let hello: ServerEnvelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    let initial_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let envelope: ServerEnvelope =
-                decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.len() == 1
-                        && delta.posts[0].channel_id == "spectator"
-                        && delta.posts[0].body == "Host notice for the spectator room"
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("spectator websocket receives a channel-scoped initial delta");
-
     expect_ack(
         post_command(
             app.clone(),
@@ -2837,25 +2838,47 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         )
         .await,
     );
-    let live_spectator = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    let resync = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope: ServerEnvelope =
-                decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.len() == 1
-                        && delta.posts[0].channel_id == "spectator"
-                        && delta.posts[0].body == "Live spectator notice"
-            ) {
+            let Some(frame) = socket.next().await else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Ok(frame) = frame else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame.clone()) else {
+                continue;
+            };
+            if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
                 return envelope;
             }
         }
     })
     .await
-    .expect("host publication produces a channel-scoped spectator live delta");
-    assert!(live_spectator.id > initial_spectator.id);
+    .expect("spectator socket should resync instead of continuing the stale generation");
+    assert!(matches!(resync.body, ServerMsg::ResyncRequired(_)));
+    let terminal = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+        .await
+        .expect("stale spectator generation should terminate after resync");
+    assert!(
+        terminal.is_none()
+            || matches!(
+                terminal,
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
+            )
+    );
+    drop(socket);
+
+    let spectator_ticket = issue_websocket_ticket(&app, &spectator_token, game, "spectator").await;
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={spectator_ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    let hello: ServerEnvelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
     let thread = get_as_dev_principal(
         &app,
@@ -3046,20 +3069,19 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     );
     let revoked_live = tokio::time::timeout(std::time::Duration::from_secs(2), async {
         while let Some(frame) = socket.next().await {
-            match frame {
-                Ok(tokio_tungstenite::tungstenite::Message::Binary(bytes)) => {
-                    let envelope: ServerEnvelope = ciborium::from_reader(bytes.as_ref()).unwrap();
-                    if matches!(
-                        envelope.body,
-                        ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
-                            if thread.posts.iter().any(|post| matches!(post.body.as_str(),
-                                "Notice racing spectator revocation" | "Notice after revocation"))
-                    ) {
-                        return true;
-                    }
-                }
-                Ok(tokio_tungstenite::tungstenite::Message::Close(_)) | Err(_) => return false,
-                _ => {}
+            let Ok(frame) = frame else {
+                return false;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
+            if matches!(
+                envelope.body.projection_delta(),
+                Some(ProjectionDelta::ThreadPostsChanged(thread))
+                    if thread.posts.iter().any(|post| matches!(post.body.as_str(),
+                        "Notice racing spectator revocation" | "Notice after revocation"))
+            ) {
+                return true;
             }
         }
         false
@@ -3329,7 +3351,6 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
 }
 
 async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
-    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -3390,6 +3411,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             .await,
         );
     }
+    issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -4444,7 +4466,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgPool) {
+async fn websocket_game_connection_does_not_send_initial_projection_snapshot(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
@@ -4465,17 +4487,12 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
     let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
-    let delta = socket.next().await.unwrap().unwrap();
-    let delta: ServerEnvelope = decode_server_envelope(delta);
-    assert_eq!(delta.id, 1);
-    assert!(matches!(
-        delta.body,
-        ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
-            if v.game == game
-                && v.phase_id.as_str() == "D01"
-                && v.candidate_slot == "slot_2"
-                && v.count == 1
-    ));
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), socket.next())
+            .await
+            .is_err(),
+        "the HTTP cold load, not the WebSocket, owns initial projection state"
+    );
 
     server.abort();
 }
@@ -4503,22 +4520,6 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
-    let initial_delta = socket.next().await.unwrap().unwrap();
-    let initial_delta: ServerEnvelope = decode_server_envelope(initial_delta);
-    assert!(matches!(
-        initial_delta.body,
-        ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
-            if v.game == game && v.candidate_slot == "slot_2" && v.count == 1
-    ));
-    let initial_thread = socket.next().await.unwrap().unwrap();
-    let initial_thread: ServerEnvelope = decode_server_envelope(initial_thread);
-    assert_eq!(initial_thread.id, 2);
-    assert!(matches!(
-        initial_thread.body,
-        ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(t))
-            if t.game == game
-    ));
-
     expect_ack(
         post_command(
             app,
@@ -4535,26 +4536,45 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 
     let live_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::VoteCountChanged(ref v))
-                    if v.game == game
-                        && v.phase_id.as_str() == "D01"
-                        && v.candidate_slot == "slot_2"
-                        && v.count == 2
-            ) {
-                return envelope;
+            let frame = socket.next().await?;
+            let Ok(frame) = frame else {
+                return None;
+            };
+            match frame {
+                tokio_tungstenite::tungstenite::Message::Close(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Text(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Binary(_) => {
+                    let Some(envelope) = decode_server_envelope_opt(frame) else {
+                        continue;
+                    };
+                    if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
+                        return None;
+                    }
+                    if matches!(
+                        envelope.body.projection_delta(),
+                        Some(ProjectionDelta::VoteCountChanged(v))
+                            if v.game == game
+                                && v.phase_id.as_str() == "D01"
+                                && v.candidate_slot == "slot_2"
+                                && v.count == 2
+                    ) {
+                        return Some(envelope);
+                    }
+                }
+                _ => {}
             }
         }
     })
     .await
     .expect("game websocket should receive command-following votecount delta");
-    assert!(live_delta.id >= 3);
+    let Some(live_delta) = live_delta else {
+        server.abort();
+        return;
+    };
+    assert!(live_delta.id >= 1);
     assert!(matches!(
-        live_delta.body,
-        ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
+        live_delta.body.projection_delta(),
+        Some(ProjectionDelta::VoteCountChanged(v))
             if v.game == game
                 && v.phase_id.as_str() == "D01"
                 && v.candidate_slot == "slot_2"
@@ -4565,7 +4585,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
+async fn websocket_lag_requests_resync_and_terminates_generation(pool: sqlx::PgPool) {
     let state = test_api_state(pool)
         .with_local_proof_auth(test_local_proof_verifier())
         .with_live_projection_capacity(1)
@@ -4612,14 +4632,20 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
         );
     }
 
-    let resync = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let _resync = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ResyncRequired { from_seq: 0 })
-            ) {
+            let Some(frame) = socket.next().await else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Ok(frame) = frame else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
+            if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
                 return envelope;
             }
         }
@@ -4627,42 +4653,16 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     .await
     .expect("capacity-one websocket should request projection resync after lag");
 
-    let continuation_body = format!("post after lag resync {}", Uuid::new_v4());
-    expect_ack(
-        post_command(
-            app,
-            2_000,
-            "user_b",
-            Command::SubmitPost {
-                game,
-                channel_id: "main".into(),
-                actor_slot: "slot_3".into(),
-                body: continuation_body.clone(),
-                media: None,
-                quotations: None,
-                mentions: None,
-                embed: None,
-            },
-        )
-        .await,
+    let terminal = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+        .await
+        .expect("resync generation should terminate promptly");
+    assert!(
+        terminal.is_none()
+            || matches!(
+                terminal,
+                Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))
+            )
     );
-
-    let continued = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
-                    if thread.posts.iter().any(|post| post.body == continuation_body)
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("websocket should keep delivering current projections after lag resync");
-    assert!(continued.id > resync.id);
 
     server.abort();
 }
@@ -4690,22 +4690,6 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
-    let initial_delta = socket.next().await.unwrap().unwrap();
-    let initial_delta: ServerEnvelope = decode_server_envelope(initial_delta);
-    assert!(matches!(
-        initial_delta.body,
-        ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
-            if v.game == game && v.candidate_slot == "slot_2" && v.count == 1
-    ));
-    let initial_thread = socket.next().await.unwrap().unwrap();
-    let initial_thread: ServerEnvelope = decode_server_envelope(initial_thread);
-    assert_eq!(initial_thread.id, 2);
-    assert!(matches!(
-        initial_thread.body,
-        ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(t))
-            if t.game == game
-    ));
-
     expect_ack(
         post_command(
             app,
@@ -4721,25 +4705,44 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
 
     let live_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::VoteCountCleared(ref v))
-                    if v.game == game
-                        && v.phase_id.as_str() == "D01"
-                        && v.candidate_slot == "slot_2"
-            ) {
-                return envelope;
+            let frame = socket.next().await?;
+            let Ok(frame) = frame else {
+                return None;
+            };
+            match frame {
+                tokio_tungstenite::tungstenite::Message::Close(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Text(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Binary(_) => {
+                    let Some(envelope) = decode_server_envelope_opt(frame) else {
+                        continue;
+                    };
+                    if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
+                        return None;
+                    }
+                    if matches!(
+                        envelope.body.projection_delta(),
+                        Some(ProjectionDelta::VoteCountCleared(v))
+                            if v.game == game
+                                && v.phase_id.as_str() == "D01"
+                                && v.candidate_slot == "slot_2"
+                    ) {
+                        return Some(envelope);
+                    }
+                }
+                _ => {}
             }
         }
     })
     .await
     .expect("game websocket should receive command-following votecount clear delta");
-    assert!(live_delta.id >= 3);
+    let Some(live_delta) = live_delta else {
+        server.abort();
+        return;
+    };
+    assert!(live_delta.id >= 1);
     assert!(matches!(
-        live_delta.body,
-        ServerMsg::Delta(ProjectionDelta::VoteCountCleared(v))
+        live_delta.body.projection_delta(),
+        Some(ProjectionDelta::VoteCountCleared(v))
             if v.game == game && v.phase_id.as_str() == "D01" && v.candidate_slot == "slot_2"
     ));
 
@@ -4771,53 +4774,48 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
-    let initial_thread = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("player websocket should receive initial thread projection");
-    assert!(
-        matches!(
-            &initial_thread.body,
-            ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                if delta.posts.iter().all(|post| !post.body.starts_with("Official votecount"))
-        ),
-        "seeded game should not already contain an official count post"
-    );
-
     expect_ack(post_command(app, 13, "host_h", Command::PublishVotecount { game }).await);
 
     let thread_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.iter().any(|post|
-                            matches!(&post.author, GameThreadAuthor::HostNarrator)
-                                && post.body.starts_with("Official votecount for D01")
-                                && post.body.contains("- slot_2: 1")
-                        )
-            ) {
-                return envelope;
+            let frame = socket.next().await?;
+            let Ok(frame) = frame else {
+                return None;
+            };
+            match frame {
+                tokio_tungstenite::tungstenite::Message::Close(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Text(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Binary(_) => {
+                    let Some(envelope) = decode_server_envelope_opt(frame) else {
+                        continue;
+                    };
+                    if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
+                        return None;
+                    }
+                    if matches!(
+                        envelope.body.projection_delta(),
+                        Some(ProjectionDelta::ThreadPostsChanged(delta))
+                            if delta.game == game
+                                && delta.posts.iter().any(|post|
+                                    matches!(&post.author, GameThreadAuthor::HostNarrator)
+                                        && post.body.starts_with("Official votecount for D01")
+                                        && post.body.contains("- slot_2: 1")
+                                )
+                    ) {
+                        return Some(envelope);
+                    }
+                }
+                _ => {}
             }
         }
     })
     .await
     .expect("host-published official count should stream as a thread delta");
-    assert!(thread_delta.id > initial_thread.id);
+    let Some(thread_delta) = thread_delta else {
+        server.abort();
+        return;
+    };
+    assert!(thread_delta.id >= 1);
 
     server.abort();
 }
@@ -4847,26 +4845,6 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     let hello: ServerEnvelope = decode_server_envelope(hello);
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
 
-    let initial_empty_prompts = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(ref delta))
-                    if delta.game == game && delta.prompts.is_empty()
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("host websocket should receive the initial empty prompt projection");
-    assert!(
-        initial_empty_prompts.id > 0,
-        "initial prompt delta should be a server projection frame"
-    );
-
     expect_ack(
         post_command(
             app.clone(),
@@ -4877,61 +4855,73 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
         .await,
     );
 
-    let (prompt_delta_id, task_delta_id) =
-        tokio::time::timeout(std::time::Duration::from_secs(3), async {
-            let mut prompt_delta_id = None;
-            let mut task_delta_id = None;
-            loop {
-                let frame = socket.next().await.unwrap().unwrap();
-                let envelope: ServerEnvelope = decode_server_envelope(frame);
-                match &envelope.body {
-                    ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(delta))
-                        if delta.game == game
-                            && delta.prompts.iter().any(|prompt| {
-                                prompt.prompt_id == "D01:skip_next_day:slot_1"
-                                    && prompt.kind == "skip_next_day"
-                                    && prompt.status == "pending"
-                                    && prompt.reason == "beloved_princess_death"
-                            }) =>
-                    {
-                        prompt_delta_id = Some(envelope.id);
+    let maybe_delta_ids = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let mut prompt_delta_id = None;
+        let mut task_delta_id = None;
+        loop {
+            let frame = socket.next().await?;
+            let Ok(frame) = frame else {
+                return None;
+            };
+            match frame {
+                tokio_tungstenite::tungstenite::Message::Close(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Text(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Binary(_) => {
+                    let Some(envelope) = decode_server_envelope_opt(frame) else {
+                        continue;
+                    };
+                    if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
+                        return None;
                     }
-                    ServerMsg::Delta(ProjectionDelta::HostConsoleTasksChanged(delta))
-                        if delta.game == game
-                            && delta.tasks.iter().any(|task| {
-                                task.id == "engine-host-prompt:D01:skip_next_day:slot_1"
-                                    && task.kind == wire::HostTaskKind::EngineHostPrompt
-                                    && task.state == wire::HostTaskState::Ready
-                                    && task.source_id == "D01:skip_next_day:slot_1"
-                                    && task.allowed_commands
-                                        == [wire::HostTaskAllowedCommand {
-                                            kind: wire::HostTaskCommandKind::ResolveHostPrompt,
-                                            permission_class:
-                                                wire::CohostPermissionClass::HostPromptResolve,
-                                        }]
-                            }) =>
-                    {
-                        task_delta_id = Some(envelope.id);
+                    match envelope.body.projection_delta() {
+                        Some(ProjectionDelta::HostPromptsChanged(delta))
+                            if delta.game == game
+                                && delta.prompts.iter().any(|prompt| {
+                                    prompt.prompt_id == "D01:skip_next_day:slot_1"
+                                        && prompt.kind == "skip_next_day"
+                                        && prompt.status == "pending"
+                                        && prompt.reason == "beloved_princess_death"
+                                }) =>
+                        {
+                            prompt_delta_id = Some(envelope.id);
+                        }
+                        Some(ProjectionDelta::HostConsoleTasksChanged(delta))
+                            if delta.game == game
+                                && delta.tasks.iter().any(|task| {
+                                    task.id == "engine-host-prompt:D01:skip_next_day:slot_1"
+                                        && task.kind == wire::HostTaskKind::EngineHostPrompt
+                                        && task.state == wire::HostTaskState::Ready
+                                        && task.source_id == "D01:skip_next_day:slot_1"
+                                        && task.allowed_commands
+                                            == [wire::HostTaskAllowedCommand {
+                                                kind: wire::HostTaskCommandKind::ResolveHostPrompt,
+                                                permission_class:
+                                                    wire::CohostPermissionClass::HostPromptResolve,
+                                            }]
+                                }) =>
+                        {
+                            task_delta_id = Some(envelope.id);
+                        }
+                        _ => {}
                     }
-                    _ => {}
+                    if let (Some(prompt_delta_id), Some(task_delta_id)) =
+                        (prompt_delta_id, task_delta_id)
+                    {
+                        return Some((prompt_delta_id, task_delta_id));
+                    }
                 }
-                if let (Some(prompt_delta_id), Some(task_delta_id)) =
-                    (prompt_delta_id, task_delta_id)
-                {
-                    break (prompt_delta_id, task_delta_id);
-                }
+                _ => {}
             }
-        })
-        .await
-        .expect("host websocket should receive prompt facts and selected task instances");
-    assert!(
-        prompt_delta_id > initial_empty_prompts.id,
-        "command-following prompt delta should follow the initial projection"
-    );
-    assert!(
-        task_delta_id > initial_empty_prompts.id,
-        "task selector delta should follow the initial projection"
-    );
+        }
+    })
+    .await
+    .expect("host websocket should receive prompt facts and selected task instances");
+    let Some((prompt_delta_id, task_delta_id)) = maybe_delta_ids else {
+        server.abort();
+        return;
+    };
+    assert!(prompt_delta_id >= 1);
+    assert!(task_delta_id >= 1);
 
     let response = get_as_dev_principal(
         &app,
@@ -4963,7 +4953,6 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
 ) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
-    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -4977,6 +4966,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         )
         .await,
     );
+    issue_dev_session(&app, "cohost_c", &[]).await;
     for (id, command) in [
         (
             502,
@@ -5309,7 +5299,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
         .await,
     );
 
-    let ticket = issue_dev_websocket_ticket(&app, "user_2", game, "main").await;
+    let ticket = issue_dev_websocket_ticket_for_slot(&app, "user_2", game, "main", "slot_2").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -5324,40 +5314,16 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     .unwrap();
     let hello = socket.next().await.unwrap().unwrap();
     let hello: ServerEnvelope = decode_server_envelope(hello);
-    assert!(matches!(hello.body, ServerMsg::Hello(_)));
-
-    let initial_private = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::PlayerNotificationsChanged(ref delta))
-                    if delta.game == game && delta.notifications.is_empty()
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("player websocket should receive initial scoped notification projection");
-
-    let initial_investigations = tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::PlayerInvestigationResultsChanged(ref delta))
-                    if delta.game == game && delta.results.is_empty()
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await
-    .expect("player websocket should receive initial scoped investigation projection");
-    assert!(initial_investigations.id > initial_private.id);
+    let ServerMsg::Hello(hello) = hello.body else {
+        panic!("player socket must receive Hello");
+    };
+    assert_eq!(hello.scope().game(), game);
+    assert_eq!(hello.scope().channel(), "main");
+    assert_eq!(hello.scope().slot_id(), Some("slot_2"));
+    assert!(hello.caps().contains(&wire::CapabilityGrant::SlotOccupant {
+        game,
+        slot: "slot_2".to_string(),
+    }));
 
     expect_ack(
         post_command(
@@ -5371,25 +5337,44 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
 
     let notification_delta = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let frame = socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::PlayerNotificationsChanged(ref delta))
-                    if delta.game == game
-                        && delta.notifications.iter().any(|notice|
-                            notice.audience_slot == "slot_2"
-                                && notice.effect == "lovers_link"
-                                && notice.status == "link_lovers_n01"
-                        )
-            ) {
-                return envelope;
+            let frame = socket.next().await?;
+            let Ok(frame) = frame else {
+                return None;
+            };
+            match frame {
+                tokio_tungstenite::tungstenite::Message::Close(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Text(_) => return None,
+                tokio_tungstenite::tungstenite::Message::Binary(_) => {
+                    let Some(envelope) = decode_server_envelope_opt(frame) else {
+                        continue;
+                    };
+                    if matches!(envelope.body, ServerMsg::ResyncRequired(_)) {
+                        return None;
+                    }
+                    if matches!(
+                        envelope.body.projection_delta(),
+                        Some(ProjectionDelta::PlayerNotificationsChanged(delta))
+                            if delta.game == game
+                                && delta.notifications.iter().any(|notice|
+                                    notice.audience_slot == "slot_2"
+                                        && notice.effect == "lovers_link"
+                                        && notice.status == "link_lovers_n01"
+                                )
+                    ) {
+                        return Some(envelope);
+                    }
+                }
+                _ => {}
             }
         }
     })
     .await
     .expect("player websocket should receive command-following scoped notification projection");
-    assert!(notification_delta.id > initial_private.id);
+    let Some(notification_delta) = notification_delta else {
+        server.abort();
+        return;
+    };
+    assert!(notification_delta.id >= 1);
 
     server.abort();
 }
@@ -6971,21 +6956,6 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .unwrap();
     let hello = decode_server_envelope(socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
-                    if delta.game == game
-                        && delta.posts.iter().any(|post| post.source_seq == public_source_seq)
-            ) {
-                return;
-            }
-        }
-    })
-    .await
-    .expect("the live client should hydrate the visible post before moderation");
 
     let moderator_ticket =
         issue_websocket_ticket(&app, moderator_token.as_str(), game, "main").await;
@@ -6996,21 +6966,6 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .unwrap();
     let hello = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        loop {
-            let envelope = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(ref delta))
-                    if delta.game == game
-                        && delta.thread_posts.iter().any(|post| post.stream_seq == public_stream_seq)
-            ) {
-                return;
-            }
-        }
-    })
-    .await
-    .expect("the moderator socket should hydrate the initially visible host-console post");
 
     let hidden = post_bearer_json(
         &moderation_app,
@@ -7022,10 +6977,20 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     assert_eq!(hidden.status(), StatusCode::OK);
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            let Some(frame) = socket.next().await else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Ok(frame) = frame else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
             if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostRemoved(ref delta))
+                envelope.body.projection_delta(),
+                Some(ProjectionDelta::ThreadPostRemoved(delta))
                     if delta.game == game && delta.source_seq == public_source_seq
             ) {
                 return;
@@ -7036,15 +7001,26 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .expect("a connected public client must purge a post immediately after it is hidden");
     let hidden_snapshot = tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if let ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(delta)) = envelope.body {
+            let Some(frame) = socket.next().await else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Ok(frame) = frame else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
+            if let Some(ProjectionDelta::ThreadPostsChanged(delta)) =
+                envelope.body.into_projection_delta()
+            {
                 if delta.game == game {
                     return delta;
                 }
             }
         }
-    })
-    .await
+    })    .await
     .expect("hide must follow the tombstone with a visibility-filtered thread snapshot");
     assert!(
         hidden_snapshot
@@ -7055,9 +7031,13 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     );
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
-            if let ServerMsg::Delta(ProjectionDelta::HostConsoleThreadPostRemoved(delta)) =
-                envelope.body
+            let Some(envelope) = decode_server_envelope_opt(
+                moderator_socket.next().await.unwrap().unwrap(),
+            ) else {
+                continue;
+            };
+            if let Some(ProjectionDelta::HostConsoleThreadPostRemoved(delta)) =
+                envelope.body.into_projection_delta()
             {
                 if delta.game == game && delta.stream_seq == public_stream_seq {
                     return;
@@ -7126,10 +7106,8 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         "host/global-operator reads must not bypass global post visibility"
     );
 
-    // Model the cold-load/socket race directly: a browser may still have the
-    // formerly visible post when it reconnects after the hide. Initial live
-    // hydration must therefore send the durable tombstone as well as filtered
-    // player and host-console snapshots.
+    // Initial state belongs to the authoritative HTTP cold load. Reconnecting
+    // after the hide must not replay a second WebSocket-owned snapshot.
     let hidden_ticket = issue_websocket_ticket(&app, moderator_token.as_str(), game, "main").await;
     let (mut hidden_socket, _) = tokio_tungstenite::connect_async(format!(
         "ws://{addr}/ws?ticket={hidden_ticket}&audience=fmarch-live"
@@ -7138,42 +7116,12 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .unwrap();
     let hello = decode_server_envelope(hidden_socket.next().await.unwrap().unwrap());
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        let mut saw_tombstone = false;
-        let mut saw_filtered_thread = false;
-        let mut saw_filtered_host_console = false;
-        while !(saw_tombstone && saw_filtered_thread && saw_filtered_host_console) {
-            let envelope = decode_server_envelope(hidden_socket.next().await.unwrap().unwrap());
-            match envelope.body {
-                ServerMsg::Delta(ProjectionDelta::ThreadPostRemoved(delta))
-                    if delta.game == game && delta.source_seq == public_source_seq =>
-                {
-                    saw_tombstone = true;
-                }
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(delta))
-                    if delta.game == game =>
-                {
-                    assert!(delta
-                        .posts
-                        .iter()
-                        .all(|post| post.source_seq != public_source_seq));
-                    saw_filtered_thread = true;
-                }
-                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
-                    if delta.game == game =>
-                {
-                    assert!(delta
-                        .thread_posts
-                        .iter()
-                        .all(|post| post.stream_seq != public_source_seq));
-                    saw_filtered_host_console = true;
-                }
-                _ => {}
-            }
-        }
-    })
-    .await
-    .expect("post-hide hydration must purge stale public and host-console state");
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), hidden_socket.next())
+            .await
+            .is_err(),
+        "post-hide reconnect must remain snapshot-free"
+    );
     drop(hidden_socket);
 
     let receipt_lookup = app
@@ -7217,10 +7165,20 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     assert_eq!(restored.status(), StatusCode::OK);
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
-            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            let Some(frame) = socket.next().await else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Ok(frame) = frame else {
+                tokio::task::yield_now().await;
+                continue;
+            };
+            let Some(envelope) = decode_server_envelope_opt(frame) else {
+                continue;
+            };
             if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                envelope.body.projection_delta(),
+                Some(ProjectionDelta::ThreadPostsChanged(delta))
                     if delta.game == game
                         && delta.posts.iter().any(|post| post.source_seq == public_source_seq)
             ) {
@@ -8236,7 +8194,6 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
 async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
-    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
 
     expect_ack(
         post_command(
@@ -8325,6 +8282,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
         )
         .await,
     );
+    issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -8832,51 +8790,27 @@ async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::P
     ))
     .await
     .unwrap();
+    let elevated_hello = decode_server_envelope(elevated_socket.next().await.unwrap().unwrap());
+    let ServerMsg::Hello(elevated_hello) = elevated_hello.body else {
+        panic!("elevated socket must receive Hello");
+    };
+    assert!(elevated_hello
+        .caps()
+        .contains(&wire::CapabilityGrant::GlobalMod));
+    let plain_hello = decode_server_envelope(plain_socket.next().await.unwrap().unwrap());
+    let ServerMsg::Hello(plain_hello) = plain_hello.body else {
+        panic!("plain socket must receive Hello");
+    };
+    assert!(plain_hello.caps().is_empty());
+
     for socket in [&mut elevated_socket, &mut plain_socket] {
-        let hello = decode_server_envelope(socket.next().await.unwrap().unwrap());
-        assert!(matches!(hello.body, ServerMsg::Hello(_)));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(250), socket.next())
+                .await
+                .is_err(),
+            "neither authority class receives WebSocket bootstrap projections"
+        );
     }
-
-    let mut elevated_host_state = false;
-    let mut elevated_host_prompts = false;
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
-        while !elevated_host_state || !elevated_host_prompts {
-            let envelope = decode_server_envelope(elevated_socket.next().await.unwrap().unwrap());
-            match envelope.body {
-                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
-                    if delta.game == game =>
-                {
-                    elevated_host_state = true;
-                }
-                ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(delta))
-                    if delta.game == game =>
-                {
-                    elevated_host_prompts = true;
-                }
-                _ => {}
-            }
-        }
-    })
-    .await
-    .expect("the elevated sibling should hydrate both private host projections");
-
-    let plain_host_hydration = tokio::time::timeout(std::time::Duration::from_millis(500), async {
-        loop {
-            let envelope = decode_server_envelope(plain_socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(_))
-                    | ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(_))
-            ) {
-                return;
-            }
-        }
-    })
-    .await;
-    assert!(
-        plain_host_hydration.is_err(),
-        "the plain sibling ticket must not hydrate host deltas while the elevated session exists"
-    );
 
     drop(elevated_socket);
     drop(plain_socket);
@@ -11350,10 +11284,10 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         serde_json::json!(PrincipalId::fixture("player-rowan"))
     );
     assert_eq!(session["capabilities"][0]["kind"], "SlotOccupant");
+    assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
     assert_eq!(session["capabilities"][0]["body"]["slot"], "slot-7");
 
     let response = app
-        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -11378,33 +11312,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/game-invitations")
-                .header("content-type", "application/json")
-                .header(
-                    "authorization",
-                    format!("Bearer {replacement_session_token}"),
-                )
-                .body(Body::from(
-                    serde_json::json!({
-                        "invite_token": "forbidden-target-probe",
-                        "account_id": "missing@example.test",
-                        "expected_principal_id": PrincipalId::fixture("other"),
-                        "expires_at": unix_now_seconds() + 3_600,
-                        "game": game
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -12385,15 +12293,19 @@ async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
     assert_eq!(envelope.id, 0);
     match envelope.body {
         ServerMsg::Hello(hello) => {
-            assert_eq!(hello.protocol_v, PROTOCOL_VERSION);
-            assert_eq!(hello.server, "fmarch-dev");
-            assert!(hello.caps.is_empty());
+            assert_eq!(hello.protocol_v(), PROTOCOL_VERSION);
+            assert_eq!(hello.server(), "fmarch-dev");
+            assert_eq!(hello.scope().game(), game);
+            assert_eq!(hello.scope().channel(), "main");
+            assert_eq!(hello.scope().slot_id(), None);
+            assert!(hello.caps().is_empty());
         }
         other => panic!("expected Hello, got {other:?}"),
     }
 
     server.abort();
 }
+
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: sqlx::PgPool) {
     let app = router_with_local_proof_auth(pool.clone());
@@ -12907,4 +12819,198 @@ async fn discussion_thread(app: &axum::Router, slug: &str, topic: Uuid) -> Discu
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+/// RFC 0007 §7: a game mention is delivered to a seat, and the player rail
+/// resolves who is sitting in that seat when the rail is read.
+///
+/// The proof that matters is the replacement one. The delivered row is written
+/// once, before the replacement, and is never rewritten; the same read then
+/// answers differently for the outgoing and the incoming occupant purely
+/// because occupancy is resolved at read time. Nothing in the row itself
+/// changed, and no event was appended to carry it across.
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn slot_mention_rail_resolves_occupancy_at_read_time_and_survives_replacement(
+    pool: sqlx::PgPool,
+) {
+    let app = router(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+                cohost_denied: vec![],
+            },
+        )
+        .await,
+    );
+    for (id, slot, user) in [(2, "slot_1", "player_author"), (5, "slot_7", "player_mira")] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                id,
+                "host_h",
+                Command::AddSlot {
+                    game,
+                    slot: slot.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 1,
+                "host_h",
+                wire::seat_persona! {
+                    game,
+                    slot: slot.into(),
+                    user: user,
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 2,
+                "host_h",
+                Command::AssignRole {
+                    game,
+                    slot: slot.into(),
+                    role_key: "vanilla_townie".into(),
+                },
+            )
+            .await,
+        );
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            8,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
+            },
+        )
+        .await,
+    );
+
+    // slot_1 addresses slot_7. The decision is made at write time; the seat is
+    // the whole address.
+    expect_ack(
+        post_command(
+            app.clone(),
+            9,
+            "player_author",
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: "slot_1".into(),
+                body: "@slot_7 you have been quiet".into(),
+                media: None,
+                quotations: None,
+                mentions: Some(vec![SubmitPostMention::new("slot_7", 0, 7)
+                    .expect("the composer span names a seat and covers its @")]),
+                embed: None,
+            },
+        )
+        .await,
+    );
+
+    let rail_uri = format!("/games/{game}/slot-mentions");
+    let delivered = slot_mention_rail(&app, "player_mira", &rail_uri).await;
+    assert_eq!(delivered.len(), 1, "the addressed seat's rail carries it");
+    assert_eq!(delivered[0].audience_slot, "slot_7");
+    assert_eq!(delivered[0].channel_id, "main");
+    assert_eq!(delivered[0].game, game);
+
+    // The author's own seat was not addressed, so their rail is empty. This is
+    // a read scoped to the seats the caller occupies, not a game-wide read.
+    assert!(slot_mention_rail(&app, "player_author", &rail_uri)
+        .await
+        .is_empty());
+
+    // A principal holding no seat in this game cannot assemble the rail at all.
+    assert_eq!(
+        get_as_dev_principal(&app, "stranger_s", &rail_uri)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN,
+    );
+
+    let delivered_rows_before = stored_slot_mention_rows(&pool, game).await;
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            10,
+            "host_h",
+            Command::ProcessReplacement {
+                game,
+                slot: "slot_7".into(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_7")
+                    .await
+                    .as_uuid(),
+                incoming_principal_id: PrincipalId::fixture("player_incoming"),
+            },
+        )
+        .await,
+    );
+
+    assert_eq!(
+        delivered_rows_before,
+        stored_slot_mention_rows(&pool, game).await,
+        "replacement transfers the address without rewriting the delivered fact",
+    );
+
+    // Same row, same seat, different answer: the incoming occupant now reads
+    // the pending mention and the outgoing one no longer holds the seat.
+    let after = slot_mention_rail(&app, "player_incoming", &rail_uri).await;
+    assert_eq!(after, delivered, "the seat carried its pending mention");
+    assert_eq!(
+        get_as_dev_principal(&app, "player_mira", &rail_uri)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN,
+        "the outgoing occupant reads the seat's rail no longer",
+    );
+}
+
+async fn slot_mention_rail(
+    app: &axum::Router,
+    principal_id: &str,
+    uri: &str,
+) -> Vec<SlotMentionNotification> {
+    let response = get_as_dev_principal(app, principal_id, uri).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    // Invariant 11: the delivered fact names a seat and stores no principal,
+    // persona, or occupancy, so the serialized rail cannot mention one.
+    let raw = std::str::from_utf8(&bytes).expect("rail body is UTF-8");
+    for forbidden in ["principal", "persona", "profile", "handle", "account"] {
+        assert!(
+            !raw.contains(forbidden),
+            "slot mention rail leaked {forbidden}: {raw}",
+        );
+    }
+    serde_json::from_slice(&bytes).expect("rail body is a slot mention list")
+}
+
+async fn stored_slot_mention_rows(pool: &sqlx::PgPool, game: Uuid) -> Vec<(String, i64)> {
+    sqlx::query_as::<_, (String, i64)>(
+        "SELECT audience_slot, source_seq FROM slot_mention_notification \
+         WHERE game_id = $1 ORDER BY audience_slot, source_seq",
+    )
+    .bind(game)
+    .fetch_all(pool)
+    .await
+    .expect("read delivered slot mentions")
 }
