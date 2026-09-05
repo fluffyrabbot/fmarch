@@ -53,6 +53,7 @@ test("gameplay proxy owns browser projection reads outside the page namespace", 
     "votecount",
     "day-vote-outcomes",
     "endgame-summary",
+    "slot-mentions",
   ]) {
     const calls = [];
     const request = new Request(

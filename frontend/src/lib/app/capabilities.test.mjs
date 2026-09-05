@@ -76,3 +76,15 @@ test("role surface access is explicit and scoped", () => {
     "SpectatorOf(midsummer)",
   );
 });
+
+test("slot and channel authority require complete game-scoped identity", () => {
+  assert.deepEqual(
+    normalizeCapabilities([
+      { kind: "SlotOccupant", slot: "slot-7" },
+      { kind: "SlotOccupant", game: "midsummer" },
+      { kind: "ChannelMember", channel: "main" },
+      { kind: "ChannelMember", game: "midsummer" },
+    ]),
+    [],
+  );
+});

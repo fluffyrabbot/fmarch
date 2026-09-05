@@ -4,7 +4,7 @@ import { load } from "./+page.server.js";
 
 test("player channel route loads an allowed role PM channel", async () => {
   const seen = [];
-  const data = await load({
+  const data = await withFixtureMode(() => load({
     params: { game: "midsummer", channel: "private:role_pm:slot-7" },
     locals: {
       principalId: "player_mira",
@@ -16,7 +16,7 @@ test("player channel route loads an allowed role PM channel", async () => {
       seen.push(url);
       return { ok: false };
     },
-  });
+  }));
 
   assert.equal(data.shell.activeSurface, "player");
   assert.equal(data.shellOwner, "layout");
@@ -25,10 +25,7 @@ test("player channel route loads an allowed role PM channel", async () => {
   assert.deepEqual(data.channels.map((channel) => [channel.id, channel.active]), [
     ["private:role_pm:slot-7", true],
   ]);
-  assert.equal(
-    seen[0],
-    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
-  );
+  assert.deepEqual(seen, []);
 });
 
 test("player channel route rejects missing channel capability", async () => {
@@ -107,7 +104,7 @@ test("player channel route distinguishes unsupported channels", async () => {
 });
 
 test("player dead channel accepts dead-viewer capability", async () => {
-  const data = await load({
+  const data = await withFixtureMode(() => load({
     params: { game: "midsummer", channel: "dead" },
     locals: {
       principalId: "dead_reader",
@@ -116,7 +113,7 @@ test("player dead channel accepts dead-viewer capability", async () => {
       ],
     },
     fetch: async () => ({ ok: false }),
-  });
+  }));
 
   assert.equal(data.access.capabilityLabel, "DeadViewer(midsummer)");
   assert.equal(data.shellOwner, "layout");
@@ -124,3 +121,40 @@ test("player dead channel accepts dead-viewer capability", async () => {
     ["dead", true],
   ]);
 });
+
+test("an allowed private channel fails closed when its projection is unavailable", async () => {
+  await assert.rejects(
+    load({
+      params: { game: "midsummer", channel: "private:role_pm:slot-7" },
+      locals: {
+        principalId: "player_mira",
+        resolvedCapabilities: [
+          { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
+        ],
+      },
+      cookies: { get: () => "session-token", delete() {} },
+      fetch: async () => ({
+        ok: false,
+        status: 503,
+        headers: new Headers(),
+      }),
+    }),
+    (failure) =>
+      failure.status === 503 &&
+      failure.body.message === "Game channel is temporarily unavailable.",
+  );
+});
+
+async function withFixtureMode(operation) {
+  const previous = process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+  process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+    } else {
+      process.env.FMARCH_FRONTEND_FIXTURE_SESSION = previous;
+    }
+  }
+}

@@ -1,18 +1,25 @@
 import { sequence } from "@sveltejs/kit/hooks";
+import { error } from "@sveltejs/kit";
 import {
   rotateAuthenticatedBrowserSession,
   resolveAuthenticatedSession,
-  resolveAuthenticatedSessionCached,
+  sessionContextFromRequest,
 } from "./lib/server/session-capabilities.mjs";
+import { frontendFixtureMode } from "./lib/server/runtime-mode.mjs";
+
+// Fail the adapter at startup instead of ever serving fixture authority from a
+// production process.
+frontendFixtureMode();
 
 // The backend-owned app session in the fmarch_session cookie is the only
 // per-request identity for the application itself.
 export async function fmarchIdentityHandle({ event, resolve }) {
-  let session = await resolveAuthenticatedSessionCached({
+  let resolution = await resolveAuthenticatedSession({
     cookies: event.cookies,
     fetchImpl: event.fetch,
     request: event.request,
   });
+  let session = sessionFromResolution(resolution, event.cookies);
 
   if (session.rotationRequired) {
     const rotation = await rotateAuthenticatedBrowserSession({
@@ -21,11 +28,12 @@ export async function fmarchIdentityHandle({ event, resolve }) {
       request: event.request,
     });
     if (rotation.status === "rotated") {
-      session = await resolveAuthenticatedSession({
+      resolution = await resolveAuthenticatedSession({
         cookies: event.cookies,
         fetchImpl: event.fetch,
         request: event.request,
       });
+      session = sessionFromResolution(resolution, event.cookies);
     } else if (rotation.status === "stale") {
       event.cookies.delete("fmarch_session", { path: "/" });
       session = {
@@ -33,6 +41,18 @@ export async function fmarchIdentityHandle({ event, resolve }) {
         rotationRequired: false,
         resolvedCapabilities: [],
       };
+    } else if (sessionContextFromRequest(event.request)?.kind === "optional_public") {
+      // A public route must not become unavailable merely because rotating an
+      // otherwise valid browser session failed. Retain the cookie so a later
+      // request can recover, but strip all identity and authority for this
+      // response.
+      session = {
+        principalId: null,
+        rotationRequired: false,
+        resolvedCapabilities: [],
+      };
+    } else {
+      throw error(503, "Identity session rotation is temporarily unavailable.");
     }
   }
 
@@ -41,6 +61,23 @@ export async function fmarchIdentityHandle({ event, resolve }) {
   event.locals.resolvedCapabilities = session.resolvedCapabilities;
 
   return resolve(event);
+}
+
+function sessionFromResolution(resolution, cookies) {
+  switch (resolution?.kind) {
+    case "authenticated":
+    case "anonymous":
+      return resolution.session;
+    case "stale":
+      cookies?.delete?.("fmarch_session", { path: "/" });
+      return resolution.session;
+    case "invalid_response":
+      throw error(502, "Identity service returned an invalid response.");
+    case "unavailable":
+      throw error(503, "Identity service is temporarily unavailable.");
+    default:
+      throw error(502, "Identity session could not be resolved safely.");
+  }
 }
 
 export async function securityHeadersHandle({ event, resolve }) {

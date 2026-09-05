@@ -587,7 +587,27 @@ function frontendSetupWorkbenchReadinessSummarySections(readiness) {
           values: [
             { id: "viewport", text: layout.viewport, emphasized: true },
             { id: "layout", text: layout.layout },
-            { id: "slotCount", text: `${layout.slotCount} slots` },
+            { id: "workflowMode", text: layout.workflowMode },
+            { id: "stageIds", text: layout.stageIds.join(" → ") },
+            {
+              id: "defaultSelectedStageId",
+              text: layout.defaultSelectedStageId,
+            },
+            { id: "correctedStageId", text: layout.correctedStageId },
+            {
+              id: "correctionTargets",
+              text: layout.correctionTargets
+                .map((target) => `${target.checkId} → ${target.stageId}`)
+                .join("; "),
+            },
+            {
+              id: "rosterCardCount",
+              text: `${layout.rosterCardCount} roster cards`,
+            },
+            {
+              id: "roleCardCount",
+              text: `${layout.roleCardCount} role cards`,
+            },
             {
               id: "noHorizontalOverflow",
               text: layout.noHorizontalOverflow
@@ -6270,7 +6290,28 @@ function normalizeFrontendSetupWorkbenchReadiness(workbench) {
             Object.freeze({
               viewport: String(entry.viewport ?? ""),
               layout: String(entry.layout ?? ""),
-              slotCount: Number(entry.slotCount ?? 0),
+              workflowMode: String(entry.workflowMode ?? ""),
+              stageIds: Object.freeze(
+                Array.isArray(entry.stageIds)
+                  ? entry.stageIds.map((stageId) => String(stageId))
+                  : [],
+              ),
+              defaultSelectedStageId: String(
+                entry.defaultSelectedStageId ?? "",
+              ),
+              correctedStageId: String(entry.correctedStageId ?? ""),
+              correctionTargets: Object.freeze(
+                Array.isArray(entry.correctionTargets)
+                  ? entry.correctionTargets.map((target) =>
+                      Object.freeze({
+                        checkId: String(target?.checkId ?? ""),
+                        stageId: String(target?.stageId ?? ""),
+                      }),
+                    )
+                  : [],
+              ),
+              rosterCardCount: Number(entry.rosterCardCount ?? 0),
+              roleCardCount: Number(entry.roleCardCount ?? 0),
               noHorizontalOverflow: entry.noHorizontalOverflow === true,
               screenshot: String(entry.screenshot ?? ""),
             }),

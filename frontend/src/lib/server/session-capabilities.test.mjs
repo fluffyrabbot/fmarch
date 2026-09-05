@@ -7,7 +7,7 @@ import {
   accessTokenForRequest,
   authenticatedApiFetch,
   hostGameFromRequest,
-  resolveAuthenticatedSession,
+  resolveAuthenticatedSession as resolveAuthenticatedSessionResult,
   resolveFixtureSession,
   sessionContextFromRequest,
 } from "./session-capabilities.mjs";
@@ -16,6 +16,10 @@ const HOST_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
 const MEMBER_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000002";
 const PLAYER_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000003";
 const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
+
+async function resolveAuthenticatedSession(options) {
+  return (await resolveAuthenticatedSessionResult(options)).session;
+}
 
 test("the fmarch_session cookie is the only per-request bearer", async () => {
   const cookies = cookieJar("fmss_app-session-token");
@@ -51,7 +55,13 @@ test("opaque session cookie resolves principal and scoped host capabilities thro
             kind: "HostOf",
             body: { game: "00000000-0000-0000-0000-000000000001" },
           },
-          { kind: "SlotOccupant", body: { slot: "slot_1" } },
+          {
+            kind: "SlotOccupant",
+            body: {
+              game: "00000000-0000-0000-0000-000000000001",
+              slot: "slot_1",
+            },
+          },
         ],
       });
     },
@@ -78,10 +88,10 @@ test("opaque session cookie resolves principal and scoped host capabilities thro
   ]);
 });
 
-test("session may carry an explicit viewer profile without treating it as authority", async () => {
-  const session = await resolveAuthenticatedSession({
+test("session rejects response fields that are absent from the canonical Rust contract", async () => {
+  const resolution = await resolveAuthenticatedSessionResult({
     cookies: cookieJar("opaque-token"),
-    request: requestFor("/community"),
+    request: requestFor("/admin"),
     env: {},
     fetchImpl: async () => jsonResponse({
       principal_id: MEMBER_PRINCIPAL_ID,
@@ -90,12 +100,27 @@ test("session may carry an explicit viewer profile without treating it as author
     }),
   });
 
-  assert.equal(session.principalId, MEMBER_PRINCIPAL_ID);
-  assert.deepEqual(session.viewerProfile, {
-    handle: "mira-r",
-    displayName: "Mira Rowan",
-    href: "/u/mira-r",
+  assert.equal(resolution.kind, "invalid_response");
+  assert.deepEqual(resolution.session, {
+    principalId: null,
+    resolvedCapabilities: [],
   });
+});
+
+test("unvalidated capability aliases cannot smuggle global authority", async () => {
+  const resolution = await resolveAuthenticatedSessionResult({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/admin"),
+    env: {},
+    fetchImpl: async () => jsonResponse({
+      principal_id: MEMBER_PRINCIPAL_ID,
+      capabilities: [],
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    }),
+  });
+
+  assert.equal(resolution.kind, "invalid_response");
+  assert.deepEqual(resolution.session.resolvedCapabilities, []);
 });
 
 test("legacy user-shaped session payloads cannot establish browser authority", async () => {
@@ -195,22 +220,22 @@ test("session context covers game, public search, moderation, community, admin, 
     kind: "admin",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/community")), {
-    kind: "community",
+    kind: "optional_public",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/discussions/general")), {
-    kind: "community",
+    kind: "optional_public",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/search?q=mafia")), {
-    kind: "community",
+    kind: "optional_public",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/games/demo")), {
-    kind: "community",
+    kind: "optional_public",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/moderation?status=open")), {
-    kind: "community",
+    kind: "authority",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/inbox")), {
-    kind: "community",
+    kind: "authority",
   });
   assert.deepEqual(sessionContextFromRequest(requestFor("/auth/account/security")), {
     kind: "account",
@@ -218,7 +243,30 @@ test("session context covers game, public search, moderation, community, admin, 
   assert.deepEqual(sessionContextFromRequest(requestFor("/auth/logout")), {
     kind: "account",
   });
-  assert.equal(sessionContextFromRequest(requestFor("/")), null);
+  assert.deepEqual(sessionContextFromRequest(requestFor("/")), {
+    kind: "optional_public",
+  });
+});
+
+test("optional public identity degrades anonymously without deleting its session", async () => {
+  const resolution = await resolveAuthenticatedSessionResult({
+    cookies: cookieJar("still-valid-after-outage"),
+    request: requestFor("/"),
+    env: {},
+    fetchImpl: async () => ({
+      ok: false,
+      status: 503,
+      headers: new Headers({ "retry-after": "3" }),
+    }),
+  });
+
+  assert.equal(resolution.kind, "anonymous");
+  assert.equal(resolution.status, 503);
+  assert.equal(resolution.retryAfterSeconds, 3);
+  assert.deepEqual(resolution.session, {
+    principalId: null,
+    resolvedCapabilities: [],
+  });
 });
 
 test("account-security route resolves the active opaque session", async () => {
@@ -425,6 +473,8 @@ function requestFor(pathname) {
 function jsonResponse(body) {
   return {
     ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return body;
     },
@@ -480,128 +530,60 @@ test("session resolution passes an abort signal from the SSR fetch budget", asyn
   assert.ok(observed[0].signal instanceof AbortSignal);
 });
 
-test("cached non-game session resolution reuses a live entry and refetches after the TTL", async () => {
-  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
-    "./session-capabilities.mjs"
-  );
-  clearSessionCache();
+test("session resolution never caches mutable authority or outages", async () => {
   let fetches = 0;
-  let clock = 1_000;
   const args = {
-    cookies: cookieJar("cache-token"),
+    cookies: cookieJar("fresh-authority-token"),
     request: requestFor("/admin"),
     env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
     fetchImpl: async () => {
       fetches += 1;
-      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
-    },
-    now: () => clock,
-  };
-
-  const first = await resolveAuthenticatedSessionCached(args);
-  const second = await resolveAuthenticatedSessionCached(args);
-  assert.equal(fetches, 1);
-  assert.equal(first, second);
-  assert.equal(second.principalId, HOST_PRINCIPAL_ID);
-
-  clock += 30_001;
-  await resolveAuthenticatedSessionCached(args);
-  assert.equal(fetches, 2);
-  clearSessionCache();
-});
-
-test("game-scoped session resolution never caches mutable capabilities", async () => {
-  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
-    "./session-capabilities.mjs"
-  );
-  clearSessionCache();
-  let fetches = 0;
-  const args = {
-    cookies: cookieJar("game-capability-token"),
-    request: requestFor("/g/game-1"),
-    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
-    fetchImpl: async () => {
-      fetches += 1;
-      return jsonResponse({
-        principal_id: PLAYER_PRINCIPAL_ID,
-        capabilities: fetches === 1
-          ? [{ kind: "SlotOccupant", body: { slot: "slot-1" } }]
-          : [
-              { kind: "SlotOccupant", body: { slot: "slot-1" } },
-              { kind: "ChannelMember", body: { channel: "private:event:event-1" } },
-            ],
-      });
-    },
-    now: () => 1_000,
-  };
-
-  const first = await resolveAuthenticatedSessionCached(args);
-  const second = await resolveAuthenticatedSessionCached(args);
-  assert.equal(fetches, 2);
-  assert.equal(first.resolvedCapabilities.length, 1);
-  assert.equal(second.resolvedCapabilities.length, 2);
-  clearSessionCache();
-});
-
-test("cached session resolution never caches empty or rotation-required sessions", async () => {
-  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
-    "./session-capabilities.mjs"
-  );
-  clearSessionCache();
-  let fetches = 0;
-  const emptyArgs = {
-    cookies: cookieJar("missing-token"),
-    request: requestFor("/g/game-1/host"),
-    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
-    fetchImpl: async () => {
-      fetches += 1;
-      return { ok: false, status: 401, async json() { return {}; } };
-    },
-    now: () => 1_000,
-  };
-  await resolveAuthenticatedSessionCached(emptyArgs);
-  await resolveAuthenticatedSessionCached(emptyArgs);
-  assert.equal(fetches, 2);
-
-  fetches = 0;
-  const rotationArgs = {
-    ...emptyArgs,
-    cookies: cookieJar("rotation-token"),
-    fetchImpl: async () => {
-      fetches += 1;
       return jsonResponse({
         principal_id: HOST_PRINCIPAL_ID,
-        rotation_required: true,
-        capabilities: [],
+        capabilities: fetches === 1 ? [{ kind: "GlobalAdmin" }] : [],
       });
     },
   };
-  await resolveAuthenticatedSessionCached(rotationArgs);
-  await resolveAuthenticatedSessionCached(rotationArgs);
+
+  const first = await resolveAuthenticatedSessionResult(args);
+  const second = await resolveAuthenticatedSessionResult(args);
   assert.equal(fetches, 2);
-  clearSessionCache();
+  assert.equal(first.kind, "authenticated");
+  assert.deepEqual(first.session.resolvedCapabilities.map(({ kind }) => kind), [
+    "GlobalAdmin",
+  ]);
+  assert.equal(second.kind, "authenticated");
+  assert.deepEqual(second.session.resolvedCapabilities, []);
 });
 
-test("cached session resolution can be disabled with a zero TTL", async () => {
-  const { resolveAuthenticatedSessionCached, clearSessionCache } = await import(
-    "./session-capabilities.mjs"
-  );
-  clearSessionCache();
-  let fetches = 0;
-  const args = {
-    cookies: cookieJar("no-cache-token"),
-    request: requestFor("/g/game-1/host"),
-    env: {
-      FMARCH_API_BASE_URL: "http://127.0.0.1:4017/",
-      FMARCH_SESSION_CACHE_TTL_MS: "0",
-    },
-    fetchImpl: async () => {
-      fetches += 1;
-      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
-    },
-    now: () => 1_000,
+test("session resolution preserves actionable trust-boundary failures", async () => {
+  const base = {
+    cookies: cookieJar("authority-token"),
+    request: requestFor("/admin"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
   };
-  await resolveAuthenticatedSessionCached(args);
-  await resolveAuthenticatedSessionCached(args);
-  assert.equal(fetches, 2);
+  const stale = await resolveAuthenticatedSessionResult({
+    ...base,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      headers: new Headers(),
+    }),
+  });
+  const unavailable = await resolveAuthenticatedSessionResult({
+    ...base,
+    fetchImpl: async () => {
+      throw new Error("network down");
+    },
+  });
+  const invalid = await resolveAuthenticatedSessionResult({
+    ...base,
+    fetchImpl: async () => jsonResponse({ principal_id: "not-a-principal" }),
+  });
+  assert.equal(stale.kind, "stale");
+  assert.equal(unavailable.kind, "unavailable");
+  assert.equal(invalid.kind, "invalid_response");
+  assert.equal(stale.session.principalId, null);
+  assert.equal(unavailable.session.principalId, null);
+  assert.equal(invalid.session.principalId, null);
 });

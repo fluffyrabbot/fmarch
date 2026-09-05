@@ -8,8 +8,6 @@ import {
   hostPromptsUrl,
   identityLifecycleAuditUrl,
   loadAdminColdData,
-  loadHostColdData,
-  loadPlayerColdData,
   normalizeDayVoteOutcomes,
   normalizeEndgameSummary,
   normalizeHostPrompts,
@@ -164,31 +162,6 @@ test("cold-load URLs keep the public main thread and private channel boundaries 
       `${url} must derive its principal exclusively from the authenticated session`,
     );
   }
-});
-
-test("player cold-load uses channel-scoped thread endpoint for private channel routes", async () => {
-  const seen = [];
-  await loadPlayerColdData({
-    game: "midsummer",
-    activeChannel: "private:role_pm:slot-7",
-    principalId: "player_mira",
-    actorSlot: "slot-7",
-    fallback: FALLBACK,
-    fetchImpl: async (url) => {
-      seen.push(url);
-      return { ok: false };
-    },
-  });
-
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/endgame-summary",
-    "/api/gameplay/games/midsummer/notifications",
-    "/api/gameplay/games/midsummer/investigation-results",
-    "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
-  ]);
 });
 
 test("normalizes thread and votecount projection payloads for the player view", () => {
@@ -412,82 +385,6 @@ test("normalizes live and cold thread posts through the same media contract", ()
   );
 });
 
-test("player cold-load fetches real endpoints and falls back per endpoint", async () => {
-  const seen = [];
-  const data = await loadPlayerColdData({
-    game: "midsummer",
-    principalId: "player_mira",
-    actorSlot: "slot_4",
-    fallback: FALLBACK,
-    fetchImpl: async (url) => {
-      seen.push(url);
-      if (url === "/api/gameplay/games/midsummer?limit=50") {
-        return jsonResponse({
-          next_before_seq: null,
-          posts: [{ source_seq: 1, body: "hello", occurred_at: 1781928000 }],
-        });
-      }
-      if (url.includes("/player-command-state")) {
-        return jsonResponse({
-          game: "midsummer",
-          actor_slot: "slot_4",
-          actor_alive: true,
-          actor_status: "alive",
-          role_key: "mafia_goon",
-          phase: {
-            phase_id: "N01",
-            locked: false,
-          },
-          actions: [
-            {
-              template_id: "factional_kill",
-              ability: "Kill",
-              window: "Night",
-              targets: ["slot-2"],
-              target_options: ["slot-2", "slot-3"],
-              label: "Submit factional kill",
-            },
-          ],
-          vote_targets: [
-            { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
-            { kind: "no_lynch", slot_id: null, label: "No lynch" },
-          ],
-          current_vote: { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
-          boundary: "live role actions",
-        });
-      }
-      return { ok: false };
-    },
-  });
-
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer?limit=50",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/endgame-summary",
-    "/api/gameplay/games/midsummer/notifications",
-    "/api/gameplay/games/midsummer/investigation-results",
-    "/api/gameplay/games/midsummer/player-command-state?slot_id=slot_4",
-  ]);
-  assert.equal(data.thread.posts[0].body, "hello");
-  assert.deepEqual(data.votecount, FALLBACK.votecount);
-  assert.deepEqual(data.dayVoteOutcomes, FALLBACK.dayVoteOutcomes);
-  assert.equal(data.commandState.phase.phaseId, "N01");
-  assert.equal(data.commandState.actorAlive, true);
-  assert.equal(data.commandState.actorStatus, "alive");
-  assert.equal(data.commandState.actions[0].templateId, "factional_kill");
-  assert.deepEqual(data.commandState.actions[0].targets, ["slot-2"]);
-  assert.deepEqual(data.commandState.voteTargets, [
-    { kind: "slot", slotId: "slot-2", label: "Slot 2" },
-    { kind: "no_lynch", slotId: null, label: "No lynch" },
-  ]);
-  assert.deepEqual(data.commandState.currentVote, {
-    kind: "slot",
-    slotId: "slot-2",
-    label: "Slot 2",
-  });
-});
-
 test("normalizes player command state into route action configs", () => {
   assert.deepEqual(
     normalizePlayerCommandState(
@@ -624,57 +521,6 @@ test("normalizes player command state into route action configs", () => {
   );
 });
 
-test("player cold-load skips private scoped endpoints without a principal", async () => {
-  const seen = [];
-  const data = await loadPlayerColdData({
-    game: "midsummer",
-    principalId: null,
-    fallback: FALLBACK,
-    fetchImpl: async (url) => {
-      seen.push(url);
-      return { ok: false };
-    },
-  });
-
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer?limit=50",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/endgame-summary",
-  ]);
-  assert.deepEqual(data.notifications, []);
-  assert.deepEqual(data.investigationResults, []);
-  assert.deepEqual(data.dayVoteOutcomes, []);
-});
-
-test("player cold-load skips player-private endpoints without an actor slot", async () => {
-  const seen = [];
-  const data = await loadPlayerColdData({
-    game: "midsummer",
-    activeChannel: "spectator",
-    principalId: "spectator_s",
-    actorSlot: null,
-    fallback: {
-      ...FALLBACK,
-      notifications: [],
-      investigationResults: [],
-    },
-    fetchImpl: async (url) => {
-      seen.push(url);
-      return { ok: false };
-    },
-  });
-
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer/channels/spectator/thread?limit=50",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/endgame-summary",
-  ]);
-  assert.deepEqual(data.notifications, []);
-  assert.deepEqual(data.investigationResults, []);
-});
-
 test("admin cold-load maps operator proof status when available", async () => {
   const data = await loadAdminColdData({
     game: "midsummer",
@@ -794,101 +640,6 @@ test("admin identity lifecycle reads are restricted to canonical principal UUIDs
     () => adminIdentityLifecycleAuditHref({ game: "midsummer", principalId: "host_h" }),
     /canonical UUID/,
   );
-});
-
-test("host cold-load maps durable prompt rows and votecount for moderator controls", async () => {
-  const seen = [];
-  const data = await loadHostColdData({
-    game: "midsummer",
-    hostConsoleStateEndpoint:
-      "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
-    fallback: FALLBACK,
-    fetchImpl: async (url) => {
-      seen.push(url);
-      if (url === "/api/gameplay/games/midsummer/votecount") {
-        return jsonResponse([
-          {
-            VoteCountChanged: {
-              candidate_slot: "slot-target",
-              count: 2,
-              majority: 5,
-            },
-          },
-        ]);
-      }
-      if (url === "/api/gameplay/games/midsummer/day-vote-outcomes") {
-        return jsonResponse([
-          {
-            DayVoteOutcomeApplied: {
-              phase_id: "D01",
-              source_seq: 11,
-              event_index: 0,
-              status: "Lynch",
-              winner_slot: "slot-target",
-              tallies: { "slot-target": 2 },
-            },
-          },
-        ]);
-      }
-      if (url.includes("host-console-state")) {
-        return jsonResponse({
-          authority: {
-            principal_id: "host_h",
-            capability: "HostOf",
-            allowed_classes: ["phase_resolve", "deadline"],
-            denied_classes: [],
-          },
-        });
-      }
-      return jsonResponse([
-        {
-          prompt_id: "D01:skip_next_day:slot_1",
-          kind: "skip_next_day",
-          reason: "beloved_princess_death",
-          status: "pending",
-          phase_id: "D01",
-          subject_slot: "slot_1",
-          metadata: { policy: "beloved_princess_skip_next_day" },
-        },
-      ]);
-    },
-  });
-
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer/host-prompts",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
-  ]);
-  assert.deepEqual(data.hostPrompts, [
-    {
-      id: "D01:skip_next_day:slot_1",
-      label: "skip_next_day",
-      value: "beloved_princess_death",
-      status: "pending",
-      phaseId: "D01",
-      subjectSlot: "slot_1",
-      decisionKind: "acknowledge",
-      metadata: { policy: "beloved_princess_skip_next_day" },
-    },
-  ]);
-  assert.deepEqual(data.votecount, [
-    { target: "slot-target", count: 2, needed: 5 },
-  ]);
-  assert.deepEqual(data.dayVoteOutcomes, [
-    {
-      game: null,
-      phaseId: "D01",
-      sourceSeq: 11,
-      eventIndex: 0,
-      status: "Lynch",
-      winnerSlot: "slot-target",
-      tallies: { "slot-target": 2 },
-      majority: null,
-      reason: null,
-    },
-  ]);
-  assert.equal(data.hostConsoleState.authority.capability, "HostOf");
 });
 
 test("host prompt cold-load infers slot selection from HostDecides contenders", () => {
@@ -1025,29 +776,4 @@ test("fetchJson returns the fallback when the timeout budget aborts the fetch", 
     timeoutMs: 20,
   });
   assert.deepEqual(result, { fallback: true });
-});
-
-test("loadPlayerColdData threads the timeout budget into every projection fetch", async () => {
-  const { loadPlayerColdData } = await import("./cold-load.mjs");
-  const observed = { signals: [] };
-  const fetchImpl = async (url, init) => {
-    observed.signals.push(init.signal);
-    return { ok: true, async json() { return null; } };
-  };
-  await loadPlayerColdData({
-    game: "midsummer",
-    principalId: "player_mira",
-    actorSlot: "slot-7",
-    fetchImpl,
-    apiBaseUrl: "",
-    timeoutMs: 500,
-    fallback: {
-      thread: { nextBeforeSeq: null, posts: [] },
-      votecount: [],
-    },
-  });
-  assert.equal(observed.signals.length, 7);
-  for (const signal of observed.signals) {
-    assert.ok(signal instanceof AbortSignal);
-  }
 });

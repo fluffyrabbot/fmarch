@@ -48,12 +48,12 @@ export function normalizeCapability(capability) {
     case "CohostOf":
       return normalized.game === null ? null : freezeWithoutNulls(normalized);
     case "SlotOccupant":
-      if (normalized.game === null && normalized.slot === null) {
+      if (normalized.game === null || normalized.slot === null) {
         return null;
       }
       return freezeWithoutNulls(normalized);
     case "ChannelMember":
-      if (normalized.game === null && normalized.channel === null) {
+      if (normalized.game === null || normalized.channel === null) {
         return null;
       }
       return freezeWithoutNulls(normalized);

@@ -24,7 +24,9 @@ import {
   hostVotecountUrl,
   hostPromptsUrl,
   dayVoteOutcomesUrl,
-  loadHostColdData,
+  normalizeDayVoteOutcomes,
+  normalizeHostPrompts,
+  normalizeVotecount,
 } from "../../../../lib/app/cold-load.mjs";
 import {
   canonicalPrincipalId,
@@ -43,12 +45,12 @@ export const HOST_CONSOLE_ROUTE_CONTRACT = Object.freeze({
   requiredText: "Live official tally",
 });
 
-export async function buildHostConsoleRouteData({
+export function buildHostConsoleRouteData({
   game,
   capabilities = [],
-  principalId = FIXTURE_PRINCIPAL_IDS.hostH,
-  fetchImpl = null,
-  apiBaseUrl = "",
+  principalId,
+  coldLoad = null,
+  fixtureMode = false,
   nowSeconds = Math.floor(Date.now() / 1000),
 }) {
   const gameId = normalizeGame(game);
@@ -57,32 +59,25 @@ export async function buildHostConsoleRouteData({
     game: gameId,
     capabilities,
   });
-  const replacement = HOST_FIXTURE_REPLACEMENT;
+  const replacement = fixtureMode ? HOST_FIXTURE_REPLACEMENT : null;
   const authorityFallback = buildHostAuthorityFallback({
     access,
     principalId: commandPrincipalId,
   });
   const serverHostConsoleStateEndpoint = buildHostConsoleStateEndpoint({
     gameId,
-    slotId: replacement.slotId,
-    apiBaseUrl,
+    slotId: replacement?.slotId,
   });
-  const coldLoad = await loadHostColdData({
-    game: gameId,
-    fetchImpl,
-    apiBaseUrl,
-    hostConsoleStateEndpoint: serverHostConsoleStateEndpoint,
-    fallback: HOST_FIXTURE_COLD_LOAD,
-  });
+  coldLoad = fixtureMode ? normalizedHostFixtureColdLoad() : requireHostColdLoad(coldLoad);
   const hostProjection = projectHostConsoleState(
     coldLoad.hostConsoleState,
     Object.freeze({
       authority: authorityFallback,
       completed: false,
-      phase: HOST_FIXTURE_PHASE,
+      phase: fixtureMode ? HOST_FIXTURE_PHASE : null,
       replacement,
-      tasks: HOST_FIXTURE_HOST_TASKS,
-      dayEvents: HOST_FIXTURE_DAY_EVENTS,
+      tasks: fixtureMode ? HOST_FIXTURE_HOST_TASKS : Object.freeze([]),
+      dayEvents: fixtureMode ? HOST_FIXTURE_DAY_EVENTS : Object.freeze([]),
       dayEventScheduler: null,
     }),
   );
@@ -148,6 +143,7 @@ export async function buildHostConsoleRouteData({
     }),
     commandPrincipalId,
     commandEndpoint: "/commands",
+    commandsEnabled: access.allowed === true,
     commandContext: Object.freeze({
       gameId,
       principalId: commandPrincipalId,
@@ -156,7 +152,7 @@ export async function buildHostConsoleRouteData({
     }),
     hostConsoleStateEndpoint: buildHostConsoleStateEndpoint({
       gameId,
-      slotId: replacement.slotId,
+      slotId: hostProjection.replacement?.slotId,
       // Browser reads must stay same-origin so the gameplay proxy can derive
       // bearer authority from the httpOnly app session. Only the websocket
       // URL below is handed the public API base directly.
@@ -170,7 +166,6 @@ export async function buildHostConsoleRouteData({
     liveProjection: Object.freeze({
       endpoint: buildLiveProjectionUrl({
         game: gameId,
-        slotId: "slot-7",
       }),
     }),
     votecountBoundary: Object.freeze({
@@ -184,7 +179,12 @@ export async function buildHostConsoleRouteData({
     completed: hostProjection.completed,
     phase: hostProjection.phase,
     replacement: hostProjection.replacement,
-    inviteTargets: buildHostInviteTargets({ replacement: hostProjection.replacement }),
+    inviteTargets: buildHostInviteTargets({
+      replacement: hostProjection.replacement,
+      replacementPrincipalId: fixtureMode
+        ? FIXTURE_PRINCIPAL_IDS.playerRowan
+        : hostProjection.replacement?.incomingPrincipalId ?? null,
+    }),
     hostPrompts: coldLoad.hostPrompts,
     hostTasks: hostProjection.tasks,
     hostDayEvents: hostProjection.dayEvents,
@@ -273,15 +273,18 @@ function replacementQueueLabel(replacement) {
 }
 
 export function buildHostInviteTargets({
-  replacement = HOST_FIXTURE_REPLACEMENT,
-  replacementPrincipalId = FIXTURE_PRINCIPAL_IDS.playerRowan,
+  replacement = null,
+  replacementPrincipalId = null,
   replacementLabel = "player-rowan",
 } = {}) {
-  const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
-  const occupant = canonicalPrincipalId(replacement.assignedPrincipalId);
-  const publicName = normalizePublicPersonaName(replacement.occupantLabel, "player-mira");
-  const replacementPrincipal = normalizePrincipal(replacementPrincipalId);
-  const available = occupant !== null;
+  const slotId =
+    replacement !== null && typeof replacement === "object"
+      ? normalizeSlotId(replacement.slotId ?? "slot")
+      : "";
+  const occupant = canonicalPrincipalId(replacement?.assignedPrincipalId);
+  const publicName = normalizePublicPersonaName(replacement?.occupantLabel, "unavailable");
+  const replacementPrincipal = canonicalPrincipalId(replacementPrincipalId) ?? "";
+  const available = slotId !== "" && occupant !== null;
   return Object.freeze({
     player: Object.freeze({
       id: "player",
@@ -297,7 +300,9 @@ export function buildHostInviteTargets({
       available,
       principalId: occupant ?? "",
       expectedOccupantPrincipalId: occupant ?? "",
-      targetLabel: `${slotDisplayLabel(slotId)} / ${publicName}`,
+      targetLabel: available
+        ? `${slotDisplayLabel(slotId)} / ${publicName}`
+        : "No authoritative slot selected",
       submitLabel: "Issue player invite",
     }),
     replacement: Object.freeze({
@@ -310,11 +315,14 @@ export function buildHostInviteTargets({
       statusTestId: "host-replacement-invite-status",
       urlTestId: "host-replacement-invite-url",
       accountTestId: "host-replacement-invite-account",
-      available,
+      available: available && replacementPrincipal !== "",
       slotId,
       principalId: replacementPrincipal,
       expectedOccupantPrincipalId: occupant ?? "",
-      targetLabel: `${slotDisplayLabel(slotId)} / ${replacementLabel}`,
+      targetLabel:
+        available && replacementPrincipal !== ""
+          ? `${slotDisplayLabel(slotId)} / ${replacementLabel}`
+          : "No authoritative replacement selected",
       submitLabel: "Issue invite",
     }),
   });
@@ -348,6 +356,33 @@ function buildHostAuthorityFallback({ access, principalId }) {
     capabilityKind: access.capability?.kind === "CohostOf" ? "CohostOf" : "HostOf",
     allowedClasses: Object.freeze([]),
     deniedClasses: Object.freeze([]),
+  });
+}
+
+function requireHostColdLoad(coldLoad) {
+  if (coldLoad === null || typeof coldLoad !== "object") {
+    throw new TypeError(
+      "host route data requires an authoritative cold-load snapshot outside fixture mode",
+    );
+  }
+  return coldLoad;
+}
+
+function normalizedHostFixtureColdLoad() {
+  return Object.freeze({
+    hostConsoleState: HOST_FIXTURE_COLD_LOAD.hostConsoleState,
+    hostPrompts: normalizeHostPrompts(
+      HOST_FIXTURE_COLD_LOAD.hostPrompts,
+      HOST_FIXTURE_COLD_LOAD.hostPrompts,
+    ),
+    votecount: normalizeVotecount(
+      HOST_FIXTURE_COLD_LOAD.votecount,
+      HOST_FIXTURE_COLD_LOAD.votecount,
+    ),
+    dayVoteOutcomes: normalizeDayVoteOutcomes(
+      HOST_FIXTURE_COLD_LOAD.dayVoteOutcomes,
+      HOST_FIXTURE_COLD_LOAD.dayVoteOutcomes,
+    ),
   });
 }
 
@@ -425,7 +460,9 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
 const HOST_FIXTURE_REPLACEMENT = Object.freeze({
   slotId: "slot-7",
   occupantLabel: "player-mira",
+  personaId: "persona-mira",
   assignedPrincipalId: FIXTURE_PRINCIPAL_IDS.playerMira,
+  incomingPrincipalId: FIXTURE_PRINCIPAL_IDS.playerRowan,
   lifecycleLabel: "Alive",
   historyLabel: "Waiting for replacement command proof",
 });

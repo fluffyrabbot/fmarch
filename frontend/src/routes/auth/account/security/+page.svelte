@@ -4,6 +4,7 @@
 
   $: security = data?.accountSecurity ?? {};
   $: methods = security.methods ?? [];
+  $: methodsReady = security.methodsStatus === "ready";
   $: activeMethods = methods.filter((method) => method.status === "active");
   $: classicMethod = activeMethods.find((method) => method.kind === "classic_password") ?? null;
   $: workosMethod = activeMethods.find((method) => method.kind === "workos") ?? null;
@@ -65,36 +66,47 @@
         WorkOS could not be linked ({security.workosError.replaceAll("_", " ")}).
       </p>
     {/if}
-    <ul class="account-security__methods" data-testid="account-security-methods">
-      {#each methods as method (method.methodId)}
-        <li class="account-security__method" data-testid={`account-method-${method.kind}`}>
-          <div>
-            <strong>{methodTitle(method)}</strong>
-            <small>{methodDetail(method)}</small>
-            {#if method.status !== "active"}
-              <small class="account-security__method-disabled">disabled</small>
+    {#if methodsReady}
+      <ul class="account-security__methods" data-testid="account-security-methods">
+        {#each methods as method (method.methodId)}
+          <li class="account-security__method" data-testid={`account-method-${method.kind}`}>
+            <div>
+              <strong>{methodTitle(method)}</strong>
+              <small>{methodDetail(method)}</small>
+              {#if method.status !== "active"}
+                <small class="account-security__method-disabled">disabled</small>
+              {/if}
+            </div>
+            {#if method.status === "active"}
+              <form method="POST" action="?/disableMethod">
+                <input type="hidden" name="methodId" value={method.methodId} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <button
+                  type="submit"
+                  class="fm-touch-button fm-touch-button--secondary"
+                  data-testid={`account-method-disable-${method.kind}`}
+                  disabled={activeMethods.length < 2}
+                  title={activeMethods.length < 2
+                    ? "Add another sign-in method before removing this one"
+                    : null}
+                >
+                  Remove
+                </button>
+              </form>
             {/if}
-          </div>
-          {#if method.status === "active"}
-            <form method="POST" action="?/disableMethod">
-              <input type="hidden" name="methodId" value={method.methodId} />
-              <input type="hidden" name="returnTo" value={returnTo} />
-              <button
-                type="submit"
-                class="fm-touch-button fm-touch-button--secondary"
-                data-testid={`account-method-disable-${method.kind}`}
-                disabled={activeMethods.length < 2}
-                title={activeMethods.length < 2
-                  ? "Add another sign-in method before removing this one"
-                  : null}
-              >
-                Remove
-              </button>
-            </form>
-          {/if}
-        </li>
-      {/each}
-    </ul>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p
+        class="account-security__reject"
+        role="status"
+        data-testid="account-security-methods-unavailable"
+      >
+        Sign-in methods are temporarily unavailable. Changes are paused until
+        the authoritative account record can be loaded.
+      </p>
+    {/if}
     {#if disableResult?.state === "ack"}
       <p class="account-security__status" data-testid="account-method-disable-status">
         {disableResult.message}
@@ -105,7 +117,7 @@
       </p>
     {/if}
 
-    {#if classicMethod === null}
+    {#if methodsReady && classicMethod === null}
       <form
         method="POST"
         action="?/addClassic"
@@ -155,7 +167,7 @@
       </form>
     {/if}
 
-    {#if workosMethod === null && security.workosAvailable}
+    {#if methodsReady && workosMethod === null && security.workosAvailable}
       <div class="account-security__form" data-testid="account-method-add-workos">
         <h3>Add WorkOS — managed sign-in</h3>
         <p class="account-security__hint">
@@ -200,7 +212,7 @@
     {/if}
   </section>
 
-  {#if classicMethod !== null}
+  {#if methodsReady && classicMethod !== null}
   <section class="account-security__panel fm-panel" aria-label="Password rotation">
     <form
       method="POST"

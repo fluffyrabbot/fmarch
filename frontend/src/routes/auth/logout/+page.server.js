@@ -1,10 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { authReturnPath } from "../../../lib/server/auth-return-path.mjs";
-import {
-  evictSessionCacheForToken,
-  SESSION_COOKIE_NAME,
-} from "../../../lib/server/session-capabilities.mjs";
+import { SESSION_COOKIE_NAME } from "../../../lib/server/session-capabilities.mjs";
 import { WORKOS_SESSION_COOKIE_NAME } from "../../../lib/server/workos-authkit.mjs";
 import { workosProviderLogoutUrl } from "../../../lib/server/workos-provider-logout.mjs";
 
@@ -31,7 +28,7 @@ export const actions = {
     });
     if (!response.ok) {
       if (response.status === 401) {
-        discardBrowserSession({ cookies, token });
+        discardBrowserSession({ cookies });
         throw redirect(303, loginPath(returnTo));
       }
       return fail(502, {
@@ -56,7 +53,7 @@ export const actions = {
       });
     }
 
-    discardBrowserSession({ cookies, token });
+    discardBrowserSession({ cookies });
     if (providerLogoutUrl !== null) {
       // Keep the native form POST inside the CSP form-action boundary. The
       // rendered continuation performs a top-level navigation after this
@@ -67,8 +64,7 @@ export const actions = {
   },
 };
 
-function discardBrowserSession({ cookies, token }) {
-  evictSessionCacheForToken(token);
+function discardBrowserSession({ cookies }) {
   cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
   // Defensive: an interrupted WorkOS exchange may have stranded the AuthKit
   // cookie; a signed-out browser must not keep any identity state.

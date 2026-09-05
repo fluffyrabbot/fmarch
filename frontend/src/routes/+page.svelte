@@ -30,10 +30,23 @@
         aria-label="Games"
         data-testid={BOARD_ROUTE_CONTRACT.indexTestId}
       >
-        {#if data.board.status === "unavailable"}
-          <p data-testid={BOARD_ROUTE_CONTRACT.unavailableTestId}>
-            The game index is unavailable. Refresh the board to try again.
-          </p>
+        {#if data.board.status === "degraded"}
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid={BOARD_ROUTE_CONTRACT.unavailableTestId}
+          >
+            <p>The game index is temporarily unavailable. Refresh the board to try again.</p>
+            {#if data.board.degradation.retryAfterSeconds !== null}
+              <p>
+                Try again in {data.board.degradation.retryAfterSeconds}
+                {data.board.degradation.retryAfterSeconds === 1 ? "second" : "seconds"}.
+              </p>
+            {/if}
+            {#if data.board.degradation.requestId !== null}
+              <p>Reference: {data.board.degradation.requestId}</p>
+            {/if}
+          </div>
         {:else if data.board.games.length === 0}
           <p data-testid={BOARD_ROUTE_CONTRACT.emptyTestId}>
             No public games are active or completed.

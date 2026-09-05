@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
+import { loadHostGameplaySnapshot } from "../../../../lib/server/gameplay-api.mjs";
+import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import { actions, load } from "./+page.server.js";
 import {
   HOST_CONSOLE_ROUTE_CONTRACT,
   buildHostInviteTargets,
-  buildHostConsoleRouteData,
+  buildHostConsoleRouteData as buildHostConsoleRouteDataModel,
   buildHostWorkQueues,
   hostConsoleForbiddenMessage,
   resolveHostConsoleAccess,
@@ -18,6 +20,39 @@ const PLAYER_MIRA_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.playerMira;
 const PLAYER_ROWAN_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.playerRowan;
 const PLAYER_ALEX_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000010";
 const PLAYER_JULES_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000011";
+
+async function buildHostConsoleRouteData(input) {
+  const principalId = input.principalId ?? HOST_PRINCIPAL_ID;
+  if (typeof input.fetchImpl !== "function") {
+    return buildHostConsoleRouteDataModel({
+      ...input,
+      principalId,
+      fixtureMode: true,
+    });
+  }
+  const hostConsoleStateEndpoint = buildHostConsoleStateEndpoint({
+    gameId: input.game,
+    slotId: "slot-7",
+    apiBaseUrl: input.apiBaseUrl ?? "",
+  });
+  const result = await loadHostGameplaySnapshot({
+    game: input.game,
+    expectedPrincipalId: principalId,
+    expectedCapabilityKind:
+      input.capabilities?.find((capability) =>
+        capability.kind === "HostOf" || capability.kind === "CohostOf",
+      )?.kind ?? "HostOf",
+    fetchImpl: input.fetchImpl,
+    apiBaseUrl: input.apiBaseUrl ?? "",
+    hostConsoleStateEndpoint,
+  });
+  assert.equal(result.kind, "ready");
+  return buildHostConsoleRouteDataModel({
+    ...input,
+    principalId,
+    coldLoad: result.data,
+  });
+}
 
 test("host console route data is allowed for HostOf scoped to the current game", async () => {
   const data = await buildHostConsoleRouteData({
@@ -63,7 +98,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   );
   assert.equal(
     data.projectionBoundary.resyncPolicy,
-    "single-flight-latest-trailing-refresh",
+    "generation-ending-reconnect-then-authoritative-refresh",
   );
   assert.equal(
     data.votecountBoundary.status,
@@ -86,7 +121,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "/live/tickets?game=midsummer&slot_id=slot-7",
+    "/live/tickets?game=midsummer",
   );
   assert.deepEqual(data.votecount, [
     { target: "slot-2 / Ilya", count: 4, needed: 7 },
@@ -286,7 +321,10 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       if (url === "/api/gameplay/games/midsummer/votecount") {
         return jsonResponse([
           {
-            VoteCountChanged: {
+            kind: "VoteCountChanged",
+            body: {
+              game: "midsummer",
+              phase_id: "D01",
               candidate_slot: "slot-target",
               count: 1,
               majority: 3,
@@ -297,13 +335,23 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       if (url === "/api/gameplay/games/midsummer/day-vote-outcomes") {
         return jsonResponse([
           {
-            DayVoteOutcomeApplied: {
+            kind: "DayVoteOutcomeApplied",
+            body: {
+              game: "midsummer",
               phase_id: "D01",
               source_seq: 14,
               event_index: 0,
               status: "Lynch",
               winner_slot: "slot-target",
+              contenders: ["slot-target"],
               tallies: { "slot-target": 1 },
+              votes: { "slot-voter": "slot-target" },
+              weights: { "slot-voter": 1 },
+              majority: 3,
+              thresholds: { lynch: 3 },
+              total_weight: 1,
+              tiebreak: null,
+              reason: null,
             },
           },
         ]);
@@ -345,16 +393,17 @@ test("host console route data uses host prompt and votecount cold-loads when ava
             event_id: "event-cookie",
             state: "resolved",
             phase_id: "D01",
+            room: null,
             participant_slots: ["slot_1", "slot_2"],
             open_due_at: 1781928000,
             open_observed_at: 1781928001,
             lock_due_at: 1781928060,
             lock_observed_at: 1781928062,
-            auto_seed: 73,
+            auto_seed: "9007199254740993",
             resolution_evidence: {
               kind: "auto",
               policy: { kind: "seeded_random", winners: 1 },
-              seed: 73,
+              seed: "9007199254740993",
               participant_slots: ["slot_2", "slot_1"],
             },
             winner_slots: ["slot_2"],
@@ -408,12 +457,18 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       }
       return jsonResponse([
         {
+          game: "midsummer",
           prompt_id: "D01:tie:slot_2",
+          event_index: 0,
           kind: "tie",
           reason: "host_decides_tie",
           status: "pending",
           phase_id: "D01",
           subject_slot: "slot_2",
+          metadata: {},
+          decision: null,
+          public_resolution: null,
+          resolved_at: null,
         },
       ]);
     },
@@ -468,12 +523,12 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       lockDueAt: 1781928060,
       lockObservedAt: 1781928062,
     },
-    autoSeed: 73,
+    autoSeed: "9007199254740993",
     resolutionEvidence: {
       kind: "auto",
       policyKind: "seeded_random",
       winnerCount: 1,
-      seed: 73,
+      seed: "9007199254740993",
       participantSlots: ["slot_1", "slot_2"],
     },
     winnerSlots: ["slot_2"],
@@ -531,14 +586,14 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   ]);
   assert.deepEqual(data.dayVoteOutcomes, [
     {
-      game: null,
+      game: "midsummer",
       phaseId: "D01",
       sourceSeq: 14,
       eventIndex: 0,
       status: "Lynch",
       winnerSlot: "slot-target",
       tallies: { "slot-target": 1 },
-      majority: null,
+      majority: 3,
       reason: null,
     },
   ]);
@@ -568,8 +623,11 @@ test("host console route data is allowed for CohostOf scoped to the current game
             phase: null,
             slots: [],
             thread_posts: [],
+            day_event_scheduler: null,
+            day_events: [],
+            tasks: [],
           })
-        : jsonResponse(null),
+        : jsonResponse([]),
   });
   const access = resolveHostConsoleAccess({
     game: "midsummer",
@@ -582,10 +640,7 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.equal(data.access.capabilityLabel, "CohostOf(midsummer)");
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
-    [
-      "process_replacement",
-      "resolve_host_prompt-D01-skip_next_day-slot_1",
-    ],
+    [],
   );
   assert.deepEqual(data.authority, {
     principalId: COHOST_PRINCIPAL_ID,
@@ -595,16 +650,11 @@ test("host console route data is allowed for CohostOf scoped to the current game
   });
   assert.deepEqual(
     data.moderatorControls.map((control) => [control.id, control.authority]),
-    [
-      ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
-    ],
+    [],
   );
   assert.deepEqual(
     data.moderatorActionGroups.map((group) => [group.id, group.authority]),
-    [
-      ["replacement", "CohostOf(game) · replacement"],
-      ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
-    ],
+    [],
   );
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
@@ -700,14 +750,28 @@ test("host console access rejects missing and wrong-game capabilities", () => {
   );
 });
 
-test("load returns host shell data when locals carry a resolved host capability", async () => {
-  const data = await load({
-    params: { game: "midsummer" },
-    locals: {
-      principalId: HOST_PRINCIPAL_ID,
-      resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
-    },
-  });
+test("load returns host shell data in explicit fixture mode", async () => {
+  const previousFixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+  process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
+  let data;
+  try {
+    data = await load({
+      params: { game: "midsummer" },
+      locals: {
+        principalId: HOST_PRINCIPAL_ID,
+        resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+      },
+      fetch: async () => {
+        throw new Error("explicit fixture host load must not fetch gameplay state");
+      },
+    });
+  } finally {
+    if (previousFixtureMode === undefined) {
+      delete process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+    } else {
+      process.env.FMARCH_FRONTEND_FIXTURE_SESSION = previousFixtureMode;
+    }
+  }
 
   assert.equal(data.game.id, "midsummer");
   assert.equal(data.shellOwner, "layout");
@@ -745,6 +809,50 @@ test("load rejects host capability without an authenticated principal", async ()
       err.status === 403 &&
       err.body.message === "Host console requires an authenticated host session.",
   );
+});
+
+test("host load never exposes controls when its authority snapshot fails", async () => {
+  const cases = [
+    { name: "stale identity", response: () => httpFailure(401), status: 401, deletes: true },
+    { name: "forbidden", response: () => httpFailure(403), status: 403, deletes: false },
+    { name: "missing game", response: () => httpFailure(404), status: 404, deletes: false },
+    { name: "API outage", response: () => httpFailure(503), status: 503, deletes: false },
+    {
+      name: "malformed JSON",
+      response: () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        async json() {
+          throw new SyntaxError("malformed");
+        },
+      }),
+      status: 502,
+      deletes: false,
+    },
+    { name: "invalid payload", response: () => jsonResponse({}), status: 502, deletes: false },
+  ];
+
+  for (const scenario of cases) {
+    const deleted = [];
+    await assert.rejects(
+      load({
+        params: { game: "midsummer" },
+        locals: {
+          principalId: HOST_PRINCIPAL_ID,
+          resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+        },
+        cookies: {
+          get: () => "session-token",
+          delete: (...args) => deleted.push(args),
+        },
+        fetch: async () => scenario.response(),
+      }),
+      (failure) => failure.status === scenario.status,
+      scenario.name,
+    );
+    assert.equal(deleted.length, scenario.deletes ? 1 : 0, scenario.name);
+  }
 });
 
 test("host action issues a replacement invite through the authenticated host session", async () => {
@@ -1179,9 +1287,18 @@ function jsonResponse(body) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return body;
     },
+  };
+}
+
+function httpFailure(status) {
+  return {
+    ok: false,
+    status,
+    headers: new Headers(),
   };
 }
 
@@ -1210,6 +1327,6 @@ test("host live projection endpoint uses the same-origin authenticated ticket br
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "/live/tickets?game=midsummer&slot_id=slot-7",
+    "/live/tickets?game=midsummer",
   );
 });

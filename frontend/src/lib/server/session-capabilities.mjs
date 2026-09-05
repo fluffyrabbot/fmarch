@@ -1,50 +1,18 @@
-import { normalizeCapabilities } from "../app/capabilities.mjs";
-import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
+import {
+  normalizeCapabilities,
+  normalizeCapability,
+} from "../app/capabilities.mjs";
 import {
   canonicalPrincipalId,
   FIXTURE_SESSION_PRINCIPAL_IDS,
 } from "../principal-id.mjs";
-import { normalizeViewerProfile } from "../app/viewer-presentation-model.mjs";
 import { serverApiBaseUrl } from "./api-base.mjs";
+import { frontendFixtureMode } from "./runtime-mode.mjs";
+import { fetchUpstreamJson } from "./upstream-client.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
 export const FIXTURE_SESSION_COOKIE_NAME = "fmarch_fixture_session";
-export const DEFAULT_SESSION_CACHE_TTL_MS = 30_000;
 export { FIXTURE_SESSION_PRINCIPAL_IDS };
-
-const SESSION_CACHE_MAX_ENTRIES = 1000;
-const sessionCache = new Map();
-
-// TTL for cached non-game auth-session resolutions. Game-scoped slot/channel
-// authority is intentionally never cached: join, withdrawal, death, and
-// replacement must affect the next SSR authorization decision immediately.
-// 0 disables all caching.
-export function sessionCacheTtlMs(env = globalThis.process?.env) {
-  const raw = env?.FMARCH_SESSION_CACHE_TTL_MS;
-  if (raw === undefined || raw === null || String(raw).trim() === "") {
-    return DEFAULT_SESSION_CACHE_TTL_MS;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return DEFAULT_SESSION_CACHE_TTL_MS;
-  }
-  return parsed;
-}
-
-export function clearSessionCache() {
-  sessionCache.clear();
-}
-
-// Drop any cached resolutions for a token that was just logged out or
-// revoked, so a stale entry cannot serve capabilities for up to a full TTL.
-export function evictSessionCacheForToken(token) {
-  if (typeof token !== "string" || token.trim() === "") return;
-  for (const key of sessionCache.keys()) {
-    if (key.startsWith(`${token}|`)) {
-      sessionCache.delete(key);
-    }
-  }
-}
 
 // The backend-owned app session in the fmarch_session cookie is the only
 // per-request identity; provider tokens are exchanged once at sign-in and
@@ -65,48 +33,6 @@ export function authenticatedApiFetch({ cookies, fetchImpl = fetch } = {}) {
   };
 }
 
-export async function resolveAuthenticatedSessionCached({
-  cookies,
-  request,
-  fetchImpl = fetch,
-  env = process.env,
-  now = Date.now,
-} = {}) {
-  const ttlMs = sessionCacheTtlMs(env);
-  const token = accessTokenForRequest({ cookies });
-  const context = sessionContextFromRequest(request);
-  const cacheable =
-    ttlMs > 0 &&
-    env?.FMARCH_FRONTEND_FIXTURE_SESSION !== "1" &&
-    typeof token === "string" &&
-    token.trim() !== "" &&
-    context !== null &&
-    context.kind !== "game";
-  if (!cacheable) {
-    return resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
-  }
-
-  const key = `${token}|${context.kind}|${context.kind === "game" ? context.game : ""}`;
-  const timestamp = now();
-  const cached = sessionCache.get(key);
-  if (cached !== undefined && cached.expiresAt > timestamp) {
-    return cached.session;
-  }
-
-  const session = await resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
-  // Rotation-required sessions must re-resolve, and empty sessions may just
-  // be an API blip — caching either would pin a worse state for a full TTL.
-  if (session.rotationRequired !== true && session.principalId !== null) {
-    if (sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
-      sessionCache.delete(sessionCache.keys().next().value);
-    }
-    sessionCache.set(key, { session, expiresAt: timestamp + ttlMs });
-  } else {
-    sessionCache.delete(key);
-  }
-  return session;
-}
-
 export async function resolveAuthenticatedSession({
   cookies,
   request,
@@ -115,36 +41,49 @@ export async function resolveAuthenticatedSession({
 } = {}) {
   const token = accessTokenForRequest({ cookies });
   const context = sessionContextFromRequest(request);
-  if (env?.FMARCH_FRONTEND_FIXTURE_SESSION === "1") {
-    return fixtureSession({
+  if (frontendFixtureMode(env)) {
+    const session = fixtureSession({
       token: cookies?.get?.(FIXTURE_SESSION_COOKIE_NAME) ?? token,
       context: context ?? Object.freeze({ kind: "game", game: "midsummer" }),
     });
+    return session.principalId === null
+      ? sessionResolution("anonymous", session)
+      : sessionResolution("authenticated", session);
   }
 
-  if (token === undefined || token === null || token.trim() === "" || context === null) {
-    return emptySession();
+  if (token === null || context === null) {
+    return sessionResolution("anonymous", emptySession());
   }
 
-  let response;
-  try {
-    const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
-    response = await fetchImpl(authSessionUrl({ env, context }), {
+  const upstream = await fetchUpstreamJson({
+    fetchImpl,
+    url: authSessionUrl({ env, context }),
+    init: {
       method: "GET",
       headers: {
         authorization: `Bearer ${token}`,
         accept: "application/json",
       },
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch {
-    return emptySession();
+    },
+    validate: validSessionPayload,
+  });
+  if (upstream.kind === "ok") {
+    return sessionResolution(
+      "authenticated",
+      normalizeSessionPayload(upstream.value, context),
+      upstream,
+    );
   }
-  if (!response.ok) {
-    return emptySession();
+  if (upstream.kind === "unauthorized") {
+    return sessionResolution("stale", emptySession(), upstream);
   }
-
-  return normalizeSessionPayload(await response.json(), context);
+  if (context.kind === "optional_public") {
+    return sessionResolution("anonymous", emptySession(), upstream);
+  }
+  if (upstream.kind === "invalid_response") {
+    return sessionResolution("invalid_response", emptySession(), upstream);
+  }
+  return sessionResolution("unavailable", emptySession(), upstream);
 }
 
 export async function rotateAuthenticatedBrowserSession({
@@ -158,10 +97,10 @@ export async function rotateAuthenticatedBrowserSession({
     return { status: "missing" };
   }
 
-  let response;
-  try {
-    const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
-    response = await fetchImpl(`${serverApiBaseUrl(env)}/auth/session-rotations`, {
+  const upstream = await fetchUpstreamJson({
+    fetchImpl,
+    url: `${serverApiBaseUrl(env)}/auth/session-rotations`,
+    init: {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
@@ -169,22 +108,22 @@ export async function rotateAuthenticatedBrowserSession({
         accept: "application/json",
       },
       body: JSON.stringify({}),
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch {
+    },
+    validate: (body) =>
+      validSessionPayload(body) && validIssuedSessionToken(body.session_token),
+  });
+  if (upstream.kind === "unauthorized") {
+    return { status: "stale" };
+  }
+  if (upstream.kind !== "ok") {
     return { status: "unavailable" };
   }
-  if (!response.ok) {
-    return { status: response.status === 401 ? "stale" : "unavailable" };
-  }
-
-  const body = await response.json().catch(() => null);
-  if (!validSessionPayload(body) || !validIssuedSessionToken(body.session_token)) {
-    return { status: "unavailable" };
-  }
-  evictSessionCacheForToken(token);
   const url = new URL(typeof request?.url === "string" ? request.url : "http://localhost/");
-  cookies?.set?.(SESSION_COOKIE_NAME, body.session_token, browserSessionCookieOptions(url));
+  cookies?.set?.(
+    SESSION_COOKIE_NAME,
+    upstream.value.session_token,
+    browserSessionCookieOptions(url),
+  );
   return { status: "rotated" };
 }
 
@@ -217,11 +156,18 @@ export function sessionContextFromRequest(request) {
   if (/^\/admin(?:\/.*)?$/.test(pathname)) {
     return Object.freeze({ kind: "admin" });
   }
-  if (/^\/(?:community|discussions|search|games|moderation|inbox)(?:\/.*)?$/.test(pathname)) {
-    return Object.freeze({ kind: "community" });
+  if (
+    pathname === "/" ||
+    /^\/(?:community|discussions|search|games)(?:\/.*)?$/.test(pathname) ||
+    /^\/u\/[^/]+(?:\/.*)?$/.test(pathname)
+  ) {
+    return Object.freeze({ kind: "optional_public" });
   }
-  if (/^\/u\/[^/]+(?:\/.*)?$/.test(pathname) || /^\/profile\/edit\/?$/.test(pathname)) {
-    return Object.freeze({ kind: "profile" });
+  if (
+    /^\/(?:moderation|inbox)(?:\/.*)?$/.test(pathname) ||
+    /^\/profile\/edit\/?$/.test(pathname)
+  ) {
+    return Object.freeze({ kind: "authority" });
   }
   if (/^\/auth\/(?:account\/security|logout)\/?$/.test(pathname)) {
     return Object.freeze({ kind: "account" });
@@ -255,18 +201,10 @@ function normalizeSessionPayload(payload, context = null) {
     return emptySession();
   }
 
-  const rawCapabilities = Array.isArray(payload.resolvedCapabilities)
-    ? payload.resolvedCapabilities
-    : Array.isArray(payload.capabilities)
-      ? payload.capabilities
-      : [];
-  const viewerProfile = normalizeViewerProfile(
-    payload.viewerProfile ?? payload.viewer_profile ?? null,
-  );
+  const rawCapabilities = payload.capabilities;
 
   return Object.freeze({
     principalId,
-    ...(viewerProfile === null ? {} : { viewerProfile }),
     ...(payload.rotation_required === true ? { rotationRequired: true } : {}),
     resolvedCapabilities: normalizeCapabilities(
       rawCapabilities.map((capability) =>
@@ -284,6 +222,16 @@ function emptySession() {
   return Object.freeze({
     principalId: null,
     resolvedCapabilities: Object.freeze([]),
+  });
+}
+
+function sessionResolution(kind, session, upstream = null) {
+  return Object.freeze({
+    kind,
+    session,
+    status: upstream?.status ?? null,
+    requestId: upstream?.requestId ?? null,
+    retryAfterSeconds: upstream?.retryAfterSeconds ?? null,
   });
 }
 
@@ -388,11 +336,26 @@ function fixtureSession({ token, context }) {
 }
 
 function validSessionPayload(payload) {
+  const capabilities = payload?.capabilities;
   return (
-    payload !== null &&
-    typeof payload === "object" &&
+    exactObject(payload, [
+      "principal_id",
+      "capabilities",
+      "session_token",
+      "created_at",
+      "expires_at",
+      "idle_expires_at",
+      "rotation_required",
+    ], ["principal_id", "capabilities"]) &&
     canonicalPrincipalId(payload.principal_id) !== null &&
-    Array.isArray(payload.capabilities)
+    Array.isArray(capabilities) &&
+    capabilities.every(validCapabilityGrant) &&
+    (payload.session_token === undefined || validIssuedSessionToken(payload.session_token)) &&
+    optionalSafeEpoch(payload.created_at) &&
+    optionalSafeEpoch(payload.expires_at) &&
+    optionalSafeEpoch(payload.idle_expires_at) &&
+    (payload.rotation_required === undefined ||
+      typeof payload.rotation_required === "boolean")
   );
 }
 
@@ -411,21 +374,72 @@ function firstString(...values) {
 
 function capabilityWithContext({ capability, context, source }) {
   const body = capability?.body ?? {};
-  const contextualGame =
-    context?.kind === "game" ? context.game : firstString(capability?.game, body.game);
   const kind = firstString(capability?.kind);
+  const capabilityGame = firstString(capability?.game, body.game);
   if (
-    contextualGame !== null &&
-    (kind === "SlotOccupant" || kind === "ChannelMember")
+    context?.kind === "game" &&
+    kind !== "GlobalAdmin" &&
+    kind !== "GlobalMod" &&
+    capabilityGame !== context.game
   ) {
-    return {
-      ...capability,
-      game: contextualGame,
-      source: firstString(capability?.source) ?? source,
-    };
+    return null;
   }
   return {
     ...capability,
     source: firstString(capability?.source) ?? source,
   };
+}
+
+function validCapabilityGrant(capability) {
+  if (capability === null || typeof capability !== "object" || Array.isArray(capability)) {
+    return false;
+  }
+  switch (capability.kind) {
+    case "GlobalAdmin":
+    case "GlobalMod":
+      return exactObject(capability, ["kind"], ["kind"]);
+    case "HostOf":
+    case "CohostOf":
+    case "DeadViewer":
+    case "SpectatorOf":
+      return (
+        exactObject(capability, ["kind", "body"], ["kind", "body"]) &&
+        exactObject(capability.body, ["game"], ["game"]) &&
+        firstString(capability.body.game) !== null &&
+        normalizeCapability(capability) !== null
+      );
+    case "SlotOccupant":
+      return (
+        exactObject(capability, ["kind", "body"], ["kind", "body"]) &&
+        exactObject(capability.body, ["game", "slot"], ["game", "slot"]) &&
+        firstString(capability.body.game) !== null &&
+        firstString(capability.body.slot) !== null &&
+        normalizeCapability(capability) !== null
+      );
+    case "ChannelMember":
+      return (
+        exactObject(capability, ["kind", "body"], ["kind", "body"]) &&
+        exactObject(capability.body, ["game", "channel"], ["game", "channel"]) &&
+        firstString(capability.body.game) !== null &&
+        firstString(capability.body.channel) !== null &&
+        normalizeCapability(capability) !== null
+      );
+    default:
+      return false;
+  }
+}
+
+function optionalSafeEpoch(value) {
+  return value === undefined || (Number.isSafeInteger(value) && value >= 0);
+}
+
+function exactObject(value, allowedKeys, requiredKeys) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const actual = Object.keys(value);
+  return (
+    requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(value, key)) &&
+    actual.every((key) => allowedKeys.includes(key))
+  );
 }

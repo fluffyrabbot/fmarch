@@ -1,9 +1,9 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { loadAccountMethods } from "../../../../lib/server/account-methods.mjs";
 import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import {
   browserSessionCookieOptions,
-  evictSessionCacheForToken,
   SESSION_COOKIE_NAME,
 } from "../../../../lib/server/session-capabilities.mjs";
 import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.mjs";
@@ -21,62 +21,25 @@ export async function load({ cookies, fetch, locals, url }) {
     );
   }
 
+  const methods = await loadAccountMethods({
+    cookies,
+    fetchImpl: fetch,
+    principalId: locals.principalId,
+    url: accountMethodsUrl(process.env),
+  });
   return {
     accountSecurity: {
       accountId,
       principalId: locals.principalId,
       returnTo,
-      methods: await accountMethods({ cookies, fetch }),
+      methods: methods.kind === "ready" ? methods.methods : [],
+      methodsStatus: methods.kind,
+      methodsFailure: methods.kind === "unavailable" ? methods.failure : null,
       workosAvailable: workosAuthKitConfigured(),
       workosLinked: url.searchParams.get("workosLinked") === "1",
       workosError: optionalField(url.searchParams.get("workosError")),
     },
   };
-}
-
-async function accountMethods({ cookies, fetch }) {
-  const sessionToken = cookies.get(SESSION_COOKIE_NAME);
-  if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
-    return [];
-  }
-  let response;
-  try {
-    response = await fetch(accountMethodsUrl(process.env), {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        accept: "application/json",
-      },
-    });
-  } catch {
-    return [];
-  }
-  if (!response.ok) {
-    return [];
-  }
-  const body = await response.json().catch(() => null);
-  if (body === null || typeof body !== "object" || !Array.isArray(body.methods)) {
-    return [];
-  }
-  return body.methods
-    .filter(
-      (method) =>
-        method !== null &&
-        typeof method === "object" &&
-        typeof method.method_id === "string" &&
-        (method.kind === "classic_password" || method.kind === "workos"),
-    )
-    .map((method) => ({
-      methodId: method.method_id,
-      kind: method.kind,
-      status: typeof method.status === "string" ? method.status : "active",
-      createdAt: Number.isSafeInteger(method.created_at) ? method.created_at : null,
-      lastAuthenticatedAt: Number.isSafeInteger(method.last_authenticated_at)
-        ? method.last_authenticated_at
-        : null,
-      loginName: typeof method.login_name === "string" ? method.login_name : null,
-      displayLabel: typeof method.display_label === "string" ? method.display_label : null,
-    }));
 }
 
 export const actions = {
@@ -167,7 +130,6 @@ export const actions = {
       });
     }
 
-    evictSessionCacheForToken(sessionToken);
     cookies.set(
       SESSION_COOKIE_NAME,
       body.session_token,
@@ -537,7 +499,6 @@ export const actions = {
     });
     const body = await response.json().catch(() => null);
     if (response.status === 202 && body?.status === "erasure_in_progress") {
-      evictSessionCacheForToken(sessionToken);
       cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
       throw redirect(303, "/?accountErasureRequested=1");
     }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { loadAccountMethods } from "../../../../lib/server/account-methods.mjs";
 import { actions, load } from "./+page.server.js";
 
 test("security load exposes the principal's sign-in methods", async () => {
@@ -65,11 +66,73 @@ test("security load exposes the principal's sign-in methods", async () => {
           displayLabel: "host@corp.example",
         },
       ],
+      methodsStatus: "ready",
+      methodsFailure: null,
       workosAvailable: false,
       workosLinked: false,
       workosError: "",
     },
   });
+});
+
+test("security load fails closed when methods are cross-principal or malformed", async () => {
+  for (const body of [
+    { principal_id: "other-principal", methods: [] },
+    {
+      principal_id: "host_h",
+      methods: [
+        {
+          method_id: "00000000-0000-0000-0000-00000000000a",
+          kind: "classic_password",
+          status: "active",
+          created_at: 100,
+          invented: true,
+        },
+      ],
+    },
+  ]) {
+    const result = await load({
+      cookies: activeSessionCookies(),
+      fetch: async () => jsonResponse(body),
+      locals: { principalId: "host_h" },
+      url: new URL("http://localhost/auth/account/security"),
+    });
+    assert.equal(result.accountSecurity.methodsStatus, "unavailable");
+    assert.deepEqual(result.accountSecurity.methods, []);
+    assert.equal(result.accountSecurity.methodsFailure.kind, "invalid_response");
+    assert.equal(result.accountSecurity.methodsFailure.reason, "invalid_schema");
+  }
+});
+
+test("security methods preserve outage and timeout instead of inventing emptiness", async () => {
+  const network = await loadAccountMethods({
+    cookies: activeSessionCookies(),
+    principalId: "host_h",
+    url: "/auth/account/methods",
+    fetchImpl: async () => {
+      throw new Error("connection refused");
+    },
+  });
+  assert.equal(network.kind, "unavailable");
+  assert.equal(network.failure.reason, "network");
+
+  const timeout = await loadAccountMethods({
+    cookies: activeSessionCookies(),
+    principalId: "host_h",
+    url: "/auth/account/methods",
+    timeoutMs: 5,
+    fetchImpl: async (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init.signal.addEventListener(
+          "abort",
+          () => reject(new DOMException("aborted", "AbortError")),
+          { once: true },
+        );
+      }),
+  });
+  assert.equal(timeout.kind, "unavailable");
+  assert.equal(timeout.failure.reason, "timeout");
+  assert.deepEqual(timeout.methods, []);
 });
 
 test("security load sends an unauthenticated browser through account login", async () => {
@@ -473,10 +536,19 @@ function formRequest(fields) {
   });
 }
 
-function jsonResponse(body, { ok = true, status = 200 } = {}) {
+function activeSessionCookies() {
+  return {
+    get(name) {
+      return name === "fmarch_session" ? "fmss_active-host-session" : undefined;
+    },
+  };
+}
+
+function jsonResponse(body, { ok = true, status = 200, headers = {} } = {}) {
   return {
     ok,
     status,
+    headers: new Headers({ "content-type": "application/json", ...headers }),
     clone() {
       return this;
     },

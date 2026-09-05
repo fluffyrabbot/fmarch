@@ -9,7 +9,7 @@ import {
   buildPrivateQueue,
   buildPrivateQueueBoundary,
   buildPrivateQueueRouteItems,
-  buildGameRouteData,
+  buildGameRouteData as buildGameRouteDataModel,
   buildPlayerComposerView,
   buildPlayerDayEventCommands,
   buildPlayerPhaseView,
@@ -20,6 +20,13 @@ import {
   playerForbiddenMessage,
   threadPageStatusForResult,
 } from "./game-route-model.mjs";
+
+function buildGameRouteData(input) {
+  return buildGameRouteDataModel({
+    ...input,
+    fixtureMode: input.coldLoad === undefined,
+  });
+}
 
 test("player DayEvent attention becomes one current typed participation command", () => {
   const available = buildPlayerDayEventCommands({
@@ -72,6 +79,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
   });
 
   assert.equal(data.access.allowed, true);
+  assert.equal(data.commandsEnabled, true);
+  assert.equal(data.liveProjectionEnabled, true);
+  assert.equal(data.player.readOnly, false);
+  assert.equal(data.composer.readOnly, false);
   assert.deepEqual(data.surfaceHeader, {
     component: "fm-surface-header",
     surface: "player",
@@ -202,7 +213,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
   ]);
   assert.equal(
     data.liveProjection.endpoint,
-    "/live/tickets?game=midsummer",
+    "/live/tickets?game=midsummer&slot_id=slot-7",
   );
   assert.equal(
     data.projectionBoundary.status,
@@ -210,11 +221,11 @@ test("player route data exposes thread, channel, votecount, and touch command la
   );
   assert.equal(
     data.projectionBoundary.resyncPolicy,
-    "single-flight-latest-trailing-refresh",
+    "generation-ending-reconnect-then-authoritative-refresh",
   );
-  assert.match(data.composer.transportBoundary, /command-following/);
+  assert.match(data.composer.transportBoundary, /audience-scoped/);
   assert.equal(data.privateQueueBoundary.status, "principal-scoped-private-projections");
-  assert.equal(data.privateQueueBoundary.count, 2);
+  assert.equal(data.privateQueueBoundary.count, 3);
   assert.deepEqual(
     data.privateQueue.map((item) => ({
       id: item.id,
@@ -230,6 +241,15 @@ test("player route data exposes thread, channel, votecount, and touch command la
         value: "Delivered",
         detail: "Phase Night 2",
         reviewHref: "/g/midsummer?private=notification-1",
+      },
+      {
+        // The rail names the seat that was addressed, never its occupant:
+        // occupancy was resolved by the read that produced this row.
+        id: "slot-mention-1",
+        label: "Addressed as slot-7",
+        value: "Main thread",
+        detail: "Phase Day 2",
+        reviewHref: "/g/midsummer?private=slot-mention-1",
       },
       {
         id: "investigation-1",
@@ -433,6 +453,10 @@ test("player route data marks active private channel access without host data", 
   });
 
   assert.equal(data.access.allowed, true);
+  assert.equal(data.commandsEnabled, false);
+  assert.equal(data.liveProjectionEnabled, true);
+  assert.equal(data.player.readOnly, true);
+  assert.equal(data.composer.readOnly, true);
   assert.deepEqual(data.channel, {
     channel: "private:role_pm:slot-7",
     supported: true,
@@ -465,6 +489,24 @@ test("player route data marks active private channel access without host data", 
   assert.equal(Object.hasOwn(data, "hostPrompts"), false);
 });
 
+test("player commands require command-state proof for the exact SlotOccupant slot", () => {
+  const data = buildGameRouteData({
+    game: "midsummer",
+    principalId: "player_mira",
+    capabilities: [
+      { kind: "SlotOccupant", game: "midsummer", slot: "slot-8" },
+    ],
+  });
+
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.player.slotId, "slot-8");
+  assert.equal(data.commandState.actorSlot, "slot-7");
+  assert.equal(data.commandsEnabled, false);
+  assert.equal(data.player.readOnly, true);
+  assert.equal(data.composer.readOnly, true);
+  assert.equal(data.liveProjectionEnabled, true);
+});
+
 test("player route data can address private queue rows from the URL", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
@@ -478,6 +520,7 @@ test("player route data can address private queue rows from the URL", async () =
     data.privateQueue.map((item) => [item.id, item.reviewHref]),
     [
       ["notification-1", "/g/midsummer?private=notification-1"],
+      ["slot-mention-1", "/g/midsummer?private=slot-mention-1"],
       ["investigation-1", "/g/midsummer?private=investigation-1"],
     ],
   );
@@ -502,7 +545,7 @@ test("player route data can address private queue rows from the URL", async () =
   });
   assert.deepEqual(rolePm.privateQueueExpandedItems, { "investigation-1": true });
   assert.equal(
-    rolePm.privateQueue[1].reviewHref,
+    rolePm.privateQueue[2].reviewHref,
     "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-1",
   );
 });
@@ -539,96 +582,76 @@ test("player route data models unsupported and denied channel access", async () 
   }), "Game midsummer channel private:role_pm:slot-7 requires scoped channel capability.");
 });
 
-test("player route data uses REST projection cold-loads when available", async () => {
+test("player route data projects an authoritative cold-load snapshot", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
     principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
-    fetchImpl: async (url) => {
-      if (url === "/api/gameplay/games/midsummer?limit=50") {
-        return jsonResponse({
-          next_before_seq: null,
-          posts: [
-            {
-              source_seq: 99,
-              author: { kind: "slot", slot_id: "slot-7" },
-              body: "server thread post",
-              occurred_at: 1781928000,
-              media: [
-                {
-                  content_id: "f".repeat(64),
-                  alt: "Server receipt",
-                  variants: {
-                    tablet: {
-                      avif_url: "/media/thread/server/tablet.avif",
-                      webp_url: "/media/thread/server/tablet.webp",
-                      width: 480,
-                      height: 360,
-                    },
-                  },
-                },
-              ],
+    coldLoad: {
+      thread: {
+        nextBeforeSeq: null,
+        posts: [{
+          seq: 99,
+          author: { kind: "slot", slotId: "slot-7" },
+          body: "server thread post",
+          meta: "cold load",
+          media: [{
+            contentId: "f".repeat(64),
+            alt: "Server receipt",
+            variants: {
+              tablet: {
+                avifUrl: "/media/thread/server/tablet.avif",
+                webpUrl: "/media/thread/server/tablet.webp",
+                width: 480,
+                height: 360,
+              },
             },
-          ],
-        });
-      }
-      if (url.includes("/votecount")) {
-        return jsonResponse([
-          { VoteCountChanged: { candidate_slot: "slot-2", count: 5 } },
-        ]);
-      }
-      if (url.includes("/day-vote-outcomes")) {
-        return jsonResponse([
-          {
-            DayVoteOutcomeApplied: {
-              phase_id: "D01",
-              source_seq: 22,
-              event_index: 0,
-              status: "Lynch",
-              winner_slot: "slot-2",
-              tallies: { "slot-2": 5 },
-              majority: 5,
-            },
-          },
-        ]);
-      }
-      if (url.includes("/notifications")) {
-        return jsonResponse([
-          { effect: "Neighborized", status: "Delivered" },
-        ]);
-      }
-      if (url.includes("/investigation-results")) {
-        return jsonResponse([
-          { mode: "cop", target_slot: "slot-2", result: "Mafia" },
-        ]);
-      }
-      if (url.includes("/player-command-state")) {
-        return jsonResponse({
-          game: "midsummer",
-          actor_slot: "slot-7",
-          actor_alive: true,
-          actor_status: "alive",
-          role_key: "mafia_goon",
-          phase: {
-            phase_id: "N01",
-            locked: false,
-          },
-          actions: [
-            {
-              template_id: "factional_kill",
-              ability: "Kill",
-              window: "Night",
-              label: "Submit factional kill",
-              detail: "factional_kill -> slot-2",
-              targets: ["slot-2"],
-              target_options: ["slot-2", "slot-3"],
-            },
-          ],
-          current_vote: { kind: "no_lynch", slot_id: null, label: "No lynch" },
-          boundary: "live player command state",
-        });
-      }
-      return { ok: false };
+          }],
+        }],
+      },
+      votecount: [{ target: "slot-2", count: 5, needed: 7 }],
+      dayVoteOutcomes: [{
+        game: null,
+        phaseId: "D01",
+        sourceSeq: 22,
+        eventIndex: 0,
+        status: "Lynch",
+        winnerSlot: "slot-2",
+        tallies: { "slot-2": 5 },
+        majority: 5,
+        reason: null,
+      }],
+      endgameSummary: null,
+      notifications: [{ effect: "Neighborized", status: "Delivered" }],
+      investigationResults: [{ mode: "cop", target_slot: "slot-2", result: "Mafia" }],
+      commandState: {
+        game: "midsummer",
+        actorSlot: "slot-7",
+        actorAlive: true,
+        actorStatus: "alive",
+        roleKey: "mafia_goon",
+        role: null,
+        gameCompleted: false,
+        phase: { phaseId: "N01", locked: false, deadline: null },
+        actions: [{
+          action: "submit_action:factional_kill",
+          commandKind: "submit_action",
+          templateId: "factional_kill",
+          ability: "Kill",
+          window: "Night",
+          label: "Submit factional kill",
+          detail: "factional_kill -> slot-2",
+          targets: ["slot-2"],
+          targetOptions: ["slot-2", "slot-3"],
+        }],
+        currentActions: [],
+        voteTargets: [],
+        currentVote: { kind: "no_lynch", slotId: null, label: "No lynch" },
+        dayEvents: [],
+        dayEventRooms: [],
+        postPolicies: [],
+        boundary: "live player command state",
+      },
     },
   });
 
@@ -765,7 +788,7 @@ test("player private queue helpers derive visible queue from scoped projections"
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: "principal-scoped-private-projections",
     detail:
-      "Night results and notices are delivered to you alone.",
+      "Night results, notices, and seats you were addressed as are delivered to you alone.",
     count: 2,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [
@@ -802,14 +825,26 @@ test("player route data exposes no older pager when the server returns the oldes
     game: "midsummer",
     principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
-    fetchImpl: async (url) => {
-      if (url === "/api/gameplay/games/midsummer?limit=50") {
-        return jsonResponse({
-          next_before_seq: null,
-          posts: [],
-        });
-      }
-      return { ok: false };
+    coldLoad: {
+      thread: { nextBeforeSeq: null, posts: [] },
+      votecount: [],
+      dayVoteOutcomes: [],
+      endgameSummary: null,
+      notifications: [],
+      investigationResults: [],
+      commandState: {
+        actorAlive: true,
+        actorStatus: "alive",
+        gameCompleted: false,
+        phase: null,
+        actions: [],
+        currentActions: [],
+        voteTargets: [],
+        currentVote: null,
+        dayEvents: [],
+        dayEventRooms: [],
+        postPolicies: [],
+      },
     },
   });
 
@@ -926,8 +961,12 @@ test("player load renders pending replacement state for authenticated no-slot se
   assert.equal(data.access.pending, true);
   assert.equal(data.access.capabilityLabel, "PendingReplacement(midsummer)");
   assert.equal(data.pendingReplacement, true);
+  assert.equal(data.commandsEnabled, false);
+  assert.equal(data.liveProjectionEnabled, false);
+  assert.equal(data.player.readOnly, true);
+  assert.equal(data.composer.readOnly, true);
   assert.equal(data.player.principalId, "player-rowan");
-  assert.equal(data.player.slotId, "slot-7");
+  assert.equal(data.player.slotId, null);
   assert.equal(data.player.status, "pending_replacement");
   assert.equal(data.commandState.actorStatus, "pending_replacement");
   assert.equal(data.commandState.actions.length, 0);
@@ -960,29 +999,41 @@ test("player load rejects signed-out sessions without private scoped requests", 
       err.status === 403 &&
       err.body.message === playerForbiddenMessage("midsummer"),
   );
-  assert.deepEqual(seen, [
-    "/api/gameplay/games/midsummer?limit=50",
-    "/api/gameplay/games/midsummer/votecount",
-    "/api/gameplay/games/midsummer/day-vote-outcomes",
-    "/api/gameplay/games/midsummer/endgame-summary",
-  ]);
+  assert.deepEqual(seen, []);
 });
 
 test("player load accepts channel membership scoped to the game", async () => {
-  const data = await load({
-    params: { game: "midsummer" },
-    locals: {
-      principalId: "reader_a",
-      resolvedCapabilities: [
-        { kind: "ChannelMember", game: "midsummer", channel: "main" },
-      ],
-    },
-    fetch: async () => ({ ok: false }),
-  });
+  const previousFixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+  process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
+  let data;
+  try {
+    data = await load({
+      params: { game: "midsummer" },
+      locals: {
+        principalId: "reader_a",
+        resolvedCapabilities: [
+          { kind: "ChannelMember", game: "midsummer", channel: "main" },
+        ],
+      },
+      fetch: async () => {
+        throw new Error("explicit fixture mode must not fetch gameplay state");
+      },
+    });
+  } finally {
+    if (previousFixtureMode === undefined) {
+      delete process.env.FMARCH_FRONTEND_FIXTURE_SESSION;
+    } else {
+      process.env.FMARCH_FRONTEND_FIXTURE_SESSION = previousFixtureMode;
+    }
+  }
 
   assert.equal(data.shell.activeSurface, "player");
   assert.equal(data.shellOwner, "layout");
   assert.equal(data.access.capabilityLabel, "ChannelMember(midsummer)");
+  assert.equal(data.commandsEnabled, false);
+  assert.equal(data.liveProjectionEnabled, true);
+  assert.equal(data.player.readOnly, true);
+  assert.equal(data.composer.readOnly, true);
 });
 
 test("player channel load exposes active channel route state from fixture query", async () => {
@@ -1045,12 +1096,68 @@ test("player main route rejects dead-viewer access without main-channel authorit
   );
 });
 
+test("player load never upgrades upstream failures into fixture authority", async () => {
+  const cases = [
+    { name: "stale identity", response: () => httpFailure(401), status: 401, deletes: true },
+    { name: "forbidden", response: () => httpFailure(403), status: 403, deletes: false },
+    { name: "missing game", response: () => httpFailure(404), status: 404, deletes: false },
+    { name: "API outage", response: () => httpFailure(503), status: 503, deletes: false },
+    {
+      name: "malformed JSON",
+      response: () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        async json() {
+          throw new SyntaxError("malformed");
+        },
+      }),
+      status: 502,
+      deletes: false,
+    },
+    { name: "invalid payload", response: () => jsonResponse({}), status: 502, deletes: false },
+  ];
+
+  for (const scenario of cases) {
+    const deleted = [];
+    await assert.rejects(
+      load({
+        params: { game: "midsummer" },
+        locals: {
+          principalId: "player_mira",
+          resolvedCapabilities: [
+            { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
+          ],
+        },
+        cookies: {
+          get: () => "session-token",
+          delete: (...args) => deleted.push(args),
+        },
+        fetch: async () => scenario.response(),
+      }),
+      (failure) => failure.status === scenario.status,
+      scenario.name,
+    );
+    assert.equal(deleted.length, scenario.deletes ? 1 : 0, scenario.name);
+  }
+});
+
 function jsonResponse(body) {
   return {
     ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return body;
     },
+  };
+}
+
+function httpFailure(status) {
+  return {
+    ok: false,
+    status,
+    headers: new Headers(),
   };
 }
 
@@ -1066,6 +1173,6 @@ test("live projection endpoint always uses the same-origin authenticated ticket 
   });
   assert.equal(
     data.liveProjection.endpoint,
-    "/live/tickets?game=midsummer",
+    "/live/tickets?game=midsummer&slot_id=slot-7",
   );
 });

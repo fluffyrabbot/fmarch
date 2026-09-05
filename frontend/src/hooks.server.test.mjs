@@ -4,10 +4,7 @@ import {
   fmarchIdentityHandle as handle,
   securityHeadersHandle,
 } from "./hooks.server.js";
-import {
-  clearSessionCache,
-  FIXTURE_SESSION_PRINCIPAL_IDS,
-} from "./lib/server/session-capabilities.mjs";
+import { FIXTURE_SESSION_PRINCIPAL_IDS } from "./lib/server/session-capabilities.mjs";
 
 test("handle rotates an overdue browser session before resolving the route", async () => {
   const observed = { requests: [], set: null, deleted: null };
@@ -41,7 +38,6 @@ test("handle clears a concurrently stale browser session instead of serving it",
 
 
 test("handle re-resolves game authority on every request", async () => {
-  clearSessionCache();
   const observed = { requests: [], set: null, deleted: null };
   const event = eventFor(observed, [
     sessionResponse({ rotationRequired: false }),
@@ -55,15 +51,22 @@ test("handle re-resolves game authority on every request", async () => {
     2,
   );
   assert.equal(event.locals.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
-  clearSessionCache();
 });
 
-test("handle serves repeat non-game identity requests from the session cache within the TTL", async () => {
-  clearSessionCache();
+test("handle re-resolves non-game authority on every request", async () => {
   const observed = { requests: [], set: null, deleted: null };
   const event = eventFor(
     observed,
-    [sessionResponse({ rotationRequired: false })],
+    [
+      sessionResponse({
+        rotationRequired: false,
+        capabilities: [{ kind: "GlobalAdmin" }],
+      }),
+      sessionResponse({
+        rotationRequired: false,
+        capabilities: [{ kind: "GlobalAdmin" }],
+      }),
+    ],
     { url: "http://localhost/admin" },
   );
   event.cookies.get = (name) => (name === "fmarch_session" ? "cached-hook-token" : undefined);
@@ -71,10 +74,115 @@ test("handle serves repeat non-game identity requests from the session cache wit
   await handle({ event, resolve: async () => new Response("ok") });
   assert.equal(
     observed.requests.filter((request) => request.url === "/auth/session").length,
-    1,
+    2,
   );
   assert.equal(event.locals.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
-  clearSessionCache();
+});
+
+test("identity outage preserves the browser session and fails authority-bearing SSR", async () => {
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(observed, [{
+    ok: false,
+    status: 503,
+    headers: new Headers({ "retry-after": "2" }),
+  }]);
+  await assert.rejects(
+    handle({ event, resolve: async () => new Response("must not resolve") }),
+    (failure) =>
+      failure.status === 503 &&
+      failure.body.message === "Identity service is temporarily unavailable.",
+  );
+  assert.equal(observed.deleted, null);
+});
+
+test("identity outage leaves public pages available and retains the browser session", async () => {
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(
+    observed,
+    [{
+      ok: false,
+      status: 503,
+      headers: new Headers({ "retry-after": "2" }),
+    }],
+    { url: "http://localhost/" },
+  );
+  const response = await handle({
+    event,
+    resolve: async () => new Response("public board"),
+  });
+
+  assert.equal(await response.text(), "public board");
+  assert.equal(observed.deleted, null);
+  assert.equal(event.locals.principalId, null);
+  assert.deepEqual(event.locals.resolvedCapabilities, []);
+});
+
+test("rotation outage degrades optional-public identity without dropping its recoverable cookie", async () => {
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(
+    observed,
+    [sessionResponse({ rotationRequired: true })],
+    {
+      url: "http://localhost/",
+      rotation: {
+        ok: false,
+        status: 503,
+        headers: new Headers({ "retry-after": "2" }),
+      },
+    },
+  );
+  const response = await handle({
+    event,
+    resolve: async () => new Response("public board"),
+  });
+
+  assert.equal(await response.text(), "public board");
+  assert.equal(observed.deleted, null);
+  assert.equal(observed.set, null);
+  assert.equal(event.locals.principalId, null);
+  assert.deepEqual(event.locals.resolvedCapabilities, []);
+  assert.deepEqual(
+    observed.requests.map((request) => request.url),
+    ["/auth/session", "/auth/session-rotations"],
+  );
+});
+
+test("invalid identity response preserves the cookie and fails with bad gateway", async () => {
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(observed, [{
+    ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
+    async json() {
+      return { principal_id: "not-a-principal", capabilities: [] };
+    },
+  }]);
+  await assert.rejects(
+    handle({ event, resolve: async () => new Response("must not resolve") }),
+    (failure) =>
+      failure.status === 502 &&
+      failure.body.message === "Identity service returned an invalid response.",
+  );
+  assert.equal(observed.deleted, null);
+});
+
+test("only an upstream 401 clears a stale browser session", async () => {
+  const observed = { requests: [], set: null, deleted: null };
+  const event = eventFor(observed, [{
+    ok: false,
+    status: 401,
+    headers: new Headers(),
+  }]);
+  const response = await handle({
+    event,
+    resolve: async () => new Response("anonymous"),
+  });
+  assert.equal(await response.text(), "anonymous");
+  assert.deepEqual(observed.deleted, {
+    name: "fmarch_session",
+    options: { path: "/" },
+  });
+  assert.equal(event.locals.principalId, null);
 });
 
 test("security header hook closes browser embedding and cross-origin policy defaults", async () => {
@@ -98,7 +206,10 @@ function eventFor(
   observed,
   sessions,
   {
-    rotation = sessionResponse({ rotationRequired: false }),
+    rotation = sessionResponse({
+      rotationRequired: false,
+      capabilities: [{ kind: "GlobalAdmin" }],
+    }),
     url = "http://localhost/g/game-1/host",
   } = {},
 ) {
@@ -130,16 +241,20 @@ function eventFor(
   };
 }
 
-function sessionResponse({ rotationRequired }) {
+function sessionResponse({
+  rotationRequired,
+  capabilities = [{ kind: "HostOf", body: { game: "game-1" } }],
+}) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
     async json() {
       return {
         principal_id: FIXTURE_SESSION_PRINCIPAL_IDS.host,
         rotation_required: rotationRequired,
         session_token: "fmss_rotated-token",
-        capabilities: [{ kind: "HostOf", body: { game: "game-1" } }],
+        capabilities,
       };
     },
   };

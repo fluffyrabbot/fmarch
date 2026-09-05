@@ -1,6 +1,7 @@
 import { fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
+import { frontendFixtureMode } from "../../../lib/server/runtime-mode.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 import {
   GAME_CITATION_PREVIEW_LIMIT,
@@ -14,7 +15,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
-  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const fixtureMode = frontendFixtureMode();
   const response = fixtureMode && apiBaseUrl === ""
     ? null
     : await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`, {

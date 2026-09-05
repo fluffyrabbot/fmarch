@@ -5,6 +5,7 @@ import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import { canonicalPrincipalId } from "../../lib/principal-id.mjs";
 import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
+import { frontendFixtureMode } from "../../lib/server/runtime-mode.mjs";
 import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
@@ -26,7 +27,7 @@ export async function load({ cookies, locals, fetch, url }) {
     throw error(400, "principal_id must be a canonical UUID");
   }
   const apiBaseUrl = serverApiBaseUrl();
-  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const fixtureMode = frontendFixtureMode();
   const sessionToken = accessTokenForRequest({ locals, cookies });
   const gameIndexPage = await loadAdminGameIndex({
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
@@ -140,7 +141,7 @@ export const actions = {
 
   checkRecoveryGate: async ({ cookies, fetch, locals, request }) => {
     const apiBaseUrl = serverApiBaseUrl();
-    const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+    const fixtureMode = frontendFixtureMode();
     const capabilities = Array.isArray(locals.resolvedCapabilities)
       ? locals.resolvedCapabilities
       : [];

@@ -13,10 +13,11 @@ import {
 } from "../host/+page.server.js";
 import { accessTokenForRequest } from "../../../../lib/server/session-capabilities.mjs";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { frontendFixtureMode } from "../../../../lib/server/runtime-mode.mjs";
 
 export async function load({ params, locals, fetch, url, cookies }) {
   const apiBaseUrl = serverApiBaseUrl();
-  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const fixtureMode = frontendFixtureMode();
   const capabilities = resolveHostRouteCapabilities({
     game: params.game,
     locals,

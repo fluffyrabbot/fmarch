@@ -3,21 +3,29 @@ import { error, fail } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../lib/app/app-route-state-model.mjs";
 import { canonicalPrincipalId } from "../../../../lib/principal-id.mjs";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { frontendFixtureMode } from "../../../../lib/server/runtime-mode.mjs";
+import { loadHostGameplaySnapshot } from "../../../../lib/server/gameplay-api.mjs";
+import {
+  applyUpstreamSessionInvalidation,
+  upstreamRouteFailure,
+} from "../../../../lib/server/upstream-route.mjs";
 import {
   authenticatedApiFetch,
   accessTokenForRequest,
 } from "../../../../lib/server/session-capabilities.mjs";
+import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.mjs";
 import {
   buildHostConsoleRouteData,
   hostConsoleForbiddenMessage,
+  resolveHostConsoleAccess,
   resolveHostRouteCapabilities,
   resolveHostRoutePrincipal,
 } from "./host-route-model.mjs";
 
 export async function load({ params, locals, fetch, url, cookies }) {
   const apiBaseUrl = serverApiBaseUrl();
-  const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
+  const fixtureMode = frontendFixtureMode();
   const capabilities = resolveHostRouteCapabilities({
     game: params.game,
     locals,
@@ -29,21 +37,38 @@ export async function load({ params, locals, fetch, url, cookies }) {
   if (principalId === "") {
     throw error(403, "Host console requires an authenticated host session.");
   }
-
-  const routeData = await buildHostConsoleRouteData({
+  const access = resolveHostConsoleAccess({ game: params.game, capabilities });
+  if (!access.allowed) {
+    throw error(403, hostConsoleForbiddenMessage(params.game));
+  }
+  let coldLoad = null;
+  if (!fixtureMode) {
+    const result = await loadHostGameplaySnapshot({
+      game: params.game,
+      expectedPrincipalId: principalId,
+      expectedCapabilityKind: access.capability.kind,
+      fetchImpl: authenticatedApiFetch({ cookies, fetchImpl: fetch }),
+      apiBaseUrl,
+      hostConsoleStateEndpoint: buildHostConsoleStateEndpoint({
+        gameId: params.game,
+        slotId: url?.searchParams.get("slot_id") || undefined,
+        apiBaseUrl,
+      }),
+    });
+    if (result.kind !== "ready") {
+      const routeFailure = upstreamRouteFailure(result, { resource: "Host console" });
+      applyUpstreamSessionInvalidation(cookies, routeFailure);
+      throw error(routeFailure.status, routeFailure.message);
+    }
+    coldLoad = result.data;
+  }
+  const routeData = buildHostConsoleRouteData({
     game: params.game,
     capabilities,
     principalId,
-    fetchImpl:
-      fixtureMode && apiBaseUrl === ""
-        ? null
-        : authenticatedApiFetch({ locals, cookies, fetchImpl: fetch }),
-    apiBaseUrl,
+    coldLoad,
+    fixtureMode,
   });
-
-  if (!routeData.access.allowed) {
-    throw error(403, hostConsoleForbiddenMessage(params.game));
-  }
 
   return {
     ...routeData,

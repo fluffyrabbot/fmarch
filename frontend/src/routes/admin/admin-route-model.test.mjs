@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 import {
+  HOST_SETUP_WORKFLOW_CONTRACT,
+} from "../g/[game]/setup/setup-workflow-model.mjs";
+import {
   ADMIN_ROUTE_CONTRACT,
   LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS,
   adminForbiddenMessage,
@@ -4792,7 +4795,31 @@ test("admin local next action detail distinguishes frontend setup workbench read
             [
               ["viewport", layout.viewport, true],
               ["layout", layout.layout, false],
-              ["slotCount", `${layout.slotCount} slots`, false],
+              ["workflowMode", layout.workflowMode, false],
+              ["stageIds", layout.stageIds.join(" → "), false],
+              [
+                "defaultSelectedStageId",
+                layout.defaultSelectedStageId,
+                false,
+              ],
+              ["correctedStageId", layout.correctedStageId, false],
+              [
+                "correctionTargets",
+                layout.correctionTargets
+                  .map((target) => `${target.checkId} → ${target.stageId}`)
+                  .join("; "),
+                false,
+              ],
+              [
+                "rosterCardCount",
+                `${layout.rosterCardCount} roster cards`,
+                false,
+              ],
+              [
+                "roleCardCount",
+                `${layout.roleCardCount} role cards`,
+                false,
+              ],
               [
                 "noHorizontalOverflow",
                 layout.noHorizontalOverflow
@@ -5934,7 +5961,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["reconnect-recovery", "passed: reconnecting -> recovered"],
       [
         "live-projection-lag-resync",
-        "passed: frames 2, refreshes 2, coalesced 0, trailing 0, reconnects 0",
+        "passed: terminal resync frames 2, recovered reconnects 2",
       ],
       ["stale-player-vote", "passed"],
       ["concurrent-vote-race", "passed"],
@@ -5947,7 +5974,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ["public-player-complete-reload", "passed"],
       ["stale-player-complete", "passed"],
       ["stale-player-complete-reload", "passed"],
-      ["stale-player-complete-endgame-resync", "passed"],
+      ["stale-player-complete-endgame-reconnect", "passed"],
       ["stale-player-complete-vote-history", "passed"],
       [
         "stale-dead-action-conflict",
@@ -7835,14 +7862,11 @@ function proofRunFixture() {
       recoveredSnapshotContainsPost: true,
     },
     "live-projection-lag-resync": {
-      resyncRecoveryCount: 2,
+      terminalResyncFrameCount: 2,
       continuationDeltaKinds: ["ThreadPostsChanged", "ThreadPostsChanged"],
-      reconnectEventCount: 0,
+      recoveredReconnectCount: 2,
       clientMetrics: {
         resyncFramesReceived: 2,
-        resyncRefreshesStarted: 2,
-        resyncFramesCoalesced: 0,
-        resyncTrailingRefreshesStarted: 0,
       },
     },
     "stale-same-action-recovery": {
@@ -9510,33 +9534,50 @@ function frontendSetupWorkbenchReadinessFixture() {
     localStatus: "browser_proven",
     importedStatus: "imported_browser_proven",
     localViewportLayouts: [
-      {
+      frontendSetupWorkbenchViewportLayoutFixture({
         viewport: "mobile",
         layout: "stacked",
-        slotCount: 2,
-        noHorizontalOverflow: true,
         screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
-      },
-      {
+      }),
+      frontendSetupWorkbenchViewportLayoutFixture({
         viewport: "tablet",
-        layout: "co-located-columns",
-        slotCount: 2,
-        noHorizontalOverflow: true,
+        layout: "stepper-canvas",
         screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
-      },
-      {
+      }),
+      frontendSetupWorkbenchViewportLayoutFixture({
         viewport: "desktop",
-        layout: "co-located-columns",
-        slotCount: 2,
-        noHorizontalOverflow: true,
+        layout: "stepper-canvas",
         screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
-      },
+      }),
     ],
     localScreenshotCount: 3,
     importedSetupCount: 3,
     importedScreenshotCheckCount: 3,
     proofBoundary:
       "Frontend readiness summary host-setup-workbench lane only; separates browser geometry proof from dev-test-game host setup role recovery and does not claim hosted, release, or production readiness.",
+  };
+}
+
+function frontendSetupWorkbenchViewportLayoutFixture({
+  viewport,
+  layout,
+  screenshot,
+}) {
+  return {
+    viewport,
+    layout,
+    workflowMode: HOST_SETUP_WORKFLOW_CONTRACT.mode,
+    stageIds: [...HOST_SETUP_WORKFLOW_CONTRACT.stageIds],
+    defaultSelectedStageId: "roster",
+    correctedStageId: "roles",
+    rosterCardCount: 2,
+    roleCardCount: 2,
+    correctionTargets: [
+      { checkId: "slots-occupied", stageId: "roster" },
+      { checkId: "roles-assigned", stageId: "roles" },
+    ],
+    noHorizontalOverflow: true,
+    screenshot,
   };
 }
 
