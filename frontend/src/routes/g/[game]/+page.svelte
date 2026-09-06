@@ -2,7 +2,9 @@
   import { onMount, tick } from "svelte";
   import { privateNewCount } from "$lib/app/private-attention.mjs";
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
-  import { afterNavigate } from "$app/navigation";
+  import { afterNavigate, pushState, replaceState } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin } from "$lib/app/reader-navigation.mjs";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
   afterNavigate(async ({ to, type }) => {
     await tick();
@@ -146,6 +148,36 @@
     authorized: Boolean(data.player.slotId) && !data.pendingReplacement &&
       commandState?.actorSlot === data.player.slotId &&
       !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
+  });
+  let readerNavigation;
+  let readerTrip = null;
+  let readerNavigationMessage = "";
+  onMount(() => {
+    let focusedReaderPost = null;
+    const rememberPost = event => {
+      const post = event.target?.closest?.('[id^="thread-post-"]');
+      if (post) focusedReaderPost = post.id;
+    };
+    document.addEventListener("focusin", rememberPost);
+    readerNavigation = createReaderNavigation({
+      getPage: () => $page, push: pushState, replace: replaceState,
+      back: () => history.back(), capture: () => captureReaderOrigin(document, focusedReaderPost), afterRender: tick,
+      restore: origin => {
+        readerNavigationMessage = restoreReaderOrigin(origin) ? "" : "The original post is no longer in this view.";
+      },
+      focusDestination: destination => {
+        const section = document.getElementById(destination === "count" ? "player-actions" : "player-private-queue");
+        const focusTarget = destination === "private" ? document.getElementById("private-attention-filter") ?? section : section;
+        focusTarget?.focus({ preventScroll: true });
+        section?.scrollIntoView({ block: "start", behavior: "instant" });
+      },
+      onChange: trip => {
+        readerTrip = trip;
+        readerNavigationMessage = "";
+      },
+    });
+    const unsubscribe = page.subscribe(value => readerNavigation.observe(value));
+    return () => { unsubscribe(); document.removeEventListener("focusin", rememberPost); readerNavigation.dispose(); };
   });
   let privateFilter = "all";
   let returnFocusId = null;
@@ -759,13 +791,9 @@
     return positions;
   }
 
-  async function openPrivateQueue() {
-    privateFilter = privateNewItemCount > 0 ? "new" : "all";
-    await tick();
-    const queue = document.getElementById("player-private-queue");
-    (document.getElementById("private-attention-filter") ?? queue)?.focus({ preventScroll: true });
-    queue?.scrollIntoView({ block: "start", behavior: "instant" });
-  }
+  function openPrivateQueue() { privateFilter = privateNewItemCount > 0 ? "new" : "all"; readerNavigation?.open("private"); }
+  function openVoteCount() { readerNavigation?.open("count"); }
+  function returnToThread() { readerNavigation?.returnToThread(); }
 
   function refreshPrivateAttention() {
     return privateAttentionController?.refresh();
@@ -902,7 +930,10 @@
       </section>
     {/if}
 
+    {#if readerNavigationMessage}<p role="status">{readerNavigationMessage}</p>{/if}
     <VoteSheet
+      returnAvailable={readerTrip?.destination === "count"}
+      onReturnToThread={returnToThread}
       view={playerActionView}
       onCommand={submitPlayerCommand}
       onSelectTarget={selectActionTarget}
@@ -910,6 +941,8 @@
 
     <ContextSheet>
       <PlayerPrivateQueue
+        returnAvailable={readerTrip?.destination === "private"}
+        onReturnToThread={returnToThread}
         boundary={privateQueueBoundary}
         items={privateQueue}
         expandedItems={expandedPrivateItems}
@@ -967,6 +1000,7 @@
         commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
         privateNewCount={privateNewItemCount}
         onOpenPrivateQueue={openPrivateQueue}
+        onOpenVoteCount={openVoteCount}
         dayEventCount={composer.dayEventCommands?.length ?? 0}
         onCommand={submitPlayerCommand}
       />

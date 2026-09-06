@@ -257,3 +257,15 @@ Reader-only navigation is not marked busy by command recovery, and its mobile
 layout does not reserve an empty command row. Completed games retain their final
 state notice without implying that a refresh can reopen commands. Spectator
 navigation does not confer seat access or populate the private delivery badge.
+
+
+Count and More are reversible local excursions using SvelteKit shallow history.
+The origin entry stores a route-scoped post ID and viewport offset, with a thread
+fallback when no post is visible. Keyboard focus moving to the dock retains the
+last focused post only while that post is still visible. Switching Count/More
+replaces the destination entry, so Return to thread and browser Back have one
+origin; repeated Return activation cannot consume another history entry. Forward
+reopens the destination. Restoration resolves current DOM geometry after render,
+so live arrivals and edits above the origin do not change the reading offset.
+History contains no post text or private receipts. A missing post falls back to
+the thread with an explicit message and does not recreate removed content.

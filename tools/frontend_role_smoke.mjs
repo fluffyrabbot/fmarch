@@ -3982,7 +3982,8 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await page.unroute(endpoint, mock);
   }
   await proveReaderNavigation(page, baseUrl, routePath);
-  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+  await proveReadingReturn(page, baseUrl, routePath);
+  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
 }
 
 
@@ -4023,4 +4024,41 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     assert.equal(await spectator.getByTestId("player-private-new-count").count(), 0);
     await spectator.getByTestId("player-private-empty").waitFor();
   } finally { await context.close(); }
+}
+
+
+async function proveReadingReturn(page, baseUrl, routePath) {
+  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  const origin = page.locator("#thread-post-443");
+  await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
+  const top = await origin.evaluate(el => el.getBoundingClientRect().top);
+  async function assertReturned() {
+    await page.waitForFunction(top => document.activeElement?.id === "thread-post-443" && Math.abs(document.getElementById("thread-post-443").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
+      const state = await page.evaluate(() => ({ active: document.activeElement?.id, top: document.getElementById("thread-post-443")?.getBoundingClientRect().top, history: history.state }));
+      throw new Error(`${error.message}; expected top=${top}; return state=${JSON.stringify(state)}`);
+    });
+  }
+  await page.getByTestId("player-dock-count").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
+  const post = (seq, body) => ({ game: "midsummer", source_seq: seq, stream_seq: seq,
+    channel_id: "main", author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
+    body, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
+  const frame = [...encodeServerEnvelopeFrame({ v: 3, id: 1, body: { kind: "Delta", body: {
+    audience: { Thread: { game: "midsummer", channel: "main" } }, delta: { kind: "ThreadPostsChanged", body: {
+      game: "midsummer", posts: [post(442, "Live edit above the reading anchor. ".repeat(100)), post(446, "A live arrival while reading the vote count.")],
+    } },
+  } } })];
+  await page.evaluate(frame => window.__fmarchEmitLiveProjection(frame), frame);
+  await page.locator("#thread-post-446").waitFor();
+  await page.goBack(); await assertReturned();
+  await page.goForward();
+  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
+  await page.getByTestId("return-to-thread").focus(); await page.keyboard.press("Enter");
+  await assertReturned();
+  await page.getByTestId("player-dock-more").focus(); await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
+  await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
+  await page.getByTestId("return-to-thread").click(); await assertReturned();
 }

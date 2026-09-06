@@ -81,7 +81,11 @@ const appNavigationPath = path.join(tempEntryDir, "app-navigation.mjs");
 const appRootShellPath = path.join(tempEntryDir, "AppRootShell.svelte");
 await writeFile(entryPath, renderEntrySource());
 await writeFile(appStoresPath, renderAppStoresSource());
-await writeFile(appNavigationPath, "export async function goto() {}\nexport function afterNavigate() {}\n");
+await writeFile(appNavigationPath, `export async function goto() {}
+export function afterNavigate() {}
+export function pushState() { throw new Error("History is unavailable during server render"); }
+export function replaceState() { throw new Error("History is unavailable during server render"); }
+`);
 await writeFile(appRootShellPath, renderAppRootShellSource());
 
 try {

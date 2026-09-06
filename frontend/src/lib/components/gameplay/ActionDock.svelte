@@ -2,6 +2,7 @@
   export let view;
   export let commandsAvailable = false;
   export let privateNewCount = null;
+  export let onOpenVoteCount = () => {};
   export let onOpenPrivateQueue = () => {};
   export let dayEventCount = 0;
   export let onCommand = () => {};
@@ -72,7 +73,7 @@
       <strong aria-label={`${dayEventCount} open events`}>{dayEventCount}</strong>
     </a>
   {/if}
-  <a class="action-dock__tool" href="#player-actions" data-testid="player-dock-count">
+  <a class="action-dock__tool" href="#player-actions" data-testid="player-dock-count" on:click|preventDefault={onOpenVoteCount}>
     <span>Count</span>
   </a>
   <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
@@ -179,8 +180,5 @@
       padding-inline: 6px;
     }
 
-    .action-dock[data-commands-available="true"] .action-dock__tool[data-testid="player-dock-count"] {
-      display: none;
-    }
   }
 </style>

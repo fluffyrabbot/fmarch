@@ -17,7 +17,7 @@
   $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled });
 </script>
 
-<section class="player-surface__thread" aria-label="Thread">
+<section id="player-thread" tabindex="-1" class="player-surface__thread" aria-label="Thread">
   {#if thread.nextAfterSeq != null}
     <button class="fm-touch-button" on:click={onLoadNewer} disabled={threadPageStatus?.state === "pending"}>Load newer posts</button>
   {/if}

@@ -1,4 +1,6 @@
 <script>
+  export let returnAvailable = false;
+  export let onReturnToThread = () => {};
   import { tick } from "svelte";
   import ConfirmationShell from "$lib/app/ConfirmationShell.svelte";
   import { containTabWithinConfirmation } from "$lib/app/confirmation-focus.mjs";
@@ -31,7 +33,8 @@
   }
 </script>
 
-<section class="vote-sheet" id="player-actions" data-testid="player-action-detail">
+<section class="vote-sheet" id="player-actions" tabindex="-1" data-testid="player-action-detail">
+  {#if returnAvailable}<button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid="return-to-thread" on:click={onReturnToThread}>Return to thread</button>{/if}
   <header>
     <div>
       <p class="fm-eyebrow">Game state</p>

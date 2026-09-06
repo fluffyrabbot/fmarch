@@ -1,4 +1,6 @@
 <script>
+  export let returnAvailable = false;
+  export let onReturnToThread = () => {};
   import {
     buildPlayerPrivateQueueViewModel,
   } from "./player-private-queue-model.mjs";
@@ -34,6 +36,7 @@
   data-component={view.root.data.component}
   data-boundary-status={view.root.data.boundaryStatus}
 >
+  {#if returnAvailable}<button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid="return-to-thread" on:click={onReturnToThread}>Return to thread</button>{/if}
   <header class="fm-ledger__head">
     <h2>{view.heading}</h2>
     {#if attention.state === "ready" && view.items.length > 0}
