@@ -1,14 +1,21 @@
 <script>
   import { onMount, tick } from "svelte";
-  import { fetchPrivateAttention } from "$lib/app/private-attention.mjs";
+  import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
   import { afterNavigate } from "$app/navigation";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
-  afterNavigate(async ({ to }) => {
+  afterNavigate(async ({ to, type }) => {
     await tick();
     if (to) {
-      focusAddressedPost(to.url);
-      const itemId = to.url.searchParams.get("private");
-      if (itemId) document.getElementById(`private-item-${itemId}`)?.focus();
+      if (type !== "popstate") {
+        returnFocusId = null;
+        focusAddressedPost(to.url);
+        const itemId = to.url.searchParams.get("private");
+        if (itemId) {
+          privateFilter = "all";
+          await tick();
+          document.getElementById(`private-item-${itemId}`)?.focus();
+        }
+      }
       if (data.player.slotId && !data.pendingReplacement) void refreshPrivateAttention();
     }
   });
@@ -132,8 +139,47 @@
   let channels = data.channels;
   let surfaceHeader = data.surfaceHeader;
   let privateQueue = data.privateQueue;
-  let privateAttention;
-  $: privateAttention = data.privateAttention ?? { state: "unavailable", reviewedIds: [] };
+  let privateAttention = data.privateAttention ?? { state: "unavailable", reviewedIds: [] };
+  let privateFilter = "all";
+  let returnFocusId = null;
+  $: if (returnFocusId && privateQueue.length && privateAttention.state === "ready") {
+    void tick().then(() => {
+      const target = returnFocusId && document.getElementById(returnFocusId);
+      if (target) { target.focus({ preventScroll: true }); returnFocusId = null; }
+    });
+  }
+  let privateAttentionController;
+  export const snapshot = {
+    capture: () => ({ privateFilter, expandedPrivateItems,
+      focusedId: document.activeElement?.closest('[id^="private-item-"], [id^="thread-post-"]')?.id ?? capturePrivateReadingPositions()[0]?.id ?? null }),
+    restore: value => {
+      privateFilter = value.privateFilter;
+      expandedPrivateItems = value.expandedPrivateItems;
+      returnFocusId = value.focusedId;
+    },
+  };
+  onMount(() => {
+    if (!data.player.slotId || data.pendingReplacement) return;
+    let active = true;
+    privateAttentionController = createPrivateAttentionController({
+      game: data.game.id, initial: privateAttention,
+      onChange: async ({ attention, pending, message }) => {
+        const positions = capturePrivateReadingPositions();
+        const focusedId = document.activeElement?.id;
+        privateAttention = attention;
+        privateReviewPending = pending;
+        privateReviewMessage = message;
+        await tick();
+        if (!active) return;
+        restoreReadingPosition(positions.find(position => document.getElementById(position.id)));
+        if (focusedId && !document.getElementById(focusedId)) {
+          document.querySelector('[data-testid="private-attention-filter"]')?.focus({ preventScroll: true });
+        }
+      },
+    });
+    void privateAttentionController.refresh();
+    return () => { active = false; privateAttentionController.dispose(); };
+  });
   let privateReviewPending = false;
   let privateReviewMessage = "";
   let privateQueueBoundary = data.privateQueueBoundary;
@@ -691,29 +737,40 @@
     }
   }
 
-  async function refreshPrivateAttention() {
-    if (privateReviewPending) return;
-    privateReviewPending = true;
-    try {
-      privateAttention = await fetchPrivateAttention({ game: data.game.id });
-      privateReviewMessage = "";
-    } catch (error) {
-      privateAttention = { state: "unavailable", reviewedIds: [] };
-      privateReviewMessage = error.message;
-    } finally { privateReviewPending = false; }
+  function capturePrivateReadingPositions() {
+    const positions = [...document.querySelectorAll('[id^="private-item-"]')]
+      .filter(row => row.getBoundingClientRect().bottom > 0 && row.getBoundingClientRect().top < window.innerHeight)
+      .map(row => ({ id: row.id, top: row.getBoundingClientRect().top }));
+    const threadPosition = captureReadingPosition();
+    if (threadPosition) positions.push(threadPosition);
+    const filter = document.getElementById("private-attention-filter");
+    if (positions.length && filter) {
+      const filterPosition = { id: filter.id, top: filter.getBoundingClientRect().top };
+      if (privateFilter === "all") positions.push(filterPosition);
+      else positions.unshift(filterPosition);
+    }
+    return positions;
+  }
+
+  function refreshPrivateAttention() {
+    return privateAttentionController?.refresh();
   }
 
   async function reviewPrivateItem(item) {
-    if (privateReviewPending) return;
-    privateReviewPending = true;
-    privateReviewMessage = "";
-    try {
-      privateAttention = await fetchPrivateAttention({ game: data.game.id, itemId: item.id });
-      privateReviewMessage = "Marked reviewed.";
+    if (await privateAttentionController?.review(item.id)) {
       await tick();
-      document.getElementById(`private-item-${item.id}`)?.focus({ preventScroll: true });
-    } catch (error) { privateReviewMessage = error.message; }
-    finally { privateReviewPending = false; }
+      const target = document.getElementById(`private-item-${item.id}`)
+        ?? document.querySelector('[data-testid="private-attention-filter"]');
+      target?.focus({ preventScroll: true });
+    }
+  }
+
+  async function filterPrivateItems(filter) {
+    const control = document.querySelector('[data-testid="private-attention-filter"]');
+    const top = control?.getBoundingClientRect().top;
+    privateFilter = filter;
+    await tick();
+    if (control) window.scrollBy({ top: control.getBoundingClientRect().top - top, behavior: "instant" });
   }
 
   function togglePrivateItem(item) {
@@ -843,6 +900,8 @@
         expandedItems={expandedPrivateItems}
         onToggle={togglePrivateItem}
         attention={privateAttention}
+        filter={privateFilter}
+        onFilter={filterPrivateItems}
         pending={privateReviewPending}
         message={privateReviewMessage}
         onReview={reviewPrivateItem}

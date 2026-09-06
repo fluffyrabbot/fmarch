@@ -12,6 +12,10 @@
   export let onRetry = () => {};
   export let onReview = () => {};
   export let onToggle = () => {};
+  export let filter = "all";
+  export let onFilter = () => {};
+  $: visibleItems = attention.state !== "ready" || filter === "all" ? view.items
+    : view.items.filter(item => reviewed.has(item.id) === (filter === "reviewed"));
 
   $: reviewed = new Set(attention.reviewedIds);
 
@@ -31,7 +35,11 @@
   <header class="fm-ledger__head">
     <h2>{view.heading}</h2>
     {#if attention.state === "ready" && view.items.length > 0}
-      <span class="private-new-count" data-testid="private-attention-count">{view.items.filter(item => !reviewed.has(item.id)).length} new</span>
+      <select id="private-attention-filter" class="private-filter" aria-label="Filter private queue" data-testid="private-attention-filter" value={filter} on:change={event => onFilter(event.currentTarget.value)}>
+        <option value="all">All ({view.items.length})</option>
+        <option value="new">New ({view.items.filter(item => !reviewed.has(item.id)).length})</option>
+        <option value="reviewed">Reviewed ({view.items.filter(item => reviewed.has(item.id)).length})</option>
+      </select>
     {/if}
     <span class="fm-count" data-testid="player-private-count">
       {view.boundary.count}
@@ -56,7 +64,8 @@
       {view.emptyMessage}
     </p>
   {:else}
-    {#each view.items as item (item.id)}
+    {#if visibleItems.length === 0}<p role="status" data-testid="private-filter-empty">{filter === "new" ? "No new private items." : "No reviewed private items."}</p>{/if}
+    {#each visibleItems as item (item.id)}
       <article
         class="player-private-queue__item fm-disclosure"
         id={`private-item-${item.id}`}
@@ -114,8 +123,8 @@
 
 <style>
   .private-item-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-  .private-item-heading > span, .private-new-count { color: var(--fm-ink-subtle); font-size: 12px; white-space: nowrap; }
-  .private-new-count { margin-inline-start: auto; }
+  .private-item-heading > span { color: var(--fm-ink-subtle); font-size: 12px; white-space: nowrap; }
+  .private-filter { margin-inline-start: auto; min-height: 44px; max-width: 130px; font: inherit; color: inherit; background: var(--fm-paper); border: 1px solid var(--fm-rule); border-radius: 4px; }
   .private-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
   .player-private-queue h2 {

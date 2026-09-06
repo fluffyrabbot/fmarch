@@ -224,3 +224,17 @@ outgoing player loses access, and the incoming player receives the seat's
 existing deliveries with independent review state. An unavailable review read
 stays distinct from an empty reviewed set. Writes have a bounded wait, explicit
 failure, and retry; viewing a destination alone does not mark it reviewed.
+
+
+Private attention filtering and refresh use the same authorized receipt endpoint.
+All/New/Reviewed is view state; navigation snapshots retain the filter, disclosure
+state, and focused destination when the reader returns with browser Back. Direct
+private-result destinations reveal their item even when a prior filter excluded it.
+Review responses and refreshes are serialized per mounted route. An invalidation
+received during a request queues a fresh read, so concurrent tab reviews converge
+without trusting stale response sets. BroadcastChannel carries only an invalidation
+signal scoped to the game, never delivery IDs, content, or review state. Focus,
+pageshow, and visibility changes revalidate with current session authority, including
+when broadcast delivery is unavailable. Unmount removes listeners and ignores late
+responses. Background changes preserve a surviving visible row or thread anchor,
+with the filter as a fallback when its final New items disappear.

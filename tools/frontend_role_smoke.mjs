@@ -3875,5 +3875,80 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   assert.equal(new URL(page.url()).searchParams.get("private"), id);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
-  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true };
+  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  const filter = page.getByTestId("private-attention-filter");
+  await filter.selectOption("new");
+  assert.equal(await status.count(), 0);
+  await filter.selectOption("reviewed");
+  await status.waitFor();
+  await page.evaluate(id => document.getElementById(`private-item-${id}`).scrollIntoView({ block: "start" }), id);
+  const readingTop = await page.getByTestId(`player-private-${id}`).evaluate(el => el.getBoundingClientRect().top);
+  await page.getByTestId(`player-private-link-${id}`).click();
+  await page.waitForFunction(id => new URL(location.href).searchParams.get("private") === id, id);
+  await page.goBack();
+  await page.waitForFunction(() => document.querySelector('[data-testid="private-attention-filter"]')?.value === "reviewed");
+  await page.waitForFunction(({ id, top }) => Math.abs(document.getElementById(`private-item-${id}`).getBoundingClientRect().top - top) < 2, { id, top: readingTop });
+
+  await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
+  const peer = await page.context().newPage();
+  await installLiveProjectionHarness(peer, { roleId: "player" });
+  for (const tab of [page, peer]) {
+    await installFixtureApiRoutes(tab, {
+      routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState(),
+    });
+  }
+  const durable = new Set();
+  const pendingWrites = [];
+  const mock = async route => {
+    if (route.request().method() === "POST") {
+      const itemId = route.request().postDataJSON().item_id;
+      durable.add(itemId);
+      pendingWrites.push({ route, itemId });
+      if (pendingWrites.length === 2) {
+        await Promise.all(pendingWrites.map(({ route, itemId }) => route.fulfill({ json: { reviewed_ids: [itemId] } })));
+      }
+      return;
+    }
+    await route.fulfill({ json: { reviewed_ids: [...durable] } });
+  };
+  const endpoint = "**/api/gameplay/games/*/private-attention";
+  await page.route(endpoint, mock);
+  await peer.route(endpoint, mock);
+  try {
+    await Promise.all([page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" }), peer.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" })]);
+    await Promise.all([page, peer].map(tab => tab.getByTestId("private-attention-filter").selectOption("all")));
+    await filter.selectOption("new");
+    await filter.evaluate(el => el.scrollIntoView({ block: "center" }));
+    const filterTop = await filter.evaluate(el => el.getBoundingClientRect().top);
+    const otherId = "investigation-N02-1-slot-7";
+    await Promise.all([
+      page.getByTestId(`private-mark-reviewed-${id}`).click(),
+      peer.getByTestId(`private-mark-reviewed-${otherId}`).click(),
+    ]);
+    await page.getByTestId("private-filter-empty").waitFor();
+    await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter", null, { timeout: 5000 });
+    await page.waitForFunction(top => {
+      const filter = document.getElementById("private-attention-filter");
+      if (!filter) return false;
+      const actual = filter.getBoundingClientRect().top;
+      const maximumScroll = document.documentElement.scrollHeight - innerHeight;
+      const expected = Math.max(top, actual + scrollY - maximumScroll);
+      return Math.abs(actual - expected) < 2;
+    }, filterTop, { timeout: 5000 });
+    await filter.selectOption("all");
+    for (const tab of [page, peer]) {
+      await tab.waitForFunction(ids => ids.every(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed"), [id, otherId]);
+    }
+    await filter.selectOption("new");
+    await page.getByTestId("private-filter-empty").waitFor();
+    assert.equal(pendingWrites.length, 2);
+  } catch (error) {
+    const states = await Promise.all([page, peer].map(tab => tab.locator('[data-component="player-private-queue"]').innerText()));
+    const geometry = await page.evaluate(() => ({ top: document.getElementById("private-attention-filter")?.getBoundingClientRect().top, scroll: scrollY, height: innerHeight, document: document.documentElement.scrollHeight, active: document.activeElement?.id }));
+    throw new Error(`${error.message}; writes=${pendingWrites.length}; geometry=${JSON.stringify(geometry)}; states=${JSON.stringify(states)}`);
+  } finally {
+    await peer.close();
+    await page.unroute(endpoint, mock);
+  }
+  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true };
 }
