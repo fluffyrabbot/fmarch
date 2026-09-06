@@ -9,6 +9,15 @@ export function readerNavigationState(page) {
     && typeof value.origin?.id === "string" && Number.isFinite(value.origin?.top)
     ? value : null;
 }
+// SvelteKit resets page.state on hydration; its supported snapshot lifecycle
+// persists the excursion without depending on internal history-state keys.
+export function readerNavigationSnapshot(page) {
+  return { trip: readerNavigationState(page), hash: page.url.hash };
+}
+export function readerNavigationFromSnapshot(saved, page) {
+  if (!saved || saved.hash !== page.url.hash || readerNavigationState(page)) return null;
+  return readerNavigationState({ ...page, state: { readerNavigation: saved.trip } });
+}
 export function captureReaderOrigin(documentRef = document, preferredId = null) {
   const preferred = preferredId && documentRef.getElementById(preferredId);
   if (preferred) {
@@ -35,11 +44,13 @@ export function restoreReaderOrigin(origin, documentRef = document, windowRef = 
 // Only our own destination entry can request Back. No post text or private
 // receipt state is copied into history, and an origin never crosses routes.
 export function createReaderNavigation({ getPage, push, replace, back, capture,
-  restore, focusDestination, afterRender, onChange }) {
+  restore, reconcileOrigin = () => {}, focusDestination, afterRender, onChange }) {
   let observed;
   let epoch = 0;
   let disposed = false;
   let returning = false;
+  let recovery;
+  let restoration = null;
   return {
     observe(page) {
       if (disposed) return;
@@ -47,13 +58,31 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       if (next === observed) return;
       observed = next;
       returning = false;
+      restoration = null;
+      recovery?.abort();
+      recovery = new AbortController();
+      const signal = recovery.signal;
       const generation = ++epoch;
       onChange(next);
       if (next) void afterRender().then(() => {
         if (disposed || generation !== epoch) return;
-        if (next.destination === null) restore(next.origin);
-        else focusDestination(next.destination);
+        if (next.destination === null) {
+          restoration = { origin: next.origin, signal, isCurrent: () => !disposed && generation === epoch };
+          restore(next.origin, restoration);
+        } else focusDestination(next.destination);
       });
+    },
+    reconcile() {
+      const pending = restoration;
+      if (pending) void afterRender().then(() => {
+        if (pending === restoration && pending.isCurrent()) reconcileOrigin(pending.origin);
+      });
+    },
+    release() {
+      if (!restoration) return;
+      restoration = null;
+      recovery?.abort();
+      ++epoch;
     },
     open(destination) {
       if (disposed || returning || !destinations.has(destination)) return;
@@ -76,6 +105,6 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
         back();
       }
     },
-    dispose() { disposed = true; ++epoch; },
+    dispose() { disposed = true; recovery?.abort(); ++epoch; },
   };
 }

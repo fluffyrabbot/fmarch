@@ -535,6 +535,7 @@ try {
       screenshot: path.relative(repoRoot, privateChannelScreenshot),
       screenshotPixels: privateChannelScreenshotPixels,
     });
+    await proveReloadReadingReturn(privateChannelPage, baseUrl, privateChannelPath, "private:role_pm:slot-7");
     await privateChannelContext.close();
 
     for (const forbidden of forbiddenRoutes) {
@@ -3983,7 +3984,8 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   }
   await proveReaderNavigation(page, baseUrl, routePath);
   await proveReadingReturn(page, baseUrl, routePath);
-  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+  await proveReloadReadingReturn(page, baseUrl, routePath);
+  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
 }
 
 
@@ -4061,4 +4063,69 @@ async function proveReadingReturn(page, baseUrl, routePath) {
   await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.activeElement?.id === "player-actions");
   await page.getByTestId("return-to-thread").click(); await assertReturned();
+}
+
+async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "main") {
+  const post = seq => ({ game: "midsummer", source_seq: seq, stream_seq: seq,
+    channel_id: channel, author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
+    body: `Historical post ${seq}.`, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
+  const posts = Array.from({ length: 60 }, (_, index) => post(index + 1));
+  const endpoint = channel === "main" ? "**/api/gameplay/games/midsummer?**" : "**/games/midsummer/channels/*/thread?**";
+  let outcome = "ready", requests = 0;
+  const handler = async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("before_seq")) return route.fulfill({ json: { next_before_seq: null, posts } });
+    if (!url.searchParams.has("around_seq")) return route.fallback();
+    assert.equal(url.searchParams.get("around_seq"), "10");
+    if (!url.searchParams.has("_fmarch_projection_refresh")) requests++;
+    if (outcome !== "ready") return route.fulfill({ status: outcome === "denied" ? 403 : 404 });
+    return route.fulfill({ json: { next_before_seq: null, next_after_seq: 30, posts: posts.slice(0, 30) } });
+  };
+  await page.route(endpoint, handler);
+  try {
+    for (outcome of channel === "main" ? ["ready", "hidden", "deleted"] : ["ready", "denied"]) {
+      await page.goto(`${baseUrl}${routePath}?reader-proof=${outcome}`, { waitUntil: "networkidle" });
+      await page.getByTestId("player-thread-load-older").click();
+      const origin = page.locator("#thread-post-10");
+      await origin.waitFor();
+      await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
+      const top = await origin.evaluate(el => el.getBoundingClientRect().top);
+      await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
+      await page.waitForFunction(() => document.activeElement?.id === "player-actions");
+      await page.reload({ waitUntil: "networkidle" });
+      assert.equal(await origin.count(), 0);
+      await page.getByTestId("return-to-thread").waitFor({ timeout: 5000 }).catch(async error => {
+        const state = await page.evaluate(() => ({ url: location.href, history: history.state,
+          snapshots: Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.includes("snapshot"))) }));
+        throw new Error(`${error.message}; reload state=${JSON.stringify(state)}`);
+      });
+      await page.getByTestId("return-to-thread").focus(); await page.keyboard.press("Enter");
+      if (outcome === "ready") {
+        await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
+          Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
+            const state = await page.evaluate(() => ({ url: location.href, active: document.activeElement?.id,
+              top: document.getElementById("thread-post-10")?.getBoundingClientRect().top, history: history.state,
+              snapshots: Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.includes("snapshot"))),
+              statuses: [...document.querySelectorAll('[role="status"]')].map(el => el.textContent) }));
+            throw new Error(`${error.message}; expected=${top}, requests=${requests}, state=${JSON.stringify(state)}`);
+          });
+        await page.getByRole("button", { name: "Load newer posts", exact: true }).waitFor();
+        await page.reload({ waitUntil: "networkidle" });
+        await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
+          Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
+            const state = await page.evaluate(() => ({ url: location.href, active: document.activeElement?.id,
+              top: document.getElementById("thread-post-10")?.getBoundingClientRect().top, history: history.state,
+              snapshots: Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.includes("snapshot"))),
+              statuses: [...document.querySelectorAll('[role="status"]')].map(el => el.textContent) }));
+            throw new Error(`${error.message}; expected=${top}, requests=${requests}, state=${JSON.stringify(state)}`);
+          });
+      } else {
+        await page.getByText(outcome === "denied" ? "You no longer have access to this channel." : "The original post is unavailable.", { exact: true }).waitFor();
+        if (outcome === "denied") assert.equal(await page.locator('[id^="thread-post-"]').count(), 0);
+        assert.equal(await origin.count(), 0);
+        assert.equal(await page.evaluate(() => document.activeElement.id), "player-thread");
+      }
+    }
+    assert.equal(requests, channel === "main" ? 4 : 3);
+  } finally { await page.unroute(endpoint, handler); }
 }

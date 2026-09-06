@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createReaderNavigation, readerNavigationState, restoreReaderOrigin, captureReaderOrigin } from "./reader-navigation.mjs";
+import { createReaderNavigation, readerNavigationState, readerNavigationSnapshot, readerNavigationFromSnapshot, restoreReaderOrigin, captureReaderOrigin } from "./reader-navigation.mjs";
 const settle = () => new Promise(resolve => setImmediate(resolve));
 test("Count and More share one reversible origin entry and retain unrelated history state", async () => {
   const stack = [{ url: new URL("https://example.test/g/g?post=443"), state: { existing: true } }];
@@ -60,4 +60,45 @@ test("repeated Return activation cannot traverse beyond the owned history entry"
   const controller = createReaderNavigation({ getPage: () => page, back: () => ++backs });
   controller.returnToThread(); controller.returnToThread();
   assert.equal(backs, 1); controller.dispose();
+});
+
+test("leaving an origin aborts recovery and invalidates its publication guard", async () => {
+  let context;
+  const controller = createReaderNavigation({ afterRender: () => Promise.resolve(),
+    restore: (_, value) => { context = value; }, onChange() {}, focusDestination() {} });
+  const entry = { url: new URL("https://example.test/g/g"), state: { readerNavigation: {
+    scope: "/g/g", origin: { id: "thread-post-10", top: 90 }, destination: null,
+  } } };
+  controller.observe(entry); await settle();
+  assert.equal(context.isCurrent(), true);
+  controller.observe({ ...entry, state: {} });
+  assert.equal(context.signal.aborted, true);
+  assert.equal(context.isCurrent(), false);
+  controller.dispose();
+});
+
+test("reload snapshots restore only the same scoped destination without replacing current history state", () => {
+  const page = { url: new URL("https://example.test/g/g#player-actions"), state: { readerNavigation: {
+    scope: "/g/g", origin: { id: "thread-post-10", top: 123 }, destination: "count",
+  } } };
+  const saved = JSON.parse(JSON.stringify(readerNavigationSnapshot(page)));
+  assert.deepEqual(readerNavigationFromSnapshot(saved, { ...page, state: {} }), page.state.readerNavigation);
+  assert.equal(readerNavigationFromSnapshot(saved, page), null);
+  assert.equal(readerNavigationFromSnapshot(saved, { url: new URL("https://example.test/g/g"), state: {} }), null);
+  assert.equal(readerNavigationFromSnapshot(saved, { url: new URL("https://example.test/g/g/c/private#player-actions"), state: {} }), null);
+});
+
+test("initial live replacement reconciles the anchor until the reader interacts", async () => {
+  let reconciled = 0;
+  const controller = createReaderNavigation({ afterRender: () => Promise.resolve(), restore() {},
+    reconcileOrigin: () => ++reconciled, onChange() {} });
+  controller.observe({ url: new URL("https://example.test/g/g"), state: { readerNavigation: {
+    scope: "/g/g", origin: { id: "thread-post-10", top: 90 }, destination: null,
+  } } });
+  await settle(); controller.reconcile(); await settle();
+  assert.equal(reconciled, 1);
+  controller.reconcile(); controller.release(); await settle();
+  controller.reconcile(); await settle();
+  assert.equal(reconciled, 1);
+  controller.dispose();
 });

@@ -267,5 +267,23 @@ replaces the destination entry, so Return to thread and browser Back have one
 origin; repeated Return activation cannot consume another history entry. Forward
 reopens the destination. Restoration resolves current DOM geometry after render,
 so live arrivals and edits above the origin do not change the reading offset.
-History contains no post text or private receipts. A missing post falls back to
-the thread with an explicit message and does not recreate removed content.
+History contains no post text or private receipts. The route snapshot persists
+this scoped excursion across reloads, recording the visible URL because shallow
+routing does not update `page.url`. Snapshot restoration requires both the same
+route scope and destination hash, and never overwrites an existing excursion.
+
+When the origin is outside the loaded window, Return or reload fetches the
+current channel's authorized `around_seq` page before restoring focus and offset.
+Reconnect cold loads follow the recovered anchor so the initial live handshake
+cannot evict it with a newest-page refresh. Recovery replaces the window instead
+of joining disjoint pages with a hidden gap; the returned cursors expose the
+remaining history. In-flight edits within
+the recovered window and removal tombstones win over the request snapshot.
+The restored anchor is reconciled through asynchronous live initialization until
+the reader uses a pointer, wheel, touch, or keyboard; that interaction immediately
+releases focus/position ownership and cancels pending restoration.
+Navigation and teardown abort recovery, and changed pagination or cleared
+thread authority prevents a late response from publishing. Hidden/deleted
+origins fall back to the thread with an unavailable message; denial clears the
+loaded thread and names the lost channel access. Neither history nor recovery
+reconstructs unavailable post content.

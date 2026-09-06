@@ -4,7 +4,7 @@
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
   import { afterNavigate, pushState, replaceState } from "$app/navigation";
   import { page } from "$app/stores";
-  import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin } from "$lib/app/reader-navigation.mjs";
+  import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin, readerNavigationSnapshot, readerNavigationFromSnapshot } from "$lib/app/reader-navigation.mjs";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
   afterNavigate(async ({ to, type }) => {
     await tick();
@@ -77,6 +77,7 @@
     buildPlayerCommandRequest,
     buildPlayerProjectionColdLoads,
     buildPlayerProjectionInitialSnapshot,
+    recoverPlayerThreadOrigin,
     loadOlderPlayerThreadPage,
     loadNewerPlayerThreadPage,
     playerCommandErrorStatus,
@@ -150,6 +151,7 @@
       !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
   });
   let readerNavigation;
+  let recoveredThreadSeq = null;
   let readerTrip = null;
   let readerNavigationMessage = "";
   onMount(() => {
@@ -162,8 +164,29 @@
     readerNavigation = createReaderNavigation({
       getPage: () => $page, push: pushState, replace: replaceState,
       back: () => history.back(), capture: () => captureReaderOrigin(document, focusedReaderPost), afterRender: tick,
-      restore: origin => {
-        readerNavigationMessage = restoreReaderOrigin(origin) ? "" : "The original post is no longer in this view.";
+      restore: async (origin, context) => {
+        let result = "ready";
+        if (!document.getElementById(origin.id)) {
+          readerNavigationMessage = "Finding your place in the thread…";
+          try {
+            result = await recoverPlayerThreadOrigin({ data, fetchImpl: fetch, projectionStore, origin,
+              onRecovered: seq => { recoveredThreadSeq = seq; }, ...context });
+          } catch (error) {
+            if (!context.isCurrent()) return;
+            result = "error";
+          }
+          await tick();
+        }
+        if (!context.isCurrent()) return;
+        if (result === "cancelled") { readerNavigationMessage = ""; return; }
+        const restored = restoreReaderOrigin(origin);
+        readerNavigationMessage = restored ? "" : result === "denied"
+          ? "You no longer have access to this channel."
+          : result === "error" ? "Could not restore your place. Reload to try again."
+          : "The original post is unavailable.";
+      },
+      reconcileOrigin: origin => {
+        if (document.getElementById(origin.id)) restoreReaderOrigin(origin);
       },
       focusDestination: destination => {
         const section = document.getElementById(destination === "count" ? "player-actions" : "player-private-queue");
@@ -177,7 +200,17 @@
       },
     });
     const unsubscribe = page.subscribe(value => readerNavigation.observe(value));
-    return () => { unsubscribe(); document.removeEventListener("focusin", rememberPost); readerNavigation.dispose(); };
+    const release = () => {
+      readerNavigation.release();
+      if (readerNavigationMessage === "Finding your place in the thread…") readerNavigationMessage = "";
+    };
+    const interactions = ["pointerdown", "wheel", "touchstart", "keydown"];
+    for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
+    return () => {
+      unsubscribe(); document.removeEventListener("focusin", rememberPost);
+      for (const event of interactions) document.removeEventListener(event, release, { capture: true });
+      readerNavigation.dispose();
+    };
   });
   let privateFilter = "all";
   let returnFocusId = null;
@@ -189,12 +222,18 @@
   }
   let privateAttentionController;
   export const snapshot = {
-    capture: () => ({ privateFilter, expandedPrivateItems,
+    capture: () => ({ privateFilter, expandedPrivateItems, reader: readerNavigationSnapshot({ ...$page, url: new URL(window.location.href) }),
       focusedId: document.activeElement?.closest('[id^="private-item-"], [id^="thread-post-"]')?.id ?? capturePrivateReadingPositions()[0]?.id ?? null }),
     restore: value => {
       privateFilter = value.privateFilter;
       expandedPrivateItems = value.expandedPrivateItems;
-      returnFocusId = value.focusedId;
+      const trip = readerNavigationFromSnapshot(value.reader, $page);
+      returnFocusId = trip ? null : value.focusedId;
+      if (trip) void tick().then(() => {
+        if (readerNavigationFromSnapshot(value.reader, $page) === trip) {
+          replaceState("", { ...$page.state, readerNavigation: trip });
+        }
+      });
     },
   };
   onMount(() => {
@@ -337,7 +376,7 @@
   });
   const projectionStore = createProjectionStore({
     initialSnapshot: buildPlayerProjectionInitialSnapshot(data),
-    coldLoads: buildPlayerProjectionColdLoads(data),
+    coldLoads: buildPlayerProjectionColdLoads(data, { threadAroundSeq: () => recoveredThreadSeq }),
     liveTransport: data.projectionBoundary,
   });
 
@@ -406,6 +445,7 @@
       if (focusedPostId) document.getElementById(focusedPostId)?.focus({ preventScroll: true });
       restoreReadingPosition(readingPosition);
     });
+    readerNavigation?.reconcile();
   });
   projectionStore.subscribeHealth((health) => {
     projectionHealth = health;

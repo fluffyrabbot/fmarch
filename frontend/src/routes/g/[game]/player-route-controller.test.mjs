@@ -5,6 +5,7 @@ import {
   buildPlayerCommandRequest,
   buildPlayerProjectionColdLoads,
   buildPlayerProjectionInitialSnapshot,
+  recoverPlayerThreadOrigin,
   loadOlderPlayerThreadPage,
   normalizePlayerCommandStateRefreshError,
   normalizePrivateRows,
@@ -1465,4 +1466,85 @@ test("pagination cannot repopulate revoked thread authority", async () => {
     },
   });
   assert.deepEqual(result.snapshot.thread.posts, []);
+});
+
+const recoveryPost = (seq, body = "authorized", channel = "main") => ({ game: "midsummer", source_seq: seq,
+  stream_seq: seq, channel_id: channel, author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
+  body, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
+const recoveryArgs = store => ({ data: fixtureData(), projectionStore: store,
+  origin: { id: "thread-post-10", top: 123 }, isCurrent: () => true });
+test("origin recovery loads an old authorized window with live edits, removals, and honest cursors", async () => {
+  const store = fakeProjectionStore();
+  store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443, body: "newest" }] } });
+  const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async url => {
+    assert.equal(url, "/api/gameplay/games/midsummer?limit=50&around_seq=10");
+    store.applySnapshot({ thread: { nextBeforeSeq: 400, removedSeqs: ["11"], posts: [
+      { seq: 10, body: "live edit" }, { seq: 446, body: "live arrival beyond the recovered window" },
+    ] } });
+    return jsonResponse({ next_before_seq: 9, next_after_seq: 11, posts: [recoveryPost(10), recoveryPost(11)] });
+  } });
+  assert.equal(result, "ready");
+  assert.deepEqual(store.getSnapshot().thread.posts.map(p => p.body), ["live edit"]);
+  assert.equal(store.getSnapshot().thread.nextAfterSeq, 11);
+  assert.equal(store.getSnapshot().thread.nextBeforeSeq, 9);
+});
+test("hidden and deleted origins remain unavailable; denied private channels clear loaded content", async () => {
+  for (const status of [404, 403]) {
+    const store = fakeProjectionStore();
+    store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443, body: "private" }] } });
+    const args = recoveryArgs(store);
+    args.data.threadPager = { channel: "private:mafia", pageSize: 50 };
+    assert.equal(await recoverPlayerThreadOrigin({ ...args, fetchImpl: async url => {
+      assert.match(url, /channels\/private%3Amafia\/thread/);
+      return { status, ok: false };
+    } }), status === 403 ? "denied" : "unavailable");
+    if (status === 403) assert.deepEqual(store.getSnapshot().thread.posts, []);
+  }
+  const store = fakeProjectionStore();
+  assert.equal(await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () =>
+    jsonResponse({ next_before_seq: null, posts: [] }) }), "unavailable");
+});
+test("late recovery cannot overwrite navigation, pagination, or revoked authority", async () => {
+  for (const kind of ["navigation", "pagination", "revocation"]) {
+    const store = fakeProjectionStore(); let active = true;
+    store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443 }] } });
+    const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), isCurrent: () => active,
+      onRecovered: () => assert.fail("Cancelled recovery must not retarget future refreshes"),
+      fetchImpl: async () => {
+        if (kind === "navigation") active = false;
+        else store.applySnapshot({ thread: { nextBeforeSeq: kind === "pagination" ? 300 : null, posts: [] } });
+        return jsonResponse({ next_before_seq: null, posts: [recoveryPost(10)] });
+      },
+    });
+    assert.equal(result, "cancelled");
+    assert.ok(!store.getSnapshot().thread.posts.some(p => p.seq === 10));
+  }
+});
+test("recovery rejects malformed or cross-channel payloads without publishing them", async () => {
+  const store = fakeProjectionStore(); const before = store.getSnapshot();
+  await assert.rejects(recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () =>
+    jsonResponse({ next_before_seq: null, posts: [recoveryPost(10, "secret", "private:mafia")] }) }), /Invalid thread/);
+  assert.equal(store.getSnapshot(), before);
+});
+
+test("reconnect cold loads follow the recovered window while retaining channel authorization", () => {
+  let seq = null;
+  const data = fixtureData();
+  data.threadPager = { channel: "private:role_pm:slot-7", pageSize: 50 };
+  const loads = buildPlayerProjectionColdLoads(data, { threadAroundSeq: () => seq });
+  assert.equal(loads.thread.url, data.coldLoad.threadEndpoint);
+  seq = "10";
+  assert.equal(loads.thread.url, "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&around_seq=10");
+});
+
+test("a concurrent reconnect may install the same authorized window before recovery completes", async () => {
+  const store = fakeProjectionStore();
+  store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443 }] } });
+  const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () => {
+    store.applySnapshot({ thread: { nextBeforeSeq: null, nextAfterSeq: 30,
+      posts: [{ seq: 10, body: "reconnected" }] } });
+    return jsonResponse({ next_before_seq: null, next_after_seq: 30, posts: [recoveryPost(10)] });
+  } });
+  assert.equal(result, "ready");
+  assert.equal(store.getSnapshot().thread.posts[0].body, "reconnected");
 });
