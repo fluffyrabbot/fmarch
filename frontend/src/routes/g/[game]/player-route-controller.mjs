@@ -120,15 +120,15 @@ export function buildPlayerProjectionInitialSnapshot(data) {
   });
 }
 
-export function buildPlayerProjectionColdLoads(data, { threadAroundSeq = () => null } = {}) {
+export function buildPlayerProjectionColdLoads(data, { threadWindow = () => null } = {}) {
   const privateThread = String(data.threadPager?.channel ?? "main") !== "main";
   return Object.freeze({
     thread: Object.freeze({
       get url() {
-        const aroundSeq = threadAroundSeq();
-        return aroundSeq === null ? data.coldLoad.threadEndpoint : playerThreadUrl({
+        const window = threadWindow();
+        return window === null ? data.coldLoad.threadEndpoint : playerThreadUrl({
           game: data.game.id, channel: data.threadPager.channel,
-          limit: data.threadPager.pageSize, aroundSeq,
+          limit: data.threadPager.pageSize, aroundSeq: window.aroundSeq,
         });
       },
       validate: (payload) =>
@@ -989,9 +989,9 @@ export function playerActionConfig(data, action) {
 }
 
 // Recover a contiguous authorized window, never join separated pages across a gap.
-export async function recoverPlayerThreadOrigin({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {} }) {
-  const seq = /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
-  if (!seq || !Number.isSafeInteger(Number(seq))) return "unavailable";
+export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {}, intent = "origin" }) {
+  const seq = intent === "newest" ? null : /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
+  if (intent !== "newest" && (!seq || !Number.isSafeInteger(Number(seq)))) return "unavailable";
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
@@ -1014,7 +1014,7 @@ export async function recoverPlayerThreadOrigin({ data, fetchImpl, projectionSto
     || (current !== initial && current.posts.length === 0)) {
     // A concurrent reconnect may already have installed this exact window.
     const ready = current?.nextBeforeSeq === window.nextBeforeSeq && current?.nextAfterSeq === window.nextAfterSeq
-      && current.posts.some(post => String(post.seq) === seq);
+      && (intent === "newest" || current.posts.some(post => String(post.seq) === seq));
     if (ready) onRecovered(seq);
     return ready ? "ready" : "cancelled";
   }
@@ -1026,7 +1026,15 @@ export async function recoverPlayerThreadOrigin({ data, fetchImpl, projectionSto
     // Only in-flight live changes override the newly authorized response.
     return now.has(key) && now.get(key) !== before.get(key) ? now.get(key) : post;
   });
-  const ready = posts.some(post => String(post.seq) === seq);
+  if (intent === "newest") {
+    const lastSeq = Number(window.posts.at(-1)?.seq ?? 0);
+    for (const post of current.posts) {
+      const key = String(post.seq);
+      if (Number(post.seq) > lastSeq && post !== before.get(key) && !removed.has(key)) posts.push(post);
+    }
+    posts.sort((a, b) => Number(a.seq) - Number(b.seq));
+  }
+  const ready = intent === "newest" || posts.some(post => String(post.seq) === seq);
   if (ready) onRecovered(seq);
   projectionStore.applySnapshot({ thread: { ...window, posts, removedSeqs: [...removed] } });
   return ready ? "ready" : "unavailable";

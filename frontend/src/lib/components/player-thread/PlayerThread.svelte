@@ -18,6 +18,7 @@
 </script>
 
 <section id="player-thread" tabindex="-1" class="player-surface__thread" aria-label="Thread">
+  <slot name="recovery" />
   {#if thread.nextAfterSeq != null}
     <button class="fm-touch-button" on:click={onLoadNewer} disabled={threadPageStatus?.state === "pending"}>Load newer posts</button>
   {/if}
@@ -236,6 +237,7 @@
 
 <style>
   .player-surface__thread {
+    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size, 64px) + 16px);
     display: grid;
     gap: 0;
     min-inline-size: 0;

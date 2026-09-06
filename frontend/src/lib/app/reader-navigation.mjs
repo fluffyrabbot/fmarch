@@ -35,16 +35,19 @@ export function restoreReaderOrigin(origin, documentRef = document, windowRef = 
     restoreReadingPosition(origin, documentRef, windowRef);
     return true;
   }
+  focusReaderThread(documentRef);
+  return false;
+}
+export function focusReaderThread(documentRef = document) {
   const thread = documentRef.getElementById("player-thread");
   thread?.focus({ preventScroll: true });
   thread?.scrollIntoView({ block: "start", behavior: "instant" });
-  return false;
 }
 
 // Only our own destination entry can request Back. No post text or private
 // receipt state is copied into history, and an origin never crosses routes.
 export function createReaderNavigation({ getPage, push, replace, back, capture,
-  restore, reconcileOrigin = () => {}, focusDestination, afterRender, onChange }) {
+  restore, reconcileOrigin = () => {}, focusNewest = () => {}, focusDestination, afterRender, onChange }) {
   let observed;
   let epoch = 0;
   let disposed = false;
@@ -52,7 +55,7 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
   let recovery;
   let restoration = null;
   return {
-    observe(page) {
+    observe(page, intent = "origin") {
       if (disposed) return;
       const next = readerNavigationState(page);
       if (next === observed) return;
@@ -67,15 +70,36 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       if (next) void afterRender().then(() => {
         if (disposed || generation !== epoch) return;
         if (next.destination === null) {
-          restoration = { origin: next.origin, signal, isCurrent: () => !disposed && generation === epoch };
+          restoration = { origin: next.origin, intent, signal, isCurrent: () => !disposed && generation === epoch };
           restore(next.origin, restoration);
         } else focusDestination(next.destination);
+      });
+    },
+    recover(intent = "origin") {
+      const page = getPage();
+      if (disposed || !["origin", "newest"].includes(intent) || readerNavigationState(page)?.destination !== null) return;
+      observed = undefined;
+      this.observe(page, intent);
+    },
+    completeNewest() {
+      if (disposed) return;
+      const page = getPage();
+      const scope = readerScope(page.url);
+      const url = new URL(page.url);
+      url.searchParams.delete("post");
+      url.searchParams.delete("private");
+      url.hash = "";
+      const state = { ...page.state };
+      delete state.readerNavigation;
+      replace(`${url.pathname}${url.search}`, state);
+      void afterRender().then(() => {
+        if (!disposed && [scope, readerScope(url)].includes(readerScope(getPage().url)) && !readerNavigationState(getPage())) focusNewest();
       });
     },
     reconcile() {
       const pending = restoration;
       if (pending) void afterRender().then(() => {
-        if (pending === restoration && pending.isCurrent()) reconcileOrigin(pending.origin);
+        if (pending === restoration && pending.intent === "origin" && pending.isCurrent()) reconcileOrigin(pending.origin);
       });
     },
     release() {

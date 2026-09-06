@@ -3985,7 +3985,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await proveReaderNavigation(page, baseUrl, routePath);
   await proveReadingReturn(page, baseUrl, routePath);
   await proveReloadReadingReturn(page, baseUrl, routePath);
-  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, recoveryControls: true, offlineRetry: true, cancelledRetry: true, newestRetry: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
 }
 
 
@@ -4071,19 +4071,26 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
     body: `Historical post ${seq}.`, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
   const posts = Array.from({ length: 60 }, (_, index) => post(index + 1));
   const endpoint = channel === "main" ? "**/api/gameplay/games/midsummer?**" : "**/games/midsummer/channels/*/thread?**";
-  let outcome = "ready", requests = 0;
+  let outcome = "ready", requests = 0, newest = null, heldRequest = null;
   const handler = async route => {
     const url = new URL(route.request().url());
     if (url.searchParams.has("before_seq")) return route.fulfill({ json: { next_before_seq: null, posts } });
-    if (!url.searchParams.has("around_seq")) return route.fallback();
+    if (!url.searchParams.has("around_seq")) {
+      if (newest === "error") return route.fulfill({ status: 503 });
+      if (newest === "ready") return route.fulfill({ json: { next_before_seq: 450, posts: [post(500)] } });
+      return route.fallback();
+    }
     assert.equal(url.searchParams.get("around_seq"), "10");
     if (!url.searchParams.has("_fmarch_projection_refresh")) requests++;
-    if (outcome !== "ready") return route.fulfill({ status: outcome === "denied" ? 403 : 404 });
+    if (outcome === "offline") return route.abort("internetdisconnected");
+    if (outcome === "hold") { heldRequest(route); return; }
+    if (outcome !== "ready") return route.fulfill({ status: outcome === "denied" ? 403 : outcome === "cancelled" ? 503 : 404 });
     return route.fulfill({ json: { next_before_seq: null, next_after_seq: 30, posts: posts.slice(0, 30) } });
   };
   await page.route(endpoint, handler);
   try {
-    for (outcome of channel === "main" ? ["ready", "hidden", "deleted"] : ["ready", "denied"]) {
+    for (outcome of channel === "main" ? ["ready", "hidden", "deleted", "offline", "cancelled"] : ["ready", "denied"]) {
+      newest = null;
       await page.goto(`${baseUrl}${routePath}?reader-proof=${outcome}`, { waitUntil: "networkidle" });
       await page.getByTestId("player-thread-load-older").click();
       const origin = page.locator("#thread-post-10");
@@ -4120,12 +4127,59 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
             throw new Error(`${error.message}; expected=${top}, requests=${requests}, state=${JSON.stringify(state)}`);
           });
       } else {
-        await page.getByText(outcome === "denied" ? "You no longer have access to this channel." : "The original post is unavailable.", { exact: true }).waitFor();
+        const connectionError = "Could not restore your place. Retry when your connection is available.";
+        await page.getByText(outcome === "denied" ? "You no longer have access to this channel."
+          : ["offline", "cancelled"].includes(outcome) ? connectionError : "The original post is unavailable.", { exact: true }).waitFor();
         if (outcome === "denied") assert.equal(await page.locator('[id^="thread-post-"]').count(), 0);
         assert.equal(await origin.count(), 0);
         assert.equal(await page.evaluate(() => document.activeElement.id), "player-thread");
+        const recovery = page.getByTestId("reader-recovery");
+        const messageBox = await recovery.getByRole("status").boundingBox();
+        const headerBox = await page.getByTestId("app-shell-topbar").boundingBox();
+        assert.ok(messageBox && headerBox && messageBox.y >= headerBox.y + headerBox.height, "Recovery status must clear the sticky header");
+        if (outcome === "hidden") {
+          if (page.viewportSize().width === 390) await page.screenshot({ path: path.join(artifactDir, "mobile-reader-recovery.png") });
+          const buttons = recovery.getByRole("button");
+          for (const button of await buttons.all()) {
+            const box = await button.boundingBox();
+            assert.ok(box && box.height >= 44 && box.width >= 44, "Recovery controls must retain touch targets");
+          }
+          const originalUrl = page.url();
+          newest = "error";
+          await recovery.getByRole("button", { name: "Go to newest", exact: true }).click();
+          await page.getByText("Could not load the newest posts. Your place is still saved.", { exact: true }).waitFor();
+          assert.equal(page.url(), originalUrl);
+          newest = "ready";
+          await recovery.getByRole("button", { name: "Retry", exact: true }).focus(); await page.keyboard.press("Enter");
+          await page.waitForFunction(() => document.activeElement?.id === "thread-post-500");
+          assert.equal(await recovery.count(), 0);
+          const beforeReload = requests;
+          await page.reload({ waitUntil: "networkidle" });
+          await page.locator("#thread-post-500").waitFor();
+          assert.equal(requests, beforeReload);
+          assert.equal(await recovery.count(), 0);
+        } else if (["denied", "offline", "cancelled"].includes(outcome)) {
+          if (outcome === "cancelled") {
+            const pending = new Promise(resolve => { heldRequest = resolve; });
+            outcome = "hold";
+            await recovery.getByRole("button", { name: "Retry", exact: true }).click();
+            const request = await pending;
+            await recovery.getByRole("button", { name: "Cancel", exact: true }).click();
+            await page.getByText("Recovery cancelled. Your place is still saved.", { exact: true }).waitFor();
+            await page.waitForFunction(() => document.activeElement?.dataset.testid === "reader-recovery-retry");
+            await request.fulfill({ json: { next_before_seq: null, next_after_seq: 30, posts: posts.slice(0, 30) } });
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            assert.equal(await origin.count(), 0);
+            assert.notEqual(await page.evaluate(() => document.activeElement.id), "thread-post-10");
+          }
+          outcome = "ready";
+          await recovery.getByRole("button", { name: "Retry", exact: true }).focus(); await page.keyboard.press("Enter");
+          await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
+            Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 });
+          assert.equal(await recovery.count(), 0);
+        }
       }
     }
-    assert.equal(requests, channel === "main" ? 4 : 3);
+    assert.equal(requests, channel === "main" ? 9 : 4);
   } finally { await page.unroute(endpoint, handler); }
 }

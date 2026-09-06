@@ -5,7 +5,7 @@ import {
   buildPlayerCommandRequest,
   buildPlayerProjectionColdLoads,
   buildPlayerProjectionInitialSnapshot,
-  recoverPlayerThreadOrigin,
+  recoverPlayerThreadWindow,
   loadOlderPlayerThreadPage,
   normalizePlayerCommandStateRefreshError,
   normalizePrivateRows,
@@ -1476,7 +1476,7 @@ const recoveryArgs = store => ({ data: fixtureData(), projectionStore: store,
 test("origin recovery loads an old authorized window with live edits, removals, and honest cursors", async () => {
   const store = fakeProjectionStore();
   store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443, body: "newest" }] } });
-  const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async url => {
+  const result = await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async url => {
     assert.equal(url, "/api/gameplay/games/midsummer?limit=50&around_seq=10");
     store.applySnapshot({ thread: { nextBeforeSeq: 400, removedSeqs: ["11"], posts: [
       { seq: 10, body: "live edit" }, { seq: 446, body: "live arrival beyond the recovered window" },
@@ -1494,21 +1494,21 @@ test("hidden and deleted origins remain unavailable; denied private channels cle
     store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443, body: "private" }] } });
     const args = recoveryArgs(store);
     args.data.threadPager = { channel: "private:mafia", pageSize: 50 };
-    assert.equal(await recoverPlayerThreadOrigin({ ...args, fetchImpl: async url => {
+    assert.equal(await recoverPlayerThreadWindow({ ...args, fetchImpl: async url => {
       assert.match(url, /channels\/private%3Amafia\/thread/);
       return { status, ok: false };
     } }), status === 403 ? "denied" : "unavailable");
     if (status === 403) assert.deepEqual(store.getSnapshot().thread.posts, []);
   }
   const store = fakeProjectionStore();
-  assert.equal(await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () =>
+  assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>
     jsonResponse({ next_before_seq: null, posts: [] }) }), "unavailable");
 });
 test("late recovery cannot overwrite navigation, pagination, or revoked authority", async () => {
   for (const kind of ["navigation", "pagination", "revocation"]) {
     const store = fakeProjectionStore(); let active = true;
     store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443 }] } });
-    const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), isCurrent: () => active,
+    const result = await recoverPlayerThreadWindow({ ...recoveryArgs(store), isCurrent: () => active,
       onRecovered: () => assert.fail("Cancelled recovery must not retarget future refreshes"),
       fetchImpl: async () => {
         if (kind === "navigation") active = false;
@@ -1522,7 +1522,7 @@ test("late recovery cannot overwrite navigation, pagination, or revoked authorit
 });
 test("recovery rejects malformed or cross-channel payloads without publishing them", async () => {
   const store = fakeProjectionStore(); const before = store.getSnapshot();
-  await assert.rejects(recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () =>
+  await assert.rejects(recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>
     jsonResponse({ next_before_seq: null, posts: [recoveryPost(10, "secret", "private:mafia")] }) }), /Invalid thread/);
   assert.equal(store.getSnapshot(), before);
 });
@@ -1531,7 +1531,7 @@ test("reconnect cold loads follow the recovered window while retaining channel a
   let seq = null;
   const data = fixtureData();
   data.threadPager = { channel: "private:role_pm:slot-7", pageSize: 50 };
-  const loads = buildPlayerProjectionColdLoads(data, { threadAroundSeq: () => seq });
+  const loads = buildPlayerProjectionColdLoads(data, { threadWindow: () => seq === null ? null : { aroundSeq: seq } });
   assert.equal(loads.thread.url, data.coldLoad.threadEndpoint);
   seq = "10";
   assert.equal(loads.thread.url, "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50&around_seq=10");
@@ -1540,11 +1540,38 @@ test("reconnect cold loads follow the recovered window while retaining channel a
 test("a concurrent reconnect may install the same authorized window before recovery completes", async () => {
   const store = fakeProjectionStore();
   store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443 }] } });
-  const result = await recoverPlayerThreadOrigin({ ...recoveryArgs(store), fetchImpl: async () => {
+  const result = await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () => {
     store.applySnapshot({ thread: { nextBeforeSeq: null, nextAfterSeq: 30,
       posts: [{ seq: 10, body: "reconnected" }] } });
     return jsonResponse({ next_before_seq: null, next_after_seq: 30, posts: [recoveryPost(10)] });
   } });
   assert.equal(result, "ready");
   assert.equal(store.getSnapshot().thread.posts[0].body, "reconnected");
+});
+
+test("newest recovery keeps live arrivals and switches future refreshes only after success", async () => {
+  const store = fakeProjectionStore();
+  store.applySnapshot({ thread: { nextBeforeSeq: null, nextAfterSeq: 30, posts: [{ seq: 10, body: "old" }] } });
+  let target = "unchanged";
+  assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), intent: "newest", onRecovered: seq => { target = seq; },
+    fetchImpl: async url => {
+      assert.equal(url, "/api/gameplay/games/midsummer?limit=50");
+      assert.equal(target, "unchanged");
+      store.applySnapshot({ thread: { ...store.getSnapshot().thread, posts: [{ seq: 10, body: "old" }, { seq: 501, body: "live arrival" }] } });
+      return jsonResponse({ next_before_seq: 450, posts: [recoveryPost(500)] });
+    },
+  }), "ready");
+  assert.equal(target, null);
+  assert.deepEqual(store.getSnapshot().thread.posts.map(p => p.seq), [500, 501]);
+  assert.equal(store.getSnapshot().thread.nextAfterSeq, undefined);
+  const loads = buildPlayerProjectionColdLoads(fixtureData(), { threadWindow: () => ({ aroundSeq: null }) });
+  assert.equal(loads.thread.url, "/api/gameplay/games/midsummer?limit=50");
+});
+test("a cancelled newest request cannot publish or erase the saved refresh target", async () => {
+  const store = fakeProjectionStore(); const initial = store.getSnapshot(); let active = true;
+  assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), intent: "newest", isCurrent: () => active,
+    onRecovered: () => assert.fail("cancelled request changed destination"),
+    fetchImpl: async () => { active = false; return jsonResponse({ next_before_seq: null, posts: [recoveryPost(500)] }); },
+  }), "cancelled");
+  assert.equal(store.getSnapshot(), initial);
 });

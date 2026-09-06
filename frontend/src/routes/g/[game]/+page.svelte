@@ -4,7 +4,7 @@
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
   import { afterNavigate, pushState, replaceState } from "$app/navigation";
   import { page } from "$app/stores";
-  import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin, readerNavigationSnapshot, readerNavigationFromSnapshot } from "$lib/app/reader-navigation.mjs";
+  import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin, focusReaderThread, readerNavigationSnapshot, readerNavigationFromSnapshot } from "$lib/app/reader-navigation.mjs";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
   afterNavigate(async ({ to, type }) => {
     await tick();
@@ -42,6 +42,7 @@
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
   import PlayerRoleCard from "$lib/components/player-role-card/PlayerRoleCard.svelte";
   import PlayerPrivateQueue from "$lib/components/player-private-queue/PlayerPrivateQueue.svelte";
+  import { readerRecoveryMessage } from "$lib/app/reader-recovery.mjs";
   import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
   import GameFrame from "$lib/components/gameplay/GameFrame.svelte";
   import GameBar from "$lib/components/gameplay/GameBar.svelte";
@@ -77,7 +78,7 @@
     buildPlayerCommandRequest,
     buildPlayerProjectionColdLoads,
     buildPlayerProjectionInitialSnapshot,
-    recoverPlayerThreadOrigin,
+    recoverPlayerThreadWindow,
     loadOlderPlayerThreadPage,
     loadNewerPlayerThreadPage,
     playerCommandErrorStatus,
@@ -151,9 +152,10 @@
       !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
   });
   let readerNavigation;
-  let recoveredThreadSeq = null;
+  let readerThreadWindow = null;
   let readerTrip = null;
-  let readerNavigationMessage = "";
+  let readerRecovery = { state: "idle", intent: "origin" };
+  $: readerNavigationMessage = readerRecoveryMessage(readerRecovery);
   onMount(() => {
     let focusedReaderPost = null;
     const rememberPost = event => {
@@ -166,24 +168,39 @@
       back: () => history.back(), capture: () => captureReaderOrigin(document, focusedReaderPost), afterRender: tick,
       restore: async (origin, context) => {
         let result = "ready";
-        if (!document.getElementById(origin.id)) {
-          readerNavigationMessage = "Finding your place in the thread…";
+        if (context.intent === "newest" || !document.getElementById(origin.id)) {
+          readerRecovery = { state: "pending", intent: context.intent };
           try {
-            result = await recoverPlayerThreadOrigin({ data, fetchImpl: fetch, projectionStore, origin,
-              onRecovered: seq => { recoveredThreadSeq = seq; }, ...context });
-          } catch (error) {
+            result = await recoverPlayerThreadWindow({ data, fetchImpl: fetch, projectionStore, origin,
+              onRecovered: seq => { readerThreadWindow = { aroundSeq: seq }; }, ...context });
+          } catch {
             if (!context.isCurrent()) return;
             result = "error";
           }
           await tick();
         }
         if (!context.isCurrent()) return;
-        if (result === "cancelled") { readerNavigationMessage = ""; return; }
-        const restored = restoreReaderOrigin(origin);
-        readerNavigationMessage = restored ? "" : result === "denied"
-          ? "You no longer have access to this channel."
-          : result === "error" ? "Could not restore your place. Reload to try again."
-          : "The original post is unavailable.";
+        if (result === "cancelled") {
+          readerRecovery = { state: "cancelled", intent: context.intent };
+          return;
+        }
+        if (result === "ready" && context.intent === "newest") {
+          readerNavigation.completeNewest();
+          return;
+        }
+        const available = context.intent === "origin" && document.getElementById(origin.id);
+        readerRecovery = { state: available ? "idle" : result === "ready" ? "unavailable" : result, intent: context.intent };
+        await tick();
+        if (context.isCurrent()) {
+          if (context.intent === "origin") restoreReaderOrigin(origin);
+          else focusReaderThread();
+        }
+      },
+      focusNewest: () => {
+        const posts = document.querySelectorAll('[id^="thread-post-"]');
+        const target = posts[posts.length - 1] ?? document.getElementById("player-thread");
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: "center", behavior: "instant" });
       },
       reconcileOrigin: origin => {
         if (document.getElementById(origin.id)) restoreReaderOrigin(origin);
@@ -196,13 +213,13 @@
       },
       onChange: trip => {
         readerTrip = trip;
-        readerNavigationMessage = "";
+        readerRecovery = { state: "idle", intent: "origin" };
       },
     });
     const unsubscribe = page.subscribe(value => readerNavigation.observe(value));
-    const release = () => {
-      readerNavigation.release();
-      if (readerNavigationMessage === "Finding your place in the thread…") readerNavigationMessage = "";
+    const release = event => {
+      if (event.target?.closest?.('[data-testid="reader-recovery"]')) return;
+      cancelReaderRecovery();
     };
     const interactions = ["pointerdown", "wheel", "touchstart", "keydown"];
     for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
@@ -376,7 +393,7 @@
   });
   const projectionStore = createProjectionStore({
     initialSnapshot: buildPlayerProjectionInitialSnapshot(data),
-    coldLoads: buildPlayerProjectionColdLoads(data, { threadAroundSeq: () => recoveredThreadSeq }),
+    coldLoads: buildPlayerProjectionColdLoads(data, { threadWindow: () => readerThreadWindow }),
     liveTransport: data.projectionBoundary,
   });
 
@@ -834,6 +851,15 @@
   function openPrivateQueue() { privateFilter = privateNewItemCount > 0 ? "new" : "all"; readerNavigation?.open("private"); }
   function openVoteCount() { readerNavigation?.open("count"); }
   function returnToThread() { readerNavigation?.returnToThread(); }
+  function cancelReaderRecovery({ focusControl = false } = {}) {
+    readerNavigation?.release();
+    if (readerRecovery.state !== "pending") return;
+    const cancelled = { ...readerRecovery, state: "cancelled" };
+    readerRecovery = cancelled;
+    if (focusControl) void tick().then(() => {
+      if (readerRecovery === cancelled) document.querySelector('[data-testid="reader-recovery-retry"]')?.focus({ preventScroll: true });
+    });
+  }
 
   function refreshPrivateAttention() {
     return privateAttentionController?.refresh();
@@ -932,7 +958,23 @@
       onLoadOlder={loadOlderThread}
       onLoadNewer={loadNewerThread}
       onQuote={quotePlayerPost}
-    />
+    >
+      <svelte:fragment slot="recovery">
+      {#if readerRecovery.state !== "idle"}
+        <div class="fm-card" data-testid="reader-recovery" role="group" aria-label="Thread recovery" aria-busy={readerRecovery.state === "pending"}>
+          <p role="status">{readerNavigationMessage}</p>
+          <div class="reader-recovery-actions">
+            {#if readerRecovery.state === "pending"}
+              <button class="fm-touch-button fm-touch-button--secondary" on:click={() => cancelReaderRecovery({ focusControl: true })}>Cancel</button>
+            {:else}
+              <button class="fm-touch-button" data-testid="reader-recovery-retry" on:click={() => readerNavigation?.recover(readerRecovery.intent)}>Retry</button>
+            {/if}
+            <button class="fm-touch-button fm-touch-button--secondary" disabled={readerRecovery.state === "pending" && readerRecovery.intent === "newest"} on:click={() => readerNavigation?.recover("newest")}>Go to newest</button>
+          </div>
+        </div>
+      {/if}
+      </svelte:fragment>
+    </PlayerThread>
 
     {#if projectionCommandsReady}
       <ComposeSheet
@@ -970,7 +1012,6 @@
       </section>
     {/if}
 
-    {#if readerNavigationMessage}<p role="status">{readerNavigationMessage}</p>{/if}
     <VoteSheet
       returnAvailable={readerTrip?.destination === "count"}
       onReturnToThread={returnToThread}
@@ -1048,6 +1089,7 @@
 {/if}
 
 <style>
+  .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .player-command-feedback {
     bottom: calc(82px + env(safe-area-inset-bottom));
     inset-inline-end: max(14px, calc((100vw - 920px) / 2));

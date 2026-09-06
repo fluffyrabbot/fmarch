@@ -102,3 +102,27 @@ test("initial live replacement reconciles the anchor until the reader interacts"
   assert.equal(reconciled, 1);
   controller.dispose();
 });
+
+test("retry preserves the anchor, supersedes a cancelled attempt, and newest completion clears only navigation state", async () => {
+  let page = { url: new URL("https://example.test/g/g?post=10&private=receipt"), state: { unrelated: 1, readerNavigation: {
+    scope: "/g/g?post=10&private=receipt", origin: { id: "thread-post-10", top: 90 }, destination: null,
+  } } };
+  const attempts = []; let focused = 0;
+  const controller = createReaderNavigation({ getPage: () => page, afterRender: () => Promise.resolve(),
+    restore: (origin, context) => attempts.push({ origin, context }), onChange() {},
+    replace: (url, state) => { page = { url: new URL(url, page.url), state }; controller.observe(page); },
+    focusNewest: () => ++focused,
+  });
+  controller.observe(page); await settle(); controller.release();
+  controller.recover(); await settle();
+  assert.deepEqual(attempts[1].origin, attempts[0].origin);
+  assert.equal(attempts[0].context.isCurrent(), false);
+  controller.recover("newest"); await settle();
+  assert.equal(attempts[1].context.signal.aborted, true);
+  assert.equal(attempts[2].context.intent, "newest");
+  assert.equal(page.state.readerNavigation.origin.id, "thread-post-10");
+  controller.completeNewest(); await settle();
+  assert.equal(page.url.href, "https://example.test/g/g");
+  assert.deepEqual(page.state, { unrelated: 1 }); assert.equal(focused, 1);
+  controller.dispose();
+});

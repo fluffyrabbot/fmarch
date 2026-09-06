@@ -287,3 +287,18 @@ thread authority prevents a late response from publishing. Hidden/deleted
 origins fall back to the thread with an unavailable message; denial clears the
 loaded thread and names the lost channel access. Neither history nor recovery
 reconstructs unavailable post content.
+
+
+Recovery controls live at the top of the thread, alongside their status. Retry
+repeats the failed destination (saved origin or newest) without replacing the
+history anchor. A pending attempt exposes Cancel; deliberate reading gestures
+also cancel it. Each retry owns a fresh abort signal and publication guard, so
+cancelled responses cannot change the thread, focus, or future refresh target.
+
+Go to newest uses the same authorized channel query and response validation as
+origin recovery, without an around-post cursor. Successful publication retains
+in-flight live arrivals, changes reconnect refreshes to newest, removes the
+post/private destination parameters and saved excursion, and focuses the newest
+rendered post (or the empty thread). Failure retains the old anchor and offers
+Retry. A denied channel can be retried after access is restored, without storing
+private post content in navigation state.

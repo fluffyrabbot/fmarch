@@ -112,7 +112,7 @@ async function provePlayerRouteSource() {
     metricsGetter: "__fmarchGetPlayerLiveProjectionMetrics",
   });
   assert.match(source, /buildPlayerProjectionInitialSnapshot\(data\)/);
-  assert.match(source, /buildPlayerProjectionColdLoads\(data,\s*\{\s*threadAroundSeq:\s*\(\) => recoveredThreadSeq\s*\}\)/);
+  assert.match(source, /buildPlayerProjectionColdLoads\(data,\s*\{\s*threadWindow:\s*\(\) => readerThreadWindow\s*\}\)/);
   assert.match(source, /playerReconnectRefreshKeys\(data\)/);
   assert.match(source, /endgameSummary = snapshot\.endgameSummary/);
   assert.match(source, /attachLiveProjectionPageLifecycle/);
