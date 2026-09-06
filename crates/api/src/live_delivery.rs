@@ -1043,6 +1043,28 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         guard.abort().await;
         return;
     };
+    let host_console_interested = plan
+        .allowed_audiences
+        .contains(&LiveAudience::Host { game });
+    // Hello acknowledges a fully established baseline. Loading it afterward
+    // could absorb a hide triggered by Hello and suppress its removal patch.
+    let mut last_host_console = if host_console_interested {
+        match tokio::time::timeout_at(
+            guard.deadline(),
+            host_console_deltas_for_ws(&state, &claim, None),
+        )
+        .await
+        {
+            Ok(Ok((_, current))) => Some(current),
+            result => {
+                tracing::warn!(event = "live_host_console_baseline_failed", ?result);
+                guard.abort().await;
+                return;
+            }
+        }
+    } else {
+        None
+    };
     let Ok(frame) = server_envelope_frame(&ServerEnvelope::new(
         LIVE_HEARTBEAT_ENVELOPE_ID,
         ServerMsg::Hello(plan.hello.clone()),
@@ -1061,11 +1083,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         return;
     }
 
-    let host_console_interested = plan
-        .allowed_audiences
-        .contains(&LiveAudience::Host { game });
     let mut last_envelope_id = LIVE_HEARTBEAT_ENVELOPE_ID;
-    let mut last_host_console: Option<HostConsoleStateDelta> = None;
 
     macro_rules! send_deltas_or_break {
         ($deltas:expr) => {
@@ -1102,17 +1120,6 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 }
             }
         };
-    }
-
-    if host_console_interested {
-        let (_, current) = match host_console_deltas_for_ws(&state, &claim, None).await {
-            Ok(value) => value,
-            Err(error) => {
-                tracing::warn!(event = "live_host_console_baseline_failed", %error);
-                return;
-            }
-        };
-        last_host_console = Some(current);
     }
 
     let mut control_budget = ControlFrameBudget::new();
