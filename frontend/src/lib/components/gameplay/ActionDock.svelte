@@ -1,5 +1,6 @@
 <script>
   export let view;
+  export let commandsAvailable = false;
   export let privateNewCount = null;
   export let onOpenPrivateQueue = () => {};
   export let dayEventCount = 0;
@@ -20,14 +21,16 @@
 
 <nav
   class="action-dock"
-  aria-label="Player actions"
-  aria-busy={view?.root?.ariaBusy}
+  aria-label={commandsAvailable ? "Player actions" : "Player navigation"}
+  data-commands-available={commandsAvailable}
+  aria-busy={commandsAvailable ? view?.root?.ariaBusy : undefined}
   data-component="player-action-dock"
   data-channel-id={view?.root?.data?.channelId}
   data-thumb-zone="player-primary-actions"
   data-action-priority="primary"
   data-testid="player-primary-action-zone"
 >
+  {#if commandsAvailable}
   <div class="action-dock__actions" data-testid="player-quick-vote-actions">
     {#each quickActions as button}
       {#if !button.disabled || button.action === "withdraw_vote"}
@@ -47,7 +50,8 @@
       {/if}
     {/each}
   </div>
-  {#if view?.composer?.readOnly !== true}
+  {/if}
+  {#if commandsAvailable && view?.composer?.readOnly !== true}
     <a
       class="action-dock__tool"
       href="#player-composer"
@@ -57,12 +61,12 @@
       <span>Reply</span>
     </a>
   {/if}
-  {#if hasPhaseActions}
+  {#if commandsAvailable && hasPhaseActions}
     <a class="action-dock__tool" href="#player-phase-actions" data-testid="player-dock-act">
       <span>Act</span>
     </a>
   {/if}
-  {#if dayEventCount > 0}
+  {#if commandsAvailable && dayEventCount > 0}
     <a class="action-dock__tool" href="#player-day-events" data-testid="player-dock-events">
       <span>Event</span>
       <strong aria-label={`${dayEventCount} open events`}>{dayEventCount}</strong>
@@ -175,7 +179,7 @@
       padding-inline: 6px;
     }
 
-    .action-dock__tool[data-testid="player-dock-count"] {
+    .action-dock[data-commands-available="true"] .action-dock__tool[data-testid="player-dock-count"] {
       display: none;
     }
   }

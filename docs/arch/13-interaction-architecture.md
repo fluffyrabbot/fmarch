@@ -247,3 +247,13 @@ deliveries, and keyboard activation focuses the queue filter (New when there are
 new items, otherwise All). On phones, primary actions and navigation occupy two
 rows; the primary row retains its height during pending commands so touch targets
 and command feedback remain stationary.
+
+
+Reader navigation remains mounted independently of command readiness. Count and
+More remain keyboard-accessible for completed games, spectator views, and paused
+command transport. The dock accepts a fail-closed command-availability flag;
+quick votes, Reply, Act, and Event are rendered only when commands are available.
+Reader-only navigation is not marked busy by command recovery, and its mobile
+layout does not reserve an empty command row. Completed games retain their final
+state notice without implying that a refresh can reopen commands. Spectator
+navigation does not confer seat access or populate the private delivery badge.

@@ -33,7 +33,7 @@ test("player route layout keeps a stable reading lane with a fixed action dock",
   ]);
 });
 
-test("player command receipts remain visible while unhealthy controls stay hidden", async () => {
+test("player receipts and reader navigation remain visible while commands stay gated", async () => {
   const source = await readFile(new URL("./+page.svelte", import.meta.url), "utf8");
 
   assert.match(source, /\{#if commandReceipts\.length > 0\}/);
@@ -41,7 +41,8 @@ test("player command receipts remain visible while unhealthy controls stay hidde
     source,
     /\{#if projectionCommandsReady[^}]*commandReceipts\.length/u,
   );
-  assert.match(source, /\{#if projectionCommandsReady\}\s*<ActionDock/u);
+  assert.doesNotMatch(source, /\{#if projectionCommandsReady\}\s*<ActionDock/u);
+  assert.match(source, /commandsAvailable=\{projectionCommandsReady &&/u);
 });
 
 test("player live invalidation precedes best-effort recovery restore and dispatch is journaled", async () => {

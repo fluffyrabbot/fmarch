@@ -587,3 +587,12 @@ test("session resolution preserves actionable trust-boundary failures", async ()
   assert.equal(unavailable.session.principalId, null);
   assert.equal(invalid.session.principalId, null);
 });
+
+
+test("spectator browser fixture grants read access without a seat", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-spectator"), request: requestFor("/g/midsummer/c/spectator"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.deepEqual(session.resolvedCapabilities.map(capability => capability.kind), ["SpectatorOf"]);
+});

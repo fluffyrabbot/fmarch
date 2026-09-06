@@ -888,7 +888,7 @@
         {player}
         onCommand={submitPlayerCommand}
       />
-    {:else if data.commandsEnabled === true}
+    {:else if data.commandsEnabled === true && !player.gameCompleted}
       <section
         class="fm-section"
         data-testid="player-projection-command-health"
@@ -961,16 +961,15 @@
       </div>
     {/if}
 
-    {#if projectionCommandsReady}
       <ActionDock
         slot="dock"
         view={playerActionView}
+        commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
         privateNewCount={privateNewItemCount}
         onOpenPrivateQueue={openPrivateQueue}
         dayEventCount={composer.dayEventCommands?.length ?? 0}
         onCommand={submitPlayerCommand}
       />
-    {/if}
   </GameFrame>
 {/if}
 

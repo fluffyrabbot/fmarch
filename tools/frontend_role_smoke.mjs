@@ -3231,6 +3231,7 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
 
 async function installLiveProjectionHarness(page, { roleId, channel = "main" }) {
   const hostProjection = roleId === "moderator";
+  const spectatorProjection = roleId === "spectator";
   const helloFrame = [...encodeServerEnvelopeFrame({
     v: 3,
     id: 0,
@@ -3242,10 +3243,11 @@ async function installLiveProjectionHarness(page, { roleId, channel = "main" }) 
         scope: {
           game: "midsummer",
           channel,
-          slot_id: hostProjection ? null : "slot-7",
+          slot_id: hostProjection || spectatorProjection ? null : "slot-7",
         },
         caps: hostProjection
           ? [{ kind: "HostOf", body: { game: "midsummer" } }]
+          : spectatorProjection ? [{ kind: "SpectatorOf", body: { game: "midsummer" } }]
           : [
               {
                 kind: "SlotOccupant",
@@ -3979,5 +3981,46 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await peer.close();
     await page.unroute(endpoint, mock);
   }
-  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+  await proveReaderNavigation(page, baseUrl, routePath);
+  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+}
+
+
+async function proveReaderNavigation(page, baseUrl, routePath) {
+  async function proveNavigation(tab, expectedFocus) {
+    const dock = tab.getByTestId("player-primary-action-zone");
+    await tab.waitForFunction(() => document.querySelector('[data-testid="player-primary-action-zone"]')?.dataset.commandsAvailable === "false");
+    assert.equal(await dock.getAttribute("aria-label"), "Player navigation");
+    assert.equal(await dock.getAttribute("aria-busy"), null);
+    assert.equal(await dock.locator("button").count(), 0);
+    assert.equal(await dock.locator('[data-testid="player-dock-reply"], [data-testid="player-dock-act"], [data-testid="player-dock-events"]').count(), 0);
+    assert.equal(await tab.locator('button[data-action]:enabled').count(), 0);
+    await tab.getByTestId("player-dock-count").focus();
+    await tab.keyboard.press("Tab");
+    await tab.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
+    await tab.keyboard.press("Enter");
+    await tab.waitForFunction(id => document.activeElement?.id === id, expectedFocus);
+  }
+  const commandRoute = fixtureApiRoutes.find(route => route.pattern instanceof RegExp && route.pattern.test("/games/midsummer/player-command-state"));
+  const completed = route => route.fulfill({ json: { ...commandRoute.body, game_completed: true } });
+  await page.route("**/games/*/player-command-state**", completed);
+  try {
+    await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    await page.getByTestId("player-game-complete").waitFor();
+    await proveNavigation(page, "private-attention-filter");
+    assert.equal(await page.getByTestId("player-projection-command-health").count(), 0);
+  } finally { await page.unroute("**/games/*/player-command-state**", completed); }
+
+  const context = await newContextForViewport(page.viewportSize(), "fixture-spectator");
+  const spectator = await context.newPage();
+  try {
+    await installLiveProjectionHarness(spectator, { roleId: "spectator", channel: "spectator" });
+    await installFixtureApiRoutes(spectator, { routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState() });
+    await spectator.route("**/channels/spectator/thread?**", route => route.fulfill({ json: { posts: [], next_before_seq: null, next_after_seq: null } }));
+    const response = await spectator.goto(`${baseUrl}/g/midsummer/c/spectator`, { waitUntil: "networkidle" });
+    assert.equal(response.status(), 200);
+    await proveNavigation(spectator, "player-private-queue");
+    assert.equal(await spectator.getByTestId("player-private-new-count").count(), 0);
+    await spectator.getByTestId("player-private-empty").waitFor();
+  } finally { await context.close(); }
 }

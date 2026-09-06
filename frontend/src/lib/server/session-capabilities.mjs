@@ -274,6 +274,13 @@ function fixtureSession({ token, context }) {
           },
         ]),
       });
+    case "fixture-spectator":
+      return Object.freeze({
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.normal,
+        resolvedCapabilities: normalizeCapabilities([
+          { kind: "SpectatorOf", game, source: "fixture" },
+        ]),
+      });
     case "fixture-target":
       return Object.freeze({
         principalId: FIXTURE_SESSION_PRINCIPAL_IDS.target,
