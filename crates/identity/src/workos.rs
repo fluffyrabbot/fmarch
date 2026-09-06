@@ -1251,6 +1251,10 @@ mod tests {
                     if thread_stop.load(Ordering::Acquire) {
                         break;
                     }
+                    // Darwin may inherit the listener's nonblocking mode.
+                    // Read the complete request before replying and closing;
+                    // an early WouldBlock otherwise races the client's write.
+                    stream.set_nonblocking(false).unwrap();
                     stream
                         .set_read_timeout(Some(Duration::from_secs(1)))
                         .unwrap();
