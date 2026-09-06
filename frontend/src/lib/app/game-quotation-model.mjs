@@ -1,3 +1,4 @@
+import { postHref } from "./post-address.mjs";
 import {
   gameThreadAuthorLabel,
   normalizeGameThreadAuthor,
@@ -140,7 +141,7 @@ export function buildOutgoingQuotationViews(post, posts = []) {
         return Object.freeze({
           sourceSeq,
           excerpt,
-          href: `#thread-post-${sourceSeq}`,
+          href: postHref(sourceSeq),
           authorLabel: postAuthorLabel(original),
           originalUnavailable: original === undefined,
         });
@@ -172,7 +173,7 @@ export function buildIncomingCitationViews({
         }
         return Object.freeze({
           sourceSeq: quotingSeq,
-          href: `#thread-post-${quotingSeq}`,
+          href: postHref(quotingSeq),
         });
       })
       .filter(Boolean)

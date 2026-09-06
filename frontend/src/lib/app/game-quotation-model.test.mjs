@@ -44,12 +44,12 @@ test("game quotation helpers attach excerpts without copying them into body", ()
   assert.equal(view.quotations[0].excerpt, "Alpha signal");
   assert.equal(view.quotations[0].authorLabel, "slot-2");
   assert.equal(view.quotations[0].originalUnavailable, false);
-  assert.equal(view.quotations[0].href, "#thread-post-12");
+  assert.equal(view.quotations[0].href, "?post=12#thread-post-12");
 
   const quoted = buildGamePostQuoteView(posts[0], { posts });
   assert.equal(quoted.citationCount, 1);
   assert.equal(quoted.incomingCitations[0].sourceSeq, 18);
-  assert.equal(quoted.incomingCitations[0].href, "#thread-post-18");
+  assert.equal(quoted.incomingCitations[0].href, "?post=18#thread-post-18");
 });
 
 test("game quotation helpers mark off-page originals unavailable and cap attachments", () => {

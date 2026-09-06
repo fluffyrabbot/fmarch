@@ -36,7 +36,7 @@ test("public game posts keep stored excerpts when the original is off-page", () 
   );
   assert.equal(posts[0].quotations[0].excerpt, "gone");
   assert.equal(posts[0].quotations[0].originalUnavailable, true);
-  assert.equal(posts[0].quotations[0].href, "#thread-post-3");
+  assert.equal(posts[0].quotations[0].href, "?post=3#thread-post-3");
 });
 
 test("completed publications and unavailable games remain explicit", () => {

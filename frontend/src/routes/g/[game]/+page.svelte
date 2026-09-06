@@ -1,5 +1,8 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { afterNavigate } from "$app/navigation";
+  import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
+  afterNavigate(async ({ to }) => { await tick(); if (to) focusAddressedPost(to.url); });
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -56,6 +59,7 @@
     buildPlayerProjectionColdLoads,
     buildPlayerProjectionInitialSnapshot,
     loadOlderPlayerThreadPage,
+    loadNewerPlayerThreadPage,
     playerCommandErrorStatus,
     playerCommandInterruptedStatus,
     playerCommandPendingStatus,
@@ -240,6 +244,9 @@
   });
 
   projectionStore.subscribe((snapshot) => {
+    const readingPosition = typeof document === "undefined" ? null : captureReadingPosition();
+    const focusedPostId = typeof document !== "undefined" && document.activeElement?.matches?.('article[id^="thread-post-"]')
+      ? document.activeElement.id : null;
     thread = snapshot.thread;
     votecount = snapshot.votecount;
     dayVoteOutcomes = Array.isArray(snapshot.dayVoteOutcomes)
@@ -297,6 +304,10 @@
       channel: data.threadPager.channel,
     });
     privateQueueBoundary = buildPrivateQueueBoundary(snapshot);
+    if (readingPosition) void tick().then(() => {
+      if (focusedPostId) document.getElementById(focusedPostId)?.focus({ preventScroll: true });
+      restoreReadingPosition(readingPosition);
+    });
   });
   projectionStore.subscribeHealth((health) => {
     projectionHealth = health;
@@ -631,7 +642,19 @@
     return persisted;
   }
 
+  async function loadNewerThread() {
+    const position = captureReadingPosition();
+    threadPageStatus = playerThreadPendingStatus();
+    try {
+      const result = await loadNewerPlayerThreadPage({ data, fetchImpl: fetch, projectionStore, thread });
+      threadPageStatus = result.threadPageStatus;
+      await tick();
+      restoreReadingPosition(position);
+    } catch (error) { threadPageStatus = playerThreadErrorStatus(error); }
+  }
+
   async function loadOlderThread() {
+    const position = captureReadingPosition();
     threadPageStatus = playerThreadPendingStatus();
     try {
       const result = await loadOlderPlayerThreadPage({
@@ -641,6 +664,8 @@
         thread,
       });
       threadPageStatus = result.threadPageStatus;
+      await tick();
+      restoreReadingPosition(position);
       if (typeof window !== "undefined") {
         exposePlayerThreadPageStatus({
           windowRef: window,
@@ -727,6 +752,7 @@
       {threadPageStatus}
       {quoteEnabled}
       onLoadOlder={loadOlderThread}
+      onLoadNewer={loadNewerThread}
       onQuote={quotePlayerPost}
     />
 

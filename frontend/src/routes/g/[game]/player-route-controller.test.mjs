@@ -1062,6 +1062,10 @@ test("player route controller loads and merges older thread pages", async () => 
   const seenUrls = [];
   const projectionStore = fakeProjectionStore();
 
+  projectionStore.applySnapshot({ thread: { nextBeforeSeq: 41, posts: [
+    { seq: 44, author: { kind: "slot", slotId: "slot-7" }, body: "current" },
+    { seq: 45, author: { kind: "host_narrator" }, body: "latest" },
+  ] } });
   const result = await loadOlderPlayerThreadPage({
     data: fixtureData(),
     fetchImpl: async (url) => {
@@ -1434,3 +1438,31 @@ function memoryStorage() {
     },
   };
 }
+
+
+test("pagination preserves live arrivals and never resurrects removed posts", async () => {
+  const store = fakeProjectionStore();
+  const thread = { nextBeforeSeq: 41, posts: [{ seq: 44, body: "original" }] };
+  store.applySnapshot({ thread });
+  const result = await loadOlderPlayerThreadPage({ data: fixtureData(), projectionStore: store, thread,
+    fetchImpl: async () => {
+      store.applySnapshot({ thread: { ...thread, removedSeqs: ["40"], posts: [{ seq: 44, body: "updated" }, { seq: 99, body: "live" }] } });
+      return jsonResponse({ next_before_seq: 20, posts: [{ source_seq: 40, body: "removed while fetching" }, { source_seq: 39, body: "older" }] });
+    },
+  });
+  assert.deepEqual(result.snapshot.thread.posts.map(p => p.body), ["older", "updated", "live"]);
+  assert.equal(result.snapshot.thread.nextBeforeSeq, 20);
+});
+
+test("pagination cannot repopulate revoked thread authority", async () => {
+  const store = fakeProjectionStore();
+  const thread = { nextBeforeSeq: 41, posts: [{ seq: 44, body: "private" }] };
+  store.applySnapshot({ thread });
+  const result = await loadOlderPlayerThreadPage({ data: fixtureData(), projectionStore: store, thread,
+    fetchImpl: async () => {
+      store.applySnapshot({ thread: { nextBeforeSeq: null, posts: [] } });
+      return jsonResponse({ posts: [{ source_seq: 40, body: "private" }] });
+    },
+  });
+  assert.deepEqual(result.snapshot.thread.posts, []);
+});

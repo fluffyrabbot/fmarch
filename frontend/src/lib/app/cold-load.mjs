@@ -158,7 +158,8 @@ export function normalizeThreadPage(page, fallback) {
 
   return Object.freeze({
     nextBeforeSeq: page.next_before_seq ?? page.nextBeforeSeq ?? null,
-    posts: Object.freeze(page.posts.map((post) => normalizeThreadPost(post))),
+    ...(page.next_after_seq != null || page.nextAfterSeq != null ? { nextAfterSeq: page.next_after_seq ?? page.nextAfterSeq } : {}),
+    posts: Object.freeze(page.posts.map((post) => normalizeThreadPost(post)).sort((left, right) => Number(left.seq) - Number(right.seq))),
   });
 }
 
@@ -1036,11 +1037,15 @@ export function playerThreadUrl({
   channel = "main",
   limit = 50,
   beforeSeq = null,
+  aroundSeq = null,
+  afterSeq = null,
 }) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (beforeSeq !== null && beforeSeq !== undefined) {
     params.set("before_seq", String(beforeSeq));
   }
+  if (aroundSeq !== null) params.set("around_seq", String(aroundSeq));
+  if (afterSeq !== null) params.set("after_seq", String(afterSeq));
   if (channel !== "main") {
     return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/thread?${params.toString()}`;
   }

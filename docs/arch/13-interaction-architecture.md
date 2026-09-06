@@ -67,6 +67,29 @@ Successful command feedback is brief. Interrupted and rejected commands remain
 persistent because they require a decision. Technical command traces stay in the
 activity disclosure.
 
+## Addressed thread reading
+
+A post destination is the existing public or authorized player/channel route with
+`?post=<source-sequence>#thread-post-<source-sequence>`. The query selects the
+server-rendered window; the fragment identifies the focus target. Quotation and
+citation links use the same address even when the target is outside the loaded
+page. The route retains its existing public or channel authorization boundary.
+
+Thread reads accept exactly one positive `around_seq`, `before_seq`, or
+`after_seq`. Around reads return bounded context on both sides of a visible
+anchor and older/newer continuation cursors. Hidden and missing anchors return
+an indistinguishable unavailable response; private reads authorize before
+resolving the anchor. No request infers permission from possession of a link.
+
+Player articles are keyed by immutable post sequence. Addressed route changes
+create a fresh scoped controller, and focus moves to the selected article.
+Pagination preserves the visible reading offset and merges against the current
+projection, retaining live arrivals and edits. Removal tombstones prevent an
+in-flight historical response from resurrecting a removed post. A revoked or
+superseded cursor cannot repopulate the thread. An addressed cold-load endpoint
+retains its anchor during reconnect rather than silently selecting the latest
+50 posts.
+
 ## Host workspace
 
 The host console presents a queue of unresolved or time-sensitive tasks and one

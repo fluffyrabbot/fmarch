@@ -1,4 +1,8 @@
 <script>
+  import { afterNavigate } from "$app/navigation";
+  import { tick } from "svelte";
+  import { postHref, focusAddressedPost } from "$lib/app/post-address.mjs";
+  afterNavigate(async ({ to }) => { await tick(); if (to) focusAddressedPost(to.url); });
   export let data;
   export let form;
 
@@ -54,6 +58,9 @@
         </a>
       {/if}
 
+      {#if data.publicGame.nextAfterSeq != null}
+        <a class="fm-touch-button" href={`?after_seq=${data.publicGame.nextAfterSeq}#${data.publication.readingLane.headingId}`}>Newer posts</a>
+      {/if}
       <section
         class="public-game-reading-lane"
         aria-labelledby={data.publication.readingLane.headingId}
@@ -77,7 +84,7 @@
             >
               <header>
                 <strong id={`public-game-post-author-${post.source_seq}`}>{post.authorLabel}</strong>
-                <a id={`public-game-post-meta-${post.source_seq}`} href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
+                <a id={`public-game-post-meta-${post.source_seq}`} href={postHref(post.source_seq)}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
               </header>
               {#each post.quotations as quotation}
                 <blockquote

@@ -320,6 +320,8 @@ async fn day_vote_outcomes(
 
 #[derive(Debug, Clone, Deserialize)]
 struct ThreadQuery {
+    around_seq: Option<i64>,
+    after_seq: Option<i64>,
     before_seq: Option<i64>,
     limit: Option<i64>,
 }
@@ -397,14 +399,19 @@ async fn public_game_thread(
             error: RejectCode::UnknownGame,
             message: "public game was not found".to_string(),
         })?;
-    let page = projections::public_thread_view(
+    let position = parse_thread_position(query.around_seq, query.before_seq, query.after_seq)?;
+    let page = projections::thread_window(
         &state.pool,
         game,
-        query.before_seq,
+        "main",
+        position,
         query.limit.unwrap_or(50),
+        true,
     )
-    .await?;
+    .await?
+    .ok_or_else(post_unavailable)?;
     Ok(Json(PublicGameThreadPage {
+        next_after_seq: page.next_after_seq,
         game: GameIndexEntry::from(game_row),
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
         next_before_seq: page.next_before_seq,
@@ -435,6 +442,8 @@ fn parse_game_index_cursor(value: &str) -> Result<projections::GameIndexCursor, 
 
 #[derive(Debug, Clone, Deserialize)]
 struct ChannelThreadQuery {
+    around_seq: Option<i64>,
+    after_seq: Option<i64>,
     before_seq: Option<i64>,
     limit: Option<i64>,
 }
@@ -461,15 +470,47 @@ async fn channel_thread_view(
     )
     .await?;
 
-    let page = projections::thread_view_for_channel(
+    let position = parse_thread_position(query.around_seq, query.before_seq, query.after_seq)?;
+    let page = projections::thread_window(
         &state.pool,
         game,
         channel.as_str(),
-        query.before_seq,
+        position,
         query.limit.unwrap_or(50),
+        false,
     )
-    .await?;
+    .await?
+    .ok_or_else(post_unavailable)?;
     Ok(Json(ThreadPage::from(page)))
+}
+
+fn post_unavailable() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::StreamConflict,
+        message: "This post is unavailable.".to_string(),
+    }
+}
+
+fn parse_thread_position(
+    around: Option<i64>,
+    before: Option<i64>,
+    after: Option<i64>,
+) -> Result<projections::ThreadPosition, ApiError> {
+    let positions: Vec<_> = [around, before, after].into_iter().flatten().collect();
+    if positions.len() > 1 || positions.iter().any(|seq| *seq <= 0) {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::StreamConflict,
+            message: "Specify one positive thread position.".to_string(),
+        });
+    }
+    Ok(match (around, before, after) {
+        (Some(seq), _, _) => projections::ThreadPosition::Around(seq),
+        (_, Some(seq), _) => projections::ThreadPosition::Before(seq),
+        (_, _, Some(seq)) => projections::ThreadPosition::After(seq),
+        _ => projections::ThreadPosition::Latest,
+    })
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -524,6 +524,7 @@ pub enum GameThreadAuthor {
 /// A cold-load page of channel-thread posts, returned oldest-to-newest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadViewPage {
+    pub next_after_seq: Option<i64>,
     pub posts: Vec<ThreadPostRow>,
     /// Pass this as `before_seq` to fetch the next older page.
     pub next_before_seq: Option<i64>,
@@ -8899,6 +8900,100 @@ pub async fn thread_view_for_channel_after(
     .await
 }
 
+/// Exactly one direction or anchor can select a thread window.
+#[derive(Debug, Clone, Copy)]
+pub enum ThreadPosition {
+    Latest,
+    Around(i64),
+    Before(i64),
+    After(i64),
+}
+
+/// Resolve a bounded window through the same visibility filter as ordinary reads.
+/// Authorization belongs to the caller; a missing or hidden anchor returns None.
+pub async fn thread_window(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    position: ThreadPosition,
+    limit: i64,
+    public_only: bool,
+) -> Result<Option<ThreadViewPage>, ProjectionError> {
+    let (around_seq, before_seq, after_seq) = match position {
+        ThreadPosition::Latest => (None, None, None),
+        ThreadPosition::Around(seq) => (Some(seq), None, None),
+        ThreadPosition::Before(seq) => (None, Some(seq), None),
+        ThreadPosition::After(seq) => (None, None, Some(seq)),
+    };
+    let limit = limit.clamp(2, 100);
+    if let Some(anchor) = around_seq {
+        let newer = thread_view_for_channel_with_visibility(ThreadViewQuery {
+            pool,
+            game_id,
+            channel_id,
+            before_seq: None,
+            after_seq: Some(anchor - 1),
+            limit: limit - limit / 2,
+            public_only,
+        })
+        .await?;
+        if newer.posts.first().map(|post| post.source_seq) != Some(anchor) {
+            return Ok(None);
+        }
+        let mut older = thread_view_for_channel_with_visibility(ThreadViewQuery {
+            pool,
+            game_id,
+            channel_id,
+            before_seq: Some(anchor),
+            after_seq: None,
+            limit: limit / 2,
+            public_only,
+        })
+        .await?;
+        older.posts.extend(newer.posts);
+        older.next_after_seq = newer.next_after_seq;
+        return Ok(Some(older));
+    }
+    let mut page = thread_view_for_channel_with_visibility(ThreadViewQuery {
+        pool,
+        game_id,
+        channel_id,
+        before_seq,
+        after_seq,
+        limit,
+        public_only,
+    })
+    .await?;
+    // A directional page still exposes a way back through the opposite side.
+    if let (Some(_), Some(first)) = (after_seq, page.posts.first()) {
+        let previous = thread_view_for_channel_with_visibility(ThreadViewQuery {
+            pool,
+            game_id,
+            channel_id,
+            before_seq: Some(first.source_seq),
+            after_seq: None,
+            limit: 1,
+            public_only,
+        })
+        .await?;
+        page.next_before_seq = (!previous.posts.is_empty()).then_some(first.source_seq);
+    }
+    if let (Some(_), Some(last)) = (before_seq, page.posts.last()) {
+        let following = thread_view_for_channel_with_visibility(ThreadViewQuery {
+            pool,
+            game_id,
+            channel_id,
+            before_seq: None,
+            after_seq: Some(last.source_seq),
+            limit: 1,
+            public_only,
+        })
+        .await?;
+        page.next_after_seq = (!following.posts.is_empty()).then_some(last.source_seq);
+    }
+    Ok(Some(page))
+}
+
 struct ThreadViewQuery<'a> {
     pool: &'a PgPool,
     game_id: Uuid,
@@ -9035,14 +9130,20 @@ async fn thread_view_for_channel_with_visibility(
             })
         })
         .collect::<Result<Vec<_>, ProjectionError>>()?;
-    posts.reverse();
-    let next_before_seq = if has_more {
+    posts.sort_by_key(|post| post.source_seq);
+    let next_after_seq = if has_more && !newest_first {
+        posts.last().map(|post| post.source_seq)
+    } else {
+        None
+    };
+    let next_before_seq = if has_more && newest_first {
         posts.first().map(|post| post.source_seq)
     } else {
         None
     };
 
     Ok(ThreadViewPage {
+        next_after_seq,
         posts,
         next_before_seq,
     })

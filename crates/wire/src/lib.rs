@@ -3146,6 +3146,7 @@ fn percent_encode_path_segment(value: &str) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPage {
+    pub next_after_seq: Option<i64>,
     pub posts: Vec<ThreadPost>,
     pub next_before_seq: Option<i64>,
 }
@@ -3153,6 +3154,7 @@ pub struct ThreadPage {
 impl From<projections::ThreadViewPage> for ThreadPage {
     fn from(page: projections::ThreadViewPage) -> Self {
         ThreadPage {
+            next_after_seq: page.next_after_seq,
             posts: page.posts.into_iter().map(ThreadPost::from).collect(),
             next_before_seq: page.next_before_seq,
         }
@@ -3201,6 +3203,7 @@ impl From<projections::GameIndexPage> for GameIndexPage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PublicGameThreadPage {
+    pub next_after_seq: Option<i64>,
     pub game: GameIndexEntry,
     pub posts: Vec<ThreadPost>,
     pub next_before_seq: Option<i64>,

@@ -62,6 +62,7 @@ export const EMPTY_HOST_GAMEPLAY_SNAPSHOT = Object.freeze({
  * mixture of live and substitute state crosses this boundary.
  */
 export async function loadPlayerGameplaySnapshot({
+  aroundSeq = null,
   game,
   activeChannel = "main",
   principalId,
@@ -80,6 +81,7 @@ export async function loadPlayerGameplaySnapshot({
         apiBaseUrl,
         game,
         channel: activeChannel,
+        aroundSeq,
         limit: 50,
       }),
       validate: (value) =>

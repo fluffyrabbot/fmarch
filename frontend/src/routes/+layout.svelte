@@ -6,6 +6,9 @@
 
   export let data;
 
+  // Gameplay controllers own a scoped snapshot; an addressed navigation starts a new scope.
+  $: gameplayScope = $page.url.pathname.startsWith("/g/")
+    ? `${$page.url.pathname}:${$page.url.searchParams.get("post") ?? ""}` : "other";
   $: appSession = data?.appSession ?? {};
   $: pendingPath = $navigating?.to?.url?.pathname ?? null;
   $: pageRouteData = $page.data?.shellOwner === "layout" ? $page.data : null;
@@ -26,7 +29,7 @@
       capabilities={appSession.resolvedCapabilities}
     />
 
-    <slot />
+    {#key gameplayScope}<slot />{/key}
   </AppShell>
 {:else}
   <AppNavigationPending
@@ -36,5 +39,5 @@
     capabilities={appSession.resolvedCapabilities}
   />
 
-  <slot />
+  {#key gameplayScope}<slot />{/key}
 {/if}

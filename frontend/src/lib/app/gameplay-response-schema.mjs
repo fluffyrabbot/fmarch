@@ -74,6 +74,7 @@ export function validateGameplayThreadPageResponse(
   }
   return (
     isNullableSafeInteger(value.next_before_seq) &&
+    (value.next_after_seq === undefined || isNullableSafeInteger(value.next_after_seq)) &&
     Array.isArray(value.posts) &&
     value.posts.every((post) => isThreadPostFor(post, { game, channel }))
   );

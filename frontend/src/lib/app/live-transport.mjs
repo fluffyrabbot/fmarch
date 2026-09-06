@@ -2013,6 +2013,9 @@ function upsertThreadPosts(previousThread, posts) {
   }
   return Object.freeze({
     ...previous,
+    ...(previous.removedSeqs ? { removedSeqs: Object.freeze(previous.removedSeqs.filter((seq) =>
+      !(Array.isArray(posts) ? posts : []).some((post) => String(post.source_seq ?? post.seq) === seq),
+    )) } : {}),
     posts: Object.freeze(
       [...nextBySeq.values()].sort((left, right) => Number(left.seq) - Number(right.seq)),
     ),
@@ -2057,6 +2060,7 @@ function removeThreadPost(previousThread, sourceSeq, channel) {
   const previousPosts = Array.isArray(previous.posts) ? previous.posts : [];
   return Object.freeze({
     ...previous,
+    removedSeqs: Object.freeze([...new Set([...(previous.removedSeqs ?? []), String(sourceSeq)])]),
     posts: Object.freeze(
       previousPosts.filter((post) =>
         String(post?.seq) !== String(sourceSeq) ||

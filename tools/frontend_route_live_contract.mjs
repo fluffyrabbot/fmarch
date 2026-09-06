@@ -182,7 +182,7 @@ function assertSourceOwnsLiveConnection(
   source,
   { endpointExpression, eventRecorder, reconnectBridge, windowTrigger, metricsGetter },
 ) {
-  assert.match(source, /import \{ onMount \} from "svelte"/);
+  assert.match(source, /import \{ onMount(?:, tick)? \} from "svelte"/);
   assert.match(source, /connectLiveProjection/);
   assert.match(source, /LIVE_PROJECTION_CONNECTING_STATUS/);
   assert.match(source, /createProjectionStore/);

@@ -1013,7 +1013,12 @@ export async function loadOlderPlayerThreadPage({
     nextBeforeSeq: thread.nextBeforeSeq,
     posts: [],
   });
-  const mergedThread = mergeThreadPage(thread, olderPage);
+  const currentThread = projectionStore.getSnapshot().thread;
+  // Never resurrect an invalidated scope or replace live updates with the request snapshot.
+  if (!currentThread || currentThread.nextBeforeSeq !== thread.nextBeforeSeq) {
+    return { threadPageStatus: threadPageStatusForResult(0), snapshot: projectionStore.getSnapshot() };
+  }
+  const mergedThread = mergeThreadPage(currentThread, olderPage);
   const snapshot = projectionStore.applySnapshot({
     thread: mergedThread,
   });
@@ -1021,6 +1026,20 @@ export async function loadOlderPlayerThreadPage({
     threadPageStatus: threadPageStatusForResult(olderPage.posts.length),
     snapshot,
   });
+}
+
+export async function loadNewerPlayerThreadPage({ data, fetchImpl, projectionStore, thread }) {
+  const cursor = thread.nextAfterSeq;
+  if (cursor == null) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
+  const response = await fetchImpl(playerThreadUrl({ game: data.game.id, channel: data.threadPager.channel,
+    limit: data.threadPager.pageSize, afterSeq: cursor }), { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error(`Thread page rejected: ${response.status}`);
+  const page = normalizeThreadPage(await response.json(), { posts: [] });
+  const current = projectionStore.getSnapshot().thread;
+  if (!current || current.nextAfterSeq !== cursor) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
+  const merged = mergeThreadPage(current, { ...page, nextBeforeSeq: current.nextBeforeSeq });
+  const snapshot = projectionStore.applySnapshot({ thread: { ...merged, nextAfterSeq: page.nextAfterSeq ?? null } });
+  return { snapshot, threadPageStatus: { state: "ack", message: `Loaded ${page.posts.length} newer posts` } };
 }
 
 export function normalizePrivateRows(payload, previous) {

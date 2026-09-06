@@ -1,4 +1,5 @@
-import { fail } from "@sveltejs/kit";
+import { requestedPost } from "../../../lib/app/post-address.mjs";
+import { error, fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { frontendFixtureMode } from "../../../lib/server/runtime-mode.mjs";
@@ -13,6 +14,11 @@ export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = serverApiBaseUrl();
   const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
+  let aroundSeq;
+  try { aroundSeq = requestedPost(url); } catch { throw error(400, "Invalid post address"); }
+  if (aroundSeq !== null) search.set("around_seq", aroundSeq);
+  const afterSeq = optionalSequence(url.searchParams.get("after_seq"));
+  if (afterSeq !== null) search.set("after_seq", afterSeq);
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
   const fixtureMode = frontendFixtureMode();
@@ -21,6 +27,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     : await fetch(`${apiBaseUrl}/games/${encodeURIComponent(params.game)}?${search}`, {
         headers: readHeaders(token),
       });
+  if (aroundSeq !== null && response && !response.ok) throw error(response.status, "This post is unavailable.");
   const page = fixtureMode && apiBaseUrl === ""
     ? fixturePublicGame(params.game)
     : response.ok ? await response.json().catch(() => null) : null;
@@ -55,6 +62,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
       game: available ? page.game : null,
       posts,
       nextBeforeSeq: optionalSequence(page?.next_before_seq),
+      nextAfterSeq: optionalSequence(page?.next_after_seq),
       hasSession: typeof locals.principalId === "string",
       subscription,
     },

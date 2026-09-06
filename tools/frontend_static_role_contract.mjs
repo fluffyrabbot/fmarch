@@ -1560,7 +1560,7 @@ async function provePlayerSurface() {
   assert.deepEqual(mediaPost.author, { kind: "slot", slotId: "slot-2" });
   assert.equal(mediaPost.authorLabel, "slot-2");
   assert.deepEqual(mediaPost.permalink, {
-    href: "#thread-post-442",
+    href: "?post=442#thread-post-442",
     testId: "thread-post-permalink-442",
     label: "#442",
     meta: "2 min ago",

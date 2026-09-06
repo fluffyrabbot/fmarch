@@ -81,7 +81,7 @@ const appNavigationPath = path.join(tempEntryDir, "app-navigation.mjs");
 const appRootShellPath = path.join(tempEntryDir, "AppRootShell.svelte");
 await writeFile(entryPath, renderEntrySource());
 await writeFile(appStoresPath, renderAppStoresSource());
-await writeFile(appNavigationPath, "export async function goto() {}\n");
+await writeFile(appNavigationPath, "export async function goto() {}\nexport function afterNavigate() {}\n");
 await writeFile(appRootShellPath, renderAppRootShellSource());
 
 try {
@@ -1558,7 +1558,7 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
-    'href="#thread-post-442"',
+    'href="?post=442#thread-post-442"',
     "player thread permalink href",
   );
   assertIncludes(

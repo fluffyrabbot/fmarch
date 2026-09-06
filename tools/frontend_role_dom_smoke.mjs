@@ -382,7 +382,7 @@ function surfaceScenarios() {
       links: [
         {
           testId: "thread-post-permalink-442",
-          href: "#thread-post-442",
+          href: "?post=442#thread-post-442",
         },
         {
           testId: "player-private-link-notification-1",

@@ -5796,6 +5796,22 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
         "the canonical public game boundary must omit globally hidden posts"
     );
 
+    for anchor in [hidden_source_seq, 9999] {
+        let addressed = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/games/{game}?around_seq={anchor}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(addressed.status(), StatusCode::NOT_FOUND);
+        let body = to_bytes(addressed.into_body(), usize::MAX).await.unwrap();
+        assert!(!String::from_utf8_lossy(&body).contains("moderated secret"));
+    }
+
     let raw = app
         .oneshot(
             Request::builder()
@@ -7629,7 +7645,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     let private = get_as_dev_principal(
         &app,
         "user_a",
-        format!("/games/{game}/channels/private:role_pm:slot_1/thread?limit=10"),
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread?limit=10&around_seq=11"),
     )
     .await;
     assert_eq!(private.status(), StatusCode::OK);
@@ -7647,7 +7663,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     let denied = get_as_dev_principal(
         &app,
         "user_b",
-        format!("/games/{game}/channels/private:role_pm:slot_1/thread"),
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread?around_seq=11"),
     )
     .await;
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
@@ -13108,4 +13124,72 @@ async fn stored_slot_mention_rows(pool: &sqlx::PgPool, game: Uuid) -> Vec<(Strin
     .fetch_all(pool)
     .await
     .expect("read delivered slot mentions")
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn addressed_thread_window_reaches_beyond_latest_fifty(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let pack = test_pack_artifact("mafiascum");
+    install_test_pack_artifact(&pool, &pack).await;
+    sqlx::query("INSERT INTO game_index (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, updated_seq) VALUES ($1,$2,$3,$4,'active','D01',1,2,120)")
+        .bind(game).bind(&pack.pack_ref.key).bind(i64::from(pack.pack_ref.version)).bind(pack.pack_ref.content_hash.as_str()).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO thread_view (game_id,source_seq,stream_seq,channel_id,author_kind,body,occurred_at) SELECT $1,n,n,'main','host_narrator','post ' || n,1781928000 FROM generate_series(1,120) n")
+        .bind(game).execute(&pool).await.unwrap();
+    let app = router(pool.clone());
+    for (query, expected_first, expected_last) in [
+        ("limit=50", 71, 120),
+        ("around_seq=20&limit=50", 1, 44),
+        ("after_seq=44&limit=50", 45, 94),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/games/{game}?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let page: PublicGameThreadPage =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(page.posts.first().unwrap().source_seq, expected_first);
+        assert_eq!(page.posts.last().unwrap().source_seq, expected_last);
+        if expected_last < 120 {
+            assert_eq!(page.next_after_seq, Some(expected_last));
+        }
+    }
+    sqlx::query("DELETE FROM thread_view WHERE game_id=$1 AND source_seq=20")
+        .bind(game)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for query in ["around_seq=20", "around_seq=9999"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/games/{game}?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+    for query in ["around_seq=0", "around_seq=20&before_seq=40"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/games/{game}?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
 }

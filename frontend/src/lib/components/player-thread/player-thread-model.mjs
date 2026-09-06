@@ -1,3 +1,4 @@
+import { postHref } from "../../app/post-address.mjs";
 import {
   buildGamePostQuoteView,
   excerptFromBody,
@@ -33,9 +34,10 @@ export function mergeThreadPage(currentThread, olderPage) {
     postsBySeq.set(post.seq, post);
   }
   return Object.freeze({
+    ...currentThread,
     nextBeforeSeq: olderPage.nextBeforeSeq,
     posts: Object.freeze(
-      [...postsBySeq.values()].sort((left, right) => Number(left.seq) - Number(right.seq)),
+      [...postsBySeq.values()].filter((post) => !(currentThread.removedSeqs ?? []).includes(String(post.seq))).sort((left, right) => Number(left.seq) - Number(right.seq)),
     ),
   });
 }
@@ -119,7 +121,7 @@ export function buildPlayerThreadPermalinkView(post = {}) {
   }
   const meta = String(post?.meta ?? "").trim();
   return Object.freeze({
-    href: `#thread-post-${seq}`,
+    href: postHref(seq),
     testId: `thread-post-permalink-${seq}`,
     label: `#${seq}`,
     meta,

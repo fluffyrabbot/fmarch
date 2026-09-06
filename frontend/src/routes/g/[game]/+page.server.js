@@ -1,3 +1,4 @@
+import { requestedPost } from "../../../lib/app/post-address.mjs";
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../lib/app/app-route-state-model.mjs";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
@@ -16,6 +17,8 @@ import {
 } from "./game-route-model.mjs";
 
 export async function load({ params, locals, fetch, url, cookies }) {
+  let aroundSeq;
+  try { aroundSeq = requestedPost(url); } catch { throw error(400, "Invalid post address"); }
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = frontendFixtureMode();
   const context = resolvePlayerRouteContext({
@@ -33,6 +36,7 @@ export async function load({ params, locals, fetch, url, cookies }) {
     );
   }
   const coldLoad = await playerColdLoad({
+    aroundSeq,
     apiBaseUrl,
     context,
     cookies,
@@ -50,6 +54,7 @@ export async function load({ params, locals, fetch, url, cookies }) {
 
   return {
     ...data,
+    coldLoad: { ...data.coldLoad, threadEndpoint: aroundSeq === null ? data.coldLoad.threadEndpoint : `${data.coldLoad.threadEndpoint}&around_seq=${aroundSeq}` },
     shellOwner: "layout",
     routeState: resolveFixtureRouteState({
       surface: "player",
@@ -59,9 +64,10 @@ export async function load({ params, locals, fetch, url, cookies }) {
   };
 }
 
-async function playerColdLoad({ apiBaseUrl, context, cookies, fetch, fixtureMode }) {
+async function playerColdLoad({ aroundSeq, apiBaseUrl, context, cookies, fetch, fixtureMode }) {
   if (fixtureMode || context.pendingReplacement) return null;
   const result = await loadPlayerGameplaySnapshot({
+    aroundSeq,
     game: context.gameId,
     activeChannel: context.channelId,
     principalId: context.hasPrincipal ? "authenticated" : null,

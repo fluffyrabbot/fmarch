@@ -263,13 +263,13 @@ export type ThreadPostMedia = { content_id: string, alt: string, variants: { [ke
 
 export type ThreadPostMediaVariant = { avif_url: string, webp_url: string, width: number, height: number, };
 
-export type ThreadPage = { posts: Array<ThreadPost>, next_before_seq: bigint | null, };
+export type ThreadPage = { next_after_seq: bigint | null, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 
 export type GameIndexEntry = { game: string, pack: string, status: string, phase_id: PhaseId | null, updated_seq: bigint, completed_seq: bigint | null, };
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
-export type PublicGameThreadPage = { game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
+export type PublicGameThreadPage = { next_after_seq: bigint | null, game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 
 export type PublicSearchExcerptSegment = { text: string, highlighted: boolean, };
 

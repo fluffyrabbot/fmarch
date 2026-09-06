@@ -10,6 +10,7 @@
   export let threadPageStatus = null;
   export let quoteEnabled = false;
   export let onLoadOlder = () => {};
+  export let onLoadNewer = () => {};
   export let onQuote = () => {};
 
   let activeEmbedSeq = null;
@@ -17,6 +18,9 @@
 </script>
 
 <section class="player-surface__thread" aria-label="Thread">
+  {#if thread.nextAfterSeq != null}
+    <button class="fm-touch-button" on:click={onLoadNewer} disabled={threadPageStatus?.state === "pending"}>Load newer posts</button>
+  {/if}
   {#if liveOfficialPost !== null}
     <aside
       class="player-surface__official-post fm-card"
@@ -68,8 +72,9 @@
     />
   {/if}
 
-  {#each threadView.posts as post}
+  {#each threadView.posts as post (post.seq)}
     <article
+      tabindex="-1"
       id={`thread-post-${post.seq}`}
       class="player-surface__post"
       data-testid={`thread-post-${post.seq}`}

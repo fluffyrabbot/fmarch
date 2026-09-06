@@ -415,6 +415,7 @@ try {
         screenshot: path.relative(repoRoot, screenshot),
         screenshotPixels,
       });
+      if (role.id === "player") await proveAddressedPlayerNavigation(page, baseUrl, role.path);
       await context.close();
     }
 
@@ -3827,4 +3828,23 @@ function containsBox(outer, inner) {
     inner.x + inner.width <= outer.x + outer.width + tolerance &&
     inner.y + inner.height <= outer.y + outer.height + tolerance
   );
+}
+
+
+async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
+  await page.goto(`${baseUrl}${routePath}?post=443#thread-post-443`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => document.activeElement?.id === "thread-post-443");
+  const href = await page.getByTestId("thread-post-permalink-442").getAttribute("href");
+  if (href !== "?post=442#thread-post-442") throw new Error("Post permalink lacks a server-resolvable address");
+  await page.getByTestId("thread-post-permalink-442").click();
+  await page.waitForFunction(() => document.activeElement?.id === "thread-post-442");
+  if (!page.url().includes("post=442")) throw new Error("Addressed navigation did not reach the selected post");
+  await page.waitForLoadState("networkidle");
+  // Activate without Playwright scrolling the pager into view: the reader's
+  // existing viewport is the invariant under prepending history.
+  const before = await page.locator("#thread-post-442").evaluate(post => post.getBoundingClientRect().top);
+  await page.getByTestId("player-thread-load-older").evaluate(button => button.click());
+  await page.getByTestId("thread-post-440").waitFor();
+  await page.waitForFunction((top) => Math.abs(document.getElementById("thread-post-442").getBoundingClientRect().top - top) < 2, before);
+  await page.waitForFunction(() => document.activeElement?.id === "thread-post-442");
 }
