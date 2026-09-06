@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { privateItemId, fetchPrivateAttention } from "./private-attention.mjs";
+import { privateItemId, fetchPrivateAttention, privateNewCount } from "./private-attention.mjs";
 import { buildPrivateQueueRouteItems } from "../../routes/g/[game]/game-route-model.mjs";
 
 test("private delivery identity survives reorder and changes across seats and phases", () => {
@@ -28,4 +28,14 @@ test("review receipt failures remain explicit and retries submit the same identi
   await fetchPrivateAttention(request); await fetchPrivateAttention(request);
   assert.deepEqual(calls[0], calls[1]);
   await assert.rejects(fetchPrivateAttention({ ...request, fetchImpl: async () => new Response(null, { status: 403 }) }));
+});
+
+
+test("navigation counts only new delivered identities and suppresses unknown or revoked state", () => {
+  const items = [{ id: "a" }, { id: "b" }, { id: "b" }];
+  const attention = { state: "ready", reviewedIds: ["a", "other-seat"] };
+  assert.equal(privateNewCount({ items, attention, authorized: true }), 1);
+  assert.equal(privateNewCount({ items, attention, authorized: false }), null);
+  assert.equal(privateNewCount({ items, attention: { ...attention, state: "unavailable" }, authorized: true }), null);
+  assert.equal(privateNewCount({ items: [], attention, authorized: true }), 0);
 });

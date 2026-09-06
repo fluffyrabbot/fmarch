@@ -3861,14 +3861,29 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const id = "notification-N02-0-slot-7";
   const status = page.getByTestId(`private-attention-${id}`);
+  const badge = page.getByTestId("player-private-new-count");
+  await page.waitForFunction(() => document.querySelector('[data-testid="player-private-new-count"]')?.textContent === "2");
+  const more = page.getByTestId("player-dock-more");
+  await assertHitTarget(more, "private queue navigation");
+  const precedingTool = await page.getByTestId("player-dock-count").isVisible()
+    ? page.getByTestId("player-dock-count") : page.getByTestId("player-dock-events");
+  await precedingTool.focus();
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
+  assert.equal(await page.getByTestId("private-attention-filter").inputValue(), "new");
+  await page.getByTestId("private-attention-filter").selectOption("all");
   await page.getByTestId(`private-mark-reviewed-${id}`).waitFor();
   await page.route("**/api/gameplay/games/*/private-attention", route => route.fulfill({ status: 503 }), { times: 1 });
   await page.getByTestId(`private-mark-reviewed-${id}`).click();
   await page.getByText("Review status is unavailable. Try again.", { exact: true }).waitFor();
   assert.equal(await status.innerText(), "New");
+  assert.equal(await badge.innerText(), "2");
   await page.getByTestId(`private-mark-reviewed-${id}`).click();
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
+  assert.equal(await badge.innerText(), "1");
   await page.reload();
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
   await page.getByTestId(`player-private-link-${id}`).click();
@@ -3942,6 +3957,20 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await filter.selectOption("new");
     await page.getByTestId("private-filter-empty").waitFor();
     assert.equal(pendingWrites.length, 2);
+    for (const tab of [page, peer]) assert.equal(await tab.getByTestId("player-private-new-count").count(), 0);
+    durable.clear();
+    for (const tab of [page, peer]) {
+      await tab.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await tab.waitForFunction(() => document.querySelector('[data-testid="player-private-new-count"]')?.textContent === "2");
+    }
+    const denySeat = route => route.fulfill({ status: 403 });
+    await page.route(endpoint, denySeat);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByText("Review status is unavailable.", { exact: true }).waitFor();
+    assert.equal(await badge.count(), 0);
+    assert.equal(await more.getAttribute("aria-label"), "More: open private queue");
+    assert.equal(await peer.getByTestId("player-private-new-count").innerText(), "2");
+    await page.unroute(endpoint, denySeat);
   } catch (error) {
     const states = await Promise.all([page, peer].map(tab => tab.locator('[data-component="player-private-queue"]').innerText()));
     const geometry = await page.evaluate(() => ({ top: document.getElementById("private-attention-filter")?.getBoundingClientRect().top, scroll: scrollY, height: innerHeight, document: document.documentElement.scrollHeight, active: document.activeElement?.id }));
@@ -3950,5 +3979,5 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await peer.close();
     await page.unroute(endpoint, mock);
   }
-  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true };
+  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
 }

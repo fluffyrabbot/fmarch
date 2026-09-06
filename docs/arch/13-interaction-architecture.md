@@ -238,3 +238,12 @@ pageshow, and visibility changes revalidate with current session authority, incl
 when broadcast delivery is unavailable. Unmount removes listeners and ignores late
 responses. Background changes preserve a surviving visible row or thread anchor,
 with the filter as a fallback when its final New items disappear.
+
+
+The action dock's More control counts distinct delivered IDs absent from the
+reader's review receipts. Unknown receipt state or lost seat authority suppresses
+the badge. The control's accessible name distinguishes the New count from total
+deliveries, and keyboard activation focuses the queue filter (New when there are
+new items, otherwise All). On phones, primary actions and navigation occupy two
+rows; the primary row retains its height during pending commands so touch targets
+and command feedback remain stationary.

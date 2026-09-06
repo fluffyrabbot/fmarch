@@ -1,6 +1,7 @@
 <script>
   export let view;
-  export let privateCount = 0;
+  export let privateNewCount = null;
+  export let onOpenPrivateQueue = () => {};
   export let dayEventCount = 0;
   export let onCommand = () => {};
 
@@ -70,9 +71,11 @@
   <a class="action-dock__tool" href="#player-actions" data-testid="player-dock-count">
     <span>Count</span>
   </a>
-  <a class="action-dock__tool" href="#player-context" data-testid="player-dock-more">
+  <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
+    aria-label={privateNewCount === null ? "More: open private queue" : `More: ${privateNewCount} new private ${privateNewCount === 1 ? "item" : "items"}`}
+    on:click|preventDefault={onOpenPrivateQueue}>
     <span>More</span>
-    {#if privateCount > 0}<strong aria-label={`${privateCount} private items`}>{privateCount}</strong>{/if}
+    {#if privateNewCount > 0}<strong aria-hidden="true" data-testid="player-private-new-count">{privateNewCount}</strong>{/if}
   </a>
 </nav>
 
@@ -156,6 +159,13 @@
     .action-dock {
       border-radius: 10px;
       inset-inline: 8px;
+      flex-wrap: wrap;
+    }
+
+    .action-dock__actions {
+      flex-basis: 100%;
+      min-block-size: 44px;
+      overflow-x: visible;
     }
 
     .action-dock button,
@@ -165,8 +175,7 @@
       padding-inline: 6px;
     }
 
-    .action-dock__tool[data-testid="player-dock-count"],
-    .action-dock__tool[data-testid="player-dock-more"] {
+    .action-dock__tool[data-testid="player-dock-count"] {
       display: none;
     }
   }

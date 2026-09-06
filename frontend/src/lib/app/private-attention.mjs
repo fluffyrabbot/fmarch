@@ -37,3 +37,9 @@ export async function fetchPrivateAttention({ game, fetchImpl = fetch, itemId = 
     throw new Error("Review status is unavailable. Try again.");
   }
 }
+
+export function privateNewCount({ items, attention, authorized }) {
+  if (!authorized || attention.state !== "ready") return null;
+  const reviewed = new Set(attention.reviewedIds);
+  return new Set(items.filter(item => !reviewed.has(item.id)).map(item => item.id)).size;
+}

@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from "svelte";
+  import { privateNewCount } from "$lib/app/private-attention.mjs";
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
   import { afterNavigate } from "$app/navigation";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
@@ -140,6 +141,12 @@
   let surfaceHeader = data.surfaceHeader;
   let privateQueue = data.privateQueue;
   let privateAttention = data.privateAttention ?? { state: "unavailable", reviewedIds: [] };
+  $: privateNewItemCount = privateNewCount({
+    items: privateQueue, attention: privateAttention,
+    authorized: Boolean(data.player.slotId) && !data.pendingReplacement &&
+      commandState?.actorSlot === data.player.slotId &&
+      !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
+  });
   let privateFilter = "all";
   let returnFocusId = null;
   $: if (returnFocusId && privateQueue.length && privateAttention.state === "ready") {
@@ -752,6 +759,14 @@
     return positions;
   }
 
+  async function openPrivateQueue() {
+    privateFilter = privateNewItemCount > 0 ? "new" : "all";
+    await tick();
+    const queue = document.getElementById("player-private-queue");
+    (document.getElementById("private-attention-filter") ?? queue)?.focus({ preventScroll: true });
+    queue?.scrollIntoView({ block: "start", behavior: "instant" });
+  }
+
   function refreshPrivateAttention() {
     return privateAttentionController?.refresh();
   }
@@ -950,7 +965,8 @@
       <ActionDock
         slot="dock"
         view={playerActionView}
-        privateCount={privateQueueBoundary.count ?? privateQueue.length}
+        privateNewCount={privateNewItemCount}
+        onOpenPrivateQueue={openPrivateQueue}
         dayEventCount={composer.dayEventCommands?.length ?? 0}
         onCommand={submitPlayerCommand}
       />
@@ -1096,5 +1112,8 @@
     line-height: 1.4;
     margin: 0;
     overflow-wrap: anywhere;
+  }
+  @media (max-width: 560px) {
+    .player-command-feedback { bottom: calc(130px + env(safe-area-inset-bottom)); }
   }
 </style>
