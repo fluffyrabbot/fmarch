@@ -335,7 +335,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
 
   const target = await resolveAuthenticatedSession({
     cookies: fixtureCookieJar("fixture-target"),
-    request: requestFor("/g/midsummer?private=notification-1"),
+    request: requestFor("/g/midsummer?private=notification-N02-0-slot-7"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
   assert.equal(target.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.target);
@@ -349,7 +349,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
 
   const nightTarget = await resolveAuthenticatedSession({
     cookies: fixtureCookieJar("fixture-night-target"),
-    request: requestFor("/g/midsummer?private=notification-1"),
+    request: requestFor("/g/midsummer?private=notification-N02-0-slot-7"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
   assert.equal(nightTarget.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.nightTarget);
@@ -363,7 +363,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
 
   const normal = await resolveAuthenticatedSession({
     cookies: fixtureCookieJar("fixture-normal"),
-    request: requestFor("/g/midsummer?private=notification-1"),
+    request: requestFor("/g/midsummer?private=notification-N02-0-slot-7"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
   assert.equal(normal.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.normal);

@@ -203,3 +203,24 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
 4. Reassess public and admin surfaces independently; do not force either through
    the gameplay composition. Complete: public uses a publication, admin uses an
    exception inbox.
+
+### Private delivery attention
+
+Private updates use immutable delivery identities: notification and investigation
+keys contain phase, event index, and audience seat; mention keys contain source
+sequence and audience seat. Queue order is presentation and never identity.
+Mention destinations open the original channel at its addressed post. Private
+result destinations select and focus the exact delivery in the private queue.
+
+`GET /games/{game}/private-attention` resolves the reader's current occupied
+seats and reads only their delivery keys. Cohost authority does not widen this
+set. `POST` accepts one delivered item ID and records an idempotent
+`PrivateAttentionItemReviewed` event in a deterministic principal/game/item
+stream. The indexed event header is the review-set read model. No result body
+is copied into a receipt or decrypted to authorize a receipt read.
+
+Delivery follows the seat across replacement; review follows the reader. The
+outgoing player loses access, and the incoming player receives the seat's
+existing deliveries with independent review state. An unavailable review read
+stays distinct from an empty reviewed set. Writes have a bounded wait, explicit
+failure, and retry; viewing a destination alone does not mark it reviewed.

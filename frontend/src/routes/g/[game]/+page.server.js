@@ -1,3 +1,4 @@
+import { loadPrivateAttention } from "../../../lib/server/private-attention.mjs";
 import { requestedPost } from "../../../lib/app/post-address.mjs";
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../lib/app/app-route-state-model.mjs";
@@ -54,6 +55,8 @@ export async function load({ params, locals, fetch, url, cookies }) {
 
   return {
     ...data,
+    privateAttention: await loadPrivateAttention({ game: context.gameId, cookies, fetch, apiBaseUrl, fixtureMode,
+      enabled: context.playerCommandStateSlot !== null && !context.pendingReplacement }),
     coldLoad: { ...data.coldLoad, threadEndpoint: aroundSeq === null ? data.coldLoad.threadEndpoint : `${data.coldLoad.threadEndpoint}&around_seq=${aroundSeq}` },
     shellOwner: "layout",
     routeState: resolveFixtureRouteState({

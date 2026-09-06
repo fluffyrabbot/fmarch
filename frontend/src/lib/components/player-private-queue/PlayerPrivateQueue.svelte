@@ -6,7 +6,14 @@
   export let boundary;
   export let items = [];
   export let expandedItems = {};
+  export let attention = { state: "unavailable", reviewedIds: [] };
+  export let pending = false;
+  export let message = "";
+  export let onRetry = () => {};
+  export let onReview = () => {};
   export let onToggle = () => {};
+
+  $: reviewed = new Set(attention.reviewedIds);
 
   $: view = buildPlayerPrivateQueueViewModel({
     boundary,
@@ -23,6 +30,9 @@
 >
   <header class="fm-ledger__head">
     <h2>{view.heading}</h2>
+    {#if attention.state === "ready" && view.items.length > 0}
+      <span class="private-new-count" data-testid="private-attention-count">{view.items.filter(item => !reviewed.has(item.id)).length} new</span>
+    {/if}
     <span class="fm-count" data-testid="player-private-count">
       {view.boundary.count}
     </span>
@@ -33,30 +43,51 @@
   >
     {view.boundary.detail}
   </p>
+  {#if view.items.length > 0}
+    {#if message}<p role="status">{message}</p>{/if}
+    {#if attention.state !== "ready"}
+      <p>Review status is unavailable.</p>
+      <button type="button" class="fm-touch-button fm-touch-button--secondary" disabled={pending} on:click={onRetry}>Retry review status</button>
+
+    {/if}
+  {/if}
   {#if view.items.length === 0}
     <p data-testid="player-private-empty">
       {view.emptyMessage}
     </p>
   {:else}
-    {#each view.items as item}
+    {#each view.items as item (item.id)}
       <article
         class="player-private-queue__item fm-disclosure"
+        id={`private-item-${item.id}`}
+        tabindex="-1"
         data-testid={`player-private-${item.id}`}
         data-kind={item.kind}
       >
-        <h3>{item.label}</h3>
+        <div class="private-item-heading">
+          <h3>{item.label}</h3>
+          {#if attention.state === "ready"}
+            <span data-testid={`private-attention-${item.id}`}>{reviewed.has(item.id) ? "Reviewed" : "New"}</span>
+          {/if}
+        </div>
         <p>{item.value}</p>
+        <div class="private-item-actions">
         <button
           type="button"
           class="fm-touch-button fm-touch-button--secondary"
           data-testid={item.reviewTestId}
           data-min-touch-target-px={item.minTouchTargetPx}
+          aria-label={item.reviewAriaLabel}
           aria-expanded={item.ariaExpanded}
           aria-controls={item.detailTestId}
           on:click={() => onToggle(item)}
         >
           {item.reviewLabel}
         </button>
+        {#if attention.state === "ready" && !reviewed.has(item.id)}
+          <button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid={`private-mark-reviewed-${item.id}`} disabled={pending} on:click={() => onReview(item)}>Mark reviewed</button>
+        {/if}
+        </div>
         {#if item.reviewHref}
           <a
             class="fm-touch-button"
@@ -82,6 +113,11 @@
 </section>
 
 <style>
+  .private-item-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .private-item-heading > span, .private-new-count { color: var(--fm-ink-subtle); font-size: 12px; white-space: nowrap; }
+  .private-new-count { margin-inline-start: auto; }
+  .private-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
   .player-private-queue h2 {
     font-size: 18px;
   }

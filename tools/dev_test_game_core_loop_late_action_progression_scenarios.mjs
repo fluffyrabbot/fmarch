@@ -486,7 +486,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
   }
   if (
     expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
+    (!/^notification-[DNT][0-9]+(?:R[0-9]+)?-[0-9]+-.+$/u.test(proof.privateNotice?.id ?? "") ||
       proof.privateNotice.kind !== "notification" ||
       !String(proof.privateNotice.text ?? "").includes("player_killed") ||
       !String(proof.privateNotice.text ?? "").includes(

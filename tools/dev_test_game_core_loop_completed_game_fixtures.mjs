@@ -26,7 +26,7 @@ export function completedGameEndgameSurfaceFixture({
   const completedRoleUrls = {
     sourceActionPlayerRoleUrl: baseRoleUrl,
     sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
-    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-N02-0-slot-7`,
   };
   const completedHostReloadSnapshot = completedHostReloadSnapshotFixture({
     dayVoteOutcomes: dayFiveOutcomes,
@@ -118,8 +118,8 @@ export function completedGameEndgameSurfaceFixture({
     }),
     completedDeadPlayerStaleVoteRecoveryProof:
       completedDeadPlayerStaleVoteRecoveryProofFixture({
-        sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-        visitedRolePath: `/g/${game}?private=notification-1`,
+        sourceRoleUrl: `${baseRoleUrl}?private=notification-N02-0-slot-7`,
+        visitedRolePath: `/g/${game}?private=notification-N02-0-slot-7`,
         game,
         reloadSnapshot: completedReloadSnapshots.completedDeadPlayerReloadProof,
       }),

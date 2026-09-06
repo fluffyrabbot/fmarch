@@ -703,7 +703,9 @@ function withPrivateQueueReviewLinks(items, { game, channel }) {
       const params = new URLSearchParams({ private: item.id });
       return Object.freeze({
         ...item,
-        reviewHref: `${baseHref}?${params.toString()}`,
+        reviewHref: item.destination
+          ? `${item.destination.channel === "main" ? `/g/${encodeURIComponent(game)}` : `/g/${encodeURIComponent(game)}/c/${encodeURIComponent(item.destination.channel)}`}?post=${item.destination.sourceSeq}#thread-post-${item.destination.sourceSeq}`
+          : `${baseHref}?${params.toString()}#private-item-${encodeURIComponent(item.id)}`,
       });
     }),
   );
@@ -839,10 +841,10 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     ]),
   }),
   notifications: Object.freeze([
-    Object.freeze({ effect: "Commuted", phase_id: "N02", status: "Delivered" }),
+    Object.freeze({ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }),
   ]),
   investigationResults: Object.freeze([
-    Object.freeze({ mode: "tracker", target_slot: "slot-4", result: "No visit" }),
+    Object.freeze({ phase_id: "N02", event_index: 1, audience_slot: "slot-7", mode: "tracker", target_slot: "slot-4", result: "No visit" }),
   ]),
   // Delivered to the seat, not to a person: the fixture names slot-7 and says
   // nothing about who occupies it (RFC 0007 §7).

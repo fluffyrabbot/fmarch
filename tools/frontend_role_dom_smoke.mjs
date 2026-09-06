@@ -376,7 +376,7 @@ function surfaceScenarios() {
         "thread-post-media-boundary-442",
         "thread-post-permalink-442",
         "thread-post-442",
-        "player-private-link-notification-1",
+        "player-private-link-notification-N02-0-slot-7",
         "player-live-status",
       ],
       links: [
@@ -385,8 +385,8 @@ function surfaceScenarios() {
           href: "?post=442#thread-post-442",
         },
         {
-          testId: "player-private-link-notification-1",
-          href: "/g/midsummer?private=notification-1",
+          testId: "player-private-link-notification-N02-0-slot-7",
+          href: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
         },
       ],
       requiredAttributes: [
@@ -403,19 +403,19 @@ function surfaceScenarios() {
     {
       id: "player-private-review",
       role: "player",
-      path: "/g/midsummer?private=notification-1",
+      path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       render: "renderPlayerPrivateReviewRoute",
       surfaceTestId: "player-surface",
       requiredText: ["Private queue", "Phase Night 2"],
       requiredTestIds: [
-        "player-private-review-notification-1",
-        "player-private-link-notification-1",
-        "player-private-detail-notification-1",
+        "player-private-review-notification-N02-0-slot-7",
+        "player-private-link-notification-N02-0-slot-7",
+        "player-private-detail-notification-N02-0-slot-7",
       ],
       links: [
         {
-          testId: "player-private-link-notification-1",
-          href: "/g/midsummer?private=notification-1",
+          testId: "player-private-link-notification-N02-0-slot-7",
+          href: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
         },
       ],
       requiredAttributes: [
@@ -434,7 +434,7 @@ function surfaceScenarios() {
       requiredTestIds: [
         "player-channel-private:role_pm:slot-7",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
-        "player-private-link-notification-1",
+        "player-private-link-notification-N02-0-slot-7",
         FIXTURE_THREAD_MEDIA_TEST_ID,
       ],
       links: [
@@ -443,8 +443,8 @@ function surfaceScenarios() {
           href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         },
         {
-          testId: "player-private-link-notification-1",
-          href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+          testId: "player-private-link-notification-N02-0-slot-7",
+          href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
         },
       ],
       requiredAttributes: [

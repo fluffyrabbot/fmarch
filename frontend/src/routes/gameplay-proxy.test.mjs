@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GET } from "./api/gameplay/[...path]/+server.js";
+import { GET, POST } from "./api/gameplay/[...path]/+server.js";
 
 test("private gameplay reads are allowlisted and bound to the httpOnly session", async () => {
   const calls = [];
@@ -159,4 +159,23 @@ test("private gameplay proxy rejects unrecognized paths before session forwardin
 
   assert.equal(response.status, 404);
   assert.equal(called, false);
+});
+
+
+test("private review writes require the same origin and forward only the session and item identity", async () => {
+  const calls = [];
+  const run = (origin, token) => {
+    const request = new Request("https://app.example/api/gameplay/games/game-1/private-attention", {
+      method: "POST", headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ item_id: "slot-mention-41-slot-7", principal_id: "forged" }),
+    });
+    return POST({ request, url: new URL(request.url), params: { path: "games/game-1/private-attention" },
+      cookies: { get: () => token }, fetch: async (url, init) => { calls.push(init); return Response.json({ reviewed_ids: [] }); } });
+  };
+  assert.equal((await run("https://evil.example", "opaque-session")).status, 403);
+  assert.equal((await run("https://app.example", undefined)).status, 401);
+  assert.equal(calls.length, 0);
+  assert.equal((await run("https://app.example", "opaque-session")).status, 200);
+  assert.equal(calls[0].headers.authorization, "Bearer opaque-session");
+  assert.deepEqual(JSON.parse(calls[0].body), { item_id: "slot-mention-41-slot-7" });
 });

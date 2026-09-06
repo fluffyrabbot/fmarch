@@ -97,8 +97,9 @@ mod private_channel_projection;
 mod publications;
 mod social_writes;
 pub use attention_writes::{
-    advance_member_inbox_read_cursor, advance_subscription_read_cursor, subscribe_to_public_target,
-    unsubscribe_from_public_target,
+    advance_member_inbox_read_cursor, advance_subscription_read_cursor,
+    private_delivery_ids_for_slots, review_private_item, reviewed_private_items,
+    subscribe_to_public_target, unsubscribe_from_public_target,
 };
 pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
 pub use moderation_writes::{append_moderation_and_project_expected, submit_moderation_report};

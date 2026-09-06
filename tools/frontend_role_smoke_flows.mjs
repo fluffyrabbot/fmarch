@@ -46,6 +46,7 @@ export const flowHookNames = Object.freeze([
   "playerMediaNetwork",
   "playerLiveThreadEmit",
   "playerPrivateDisclosure",
+  "playerPrivateAttention",
   "adminAuditDetail",
 ]);
 
@@ -58,6 +59,7 @@ export const roleHarnesses = Object.freeze({
 // Post-screenshot link-click proofs per role, run after the role surface
 // screenshot is captured.
 export const linkClickProofHooks = Object.freeze({
+  player: Object.freeze(["playerPrivateAttention"]),
   admin: Object.freeze(["adminAuditDetail"]),
 });
 

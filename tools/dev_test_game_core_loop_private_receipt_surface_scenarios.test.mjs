@@ -135,11 +135,11 @@ test("night action receipt and privacy checkpoint rows share scenario predicates
 test("private receipt surface role URLs focus the private notification", () => {
   assert.equal(
     targetResolutionReceiptRoleUrl("http://127.0.0.1:5173/g/game-a"),
-    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a?private=notification-N02-0-slot-7",
   );
   assert.equal(
     normalResolutionPrivacyRoleUrl("http://127.0.0.1:5173/g/game-a?x=1"),
-    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a?private=notification-N02-0-slot-7",
   );
   assert.throws(
     () => targetResolutionReceiptRoleUrl(""),

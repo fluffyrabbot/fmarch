@@ -13,6 +13,8 @@ use axum::http::request::Parts;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::routing::get;
+#[path = "private_attention_http.rs"]
+mod private_attention_http;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use content_reference::{
@@ -75,6 +77,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route(
             "/games/{game}/channels/{channel}/posts/{source_seq}/citations",
             get(channel_post_citations),
+        )
+        .route(
+            "/games/{game}/private-attention",
+            get(private_attention_http::read).post(private_attention_http::review),
         )
         .route("/games/{game}/notifications", get(player_notifications))
         .route(

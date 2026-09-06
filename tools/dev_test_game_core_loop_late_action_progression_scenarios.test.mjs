@@ -408,7 +408,7 @@ function nightFourPlayerSurfaceProof({
     ...(privateReceipt
       ? {
           privateNotice: {
-            id: "notification-1",
+            id: "notification-N02-0-slot-7",
             kind: "notification",
             text: "player_killed factional_kill",
             detailText: "Phase N04",

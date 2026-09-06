@@ -174,14 +174,14 @@ export function postDayThreeResolutionSurfaceFixture({
     sourceActionPlayerRoleUrl: baseRoleUrl,
     sourceTargetRoleUrl: seededCoreLoopRoleUrl({
       game,
-      suffix: "?private=notification-1",
+      suffix: "?private=notification-N02-0-slot-7",
     }),
     clickedThroughFromRoleUrl: true,
     transition:
       "target:D03:day_vote -> actionPlayer:D03:privacy -> host:advance_phase:ack:909 -> actionPlayer:N03",
     targetReceiptProof: seededCoreLoopPlayerSurfaceFixture({
       game,
-      roleUrlSuffix: "?private=notification-1",
+      roleUrlSuffix: "?private=notification-N02-0-slot-7",
       slotField: "targetSlot",
       slot: "slot-4",
       principalId: "player_rowan",

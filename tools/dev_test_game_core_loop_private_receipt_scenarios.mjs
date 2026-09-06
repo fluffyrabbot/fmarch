@@ -379,9 +379,9 @@ export function assertPrivateChannelRoleSurfaceProof({
     !String(privateChannelRoleSurface.privateQueueBoundary?.text ?? "").includes(
       "delivered to you alone",
     ) ||
-    privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-1" ||
+    privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-N02-0-slot-7" ||
     privateChannelRoleSurface.expandedPrivateItem?.detailTestId !==
-      "player-private-detail-notification-1" ||
+      "player-private-detail-notification-N02-0-slot-7" ||
     !String(privateChannelRoleSurface.expandedPrivateItem?.detailText ?? "").includes(
       "Phase",
     )
@@ -1253,10 +1253,10 @@ export function assertPrivateReceiptRoleSurfaceCase({
     typeof proof.sourceRoleUrl !== "string" ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
     !proof.sourceRoleUrl.includes("/g/") ||
-    !proof.sourceRoleUrl.includes("private=notification-1") ||
+    !proof.sourceRoleUrl.includes("private=notification-N02-0-slot-7") ||
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
-    !proof.visitedRolePath.includes("private=notification-1") ||
+    !proof.visitedRolePath.includes("private=notification-N02-0-slot-7") ||
     proof.surfaceTestId !== "player-surface" ||
     proof.checkpoint?.phaseId !== expectedPhaseId ||
     proof.checkpoint.phaseState !== expectedPhaseState ||
@@ -1299,7 +1299,7 @@ export function assertPrivateReceiptRoleSurfaceCase({
   }
   if (
     expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
+    (!/^notification-[DNT][0-9]+(?:R[0-9]+)?-[0-9]+-.+$/u.test(proof.privateNotice?.id ?? "") ||
       proof.privateNotice.kind !== "notification" ||
       !String(proof.privateNotice.text ?? "").includes("player_killed") ||
       !String(proof.privateNotice.text ?? "").includes(
@@ -1404,7 +1404,7 @@ export function assertDayThreePlayerObservationProofCase({
   }
   if (
     expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
+    (!/^notification-[DNT][0-9]+(?:R[0-9]+)?-[0-9]+-.+$/u.test(proof.privateNotice?.id ?? "") ||
       proof.privateNotice.kind !== "notification" ||
       !String(proof.privateNotice.text ?? "").includes("player_killed") ||
       !String(proof.privateNotice.text ?? "").includes("factional_kill") ||
@@ -1513,7 +1513,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
   }
   if (
     expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
+    (!/^notification-[DNT][0-9]+(?:R[0-9]+)?-[0-9]+-.+$/u.test(proof.privateNotice?.id ?? "") ||
       proof.privateNotice.kind !== "notification" ||
       !String(proof.privateNotice.text ?? "").includes("player_killed") ||
       !String(proof.privateNotice.text ?? "").includes(

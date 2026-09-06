@@ -1327,13 +1327,13 @@ test("route-state render artifact covers every forced board and role page state"
   );
   assert.deepEqual(routeStateRender.playerPrivateReviewRoute, {
     role: "player",
-    path: "/g/midsummer?private=notification-1",
+    path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     surfaceTestId: "player-surface",
-    reviewTestId: "player-private-review-notification-1",
-    reviewLinkTestId: "player-private-link-notification-1",
-    reviewHref: "/g/midsummer?private=notification-1",
+    reviewTestId: "player-private-review-notification-N02-0-slot-7",
+    reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+    reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     reviewLinkLabel: "Open Commuted review",
-    detailTestId: "player-private-detail-notification-1",
+    detailTestId: "player-private-detail-notification-N02-0-slot-7",
     ariaExpanded: "true",
     detailRendered: true,
     hostOnlyCopyExcluded: true,
@@ -1354,8 +1354,8 @@ test("route-state render artifact covers every forced board and role page state"
       capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
       actorSlot: "slot-7",
     },
-    privateReviewLinkTestId: "player-private-link-notification-1",
-    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    privateReviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     privateReviewLinkLabel: "Open Commuted review",
     privateBoundaryStatus: "principal-scoped-private-projections",
     mediaVariant: "tablet",
@@ -1549,21 +1549,21 @@ test("route-state render artifact covers every forced board and role page state"
     boundary:
       "Build-mode Svelte SSR renders player private queue disclosure markup in collapsed and expanded states. This proves principal-scoped disclosure attributes and host-copy exclusion, not hydrated click/focus behavior.",
     collapsed: {
-      reviewTestId: "player-private-review-notification-1",
-      reviewLinkTestId: "player-private-link-notification-1",
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewTestId: "player-private-review-notification-N02-0-slot-7",
+      reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       reviewLinkLabel: "Open Commuted review",
-      detailTestId: "player-private-detail-notification-1",
+      detailTestId: "player-private-detail-notification-N02-0-slot-7",
       ariaExpanded: "false",
       detailRendered: false,
       htmlBytes: routeStateRender.playerPrivateDisclosure.collapsed.htmlBytes,
     },
     expanded: {
-      reviewTestId: "player-private-review-notification-1",
-      reviewLinkTestId: "player-private-link-notification-1",
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewTestId: "player-private-review-notification-N02-0-slot-7",
+      reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       reviewLinkLabel: "Open Commuted review",
-      detailTestId: "player-private-detail-notification-1",
+      detailTestId: "player-private-detail-notification-N02-0-slot-7",
       ariaExpanded: "true",
       detailRendered: true,
       htmlBytes: routeStateRender.playerPrivateDisclosure.expanded.htmlBytes,
@@ -2076,10 +2076,10 @@ test("hydrated surface artifact records route-backed surface adapters without lo
     "dayVoteOutcomes",
   ]);
   assert.deepEqual(hydratedSurfaces.player.privateDisclosure, {
-    itemId: "notification-1",
+    itemId: "notification-N02-0-slot-7",
     before: "false",
     after: "true",
-    reviewHref: "/g/midsummer?private=notification-1",
+    reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     hostOnlyCopyPresent: false,
   });
   assert.deepEqual(hydratedSurfaces.player.threadPager.pending, {
@@ -2360,7 +2360,7 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
       activeChannelTestId: "player-channel-private:role_pm:slot-7",
       activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       activeChannelCurrent: "page",
-      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     },
     media: {
       boundaryTestId: "thread-post-media-boundary-442",
@@ -2999,7 +2999,7 @@ test("in-app browser interaction page fixture records role command targets", asy
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelTestId: "player-channel-private:role_pm:slot-7",
     activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
   });
   const routeErrorScenario = manifest.scenarios.find(
     (scenario) => scenario.id === "route-error-back-to-board-click",
@@ -3103,10 +3103,10 @@ test("in-app browser interaction page fixture records role command targets", asy
     (scenario) => scenario.id === "player-private-disclosure-vote-and-post",
   );
   assert.deepEqual(playerHydratedScenario.privateDisclosure, {
-    itemId: "notification-1",
+    itemId: "notification-N02-0-slot-7",
     before: "false",
     after: "true",
-    reviewHref: "/g/midsummer?private=notification-1",
+    reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     hostOnlyCopyPresent: false,
   });
   assert.equal(playerHydratedScenario.command.commandKind, "SubmitVote");
@@ -3377,7 +3377,7 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
     activeChannelTestId: "player-channel-private:role_pm:slot-7",
     activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelCurrent: "page",
-    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
   });
   const routeError = staticDom.scenarios.find(
     (scenario) => scenario.id === "route-error-back-to-board-click",
@@ -3568,7 +3568,7 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
       activeChannelTestId: "player-channel-private:role_pm:slot-7",
       activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       activeChannelCurrent: "page",
-      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+      privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     });
     assert.deepEqual(routeError.errorSurface, {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
@@ -5597,7 +5597,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         activeChannelTestId: "player-channel-private:role_pm:slot-7",
         activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
         activeChannelCurrent: "page",
-        privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+        privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       },
       routeError: {
         path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
@@ -6575,16 +6575,16 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
     assert.equal(entry.commandResult.media.image.src.includes("original"), false);
     assert.equal(String(entry.commandResult.media.image.srcset ?? "").includes("original"), false);
     const disclosure = entry.commandResult.privateDisclosure;
-    assert.equal(disclosure.reviewTestId, "player-private-review-notification-1");
-    assert.equal(disclosure.reviewLinkTestId, "player-private-link-notification-1");
-    assert.equal(disclosure.reviewHref, "/g/midsummer?private=notification-1");
-    assert.equal(disclosure.detailTestId, "player-private-detail-notification-1");
+    assert.equal(disclosure.reviewTestId, "player-private-review-notification-N02-0-slot-7");
+    assert.equal(disclosure.reviewLinkTestId, "player-private-link-notification-N02-0-slot-7");
+    assert.equal(disclosure.reviewHref, "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7");
+    assert.equal(disclosure.detailTestId, "player-private-detail-notification-N02-0-slot-7");
     assert.deepEqual(disclosure.routeReview.searchParams, {
-      private: "notification-1",
+      private: "notification-N02-0-slot-7",
     });
     assert.equal(disclosure.routeReview.path, "/g/midsummer");
-    assert.equal(disclosure.routeReview.reviewHref, "/g/midsummer?private=notification-1");
-    assert.equal(disclosure.routeReview.detailTestId, "player-private-detail-notification-1");
+    assert.equal(disclosure.routeReview.reviewHref, "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7");
+    assert.equal(disclosure.routeReview.detailTestId, "player-private-detail-notification-N02-0-slot-7");
     assert.equal(disclosure.routeReview.ariaExpanded, "true");
     assert.equal(disclosure.routeReview.detailRendered, true);
     assert.equal(disclosure.routeReview.hostOnlyCopyExcluded, true);
@@ -6624,7 +6624,7 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
     assert.equal(entry.activeChannelTestId, "player-channel-private:role_pm:slot-7");
     assert.equal(
       entry.privateReviewHref,
-      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     );
     assert.equal(entry.commandResult.state, "ack");
     assert.match(entry.commandResult.message, /Ack: stream seqs 172/);
@@ -6731,7 +6731,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
       [
         "player-private-review",
         "player",
-        "/g/midsummer?private=notification-1",
+        "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
         "player-surface",
       ],
       [

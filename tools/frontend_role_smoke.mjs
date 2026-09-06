@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -481,12 +482,12 @@ try {
       {
         label: "player-private-channel review link",
         box: await assertNavigationAffordance(
-          privateChannelPage.getByTestId("player-private-link-notification-1"),
+          privateChannelPage.getByTestId("player-private-link-notification-N02-0-slot-7"),
           {
             label: "player-private-channel private review link",
             navigation: "link",
             hrefPath: privateChannelPath,
-            searchParams: Object.freeze({ private: "notification-1" }),
+            searchParams: Object.freeze({ private: "notification-N02-0-slot-7" }),
             baseUrl,
           },
         ),
@@ -526,7 +527,7 @@ try {
       viewport,
       path: privateChannelPath,
       activeChannelTestId: "player-channel-private:role_pm:slot-7",
-      privateReviewHref: `${privateChannelPath}?private=notification-1`,
+      privateReviewHref: `${privateChannelPath}?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7`,
       media: privateChannelMedia,
       focusTraversal: privateChannelFocusTraversal,
       commandResult: privateChannelCommand,
@@ -1378,6 +1379,7 @@ function resolveFlowHook(name) {
         viewport: ctx.viewport,
         baseUrl: ctx.baseUrl,
       }),
+    playerPrivateAttention: (page, ctx) => provePrivateAttention(page, ctx.baseUrl, ctx.role.path),
     adminAuditDetail: (page, ctx) =>
       driveAdminAuditDetailClick(page, {
         viewport: ctx.viewport,
@@ -2596,6 +2598,11 @@ async function installCommandMock(
     commandInterruption = null,
   },
 ) {
+  const reviewedPrivateItems = new Set();
+  await page.route("**/api/gameplay/games/*/private-attention", async route => {
+    if (route.request().method() === "POST") reviewedPrivateItems.add(route.request().postDataJSON().item_id);
+    await route.fulfill({ json: { reviewed_ids: [...reviewedPrivateItems] } });
+  });
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -3069,26 +3076,26 @@ function isForbiddenMediaUrl(value) {
 }
 
 async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
-  const review = page.getByTestId("player-private-review-notification-1");
+  const review = page.getByTestId("player-private-review-notification-N02-0-slot-7");
   await assertHitTarget(review, "player private notification disclosure");
   await assertNavigationAffordance(
-    page.getByTestId("player-private-link-notification-1"),
+    page.getByTestId("player-private-link-notification-N02-0-slot-7"),
     {
       label: "player private notification review link",
       navigation: "link",
       hrefPath: "/g/midsummer",
-      searchParams: { private: "notification-1" },
+      searchParams: { private: "notification-N02-0-slot-7" },
       baseUrl: page.url(),
     },
   );
   const reviewHref = await page
-    .getByTestId("player-private-link-notification-1")
+    .getByTestId("player-private-link-notification-N02-0-slot-7")
     .getAttribute("href");
   const baseRouteUrl = page.url();
   const detailId = await review.getAttribute("aria-controls");
-  if (detailId !== "player-private-detail-notification-1") {
+  if (detailId !== "player-private-detail-notification-N02-0-slot-7") {
     throw new Error(
-      `player private disclosure controls ${detailId}, expected player-private-detail-notification-1`,
+      `player private disclosure controls ${detailId}, expected player-private-detail-notification-N02-0-slot-7`,
     );
   }
   if ((await review.getAttribute("aria-expanded")) !== "false") {
@@ -3107,11 +3114,11 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     viewport,
   });
 
-  await page.getByTestId("player-private-link-notification-1").click();
+  await page.getByTestId("player-private-link-notification-N02-0-slot-7").click();
   await page.waitForURL((url) => {
     return (
       url.pathname === "/g/midsummer" &&
-      url.searchParams.get("private") === "notification-1"
+      url.searchParams.get("private") === "notification-N02-0-slot-7"
     );
   });
   await page.getByTestId(detailId).waitFor({ state: "visible" });
@@ -3122,14 +3129,14 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
   });
 
   await page.goto(baseRouteUrl, { waitUntil: "networkidle" });
-  await page.getByTestId("player-private-review-notification-1").waitFor({
+  await page.getByTestId("player-private-review-notification-N02-0-slot-7").waitFor({
     state: "visible",
   });
-  if ((await page.getByTestId("player-private-review-notification-1").getAttribute("aria-expanded")) !== "false") {
+  if ((await page.getByTestId("player-private-review-notification-N02-0-slot-7").getAttribute("aria-expanded")) !== "false") {
     throw new Error("player private disclosure did not return to collapsed base route");
   }
 
-  const baseReview = page.getByTestId("player-private-review-notification-1");
+  const baseReview = page.getByTestId("player-private-review-notification-N02-0-slot-7");
   await baseReview.click();
   await page.getByTestId(detailId).waitFor({ state: "visible" });
   if ((await baseReview.getAttribute("aria-expanded")) !== "true") {
@@ -3138,7 +3145,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
   const focusedTestId = await page.evaluate(() =>
     document.activeElement?.closest("[data-testid]")?.getAttribute("data-testid"),
   );
-  if (focusedTestId !== "player-private-review-notification-1") {
+  if (focusedTestId !== "player-private-review-notification-N02-0-slot-7") {
     throw new Error(`player private disclosure focus moved to ${focusedTestId}`);
   }
   const detailText = await page.getByTestId(detailId).innerText();
@@ -3159,8 +3166,8 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
   });
 
   return {
-    reviewTestId: "player-private-review-notification-1",
-    reviewLinkTestId: "player-private-link-notification-1",
+    reviewTestId: "player-private-review-notification-N02-0-slot-7",
+    reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
     reviewHref,
     detailTestId: detailId,
     routeReview,
@@ -3185,7 +3192,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
 }
 
 async function assertUrlAddressedPrivateReview(page, { viewport, detailId, reviewHref }) {
-  const review = page.getByTestId("player-private-review-notification-1");
+  const review = page.getByTestId("player-private-review-notification-N02-0-slot-7");
   const routeHref = new URL(page.url());
   if ((await review.getAttribute("aria-expanded")) !== "true") {
     throw new Error("player private review URL did not expand the matching disclosure");
@@ -3199,7 +3206,7 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
   }
   const screenshot = path.join(
     artifactDir,
-    `${viewport.name}-player-private-review-url-notification-1.png`,
+    `${viewport.name}-player-private-review-url-notification-N02-0-slot-7.png`,
   );
   const screenshotPixels = await captureScreenshotEvidence(page, {
     path: screenshot,
@@ -3847,4 +3854,26 @@ async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
   await page.getByTestId("thread-post-440").waitFor();
   await page.waitForFunction((top) => Math.abs(document.getElementById("thread-post-442").getBoundingClientRect().top - top) < 2, before);
   await page.waitForFunction(() => document.activeElement?.id === "thread-post-442");
+}
+
+
+async function provePrivateAttention(page, baseUrl, routePath) {
+  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  const id = "notification-N02-0-slot-7";
+  const status = page.getByTestId(`private-attention-${id}`);
+  await page.getByTestId(`private-mark-reviewed-${id}`).waitFor();
+  await page.route("**/api/gameplay/games/*/private-attention", route => route.fulfill({ status: 503 }), { times: 1 });
+  await page.getByTestId(`private-mark-reviewed-${id}`).click();
+  await page.getByText("Review status is unavailable. Try again.", { exact: true }).waitFor();
+  assert.equal(await status.innerText(), "New");
+  await page.getByTestId(`private-mark-reviewed-${id}`).click();
+  await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
+  await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
+  await page.reload();
+  await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
+  await page.getByTestId(`player-private-link-${id}`).click();
+  await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
+  assert.equal(new URL(page.url()).searchParams.get("private"), id);
+  await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
+  return { kind: "private-attention", status: "passed", itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true };
 }

@@ -371,7 +371,7 @@ function validPrivateChannelEntry(viewport) {
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelTestId: "player-channel-private:role_pm:slot-7",
     privateReviewHref:
-      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     focusTraversal: focusTraversal(),
     overlapCheckedTargets: 1,
     commandResult: {

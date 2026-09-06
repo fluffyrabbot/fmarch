@@ -457,17 +457,17 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
   );
   assertIncludes(
     collapsedHtml,
-    'data-testid="player-private-review-notification-1"',
+    'data-testid="player-private-review-notification-N02-0-slot-7"',
     "player private notification review",
   );
   assertIncludes(
     collapsedHtml,
-    'data-testid="player-private-link-notification-1"',
+    'data-testid="player-private-link-notification-N02-0-slot-7"',
     "player private notification review link",
   );
   assertIncludes(
     collapsedHtml,
-    'href="/g/midsummer?private=notification-1"',
+    'href="/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"',
     "player private notification review href",
   );
   assertIncludes(
@@ -482,19 +482,19 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
   );
   assertIncludes(
     collapsedHtml,
-    'aria-controls="player-private-detail-notification-1"',
+    'aria-controls="player-private-detail-notification-N02-0-slot-7"',
     "collapsed player private disclosure controls",
   );
   assertExcludes(
     collapsedHtml,
-    'data-testid="player-private-detail-notification-1"',
+    'data-testid="player-private-detail-notification-N02-0-slot-7"',
     "collapsed player private detail",
   );
   assertPrivateDisclosureDoesNotLeakHostOnlyCopy(collapsedHtml, "collapsed private queue");
 
   assertIncludes(
     expandedHtml,
-    'data-testid="player-private-review-notification-1"',
+    'data-testid="player-private-review-notification-N02-0-slot-7"',
     "expanded player private notification review",
   );
   assertIncludes(
@@ -504,12 +504,12 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
   );
   assertIncludes(
     expandedHtml,
-    'id="player-private-detail-notification-1"',
+    'id="player-private-detail-notification-N02-0-slot-7"',
     "expanded player private detail id",
   );
   assertIncludes(
     expandedHtml,
-    'data-testid="player-private-detail-notification-1"',
+    'data-testid="player-private-detail-notification-N02-0-slot-7"',
     "expanded player private detail test id",
   );
   assertIncludes(expandedHtml, "Phase Night 2", "expanded player private detail");
@@ -519,21 +519,21 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
     boundary:
       "Build-mode Svelte SSR renders player private queue disclosure markup in collapsed and expanded states. This proves principal-scoped disclosure attributes and host-copy exclusion, not hydrated click/focus behavior.",
     collapsed: {
-      reviewTestId: "player-private-review-notification-1",
-      reviewLinkTestId: "player-private-link-notification-1",
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewTestId: "player-private-review-notification-N02-0-slot-7",
+      reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       reviewLinkLabel: "Open Commuted review",
-      detailTestId: "player-private-detail-notification-1",
+      detailTestId: "player-private-detail-notification-N02-0-slot-7",
       ariaExpanded: "false",
       detailRendered: false,
       htmlBytes: Buffer.byteLength(collapsedHtml),
     },
     expanded: {
-      reviewTestId: "player-private-review-notification-1",
-      reviewLinkTestId: "player-private-link-notification-1",
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewTestId: "player-private-review-notification-N02-0-slot-7",
+      reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       reviewLinkLabel: "Open Commuted review",
-      detailTestId: "player-private-detail-notification-1",
+      detailTestId: "player-private-detail-notification-N02-0-slot-7",
       ariaExpanded: "true",
       detailRendered: true,
       htmlBytes: Buffer.byteLength(expandedHtml),
@@ -552,17 +552,17 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
   assertIncludes(html, 'data-testid="player-surface"', "player private review surface");
   assertIncludes(
     html,
-    'data-testid="player-private-review-notification-1"',
+    'data-testid="player-private-review-notification-N02-0-slot-7"',
     "player private review button",
   );
   assertIncludes(
     html,
-    'data-testid="player-private-link-notification-1"',
+    'data-testid="player-private-link-notification-N02-0-slot-7"',
     "player private review link",
   );
   assertIncludes(
     html,
-    'href="/g/midsummer?private=notification-1"',
+    'href="/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"',
     "player private review href",
   );
   assertIncludes(html, "Open Commuted review", "player private review link label");
@@ -573,7 +573,7 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
   );
   assertIncludes(
     html,
-    'data-testid="player-private-detail-notification-1"',
+    'data-testid="player-private-detail-notification-N02-0-slot-7"',
     "player private review URL detail",
   );
   assertIncludes(html, "Phase Night 2", "player private review URL detail text");
@@ -584,13 +584,13 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
 
   return {
     role: "player",
-    path: "/g/midsummer?private=notification-1",
+    path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     surfaceTestId: "player-surface",
-    reviewTestId: "player-private-review-notification-1",
-    reviewLinkTestId: "player-private-link-notification-1",
-    reviewHref: "/g/midsummer?private=notification-1",
+    reviewTestId: "player-private-review-notification-N02-0-slot-7",
+    reviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+    reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     reviewLinkLabel: "Open Commuted review",
-    detailTestId: "player-private-detail-notification-1",
+    detailTestId: "player-private-detail-notification-N02-0-slot-7",
     ariaExpanded: "true",
     detailRendered: true,
     hostOnlyCopyExcluded: true,
@@ -640,12 +640,12 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
-    'data-testid="player-private-link-notification-1"',
+    'data-testid="player-private-link-notification-N02-0-slot-7"',
     "player private channel review link",
   );
   assertIncludes(
     html,
-    'href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"',
+    'href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"',
     "player private channel scoped review href",
   );
   assertIncludes(
@@ -687,8 +687,8 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
       capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
       actorSlot: "slot-7",
     },
-    privateReviewLinkTestId: "player-private-link-notification-1",
-    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    privateReviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     privateReviewLinkLabel: "Open Commuted review",
     privateBoundaryStatus: "principal-scoped-private-projections",
     mediaVariant: "tablet",
@@ -2661,13 +2661,13 @@ export async function renderPlayerThreadPagerState(state) {
 export async function renderPlayerPrivateReviewRoute() {
 	  const data = await buildGameRouteData({
 	    game: "midsummer",
-	    privateItem: "notification-1",
+	    privateItem: "notification-N02-0-slot-7",
 	    ...fixtureRouteInputForRole("player"),
 	  });
 	  return renderWithRootLayout({
 	    page: "player",
 	    data,
-	    url: "http://localhost/g/midsummer?private=notification-1",
+	    url: "http://localhost/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
 	  });
 	}
 
@@ -2686,19 +2686,19 @@ export async function renderPlayerPrivateChannelRoute() {
 
 export async function renderPlayerPrivateDisclosure(expanded) {
   const boundary = buildPrivateQueueBoundary({
-    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
-    investigationResults: [{ mode: "tracker", target_slot: "slot-4" }],
+    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }],
+    investigationResults: [{ phase_id: "N02", event_index: 1, audience_slot: "slot-7", mode: "tracker", target_slot: "slot-4" }],
   });
   const items = buildPrivateQueue({
-    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
-    investigationResults: [{ mode: "tracker", target_slot: "slot-4" }],
+    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }],
+    investigationResults: [{ phase_id: "N02", event_index: 1, audience_slot: "slot-7", mode: "tracker", target_slot: "slot-4" }],
   }).map((item) => ({
     ...item,
-    reviewHref: item.id === "notification-1"
-      ? "/g/midsummer?private=notification-1"
-      : "/g/midsummer?private=investigation-1",
+    reviewHref: item.id === "notification-N02-0-slot-7"
+      ? "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"
+      : "/g/midsummer?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7",
   }));
-  const expandedItems = expanded ? { "notification-1": true } : {};
+  const expandedItems = expanded ? { "notification-N02-0-slot-7": true } : {};
   buildPlayerPrivateQueueViewModel({ boundary, items, expandedItems });
   return render(PlayerPrivateQueue, {
     props: {

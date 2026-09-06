@@ -1533,14 +1533,9 @@ async function proveDayThreePlayerObservation({
       productionReady: false,
     };
     if (privateCount > 0) {
-      const privateNotice = page.getByTestId("player-private-notification-1");
-      await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-      const privateNoticeDetail = page.getByTestId(
-        "player-private-detail-notification-1",
-      );
-      await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+      const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
       proof.privateNotice = {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: await privateNotice.getAttribute("data-kind"),
         text: await privateNotice.innerText(),
         detailText: await privateNoticeDetail.innerText(),
@@ -3930,14 +3925,9 @@ async function provePostDayThreePlayerSurface({
       productionReady: false,
     };
     if (privateCount > 0) {
-      const privateNotice = page.getByTestId("player-private-notification-1");
-      await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-      const privateNoticeDetail = page.getByTestId(
-        "player-private-detail-notification-1",
-      );
-      await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+      const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
       proof.privateNotice = {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: await privateNotice.getAttribute("data-kind"),
         text: await privateNotice.innerText(),
         detailText: await privateNoticeDetail.innerText(),
@@ -5553,12 +5543,7 @@ async function proveTargetResolutionReceiptSurface({
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
-    const privateNotice = page.getByTestId("player-private-notification-1");
-    await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-    const privateNoticeDetail = page.getByTestId(
-      "player-private-detail-notification-1",
-    );
-    await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+    const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
@@ -5610,7 +5595,7 @@ async function proveTargetResolutionReceiptSurface({
         text: privateBoundaryText,
       },
       privateNotice: {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: privateNoticeKind,
         text: privateNoticeText,
         detailText: privateNoticeDetailText,
@@ -5661,6 +5646,8 @@ async function installTargetResolutionReceiptBrowserRoutes(page) {
     await fulfillJson(route, [
       {
         effect: "player_killed",
+        event_index: 0,
+        audience_slot: "slot-2",
         phase_id: "N01",
         status: "factional_kill",
       },
@@ -5874,12 +5861,7 @@ async function proveTargetDayVoteReceiptSurface({
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
-    const privateNotice = page.getByTestId("player-private-notification-1");
-    await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-    const privateNoticeDetail = page.getByTestId(
-      "player-private-detail-notification-1",
-    );
-    await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+    const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
@@ -5931,7 +5913,7 @@ async function proveTargetDayVoteReceiptSurface({
         text: privateBoundaryText,
       },
       privateNotice: {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: privateNoticeKind,
         text: privateNoticeText,
         detailText: privateNoticeDetailText,
@@ -6134,12 +6116,7 @@ async function proveTargetPostDayVoteAdvanceSurface({
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
-    const privateNotice = page.getByTestId("player-private-notification-1");
-    await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-    const privateNoticeDetail = page.getByTestId(
-      "player-private-detail-notification-1",
-    );
-    await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+    const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
@@ -6191,7 +6168,7 @@ async function proveTargetPostDayVoteAdvanceSurface({
         text: privateBoundaryText,
       },
       privateNotice: {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: privateNoticeKind,
         text: privateNoticeText,
         detailText: privateNoticeDetailText,
@@ -6397,12 +6374,7 @@ async function proveNightActionResolutionReceiptSurface({
     await checkpoint.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
     await privateQueue.waitFor({ state: "visible", timeout: 15000 });
-    const privateNotice = page.getByTestId("player-private-notification-1");
-    await privateNotice.waitFor({ state: "visible", timeout: 15000 });
-    const privateNoticeDetail = page.getByTestId(
-      "player-private-detail-notification-1",
-    );
-    await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+    const { notice: privateNotice, detail: privateNoticeDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
@@ -6454,7 +6426,7 @@ async function proveNightActionResolutionReceiptSurface({
         text: privateBoundaryText,
       },
       privateNotice: {
-        id: "notification-1",
+        id: privateNoticeId,
         kind: privateNoticeKind,
         text: privateNoticeText,
         detailText: privateNoticeDetailText,
@@ -6656,7 +6628,7 @@ async function installDayVoteResolvedCommonRoutes(
     ]);
   });
   await page.route("**/games/*/notifications?**", async (route) => {
-    await fulfillJson(route, notifications);
+    await fulfillJson(route, notifications.map((row, event_index) => ({ ...row, event_index, audience_slot: commandState.actor_slot })));
   });
   await page.route("**/games/*/investigation-results?**", async (route) => {
     await fulfillJson(route, []);
@@ -6708,7 +6680,7 @@ async function installNightActionResolutionCommonRoutes(
     ]);
   });
   await page.route("**/games/*/notifications?**", async (route) => {
-    await fulfillJson(route, notifications);
+    await fulfillJson(route, notifications.map((row, event_index) => ({ ...row, event_index, audience_slot: commandState.actor_slot })));
   });
   await page.route("**/games/*/investigation-results?**", async (route) => {
     await fulfillJson(route, []);
@@ -6760,7 +6732,7 @@ async function installDayThreePlayerObservationRoutes(
     ]);
   });
   await page.route("**/games/*/notifications?**", async (route) => {
-    await fulfillJson(route, notifications);
+    await fulfillJson(route, notifications.map((row, event_index) => ({ ...row, event_index, audience_slot: commandState.actor_slot })));
   });
   await page.route("**/games/*/investigation-results?**", async (route) => {
     await fulfillJson(route, []);
@@ -8076,7 +8048,7 @@ async function installPostDayThreePlayerBrowserRoutes(
     await fulfillJson(route, endgameSummary);
   });
   await page.route("**/games/*/notifications?**", async (route) => {
-    await fulfillJson(route, notifications);
+    await fulfillJson(route, notifications.map((row, event_index) => ({ ...row, event_index, audience_slot: commandState.actor_slot })));
   });
   await page.route("**/games/*/investigation-results?**", async (route) => {
     await fulfillJson(route, []);
@@ -8319,7 +8291,7 @@ async function installPostDayVoteAdvanceCommonRoutes(
     ]);
   });
   await page.route("**/games/*/notifications?**", async (route) => {
-    await fulfillJson(route, notifications);
+    await fulfillJson(route, notifications.map((row, event_index) => ({ ...row, event_index, audience_slot: commandState.actor_slot })));
   });
   await page.route("**/games/*/investigation-results?**", async (route) => {
     await fulfillJson(route, []);
@@ -8462,10 +8434,7 @@ async function provePrivateChannelRoleSurface({
       await page.getByTestId("player-private-count").innerText(),
       10,
     );
-    const expandedPrivateDetail = page.getByTestId(
-      "player-private-detail-notification-1",
-    );
-    await expandedPrivateDetail.waitFor({ state: "visible", timeout: 15000 });
+    const { detail: expandedPrivateDetail, id: privateNoticeId } = await revealOnlyPrivateNotification(page);
     const expandedPrivateDetailText = await expandedPrivateDetail.innerText();
     await page.locator('[data-testid="player-composer"] textarea').fill(
       privatePostBody,
@@ -8543,8 +8512,8 @@ async function provePrivateChannelRoleSurface({
         text: privateBoundaryText,
       },
       expandedPrivateItem: {
-        id: "notification-1",
-        detailTestId: "player-private-detail-notification-1",
+        id: privateNoticeId,
+        detailTestId: `player-private-detail-${privateNoticeId}`,
         detailText: expandedPrivateDetailText,
       },
       submitPostProof: {
@@ -10443,7 +10412,7 @@ function rolePathFromUrl(roleUrl) {
 function privateChannelFocusedRolePathFromUrl(roleUrl) {
   const parsed = new URL(roleUrl);
   if (!parsed.searchParams.has("private")) {
-    parsed.searchParams.set("private", "notification-1");
+    parsed.searchParams.set("private", "notification-N02-0-slot-7");
   }
   return `${parsed.pathname}${parsed.search}`;
 }
@@ -11196,4 +11165,16 @@ function sameStringArray(actual, expected) {
     actual.length === expected.length &&
     actual.every((item, index) => item === expected[index])
   );
+}
+
+
+async function revealOnlyPrivateNotification(page) {
+  const notice = page.locator('[data-component="player-private-queue"] [data-kind="notification"]');
+  await notice.waitFor({ state: "visible", timeout: 15000 });
+  const id = (await notice.getAttribute("data-testid")).replace(/^player-private-/, "");
+  const toggle = page.getByTestId(`player-private-review-${id}`);
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+  const detail = page.getByTestId(`player-private-detail-${id}`);
+  await detail.waitFor({ state: "visible", timeout: 15000 });
+  return { notice, id, detail };
 }

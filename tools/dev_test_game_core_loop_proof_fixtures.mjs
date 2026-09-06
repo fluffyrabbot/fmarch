@@ -149,7 +149,7 @@ export function postDayThreePlayerSurfaceFixture({
   };
   if (privateReceipt) {
     proof.privateNotice = {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       text: `player_killed ${privateReceiptStatus}`,
       detailText: `Phase ${privateReceiptPhaseId}`,

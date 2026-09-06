@@ -1532,15 +1532,15 @@ async function provePlayerSurface() {
   });
   const privateDisclosure = buildPlayerPrivateQueueViewModel({
     boundary: buildPrivateQueueBoundary({
-      notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
+      notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }],
       investigationResults: [],
     }),
     items: buildPrivateQueue({
-      notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
+      notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }],
       investigationResults: [],
     }).map((item) => ({
       ...item,
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     })),
   });
 
@@ -1644,19 +1644,19 @@ async function provePlayerSurface() {
   );
   assert.equal(privateQueue.items.every((item) => item.minTouchTargetPx >= 44), true);
   assert.equal(privateDisclosure.items[0].ariaExpanded, "false");
-  assert.equal(privateDisclosure.items[0].reviewLabel, "Review Commuted");
+  assert.equal(privateDisclosure.items[0].reviewLabel, "Details");
   assert.equal(privateDisclosure.items[0].reviewLinkLabel, "Open Commuted review");
   assert.equal(
     privateDisclosure.items[0].reviewLinkTestId,
-    "player-private-link-notification-1",
+    "player-private-link-notification-N02-0-slot-7",
   );
   assert.equal(
     privateDisclosure.items[0].reviewHref,
-    "/g/midsummer?private=notification-1",
+    "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
   );
   assert.equal(
     privateDisclosure.items[0].detailTestId,
-    "player-private-detail-notification-1",
+    "player-private-detail-notification-N02-0-slot-7",
   );
   assert.equal(data.layout.root.data.mode, "reading-first-action-dock");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);

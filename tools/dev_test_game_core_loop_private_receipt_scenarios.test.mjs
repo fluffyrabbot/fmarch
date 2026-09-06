@@ -411,8 +411,8 @@ test("stale private-channel PhaseLocked assertion covers refreshed private post 
   const scenario = stalePrivateChannelPostPhaseLockedScenario();
   const proof = {
     status: "passed",
-    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
-    visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7",
+    visitedRolePath: "/g/game-a/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7",
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
     command: {
@@ -745,7 +745,7 @@ test("live completed private-channel reject outcome assertion covers reload clos
 test("private receipt role-surface assertion covers target receipt projection", () => {
   const scenario = privateReceiptScenario("n01-target-receipt");
   const sourceRoleUrl =
-    "http://127.0.0.1/g/game-a?private=notification-1";
+    "http://127.0.0.1/g/game-a?private=notification-N02-0-slot-7";
   const args = privateReceiptAssertionArgs({
     scenario,
     expectedGame: "game-a",
@@ -760,7 +760,7 @@ test("private receipt role-surface assertion covers target receipt projection", 
     targetSlot: scenario.expectedSlot,
     principalId: scenario.principalId,
     sourceRoleUrl,
-    visitedRolePath: "/g/game-a?private=notification-1",
+    visitedRolePath: "/g/game-a?private=notification-N02-0-slot-7",
     surfaceTestId: "player-surface",
     checkpoint: {
       phaseId: scenario.phaseId,
@@ -793,7 +793,7 @@ test("private receipt role-surface assertion covers target receipt projection", 
       commandStateEndpoint: args.expectedCommandStateEndpoint,
     },
     privateNotice: {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       text: `player_killed ${scenario.privateReceiptStatus}`,
       detailText: `Phase ${scenario.privateReceiptPhaseId}`,
@@ -837,7 +837,7 @@ test("private receipt role-surface assertion covers target receipt projection", 
 });
 
 test("Day 3 player observation assertion covers target private receipt", () => {
-  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-1";
+  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-N02-0-slot-7";
   const proof = {
     status: "passed",
     clickedThroughFromRoleUrl: true,
@@ -845,7 +845,7 @@ test("Day 3 player observation assertion covers target private receipt", () => {
     productionReady: false,
     rawInviteTokensVisible: false,
     sourceRoleUrl,
-    visitedRolePath: "/g/game-a?private=notification-1",
+    visitedRolePath: "/g/game-a?private=notification-N02-0-slot-7",
     surfaceTestId: "player-surface",
     targetSlot: "slot-3",
     principalId: "player-seed",
@@ -882,7 +882,7 @@ test("Day 3 player observation assertion covers target private receipt", () => {
         "/api/gameplay/games/game-a/player-command-state?slot_id=slot-3",
     },
     privateNotice: {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       text: "player_killed factional_kill",
       detailText: "Phase N02",
@@ -943,7 +943,7 @@ test("Day 3 player observation assertion covers target private receipt", () => {
 });
 
 test("post-Day 3 player surface assertion covers private day-vote receipt", () => {
-  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-1";
+  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-N02-0-slot-7";
   const proof = {
     status: "passed",
     clickedThroughFromRoleUrl: true,
@@ -951,7 +951,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
     productionReady: false,
     rawInviteTokensVisible: false,
     sourceRoleUrl,
-    visitedRolePath: "/g/game-a?private=notification-1",
+    visitedRolePath: "/g/game-a?private=notification-N02-0-slot-7",
     surfaceTestId: "player-surface",
     targetSlot: "slot-2",
     principalId: "player_ilya",
@@ -991,7 +991,7 @@ test("post-Day 3 player surface assertion covers private day-vote receipt", () =
         "/api/gameplay/games/game-a/player-command-state?slot_id=slot-2",
     },
     privateNotice: {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       text: "player_killed day_vote",
       detailText: "Phase D03",

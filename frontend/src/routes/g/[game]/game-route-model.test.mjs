@@ -236,27 +236,27 @@ test("player route data exposes thread, channel, votecount, and touch command la
     })),
     [
       {
-        id: "notification-1",
+        id: "notification-N02-0-slot-7",
         label: "Commuted",
         value: "Delivered",
         detail: "Phase Night 2",
-        reviewHref: "/g/midsummer?private=notification-1",
+        reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       },
       {
         // The rail names the seat that was addressed, never its occupant:
         // occupancy was resolved by the read that produced this row.
-        id: "slot-mention-1",
+        id: "slot-mention-443-slot-7",
         label: "Addressed as slot-7",
         value: "Main thread",
         detail: "Phase Day 2",
-        reviewHref: "/g/midsummer?private=slot-mention-1",
+        reviewHref: "/g/midsummer?post=443#thread-post-443",
       },
       {
-        id: "investigation-1",
+        id: "investigation-N02-1-slot-7",
         label: "tracker",
         value: "No visit",
         detail: "Target slot-4",
-        reviewHref: "/g/midsummer?private=investigation-1",
+        reviewHref: "/g/midsummer?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7",
       },
     ],
   );
@@ -510,18 +510,18 @@ test("player commands require command-state proof for the exact SlotOccupant slo
 test("player route data can address private queue rows from the URL", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    privateItem: "notification-1",
+    privateItem: "notification-N02-0-slot-7",
     principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
 
-  assert.deepEqual(data.privateQueueExpandedItems, { "notification-1": true });
+  assert.deepEqual(data.privateQueueExpandedItems, { "notification-N02-0-slot-7": true });
   assert.deepEqual(
     data.privateQueue.map((item) => [item.id, item.reviewHref]),
     [
-      ["notification-1", "/g/midsummer?private=notification-1"],
-      ["slot-mention-1", "/g/midsummer?private=slot-mention-1"],
-      ["investigation-1", "/g/midsummer?private=investigation-1"],
+      ["notification-N02-0-slot-7", "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"],
+      ["slot-mention-443-slot-7", "/g/midsummer?post=443#thread-post-443"],
+      ["investigation-N02-1-slot-7", "/g/midsummer?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7"],
     ],
   );
 
@@ -536,17 +536,17 @@ test("player route data can address private queue rows from the URL", async () =
   const rolePm = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
-    privateItem: "investigation-1",
+    privateItem: "investigation-N02-1-slot-7",
     principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
   });
-  assert.deepEqual(rolePm.privateQueueExpandedItems, { "investigation-1": true });
+  assert.deepEqual(rolePm.privateQueueExpandedItems, { "investigation-N02-1-slot-7": true });
   assert.equal(
     rolePm.privateQueue[2].reviewHref,
-    "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-1",
+    "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7",
   );
 });
 
@@ -622,8 +622,8 @@ test("player route data projects an authoritative cold-load snapshot", async () 
         reason: null,
       }],
       endgameSummary: null,
-      notifications: [{ effect: "Neighborized", status: "Delivered" }],
-      investigationResults: [{ mode: "cop", target_slot: "slot-2", result: "Mafia" }],
+      notifications: [{ phase_id: "N02", event_index: 0, audience_slot: "slot-7", effect: "Neighborized", status: "Delivered" }],
+      investigationResults: [{ phase_id: "N02", event_index: 1, audience_slot: "slot-7", mode: "cop", target_slot: "slot-2", result: "Mafia" }],
       commandState: {
         game: "midsummer",
         actorSlot: "slot-7",
@@ -719,22 +719,22 @@ test("player route data projects an authoritative cold-load snapshot", async () 
   ]);
   assert.deepEqual(data.privateQueue, [
     {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       label: "Neighborized",
       value: "Delivered",
-      detail: "Sent only to you",
+      detail: "Phase Night 2",
       buttonLabel: "Review",
-      reviewHref: "/g/midsummer?private=notification-1",
+      reviewHref: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     },
     {
-      id: "investigation-1",
+      id: "investigation-N02-1-slot-7",
       kind: "investigation-result",
       label: "cop",
       value: "Mafia",
       detail: "Target slot-2",
       buttonLabel: "Review",
-      reviewHref: "/g/midsummer?private=investigation-1",
+      reviewHref: "/g/midsummer?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7",
     },
   ]);
   assert.equal(data.privateQueueBoundary.count, 2);
@@ -781,8 +781,8 @@ test("player route model highlights the latest official host thread post", () =>
 
 test("player private queue helpers derive visible queue from scoped projections", () => {
   const snapshot = {
-    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered" }],
-    investigationResults: [{ mode: "tracker", target_slot: "slot-4" }],
+    notifications: [{ effect: "Commuted", phase_id: "N02", status: "Delivered", event_index: 0, audience_slot: "slot-7" }],
+    investigationResults: [{ phase_id: "N02", event_index: 1, audience_slot: "slot-7", mode: "tracker", target_slot: "slot-4" }],
   };
 
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
@@ -793,7 +793,7 @@ test("player private queue helpers derive visible queue from scoped projections"
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [
     {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       label: "Commuted",
       value: "Delivered",
@@ -801,7 +801,7 @@ test("player private queue helpers derive visible queue from scoped projections"
       buttonLabel: "Review",
     },
     {
-      id: "investigation-1",
+      id: "investigation-N02-1-slot-7",
       kind: "investigation-result",
       label: "tracker",
       value: "Result for slot-4",
@@ -814,8 +814,8 @@ test("player private queue helpers derive visible queue from scoped projections"
       (item) => [item.id, item.reviewHref],
     ),
     [
-      ["notification-1", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"],
-      ["investigation-1", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-1"],
+      ["notification-N02-0-slot-7", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"],
+      ["investigation-N02-1-slot-7", "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=investigation-N02-1-slot-7#private-item-investigation-N02-1-slot-7"],
     ],
   );
 });
@@ -1068,7 +1068,7 @@ test("player channel load exposes active channel route state from fixture query"
     });
     assert.equal(
       data.privateQueue[0].reviewHref,
-      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     );
   } finally {
     if (previousFixtureMode === undefined) {

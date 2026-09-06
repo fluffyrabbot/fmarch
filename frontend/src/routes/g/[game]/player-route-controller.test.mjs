@@ -1274,12 +1274,12 @@ test("player route controller records one current command receipt per action", (
 
 test("player route controller toggles private item expansion and validates private rows", () => {
   assert.deepEqual(
-    togglePrivateItemExpansion({ "notification-1": true }, { id: "notification-1" }),
-    { "notification-1": false },
+    togglePrivateItemExpansion({ "notification-N02-0-slot-7": true }, { id: "notification-N02-0-slot-7" }),
+    { "notification-N02-0-slot-7": false },
   );
   assert.deepEqual(
-    togglePrivateItemExpansion({}, { id: "investigation-1" }),
-    { "investigation-1": true },
+    togglePrivateItemExpansion({}, { id: "investigation-N02-1-slot-7" }),
+    { "investigation-N02-1-slot-7": true },
   );
 
   const rows = [{ effect: "Commuted" }];

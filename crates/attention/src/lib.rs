@@ -216,6 +216,17 @@ pub fn decide_inbox_cursor(
     }
 }
 
+pub const PRIVATE_ITEM_REVIEWED: &str = "PrivateAttentionItemReviewed";
+const PRIVATE_REVIEW_NAMESPACE: Uuid = Uuid::from_u128(0x8eeb8350482f4af5a82f5a88cdcc1e01);
+
+pub fn private_review_stream_id(principal: PrincipalId, game: Uuid, item_id: &str) -> Uuid {
+    let mut identity = Vec::with_capacity(32 + item_id.len());
+    identity.extend_from_slice(principal.as_uuid().as_bytes());
+    identity.extend_from_slice(game.as_bytes());
+    identity.extend_from_slice(item_id.as_bytes());
+    Uuid::new_v5(&PRIVATE_REVIEW_NAMESPACE, &identity)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

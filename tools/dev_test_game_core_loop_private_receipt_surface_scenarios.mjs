@@ -281,6 +281,6 @@ function assertPrivateReceiptSurfaceProof({
 
 function privateReceiptFocusedRoleUrl(roleUrl) {
   const parsed = new URL(roleUrl);
-  parsed.search = "?private=notification-1";
+  parsed.search = "?private=notification-N02-0-slot-7";
   return parsed.toString();
 }

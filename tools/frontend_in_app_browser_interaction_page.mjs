@@ -153,7 +153,7 @@ async function buildSurfaces(bundle) {
       requiredSelectors: [
         `[data-testid="${roleNavTestId("player")}"]`,
         '[data-testid="player-channel-main"]',
-        '[data-testid="player-private-link-notification-1"]',
+        '[data-testid="player-private-link-notification-N02-0-slot-7"]',
       ],
       nav: roleById.player.nav,
       minTouchTargetPx: APP_SHELL_CONTRACT.minTouchTargetPx,

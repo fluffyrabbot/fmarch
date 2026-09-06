@@ -24171,9 +24171,9 @@ function hostMixedAdvanceRaceSurfaceFixture() {
 function privateChannelRoleSurfaceFixture() {
   const game = "00000000-0000-0000-0000-000000000002";
   const roleUrl =
-    `http://127.0.0.1:5173/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-1`;
+    `http://127.0.0.1:5173/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7`;
   const visitedRolePath =
-    `/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-1`;
+    `/g/${game}/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7`;
   const completedPrivateReloadScenario = completedPrivateChannelReloadScenario();
   const staleCompletedPrivateScenario = staleCompletedPrivatePostScenario();
   const completedPrivateReloadSnapshot = completedPrivateChannelSnapshot({
@@ -24203,8 +24203,8 @@ function privateChannelRoleSurfaceFixture() {
         "Night results and notices are delivered to you alone.",
     },
     expandedPrivateItem: {
-      id: "notification-1",
-      detailTestId: "player-private-detail-notification-1",
+      id: "notification-N02-0-slot-7",
+      detailTestId: "player-private-detail-notification-N02-0-slot-7",
       detailText: "Phase N02",
     },
     submitPostProof: {
@@ -24259,9 +24259,9 @@ function privateChannelRoleSurfaceFixture() {
     stalePostAfterPhaseTransitionProof: {
       status: "passed",
       sourceRoleUrl:
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7",
       visitedRolePath:
-        "/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+        "/g/00000000-0000-0000-0000-000000000002/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7",
       clickedAction: "submit_post",
       commandKind: "SubmitPost",
       command: {

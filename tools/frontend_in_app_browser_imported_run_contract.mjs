@@ -188,7 +188,7 @@ function assertImportedInteractions(run) {
     activeChannelTestId: "player-channel-private:role_pm:slot-7",
     activeChannelHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelCurrent: "page",
-    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1",
+    privateReviewHref: "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
   });
   const routeError = run.interactions.find(
     (entry) => entry.id === "route-error-back-to-board-click",

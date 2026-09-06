@@ -957,7 +957,7 @@ function iabStaticDomEvidenceComplete() {
     playerPrivateChannel.route.activeChannelTestId === "player-channel-private:role_pm:slot-7" &&
     playerPrivateChannel.route.activeChannelCurrent === "page" &&
     playerPrivateChannel.route.privateReviewHref ===
-      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1" &&
+      "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7" &&
     routeError?.errorSurface?.path === "/g/midsummer/c/private%3Arole_pm%3Aslot-7" &&
     routeError.errorSurface.status === 403 &&
     routeError.errorSurface.actionHref === "/" &&

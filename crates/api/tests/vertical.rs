@@ -13193,3 +13193,190 @@ async fn addressed_thread_window_reaches_beyond_latest_fifty(pool: sqlx::PgPool)
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn private_attention_receipts_are_durable_idempotent_and_reader_owned(pool: sqlx::PgPool) {
+    let reader = principal::PrincipalId::fixture("attention_reader");
+    let replacement = principal::PrincipalId::fixture("attention_replacement");
+    let game = uuid::Uuid::new_v4();
+    let id = "slot-mention-41-slot-7".to_string();
+    let ids = vec![id.clone()];
+    assert!(
+        projections::reviewed_private_items(&pool, reader, game, &ids)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let (a, b) = tokio::join!(
+        projections::review_private_item(&pool, reader, game, &id, 10),
+        projections::review_private_item(&pool, reader, game, &id, 11),
+    );
+    a.unwrap();
+    b.unwrap();
+    assert_eq!(
+        projections::reviewed_private_items(&pool, reader, game, &ids)
+            .await
+            .unwrap(),
+        ids
+    );
+    assert!(
+        projections::reviewed_private_items(&pool, replacement, game, &ids)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        projections::reviewed_private_items(&pool, reader, uuid::Uuid::new_v4(), &ids)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let stream = attention::private_review_stream_id(reader, game, &id);
+    let events = eventstore::load_stream(&pool, stream).await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, attention::PRIVATE_ITEM_REVIEWED);
+    assert_eq!(
+        events[0].payload,
+        serde_json::json!({"game":game,"item_id":id})
+    );
+    assert_eq!(events[0].actor, eventstore::ActorId::Principal(reader));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn private_attention_http_denies_forged_items_and_transfers_delivery_without_review(
+    pool: sqlx::PgPool,
+) {
+    let app = router(pool.clone());
+    let token = issue_dev_session(&app, "user_a", &[]).await;
+    issue_dev_session(&app, "host_h", &[]).await;
+    let game = Uuid::new_v4();
+    let host = caps::Principal::authenticated(PrincipalId::fixture("host_h"));
+    for command in [
+        commands::Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        },
+        commands::Command::AddSlot {
+            game,
+            slot: "slot_1".into(),
+        },
+        commands::seat_persona! { game, slot: "slot_1".into(), user: "user_a" },
+    ] {
+        commands::handle(&pool, &host, command).await.unwrap();
+    }
+    sqlx::query("INSERT INTO slot_mention_notification (game_id,audience_slot,source_seq,channel_id,phase_id,occurred_at) VALUES ($1,'slot_1',41,'main',NULL,1)")
+        .bind(game).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO player_notification (game_id,phase_id,event_index,audience_slot,effect,status) VALUES ($1,'N01',0,'slot_1','notice','delivered'),($1,'N02',0,'slot_1','notice','delivered'),($1,'N02',0,'slot_2','secret','delivered')")
+        .bind(game).execute(&pool).await.unwrap();
+    let ids = projections::private_delivery_ids_for_slots(&pool, game, &["slot_1".to_string()])
+        .await
+        .unwrap();
+    assert_eq!(ids.len(), 3);
+    assert!(ids.contains(&"notification-N01-0-slot_1".to_string()));
+    assert!(ids.contains(&"notification-N02-0-slot_1".to_string()));
+    assert!(!ids.iter().any(|id| id.ends_with("slot_2")));
+    let request = |item: &str| {
+        Request::builder()
+            .method("POST")
+            .uri(format!("/games/{game}/private-attention"))
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::json!({"item_id":item}).to_string()))
+            .unwrap()
+    };
+    let rejected = app
+        .clone()
+        .oneshot(request("slot-mention-41-slot_2"))
+        .await
+        .unwrap();
+    assert_eq!(rejected.status(), StatusCode::NOT_FOUND);
+    for _ in 0..2 {
+        let accepted = app
+            .clone()
+            .oneshot(request("slot-mention-41-slot_1"))
+            .await
+            .unwrap();
+        assert_eq!(accepted.status(), StatusCode::OK);
+    }
+    let reload = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}/private-attention"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let value: serde_json::Value =
+        serde_json::from_slice(&to_bytes(reload.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        value["reviewed_ids"],
+        serde_json::json!(["slot-mention-41-slot_1"])
+    );
+    issue_dev_session(&app, "cohost_c", &[]).await;
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::AddCohost {
+            game,
+            principal_id: PrincipalId::fixture("cohost_c"),
+        },
+    )
+    .await
+    .unwrap();
+    let cohost =
+        get_as_dev_principal(&app, "cohost_c", format!("/games/{game}/private-attention")).await;
+    assert_eq!(cohost.status(), StatusCode::FORBIDDEN);
+    let denied =
+        get_as_dev_principal(&app, "user_b", format!("/games/{game}/private-attention")).await;
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    commands::handle(
+        &pool,
+        &host,
+        commands::Command::ProcessReplacement {
+            game,
+            slot: "slot_1".into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
+            incoming_principal_id: PrincipalId::fixture("user_b"),
+        },
+    )
+    .await
+    .unwrap();
+    let former = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}/private-attention"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(former.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.clone()
+            .oneshot(request("slot-mention-41-slot_1"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let replacement =
+        get_as_dev_principal(&app, "user_b", format!("/games/{game}/private-attention")).await;
+    assert_eq!(replacement.status(), StatusCode::OK);
+    let value: serde_json::Value =
+        serde_json::from_slice(&to_bytes(replacement.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(value["reviewed_ids"], serde_json::json!([]));
+    let delivered =
+        get_as_dev_principal(&app, "user_b", format!("/games/{game}/slot-mentions")).await;
+    assert_eq!(delivered.status(), StatusCode::OK);
+    let value: serde_json::Value =
+        serde_json::from_slice(&to_bytes(delivered.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(value[0]["source_seq"], 41);
+}

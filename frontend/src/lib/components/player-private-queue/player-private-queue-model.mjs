@@ -1,3 +1,4 @@
+import { privateItemId } from "../../app/private-attention.mjs";
 export const PLAYER_PRIVATE_QUEUE_CONTRACT = Object.freeze({
   rootClassName: "player-private-queue fm-card",
   componentName: "player-private-queue",
@@ -25,10 +26,10 @@ export function buildPrivateQueue({
   slotMentions = [],
 } = {}) {
   return Object.freeze([
-    ...notifications.map((notification, index) => {
+    ...notifications.map((notification) => {
       const phaseLabel = phaseLabelFromId(notification.phase_id);
       return Object.freeze({
-        id: `notification-${index + 1}`,
+        id: privateItemId("notification", notification),
         kind: "notification",
         label: notification.effect ?? "Private notification",
         value: notification.status ?? phaseLabel ?? "Available",
@@ -43,11 +44,12 @@ export function buildPrivateQueue({
     // this rail because the API resolved current occupancy at read time, so a
     // seat that changed hands carries its pending mentions to whoever holds it
     // now and no row is ever rewritten.
-    ...slotMentions.map((mention, index) => {
+    ...slotMentions.map((mention) => {
       const phaseLabel = phaseLabelFromId(mention.phase_id);
       return Object.freeze({
-        id: `slot-mention-${index + 1}`,
+        id: privateItemId("slot-mention", mention),
         kind: "slot-mention",
+        destination: { channel: mention.channel_id, sourceSeq: mention.source_seq },
         label: `Addressed as ${mention.audience_slot}`,
         value: channelLabel(mention.channel_id),
         detail:
@@ -57,9 +59,9 @@ export function buildPrivateQueue({
         buttonLabel: "Review",
       });
     }),
-    ...investigationResults.map((result, index) =>
+    ...investigationResults.map((result) =>
       Object.freeze({
-        id: `investigation-${index + 1}`,
+        id: privateItemId("investigation", result),
         kind: "investigation-result",
         label: result.mode ?? "Investigation result",
         value:
@@ -105,11 +107,9 @@ export function buildPlayerPrivateQueueViewModel({
           reviewTestId: `player-private-review-${item.id}`,
           reviewLinkTestId: `player-private-link-${item.id}`,
           reviewHref: item.reviewHref ?? null,
-          reviewLinkLabel: `Open ${item.label} review`,
-          reviewLabel:
-            expandedItems[item.id] === true
-              ? `Hide ${item.label}`
-              : `Review ${item.label}`,
+          reviewLinkLabel: item.destination ? "Open addressed post" : `Open ${item.label} review`,
+          reviewLabel: expandedItems[item.id] === true ? "Hide details" : "Details",
+          reviewAriaLabel: `${expandedItems[item.id] === true ? "Hide" : "Show"} ${item.label} details`,
           ariaExpanded: expandedItems[item.id] === true ? "true" : "false",
           minTouchTargetPx: PLAYER_PRIVATE_QUEUE_CONTRACT.minTouchTargetPx,
         }),

@@ -1047,7 +1047,7 @@ function coreLoopRoleUrlHrefFixture(role) {
       : role === "privateChannel" || role.endsWith("-privateChannel")
         ? "/c/private%3Amafia_day_chat"
         : role === "deadPlayer" && baseGame === "game-b"
-          ? "?private=notification-1"
+          ? "?private=notification-N02-0-slot-7"
           : "";
   return `http://127.0.0.1:5173/g/${baseGame}${roleSuffix}`;
 }

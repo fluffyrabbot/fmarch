@@ -1,8 +1,17 @@
 <script>
   import { onMount, tick } from "svelte";
+  import { fetchPrivateAttention } from "$lib/app/private-attention.mjs";
   import { afterNavigate } from "$app/navigation";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
-  afterNavigate(async ({ to }) => { await tick(); if (to) focusAddressedPost(to.url); });
+  afterNavigate(async ({ to }) => {
+    await tick();
+    if (to) {
+      focusAddressedPost(to.url);
+      const itemId = to.url.searchParams.get("private");
+      if (itemId) document.getElementById(`private-item-${itemId}`)?.focus();
+      if (data.player.slotId && !data.pendingReplacement) void refreshPrivateAttention();
+    }
+  });
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -123,6 +132,10 @@
   let channels = data.channels;
   let surfaceHeader = data.surfaceHeader;
   let privateQueue = data.privateQueue;
+  let privateAttention;
+  $: privateAttention = data.privateAttention ?? { state: "unavailable", reviewedIds: [] };
+  let privateReviewPending = false;
+  let privateReviewMessage = "";
   let privateQueueBoundary = data.privateQueueBoundary;
   let liveOfficialPost = data.liveOfficialPost;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
@@ -678,6 +691,31 @@
     }
   }
 
+  async function refreshPrivateAttention() {
+    if (privateReviewPending) return;
+    privateReviewPending = true;
+    try {
+      privateAttention = await fetchPrivateAttention({ game: data.game.id });
+      privateReviewMessage = "";
+    } catch (error) {
+      privateAttention = { state: "unavailable", reviewedIds: [] };
+      privateReviewMessage = error.message;
+    } finally { privateReviewPending = false; }
+  }
+
+  async function reviewPrivateItem(item) {
+    if (privateReviewPending) return;
+    privateReviewPending = true;
+    privateReviewMessage = "";
+    try {
+      privateAttention = await fetchPrivateAttention({ game: data.game.id, itemId: item.id });
+      privateReviewMessage = "Marked reviewed.";
+      await tick();
+      document.getElementById(`private-item-${item.id}`)?.focus({ preventScroll: true });
+    } catch (error) { privateReviewMessage = error.message; }
+    finally { privateReviewPending = false; }
+  }
+
   function togglePrivateItem(item) {
     expandedPrivateItems = togglePrivateItemExpansion(expandedPrivateItems, item);
   }
@@ -804,6 +842,11 @@
         items={privateQueue}
         expandedItems={expandedPrivateItems}
         onToggle={togglePrivateItem}
+        attention={privateAttention}
+        pending={privateReviewPending}
+        message={privateReviewMessage}
+        onReview={reviewPrivateItem}
+        onRetry={refreshPrivateAttention}
       />
 
       {#if player.readOnly !== true}

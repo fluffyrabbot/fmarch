@@ -1088,7 +1088,7 @@ test("completed-game scenario module builds reusable proof fixtures", () => {
       sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a",
       sourceNormalPlayerRoleUrl: "http://127.0.0.1/g/game-a/player-rowan",
       sourceDeadPlayerRoleUrl:
-        "http://127.0.0.1/g/game-a?private=notification-1",
+        "http://127.0.0.1/g/game-a?private=notification-N02-0-slot-7",
     },
     snapshots: playerSnapshots,
   });
@@ -1181,7 +1181,7 @@ test("core-loop proof fixture module builds shared host and player proof shapes"
 test("core-loop proof fixture module derives seeded role URLs and endpoints", () => {
   const proof = seededCoreLoopPlayerSurfaceFixture({
     game: "game-a",
-    roleUrlSuffix: "?private=notification-1",
+    roleUrlSuffix: "?private=notification-N02-0-slot-7",
     slotField: "survivorSlot",
     slot: "slot-5",
     principalId: "player_sage",
@@ -1201,9 +1201,9 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
 
   assert.equal(
     proof.sourceRoleUrl,
-    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a?private=notification-N02-0-slot-7",
   );
-  assert.equal(proof.visitedRolePath, "/g/game-a?private=notification-1");
+  assert.equal(proof.visitedRolePath, "/g/game-a?private=notification-N02-0-slot-7");
   assert.equal(
     proof.coldLoadEndpoints.commandStateEndpoint,
     "/api/gameplay/games/game-a/player-command-state?slot_id=slot-5",
@@ -1245,7 +1245,7 @@ test("core-loop surface fixture module builds post-Day-3 resolution surface", ()
   assert.equal(surface.sourceActionPlayerRoleUrl, "http://127.0.0.1:5173/g/game-a");
   assert.equal(
     surface.sourceTargetRoleUrl,
-    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+    "http://127.0.0.1:5173/g/game-a?private=notification-N02-0-slot-7",
   );
   assert.equal(surface.targetReceiptProof.targetSlot, "slot-4");
   assert.equal(surface.hostAdvanceProof.advanceProof.commandKind, "AdvancePhase");

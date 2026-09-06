@@ -589,7 +589,7 @@ export function privateReceiptProofFixture({ game, scenario }) {
     productionReady: false,
     rawInviteTokensVisible: false,
     sourceRoleUrl: privateReceiptSourceRoleUrl({ game }),
-    visitedRolePath: `/g/${game}?private=notification-1`,
+    visitedRolePath: `/g/${game}?private=notification-N02-0-slot-7`,
     surfaceTestId: "player-surface",
     [scenario.slotField]: scenario.expectedSlot,
     principalId: scenario.principalId,
@@ -632,7 +632,7 @@ export function privateReceiptProofFixture({ game, scenario }) {
     return {
       ...proof,
       privateNotice: {
-        id: "notification-1",
+        id: "notification-N02-0-slot-7",
         kind: "notification",
         text: `player_killed ${scenario.privateReceiptStatus}`,
         detailText: `Phase ${scenario.privateReceiptPhaseId}`,
@@ -662,7 +662,7 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
     productionReady: false,
     rawInviteTokensVisible: false,
     sourceRoleUrl: privateReceiptSourceRoleUrl({ game }),
-    visitedRolePath: `/g/${game}?private=notification-1`,
+    visitedRolePath: `/g/${game}?private=notification-N02-0-slot-7`,
     surfaceTestId: "player-surface",
     [surfaceCase.slotField]: surfaceCase.expectedSlot,
     principalId: surfaceCase.principalId,
@@ -709,7 +709,7 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
     return {
       ...proof,
       privateNotice: {
-        id: "notification-1",
+        id: "notification-N02-0-slot-7",
         kind: "notification",
         text: `player_killed ${surfaceCase.privateReceiptStatus}`,
         detailText: `Phase ${surfaceCase.privateReceiptPhaseId}`,
@@ -730,5 +730,5 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
 }
 
 export function privateReceiptSourceRoleUrl({ game }) {
-  return `http://127.0.0.1:5173/g/${game}?private=notification-1`;
+  return `http://127.0.0.1:5173/g/${game}?private=notification-N02-0-slot-7`;
 }

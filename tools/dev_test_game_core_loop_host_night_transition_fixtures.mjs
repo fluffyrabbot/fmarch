@@ -16,8 +16,8 @@ export function hostNightActionTransitionSurfaceFixture({
   const hostRolePath = `${baseRolePath}/host`;
   const sourceRoleUrls = {
     sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceNightTargetRoleUrl: `${baseRoleUrl}?private=notification-1`,
-    sourceNormalRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    sourceNightTargetRoleUrl: `${baseRoleUrl}?private=notification-N02-0-slot-7`,
+    sourceNormalRoleUrl: `${baseRoleUrl}?private=notification-N02-0-slot-7`,
   };
   return {
     status: "passed",
@@ -52,7 +52,7 @@ export function hostNightActionTransitionSurfaceFixture({
           visitedRolePath:
             playerCase.sourceRoleUrlField === "sourceActionPlayerRoleUrl"
               ? baseRolePath
-              : `${baseRolePath}?private=notification-1`,
+              : `${baseRolePath}?private=notification-N02-0-slot-7`,
           principalId: playerCase.expectedPrincipalUserId,
           slotField: playerCase.slotField,
           slot: playerCase.expectedSlot,
@@ -191,7 +191,7 @@ export function dayThreeObservationFixture({
     return {
       ...proof,
       privateNotice: {
-        id: "notification-1",
+        id: "notification-N02-0-slot-7",
         kind: "notification",
         text: "player_killed factional_kill",
         detailText: "Phase N02",

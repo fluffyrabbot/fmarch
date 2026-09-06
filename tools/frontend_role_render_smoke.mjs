@@ -231,7 +231,7 @@ function surfaceScenarios() {
       requiredText: ["Full votecount", "Private queue"],
       requiredSelectors: [
         '[data-testid="player-role-card"][data-role-state="unassigned"]',
-        '[data-testid="player-private-link-notification-1"]',
+        '[data-testid="player-private-link-notification-N02-0-slot-7"]',
         '[data-testid="thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"][data-media-variant="tablet"]',
       ],
       thumbZones: roleById.get("player")?.thumbZones ?? [],
@@ -239,13 +239,13 @@ function surfaceScenarios() {
     {
       id: "player-private-review",
       role: "player",
-      path: "/g/midsummer?private=notification-1",
+      path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       render: "renderPlayerPrivateReviewRoute",
       surfaceTestId: "player-surface",
       requiredText: ["Private queue", "Phase Night 2"],
       requiredSelectors: [
-        '[data-testid="player-private-review-notification-1"][aria-expanded="true"]',
-        '[data-testid="player-private-detail-notification-1"]',
+        '[data-testid="player-private-review-notification-N02-0-slot-7"][aria-expanded="true"]',
+        '[data-testid="player-private-detail-notification-N02-0-slot-7"]',
       ],
     },
     {
@@ -257,7 +257,7 @@ function surfaceScenarios() {
       requiredText: ["Role PM", "Private queue"],
       requiredSelectors: [
         '[data-testid="player-channel-private:role_pm:slot-7"][aria-current="page"]',
-        '[data-testid="player-private-link-notification-1"][href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-1"]',
+        '[data-testid="player-private-link-notification-N02-0-slot-7"][href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"]',
         '[data-testid="thread-post-media-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"][data-media-variant="tablet"]',
       ],
     },

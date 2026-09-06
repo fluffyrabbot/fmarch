@@ -288,7 +288,7 @@ export function postNightFourTransitionSurfaceFixture({
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-N02-0-slot-7`,
     clickedThroughFromRoleUrl: true,
     transition: surfaceCase.transitionFragments.join(" -> "),
     hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
@@ -314,7 +314,7 @@ export function postNightFourTransitionSurfaceFixture({
     }),
     deadPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
-      roleUrlSuffix: "?private=notification-1",
+      roleUrlSuffix: "?private=notification-N02-0-slot-7",
       slotField: deadPlayerCase.slotField,
       slot: deadPlayerCase.expectedSlot,
       principalId: deadPlayerCase.expectedPrincipalUserId,
@@ -529,7 +529,7 @@ function nightFourResolutionPlayerSurfaceFixture({
   };
   if (privateReceipt) {
     proof.privateNotice = {
-      id: "notification-1",
+      id: "notification-N02-0-slot-7",
       kind: "notification",
       text: `player_killed ${privateReceiptStatus}`,
       detailText: `Phase ${privateReceiptPhaseId}`,
