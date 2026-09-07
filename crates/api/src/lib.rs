@@ -86,6 +86,7 @@ pub struct ApiState {
     authority_transaction_limit: usize,
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,
+    media_upload_lease_seconds: i64,
     websocket_poll_interval: Duration,
     websocket_heartbeat_interval: Duration,
     live_event_wake: GameEventWakeHub,
@@ -180,6 +181,12 @@ impl ApiState {
                 256 * 1024 * 1024,
                 12 * 1024 * 1024,
                 10 * 1024 * 1024 * 1024,
+            ),
+            media_upload_lease_seconds: env_i64(
+                "FMARCH_MEDIA_UPLOAD_LEASE_SECONDS",
+                15 * 60,
+                60,
+                24 * 60 * 60,
             ),
             websocket_poll_interval: Duration::from_millis(env_i64(
                 "FMARCH_WS_POLL_INTERVAL_MS",
@@ -357,6 +364,11 @@ impl ApiState {
 
     pub fn with_media_limit(mut self, limit: usize) -> Self {
         self.media_slots = Arc::new(Semaphore::new(limit.clamp(1, 32)));
+        self
+    }
+
+    pub fn with_media_upload_lease_seconds(mut self, seconds: i64) -> Self {
+        self.media_upload_lease_seconds = seconds.clamp(60, 24 * 60 * 60);
         self
     }
 

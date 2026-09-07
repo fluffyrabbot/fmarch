@@ -166,6 +166,8 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_ACCESS_KEY_ID: "staging-access-key",
     AWS_SECRET_ACCESS_KEY: "staging-secret-key",
     AWS_S3_BUCKET_NAME: "staging-media",
+    FMARCH_MEDIA_READ_MAX_IN_FLIGHT: "16",
+    FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES: "67108864",
     FMARCH_CLASSIC_AUTH: "0",
     WORKOS_CLIENT_ID: "client_01STAGING00000000000000000",
     WORKOS_ISSUER:
@@ -219,6 +221,8 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_ACCESS_KEY_ID: "production-access-key",
     AWS_SECRET_ACCESS_KEY: "production-secret-key",
     AWS_S3_BUCKET_NAME: "production-media",
+    FMARCH_MEDIA_READ_MAX_IN_FLIGHT: "16",
+    FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES: "67108864",
     FMARCH_CLASSIC_AUTH: "0",
     WORKOS_CLIENT_ID: "client_01PRODUCTION000000000000000",
     WORKOS_ISSUER:

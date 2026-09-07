@@ -77,6 +77,10 @@ export function serverRuntimeEnvironment({ applicationUrl, env = process.env }) 
     env.FMARCH_PROFILE_HANDLE_INDEX_KEY ?? defaultProfileHandleIndexKey;
   childEnv.FMARCH_PROFILE_HANDLE_INDEX_KID =
     env.FMARCH_PROFILE_HANDLE_INDEX_KID ?? defaultProfileHandleIndexKid;
+  childEnv.FMARCH_MEDIA_READ_MAX_IN_FLIGHT =
+    env.FMARCH_MEDIA_READ_MAX_IN_FLIGHT ?? "16";
+  childEnv.FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES =
+    env.FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES ?? "67108864";
   return childEnv;
 }
 

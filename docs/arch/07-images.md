@@ -127,7 +127,7 @@ Current implemented slice:
   generation may reuse verified partial members and fill missing ones but fails closed on
   conflicting immutable bytes; explicit restart-safe regeneration first verifies `orig`, removes
   the manifest, repairs conflicting members, and installs the manifest last.
-- Lookup retains the exact opened manifest inode as its commit token while checking all six members
+- Local descriptor-backed lookup retains the exact opened manifest inode as its commit token while checking all six members
   from the same held recipe directory. A requested member is read inside that scan, not in a second
   path-based phase. Immediately before success, lookup proves that same manifest, recipe directory,
   id directory, and blob-store capability are still attached; concurrent removal, replacement,
@@ -144,8 +144,15 @@ Current implemented slice:
   `virtual-hosted` accepted as a provider-neutral synonym). Canonical
   `orig`, six immutable variant objects, and the canonical manifest use the same typed key layout;
   writes are create-only, conflicting existing bytes fail closed, and the manifest is committed
-  last. Lookup bounds object size before collection and revalidates canonical identity, manifest,
-  dimensions, member digests, codecs, and aggregate limits.
+  last. Complete-set lookup bounds every declared member before collection and revalidates the
+  manifest, dimensions, member digests, codecs, and aggregate limits. The serving lookup
+  instead treats that immutable installed-last manifest as the set commitment: it validates all
+  declared policy metadata, fetches only the requested member, and verifies that member's length,
+  digest, codec, dimensions, and alpha contract. It never loads `orig` or any sibling member.
+  Hosted startup requires typed `FMARCH_MEDIA_READ_MAX_IN_FLIGHT` and
+  `FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES` values. A shared request semaphore bounds object-store
+  fan-out, and byte permits conservatively cover the manifest plus requested member while they are
+  materialized; exhaustion fails fast as retryable admission rather than allocating or queueing.
 - Server release builds have no filesystem media fallback. They require the S3 variables and fail
   startup when object-store construction is invalid. `FMARCH_MEDIA_ROOT` remains only as an
   explicit debug-build adapter; repo-owned local harnesses use it independently of their auth mode
@@ -161,6 +168,16 @@ Current implemented slice:
   Only a fully prepared upload reaches persistence; it atomically installs each immutable file and
   installs the variant manifest last, without claiming a filesystem-wide transaction for internal
   commit failures.
+- The per-account upload ledger is also the durable upload-operation journal. Preparation first
+  establishes the canonical identity without storage effects; a fresh row is then created directly
+  as the leased `pending:<content-id>` operation, eliminating the old unidentifiable `NULL` gap.
+  Only an installed immutable set advances it to the final content id.
+  Principal-scoped advisory serialization reaps expired reservations, replaces interrupted retries
+  for the same content, compacts prior duplicate final charges, and guarantees one quota charge per
+  principal/content pair. A crash or request cancellation therefore leaves only an expiring lease;
+  a retry converges on the same content-addressed objects and durable charge. The media CPU permit
+  moves into the blocking codec task, so cancelling its waiter cannot admit more codec work while
+  that uncancellable task is still running.
 - A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
   the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,
   format, MIME, dimensions, length, BLAKE3, and alpha flag—never paths or original bytes.
@@ -198,7 +215,7 @@ Current implemented slice:
   does not depend on an in-memory upload index.
 
 This slice deliberately does **not** claim ICC/profile color-space normalization, multipart or
-resumable upload, direct object-store upload, account quotas/rate limiting, orphan-retention or
+resumable upload, direct object-store upload, request rate limiting, unreferenced-object retention or
 garbage-collection policy, a cross-post media library, galleries, profile media, moderation
 workflow, production codec-quality or memory benchmarks, an object store/CDN, hosted durability,
 or production performance. The completed local vertical is upload → private post → durable
@@ -214,8 +231,8 @@ manifest-backed serving → responsive browser reload → exact non-member byte 
 
 ## Limits & abuse
 
-- Per-upload size and dimension caps are implemented; per-account quotas and rate limits remain a
-  later abuse-control slice.
+- Per-upload size/dimension caps, leased per-account quota reservations, and process-local CPU/read
+  admission are implemented. Distributed request rate limiting remains a later abuse-control slice.
 - Animated formats bounded (frame count / dimensions) or transcoded to a still where policy
   requires.
 - Reject undecodable / malformed inputs early; never hand untrusted bytes to a serving path

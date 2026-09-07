@@ -327,6 +327,14 @@ async function contract() {
     /^FMARCH_WORKOS_CREDENTIAL_KID=/m,
   );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT/);
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_MEDIA_READ_MAX_IN_FLIGHT=16$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES=67108864$/m,
+  );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_SUBJECT_KEY_DIR=/m);
   for (const variable of [
     "ENDPOINT",

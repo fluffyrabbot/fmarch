@@ -21,6 +21,7 @@ struct Config {
     database_url: String,
     bind: SocketAddr,
     media: MediaConfig,
+    media_read: media::MediaReadLimits,
     database: DatabaseCapacity,
     http: HttpCapacity,
     scheduler: commands::day_scheduler::DayEventSchedulerConfig,
@@ -122,10 +123,19 @@ impl Config {
             env::var("PORT").ok().as_deref(),
         )?;
         let media = media_config_from_env()?;
+        let media_read = media::MediaReadLimits::new(
+            required_bounded_env("FMARCH_MEDIA_READ_MAX_IN_FLIGHT", 1, 1_024)? as usize,
+            required_bounded_env(
+                "FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES",
+                16 * 1024 * 1024 + 32 * 1024,
+                u32::MAX as u64,
+            )? as usize,
+        )?;
         Ok(Config {
             database_url,
             bind,
             media,
+            media_read,
             database: DatabaseCapacity {
                 max_connections: bounded_env(
                     "FMARCH_DB_MAX_CONNECTIONS",
@@ -342,6 +352,25 @@ fn bounded_env(
     Ok(parsed)
 }
 
+fn required_bounded_env(name: &str, minimum: u64, maximum: u64) -> Result<u64, std::io::Error> {
+    let raw = env::var(name).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, format!("{name} is required"))
+    })?;
+    let parsed = raw.parse::<u64>().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} must be an integer between {minimum} and {maximum}"),
+        )
+    })?;
+    if !(minimum..=maximum).contains(&parsed) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} must be between {minimum} and {maximum}"),
+        ));
+    }
+    Ok(parsed)
+}
+
 fn bind_from_values(
     configured_bind: Option<&str>,
     platform_port: Option<&str>,
@@ -497,9 +526,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
+    let media_read = config.media_read;
     let media_store = match &config.media {
         MediaConfig::S3(config) => {
-            media::MediaRepository::s3(config.clone(), media::MediaLimits::default())?
+            media::MediaRepository::s3(config.clone(), media::MediaLimits::default(), media_read)?
         }
         MediaConfig::LocalDebug(root) => {
             if !cfg!(debug_assertions) {
@@ -688,8 +718,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
-        local_proof_auth_from_values, virtual_hosted_style_from_value, IdentityDeliveryMode,
-        MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+        local_proof_auth_from_values, required_bounded_env, virtual_hosted_style_from_value,
+        IdentityDeliveryMode, MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
 
     const TEST_LOCAL_PROOF_SECRET: &str =
@@ -829,6 +859,24 @@ mod tests {
         let error = bounded_env("FMARCH_TEST_CAPACITY_VALUE", 10, 1, 100).unwrap_err();
         std::env::remove_var("FMARCH_TEST_CAPACITY_VALUE");
         assert!(error.to_string().contains("between 1 and 100"));
+    }
+
+    #[test]
+    fn required_media_read_capacity_has_no_ambient_default() {
+        const NAME: &str = "FMARCH_TEST_REQUIRED_MEDIA_READ_CAPACITY";
+        std::env::remove_var(NAME);
+        assert_eq!(
+            required_bounded_env(NAME, 1, 64).unwrap_err().kind(),
+            std::io::ErrorKind::NotFound
+        );
+        std::env::set_var(NAME, "65");
+        assert_eq!(
+            required_bounded_env(NAME, 1, 64).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        std::env::set_var(NAME, "16");
+        assert_eq!(required_bounded_env(NAME, 1, 64).unwrap(), 16);
+        std::env::remove_var(NAME);
     }
 
     #[test]
