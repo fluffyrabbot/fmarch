@@ -53,7 +53,7 @@ test("dev postgres config accepts environment overrides", () => {
   const config = buildConfig(
     {},
     {
-      PG_BIN: "/env/pg",
+      FMARCH_DEV_POSTGRES_BIN: "/env/pg",
       FMARCH_DEV_POSTGRES_HOST: "localhost",
       FMARCH_DEV_POSTGRES_PORT: "6544",
       FMARCH_DEV_POSTGRES_DB: "scratch",

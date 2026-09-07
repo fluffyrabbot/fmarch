@@ -17,7 +17,7 @@ export const defaultPassword = "fmarch";
 
 const pgCommands = ["pg_ctl", "initdb", "createdb", "dropdb", "pg_isready"];
 const pgBinCandidates = [
-  process.env.PG_BIN,
+  process.env.FMARCH_DEV_POSTGRES_BIN,
   "/opt/homebrew/opt/postgresql@16/bin",
   "/usr/local/opt/postgresql@16/bin",
   "/opt/homebrew/bin",
@@ -125,7 +125,7 @@ export function parseArgs(argv) {
 }
 
 export function buildConfig(args = {}, env = process.env) {
-  const pgBin = args.pgBin ?? env.PG_BIN ?? findPgBin();
+  const pgBin = args.pgBin ?? env.FMARCH_DEV_POSTGRES_BIN ?? findPgBin();
   const dataDir = args.dataDir ?? env.FMARCH_DEV_POSTGRES_DATA ?? defaultDataDir;
   return {
     host: args.host ?? env.FMARCH_DEV_POSTGRES_HOST ?? defaultHost,
@@ -467,7 +467,7 @@ function requirePgBin(config) {
     throw new Error(
       [
         "Postgres binaries were not found.",
-        "Install postgresql@16 with Homebrew or set PG_BIN to a directory containing pg_ctl, initdb, createdb, and pg_isready.",
+        "Install postgresql@16 with Homebrew or set FMARCH_DEV_POSTGRES_BIN to a directory containing pg_ctl, initdb, createdb, and pg_isready.",
       ].join(" "),
     );
   }

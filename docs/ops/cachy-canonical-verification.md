@@ -104,7 +104,7 @@ libraries/fonts and record their identity alongside visual evidence.
 The native PostgreSQL probe used 18.6, while `docker-compose.yml` pins
 PostgreSQL 16. Use the repository's PostgreSQL 16 container through Podman, or
 explicitly migrate and qualify the database contract on 18. Do not silently
-mix versions. The existing helper can use `/usr/bin` or explicit `PG_BIN`, so
+mix versions. The existing helper can use `/usr/bin` or explicit `FMARCH_DEV_POSTGRES_BIN`, so
 Homebrew paths are not a fundamental blocker.
 
 Give fmarch its own writable build/cache root and database endpoint. Never use

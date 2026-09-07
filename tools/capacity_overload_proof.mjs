@@ -1314,7 +1314,7 @@ async function cleanupReadFixtures({ psql, databaseUrl }) {
 
 function findPsql(env) {
   const candidates = [
-    env.PG_BIN && path.join(env.PG_BIN, "psql"),
+    env.FMARCH_DEV_POSTGRES_BIN && path.join(env.FMARCH_DEV_POSTGRES_BIN, "psql"),
     "/opt/homebrew/opt/postgresql@16/bin/psql",
     "/usr/local/opt/postgresql@16/bin/psql",
     "/opt/homebrew/bin/psql",
