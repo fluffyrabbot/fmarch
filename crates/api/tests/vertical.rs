@@ -2813,6 +2813,13 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
 async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
+    // Publish the resync trigger through an independent instance. Its durable
+    // event is visible to the socket but its in-process broadcast is not, so
+    // this tests the catch-up contract without racing the normal delta path.
+    let other_instance = api::router_with_state(
+        ApiState::new(pool.clone(), store.clone())
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
     let app = api::router_with_state(
         ApiState::new(pool.clone(), store)
             .with_local_proof_auth(test_local_proof_verifier())
@@ -2921,7 +2928,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     assert!(matches!(hello.body, ServerMsg::Hello(_)));
     expect_ack(
         post_command(
-            app.clone(),
+            other_instance,
             5,
             "host_h",
             Command::PublishSpectatorPost {
