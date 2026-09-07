@@ -234,6 +234,14 @@ impl ApiState {
         self
     }
 
+    pub fn with_identity_delivery_worker_config(
+        mut self,
+        config: identity_delivery::IdentityDeliveryWorkerConfig,
+    ) -> Self {
+        self.auth.identity_delivery_worker_config = config;
+        self
+    }
+
     pub fn with_registration_source_limit(mut self, max_registrations: i32) -> Self {
         assert!((2..=10_000).contains(&max_registrations));
         self.auth.auth_attempt_policy.registration_max_per_source = max_registrations;

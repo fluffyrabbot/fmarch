@@ -1,3 +1,4 @@
+use crate::identity_delivery::IdentityDeliveryWorkerConfig;
 use identity::SessionPolicy;
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,6 +36,7 @@ pub struct MediaBudget {
 
 #[derive(Clone)]
 pub struct AuthBudget {
+    pub identity_delivery_worker_config: IdentityDeliveryWorkerConfig,
     pub password_max_in_flight: usize,
     pub workos_verification_max_in_flight: usize,
     pub workos_verification_max_per_source: i32,
@@ -55,6 +57,10 @@ impl std::fmt::Debug for AuthBudget {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("AuthBudget")
+            .field(
+                "identity_delivery_worker_config",
+                &self.identity_delivery_worker_config,
+            )
             .field("password_max_in_flight", &self.password_max_in_flight)
             .field(
                 "workos_verification_max_in_flight",
@@ -219,6 +225,7 @@ impl Default for ApiRuntimeConfig {
                 account_quota_bytes: 256 * 1024 * 1024,
             },
             auth: AuthBudget {
+                identity_delivery_worker_config: IdentityDeliveryWorkerConfig::default(),
                 password_max_in_flight: 4,
                 workos_verification_max_in_flight: 8,
                 workos_verification_max_per_source: 120,

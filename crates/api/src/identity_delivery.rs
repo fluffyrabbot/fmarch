@@ -856,27 +856,7 @@ struct IdentityDeliveryAuditRecord<'a> {
     provider_receipt_id: Option<&'a str>,
 }
 
-pub async fn process_identity_delivery_intent(
-    pool: &PgPool,
-    gateway: &dyn IdentityDeliveryGateway,
-    delivery_id: Uuid,
-    actor_principal_id: &PrincipalId,
-    event_kind: &str,
-    now: i64,
-) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    process_identity_delivery_intent_with_config(
-        pool,
-        gateway,
-        delivery_id,
-        actor_principal_id,
-        event_kind,
-        now,
-        IdentityDeliveryWorkerConfig::default(),
-    )
-    .await
-}
-
-async fn process_identity_delivery_intent_with_config(
+pub(super) async fn process_identity_delivery_intent_with_config(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
     delivery_id: Uuid,
@@ -1014,16 +994,19 @@ pub fn spawn_identity_delivery_worker(
     gateway: Arc<dyn IdentityDeliveryGateway>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let (_shutdown_guard, shutdown) = tokio::sync::watch::channel(false);
-        if let Err(error) = run_identity_delivery_worker(
-            pool,
-            gateway,
-            IdentityDeliveryWorkerConfig::default(),
-            shutdown,
-        )
-        .await
-        {
-            tracing::error!(error = %error, "identity delivery worker stopped");
+        loop {
+            let (_shutdown_guard, shutdown) = tokio::sync::watch::channel(false);
+            if let Err(error) = run_identity_delivery_worker(
+                pool.clone(),
+                gateway.clone(),
+                IdentityDeliveryWorkerConfig::default(),
+                shutdown,
+            )
+            .await
+            {
+                tracing::error!(error = %error, "identity delivery worker restarting");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
         }
     })
 }
