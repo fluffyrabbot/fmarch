@@ -17,8 +17,10 @@ use principal::PrincipalId;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tempfile::TempDir;
+use tokio::sync::Semaphore;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
@@ -416,6 +418,62 @@ struct RecoveryProofIdentityDeliveryGateway {
     attempts: Mutex<Vec<(Uuid, i32, String)>>,
 }
 
+#[derive(Debug)]
+struct FencedIdentityDeliveryGateway {
+    calls: AtomicUsize,
+    attempts: Mutex<Vec<(Uuid, i32)>>,
+    first_started: Semaphore,
+    release_first: Semaphore,
+}
+
+impl Default for FencedIdentityDeliveryGateway {
+    fn default() -> Self {
+        Self {
+            calls: AtomicUsize::new(0),
+            attempts: Mutex::new(Vec::new()),
+            first_started: Semaphore::new(0),
+            release_first: Semaphore::new(0),
+        }
+    }
+}
+
+impl FencedIdentityDeliveryGateway {
+    async fn wait_for_first_attempt(&self) {
+        self.first_started.acquire().await.unwrap().forget();
+    }
+
+    fn release_first_attempt(&self) {
+        self.release_first.add_permits(1);
+    }
+
+    fn attempts(&self) -> Vec<(Uuid, i32)> {
+        self.attempts.lock().expect("fenced attempts").clone()
+    }
+}
+
+impl IdentityDeliveryGateway for FencedIdentityDeliveryGateway {
+    fn provider_id(&self) -> &'static str {
+        "fixture-fenced"
+    }
+
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst);
+            self.attempts
+                .lock()
+                .expect("record fenced attempt")
+                .push((attempt.delivery_id, attempt.attempt_number));
+            if call == 0 {
+                self.first_started.add_permits(1);
+                self.release_first.acquire().await.unwrap().forget();
+            }
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: format!("fixture-fenced-{}-{call}", attempt.delivery_id),
+            }
+        })
+    }
+}
+
 impl RecoveryProofIdentityDeliveryGateway {
     fn attempts(&self) -> Vec<(Uuid, i32, String)> {
         self.attempts
@@ -482,6 +540,41 @@ async fn create_test_auth_account(
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+async fn queue_test_delivery_invite(
+    app: &axum::Router,
+    admin_token: &str,
+    account_id: &str,
+    principal_label: &str,
+    raw_token: &str,
+) -> Uuid {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/game-invitations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": raw_token,
+                        "account_id": account_id,
+                        "expected_principal_id": PrincipalId::fixture(principal_label),
+                        "expires_at": unix_now_seconds() + 3_600
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
+        .expect("typed delivery id")
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9037,6 +9130,241 @@ async fn legacy_session_grant_route_is_absent_even_for_global_admin(pool: sqlx::
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
     assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_two_workers_never_share_a_live_claim(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "fenced_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "fenced@example.test",
+        "correct horse battery",
+        "fenced_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "fenced@example.test",
+        "fenced_user",
+        "fenced-delivery-token",
+    )
+    .await;
+    let first_pool = pool.clone();
+    let first_gateway = gateway.clone();
+    let now = unix_now_seconds();
+    let first = tokio::spawn(async move {
+        process_next_identity_delivery(&first_pool, first_gateway.as_ref(), now).await
+    });
+    gateway.wait_for_first_attempt().await;
+
+    assert!(
+        process_next_identity_delivery(&pool, gateway.as_ref(), now)
+            .await
+            .unwrap()
+            .is_none(),
+        "a second worker must not share an unexpired claim"
+    );
+    gateway.release_first_attempt();
+    let receipt = first
+        .await
+        .unwrap()
+        .unwrap()
+        .expect("first worker finalizes its claim");
+    assert_eq!(receipt.delivery_id, delivery_id);
+    assert_eq!(receipt.status, "delivered");
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 1)]);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "claim_loss_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "claim-loss@example.test",
+        "correct horse battery",
+        "claim_loss_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "claim-loss@example.test",
+        "claim_loss_user",
+        "claim-loss-delivery-token",
+    )
+    .await;
+    let first_pool = pool.clone();
+    let first_gateway = gateway.clone();
+    let now = unix_now_seconds();
+    let first = tokio::spawn(async move {
+        process_next_identity_delivery(&first_pool, first_gateway.as_ref(), now).await
+    });
+    gateway.wait_for_first_attempt().await;
+
+    sqlx::query("UPDATE auth_delivery_intent SET claim_expires_at = $2 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .bind(now)
+        .execute(&pool)
+        .await
+        .expect("provider I/O holds no delivery row lock");
+    let replacement = process_next_identity_delivery(&pool, gateway.as_ref(), now)
+        .await
+        .unwrap()
+        .expect("expired lease is reclaimed");
+    assert_eq!(replacement.delivery_id, delivery_id);
+    assert_eq!(replacement.status, "delivered");
+    assert_eq!(replacement.attempt_count, 2);
+
+    gateway.release_first_attempt();
+    assert!(
+        first.await.unwrap().unwrap().is_none(),
+        "the old claim token must lose its finalization CAS"
+    );
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 1), (delivery_id, 2)]);
+    let persisted = sqlx::query_as::<_, (String, i32, String)>(
+        "SELECT status, attempt_count, provider_receipt_id FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted.0, "delivered");
+    assert_eq!(persisted.1, 2);
+    assert_eq!(persisted.2, format!("fixture-fenced-{delivery_id}-1"));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "dead_letter_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "dead-letter@example.test",
+        "correct horse battery",
+        "dead_letter_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "dead-letter@example.test",
+        "dead_letter_user",
+        "dead-letter-delivery-token",
+    )
+    .await;
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'retryable_failed',
+            outcome_kind = 'retryable_failure',
+            outcome_code = 'provider_unavailable',
+            last_error = 'provider_unavailable',
+            attempt_count = 8,
+            next_attempt_at = 0
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+        .await
+        .unwrap()
+        .expect("exhausted retry is terminalized");
+    assert_eq!(receipt.status, "permanent_failed");
+    assert_eq!(receipt.attempt_count, 8);
+    assert_eq!(receipt.outcome_code.as_deref(), Some("attempts_exhausted"));
+    assert!(gateway.attempts().is_empty());
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_revocation_wins_the_post_provider_cas(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "revocation_cas_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "revocation-cas@example.test",
+        "correct horse battery",
+        "revocation_cas_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "revocation-cas@example.test",
+        "revocation_cas_user",
+        "revocation-cas-delivery-token",
+    )
+    .await;
+    let credential_hash = sqlx::query_scalar::<_, String>(
+        "SELECT credential_hash FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let attempt_pool = pool.clone();
+    let attempt_gateway = gateway.clone();
+    let now = unix_now_seconds();
+    let attempt = tokio::spawn(async move {
+        process_next_identity_delivery(&attempt_pool, attempt_gateway.as_ref(), now).await
+    });
+    gateway.wait_for_first_attempt().await;
+    sqlx::query("UPDATE game_invitation SET revoked_at = $2 WHERE token_hash = $1")
+        .bind(credential_hash)
+        .bind(now)
+        .execute(&pool)
+        .await
+        .expect("revocation is not blocked by provider I/O");
+    gateway.release_first_attempt();
+
+    let receipt = attempt
+        .await
+        .unwrap()
+        .unwrap()
+        .expect("the active claim is terminalized");
+    assert_eq!(receipt.delivery_id, delivery_id);
+    assert_eq!(receipt.status, "cancelled");
+    assert_eq!(receipt.outcome_code.as_deref(), Some("credential_inactive"));
+    let envelope = sqlx::query_scalar::<_, Option<serde_json::Value>>(
+        "SELECT credential_envelope FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(envelope.is_none());
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

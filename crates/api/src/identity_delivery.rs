@@ -1,6 +1,6 @@
 use eventstore::decrypt_delivery_credential;
 use principal::PrincipalId;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{header::RETRY_AFTER, Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::postgres::PgPool;
@@ -8,10 +8,226 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, fmt::Formatter, future::Future, pin::Pin};
 use thiserror::Error;
+use tokio::task::JoinSet;
 use uuid::Uuid;
 
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
 pub const DISABLED_PROVIDER_ID: &str = "disabled";
+
+const DEFAULT_DELIVERY_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_DELIVERY_RESPONSE_TIMEOUT: Duration = Duration::from_secs(3);
+const DEFAULT_DELIVERY_BODY_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_DELIVERY_TOTAL_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_DELIVERY_RESPONSE_BYTES: usize = 64 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryHttpTimeouts {
+    connect: Duration,
+    response: Duration,
+    body: Duration,
+    total: Duration,
+    max_response_bytes: usize,
+}
+
+impl IdentityDeliveryHttpTimeouts {
+    pub fn new(
+        connect: Duration,
+        response: Duration,
+        body: Duration,
+        total: Duration,
+        max_response_bytes: usize,
+    ) -> Result<Self, String> {
+        if connect.is_zero() || response.is_zero() || body.is_zero() || total.is_zero() {
+            return Err("identity delivery HTTP deadlines must be non-zero".to_string());
+        }
+        if connect > response {
+            return Err(
+                "identity delivery connect deadline must not exceed the response deadline"
+                    .to_string(),
+            );
+        }
+        if response.saturating_add(body) > total {
+            return Err(
+                "identity delivery total deadline must cover the response and body deadlines"
+                    .to_string(),
+            );
+        }
+        if !(1..=1024 * 1024).contains(&max_response_bytes) {
+            return Err(
+                "identity delivery response limit must be between 1 byte and 1 MiB".to_string(),
+            );
+        }
+        Ok(Self {
+            connect,
+            response,
+            body,
+            total,
+            max_response_bytes,
+        })
+    }
+
+    pub fn total(self) -> Duration {
+        self.total
+    }
+}
+
+impl Default for IdentityDeliveryHttpTimeouts {
+    fn default() -> Self {
+        Self {
+            connect: DEFAULT_DELIVERY_CONNECT_TIMEOUT,
+            response: DEFAULT_DELIVERY_RESPONSE_TIMEOUT,
+            body: DEFAULT_DELIVERY_BODY_TIMEOUT,
+            total: DEFAULT_DELIVERY_TOTAL_TIMEOUT,
+            max_response_bytes: DEFAULT_DELIVERY_RESPONSE_BYTES,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryRetryPolicy {
+    base: Duration,
+    max: Duration,
+    max_attempts: i32,
+}
+
+impl IdentityDeliveryRetryPolicy {
+    pub fn new(base: Duration, max: Duration, max_attempts: i32) -> Result<Self, String> {
+        if base.as_secs() == 0 || max < base || max > Duration::from_secs(86_400) {
+            return Err(
+                "identity delivery retry bounds must be whole-second values with 1s <= base <= max <= 24h"
+                    .to_string(),
+            );
+        }
+        if base.subsec_nanos() != 0 || max.subsec_nanos() != 0 {
+            return Err("identity delivery retry bounds must use whole seconds".to_string());
+        }
+        if !(1..=100).contains(&max_attempts) {
+            return Err("identity delivery max attempts must be between 1 and 100".to_string());
+        }
+        Ok(Self {
+            base,
+            max,
+            max_attempts,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryWorkerConfig {
+    max_concurrency: usize,
+    poll_interval: Duration,
+    claim_lease: Duration,
+    attempt_timeout: Duration,
+    retry_base: Duration,
+    retry_max: Duration,
+    max_attempts: i32,
+}
+
+impl IdentityDeliveryWorkerConfig {
+    pub fn new(
+        max_concurrency: usize,
+        poll_interval: Duration,
+        claim_lease: Duration,
+        attempt_timeout: Duration,
+        retry: IdentityDeliveryRetryPolicy,
+    ) -> Result<Self, String> {
+        if !(1..=64).contains(&max_concurrency) {
+            return Err("identity delivery concurrency must be between 1 and 64".to_string());
+        }
+        if poll_interval.is_zero() || poll_interval > Duration::from_secs(60) {
+            return Err("identity delivery poll interval must be in (0ms, 60s]".to_string());
+        }
+        if attempt_timeout.is_zero() || attempt_timeout > Duration::from_secs(120) {
+            return Err("identity delivery attempt timeout must be in (0ms, 120s]".to_string());
+        }
+        if claim_lease.subsec_nanos() != 0
+            || claim_lease.as_secs() < 2
+            || claim_lease > Duration::from_secs(300)
+            || claim_lease <= attempt_timeout.saturating_add(Duration::from_secs(1))
+        {
+            return Err(
+                "identity delivery claim lease must use 2..=300 whole seconds and exceed the attempt timeout by more than one second"
+                    .to_string(),
+            );
+        }
+        Ok(Self {
+            max_concurrency,
+            poll_interval,
+            claim_lease,
+            attempt_timeout,
+            retry_base: retry.base,
+            retry_max: retry.max,
+            max_attempts: retry.max_attempts,
+        })
+    }
+
+    pub fn max_concurrency(self) -> usize {
+        self.max_concurrency
+    }
+
+    pub fn poll_interval(self) -> Duration {
+        self.poll_interval
+    }
+
+    pub fn claim_lease(self) -> Duration {
+        self.claim_lease
+    }
+
+    pub fn attempt_timeout(self) -> Duration {
+        self.attempt_timeout
+    }
+
+    pub fn retry_base(self) -> Duration {
+        self.retry_base
+    }
+
+    pub fn retry_max(self) -> Duration {
+        self.retry_max
+    }
+
+    pub fn max_attempts(self) -> i32 {
+        self.max_attempts
+    }
+
+    fn retry_delay_seconds(
+        self,
+        attempt_number: i32,
+        provider_retry_after_seconds: Option<i64>,
+        entropy: u64,
+    ) -> i64 {
+        let exponent = u32::try_from(attempt_number.saturating_sub(1))
+            .unwrap_or_default()
+            .min(62);
+        let base = self.retry_base.as_secs();
+        let exponential_cap = base
+            .checked_mul(1_u64 << exponent)
+            .unwrap_or(u64::MAX)
+            .min(self.retry_max.as_secs());
+        // PostgreSQL persists second-resolution scheduling. Keep the lower bound
+        // at one second while sampling every other point in the full-jitter
+        // interval uniformly.
+        let jittered = 1 + entropy % exponential_cap.max(1);
+        let provider_floor = provider_retry_after_seconds
+            .and_then(|seconds| u64::try_from(seconds).ok())
+            .unwrap_or_default()
+            .min(self.retry_max.as_secs());
+        i64::try_from(jittered.max(provider_floor)).unwrap_or(i64::MAX)
+    }
+}
+
+impl Default for IdentityDeliveryWorkerConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrency: 4,
+            poll_interval: Duration::from_millis(100),
+            claim_lease: Duration::from_secs(30),
+            attempt_timeout: Duration::from_secs(10),
+            retry_base: Duration::from_secs(2),
+            retry_max: Duration::from_secs(300),
+            max_attempts: 8,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityDeliveryKind {
@@ -77,6 +293,7 @@ pub enum IdentityDeliveryFailureCode {
     RecipientRejected,
     CredentialUnavailable,
     CredentialExpired,
+    AttemptsExhausted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,14 +328,21 @@ impl IdentityDeliveryFailureCode {
             Self::RecipientRejected => "recipient_rejected",
             Self::CredentialUnavailable => "credential_unavailable",
             Self::CredentialExpired => "credential_expired",
+            Self::AttemptsExhausted => "attempts_exhausted",
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityDeliveryOutcome {
-    Delivered { provider_receipt_id: String },
+    Delivered {
+        provider_receipt_id: String,
+    },
     RetryableFailure(IdentityDeliveryFailureCode),
+    RetryableFailureAfter {
+        code: IdentityDeliveryFailureCode,
+        retry_after_seconds: i64,
+    },
     PermanentFailure(IdentityDeliveryFailureCode),
     Cancelled(IdentityDeliveryCancellationCode),
 }
@@ -127,7 +351,7 @@ impl IdentityDeliveryOutcome {
     pub fn status(&self) -> &'static str {
         match self {
             Self::Delivered { .. } => "delivered",
-            Self::RetryableFailure(_) => "retryable_failed",
+            Self::RetryableFailure(_) | Self::RetryableFailureAfter { .. } => "retryable_failed",
             Self::PermanentFailure(_) => "permanent_failed",
             Self::Cancelled(_) => "cancelled",
         }
@@ -136,7 +360,7 @@ impl IdentityDeliveryOutcome {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Delivered { .. } => "delivered",
-            Self::RetryableFailure(_) => "retryable_failure",
+            Self::RetryableFailure(_) | Self::RetryableFailureAfter { .. } => "retryable_failure",
             Self::PermanentFailure(_) => "permanent_failure",
             Self::Cancelled(_) => "cancelled",
         }
@@ -146,6 +370,7 @@ impl IdentityDeliveryOutcome {
         match self {
             Self::Delivered { .. } => None,
             Self::RetryableFailure(code) | Self::PermanentFailure(code) => Some(code.as_str()),
+            Self::RetryableFailureAfter { code, .. } => Some(code.as_str()),
             Self::Cancelled(code) => Some(code.as_str()),
         }
     }
@@ -153,6 +378,10 @@ impl IdentityDeliveryOutcome {
     pub fn retry_after_seconds(&self) -> Option<i64> {
         match self {
             Self::RetryableFailure(_) => Some(1),
+            Self::RetryableFailureAfter {
+                retry_after_seconds,
+                ..
+            } => Some(*retry_after_seconds),
             Self::Delivered { .. } | Self::PermanentFailure(_) | Self::Cancelled(_) => None,
         }
     }
@@ -162,7 +391,10 @@ impl IdentityDeliveryOutcome {
             Self::Delivered {
                 provider_receipt_id,
             } => Some(provider_receipt_id.as_str()),
-            Self::RetryableFailure(_) | Self::PermanentFailure(_) | Self::Cancelled(_) => None,
+            Self::RetryableFailure(_)
+            | Self::RetryableFailureAfter { .. }
+            | Self::PermanentFailure(_)
+            | Self::Cancelled(_) => None,
         }
     }
 }
@@ -238,6 +470,7 @@ pub struct HttpJsonIdentityDeliveryGateway {
     endpoint: Url,
     auth_token: Option<String>,
     client: Client,
+    timeouts: IdentityDeliveryHttpTimeouts,
 }
 
 impl HttpJsonIdentityDeliveryGateway {
@@ -270,12 +503,34 @@ impl HttpJsonIdentityDeliveryGateway {
                 "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN is required when the delivery endpoint is configured"
                     .to_string()
             })?;
-        Ok(Some(Self {
+        let timeouts = IdentityDeliveryHttpTimeouts::new(
+            delivery_duration_from_env(
+                "FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS",
+                DEFAULT_DELIVERY_CONNECT_TIMEOUT,
+            )?,
+            delivery_duration_from_env(
+                "FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS",
+                DEFAULT_DELIVERY_RESPONSE_TIMEOUT,
+            )?,
+            delivery_duration_from_env(
+                "FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS",
+                DEFAULT_DELIVERY_BODY_TIMEOUT,
+            )?,
+            delivery_duration_from_env(
+                "FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS",
+                DEFAULT_DELIVERY_TOTAL_TIMEOUT,
+            )?,
+            delivery_usize_from_env(
+                "FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES",
+                DEFAULT_DELIVERY_RESPONSE_BYTES,
+            )?,
+        )?;
+        Ok(Some(Self::configured(
             provider_id,
             endpoint,
-            auth_token: Some(auth_token),
-            client: Client::new(),
-        }))
+            Some(auth_token),
+            timeouts,
+        )?))
     }
 
     pub fn new(
@@ -289,10 +544,66 @@ impl HttpJsonIdentityDeliveryGateway {
             endpoint,
             auth_token,
             client,
+            timeouts: IdentityDeliveryHttpTimeouts::default(),
         }
     }
 
+    pub fn configured(
+        provider_id: impl Into<String>,
+        endpoint: Url,
+        auth_token: Option<String>,
+        timeouts: IdentityDeliveryHttpTimeouts,
+    ) -> Result<Self, String> {
+        let provider_id = provider_id.into();
+        if provider_id.trim() != provider_id || provider_id.is_empty() || provider_id.len() > 128 {
+            return Err("identity delivery provider id must be 1..=128 unpadded bytes".to_string());
+        }
+        let local_host = matches!(endpoint.host_str(), Some("127.0.0.1" | "localhost"));
+        if endpoint.scheme() != "https" && !local_host {
+            return Err("identity delivery endpoint must use https outside localhost".to_string());
+        }
+        if auth_token
+            .as_deref()
+            .is_some_and(|token| token.trim().is_empty())
+        {
+            return Err("identity delivery auth token must not be blank".to_string());
+        }
+        let client = Client::builder()
+            .connect_timeout(timeouts.connect)
+            .build()
+            .map_err(|error| format!("identity delivery HTTP client is invalid: {error}"))?;
+        Ok(Self {
+            provider_id,
+            endpoint,
+            auth_token,
+            client,
+            timeouts,
+        })
+    }
+
+    pub fn with_timeouts(mut self, timeouts: IdentityDeliveryHttpTimeouts) -> Self {
+        self.timeouts = timeouts;
+        self
+    }
+
     async fn deliver_http(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
+        match tokio::time::timeout(
+            self.timeouts.total,
+            self.deliver_http_with_deadlines(attempt),
+        )
+        .await
+        {
+            Ok(outcome) => outcome,
+            Err(_) => IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::ProviderUnavailable,
+            ),
+        }
+    }
+
+    async fn deliver_http_with_deadlines(
+        &self,
+        attempt: &IdentityDeliveryAttempt,
+    ) -> IdentityDeliveryOutcome {
         let Some(credential) = attempt.credential_material.as_deref() else {
             return IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::CredentialUnavailable,
@@ -312,33 +623,59 @@ impl HttpJsonIdentityDeliveryGateway {
         if let Some(auth_token) = self.auth_token.as_deref() {
             builder = builder.bearer_auth(auth_token);
         }
-        let response = match builder.send().await {
-            Ok(response) => response,
-            Err(_) => {
+        let response = match tokio::time::timeout(self.timeouts.response, builder.send()).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(_)) | Err(_) => {
                 return IdentityDeliveryOutcome::RetryableFailure(
                     IdentityDeliveryFailureCode::ProviderUnavailable,
                 )
             }
         };
         let status = response.status();
+        let retry_after_seconds = parse_retry_after_seconds(response.headers());
         if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
-            return IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::ProviderUnavailable,
-            );
+            return retry_after_seconds
+                .map(
+                    |retry_after_seconds| IdentityDeliveryOutcome::RetryableFailureAfter {
+                        code: IdentityDeliveryFailureCode::ProviderUnavailable,
+                        retry_after_seconds,
+                    },
+                )
+                .unwrap_or(IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                ));
         }
         if status.is_client_error() {
             return IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::RecipientRejected,
             );
         }
-        let provider_response = match response.json::<IdentityDeliveryProviderResponse>().await {
-            Ok(response) => response,
-            Err(_) => {
+        if response
+            .content_length()
+            .is_some_and(|length| length > self.timeouts.max_response_bytes as u64)
+        {
+            return IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::ProviderUnavailable,
+            );
+        }
+        let response_bytes = match tokio::time::timeout(self.timeouts.body, response.bytes()).await
+        {
+            Ok(Ok(bytes)) if bytes.len() <= self.timeouts.max_response_bytes => bytes,
+            Ok(Ok(_)) | Ok(Err(_)) | Err(_) => {
                 return IdentityDeliveryOutcome::RetryableFailure(
                     IdentityDeliveryFailureCode::ProviderUnavailable,
                 )
             }
         };
+        let provider_response =
+            match serde_json::from_slice::<IdentityDeliveryProviderResponse>(&response_bytes) {
+                Ok(response) => response,
+                Err(_) => {
+                    return IdentityDeliveryOutcome::RetryableFailure(
+                        IdentityDeliveryFailureCode::ProviderUnavailable,
+                    )
+                }
+            };
         match provider_response.status.as_str() {
             "delivered" => provider_response
                 .provider_receipt_id
@@ -351,9 +688,24 @@ impl HttpJsonIdentityDeliveryGateway {
                         IdentityDeliveryFailureCode::ProviderUnavailable,
                     )
                 }),
-            "retryable_failure" => IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::from_provider_code(provider_response.code.as_deref()),
-            ),
+            "retryable_failure" => provider_response
+                .retry_after_seconds
+                .filter(|seconds| *seconds >= 0)
+                .map(
+                    |retry_after_seconds| IdentityDeliveryOutcome::RetryableFailureAfter {
+                        code: IdentityDeliveryFailureCode::from_provider_code(
+                            provider_response.code.as_deref(),
+                        ),
+                        retry_after_seconds,
+                    },
+                )
+                .unwrap_or_else(|| {
+                    IdentityDeliveryOutcome::RetryableFailure(
+                        IdentityDeliveryFailureCode::from_provider_code(
+                            provider_response.code.as_deref(),
+                        ),
+                    )
+                }),
             "permanent_failure" => IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::from_provider_code(provider_response.code.as_deref()),
             ),
@@ -383,6 +735,45 @@ struct IdentityDeliveryProviderResponse {
     code: Option<String>,
     #[serde(default)]
     provider_receipt_id: Option<String>,
+    #[serde(default)]
+    retry_after_seconds: Option<i64>,
+}
+
+fn delivery_duration_from_env(name: &str, default: Duration) -> Result<Duration, String> {
+    let Some(raw) = std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(default);
+    };
+    let milliseconds = raw
+        .parse::<u64>()
+        .map_err(|_| format!("{name} must be an unsigned integer number of milliseconds"))?;
+    if !(1..=120_000).contains(&milliseconds) {
+        return Err(format!("{name} must be between 1 and 120000 milliseconds"));
+    }
+    Ok(Duration::from_millis(milliseconds))
+}
+
+fn delivery_usize_from_env(name: &str, default: usize) -> Result<usize, String> {
+    let Some(raw) = std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(default);
+    };
+    raw.parse::<usize>()
+        .map_err(|_| format!("{name} must be an unsigned integer"))
+}
+
+fn parse_retry_after_seconds(headers: &reqwest::header::HeaderMap) -> Option<i64> {
+    headers
+        .get(RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .parse::<i64>()
+        .ok()
+        .filter(|seconds| *seconds >= 0)
 }
 
 impl IdentityDeliveryGateway for HttpJsonIdentityDeliveryGateway {
@@ -407,12 +798,17 @@ pub struct IdentityDeliveryReceipt {
     pub provider_receipt_id: Option<String>,
 }
 
+type IdentityDeliveryTaskOutput = Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError>;
+type JoinedIdentityDeliveryTask = Result<IdentityDeliveryTaskOutput, tokio::task::JoinError>;
+
 #[derive(Debug, Error)]
 pub enum IdentityDeliveryError {
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     #[error("delivery credential envelope error: {0}")]
     Credential(String),
+    #[error("identity delivery worker task failed: {0}")]
+    Worker(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -430,6 +826,7 @@ struct ClaimedIdentityDelivery {
     credential_envelope: Option<Value>,
     provider_id: String,
     claim_token: Uuid,
+    provider_attempt_permitted: bool,
 }
 
 #[derive(Debug)]
@@ -467,7 +864,29 @@ pub async fn process_identity_delivery_intent(
     event_kind: &str,
     now: i64,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now).await?
+    process_identity_delivery_intent_with_config(
+        pool,
+        gateway,
+        delivery_id,
+        actor_principal_id,
+        event_kind,
+        now,
+        IdentityDeliveryWorkerConfig::default(),
+    )
+    .await
+}
+
+async fn process_identity_delivery_intent_with_config(
+    pool: &PgPool,
+    gateway: &dyn IdentityDeliveryGateway,
+    delivery_id: Uuid,
+    actor_principal_id: &PrincipalId,
+    event_kind: &str,
+    now: i64,
+    config: IdentityDeliveryWorkerConfig,
+) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let Some(claim) =
+        claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now, config).await?
     else {
         return Ok(None);
     };
@@ -478,6 +897,7 @@ pub async fn process_identity_delivery_intent(
         actor_principal_id,
         Some(event_kind),
         now,
+        config,
     )
     .await
 }
@@ -487,11 +907,106 @@ pub async fn process_next_identity_delivery(
     gateway: &dyn IdentityDeliveryGateway,
     now: i64,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now).await? else {
+    process_next_identity_delivery_with_config(
+        pool,
+        gateway,
+        now,
+        IdentityDeliveryWorkerConfig::default(),
+    )
+    .await
+}
+
+pub async fn process_next_identity_delivery_with_config(
+    pool: &PgPool,
+    gateway: &dyn IdentityDeliveryGateway,
+    now: i64,
+    config: IdentityDeliveryWorkerConfig,
+) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now, config).await? else {
         return Ok(None);
     };
     let actor_principal_id = claim.attempt.principal_id;
-    deliver_and_finalize(pool, claim, gateway, &actor_principal_id, None, now).await
+    deliver_and_finalize(pool, claim, gateway, &actor_principal_id, None, now, config).await
+}
+
+pub async fn run_identity_delivery_worker(
+    pool: PgPool,
+    gateway: Arc<dyn IdentityDeliveryGateway>,
+    config: IdentityDeliveryWorkerConfig,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) -> Result<(), IdentityDeliveryError> {
+    let mut attempts = JoinSet::new();
+    loop {
+        if *shutdown.borrow() {
+            break;
+        }
+
+        let mut found_work = false;
+        while attempts.len() < config.max_concurrency() {
+            let now = unix_now_seconds();
+            let Some(claim) =
+                claim_delivery(&pool, gateway.provider_id(), None, now, config).await?
+            else {
+                break;
+            };
+            found_work = true;
+            let attempt_pool = pool.clone();
+            let attempt_gateway = gateway.clone();
+            let actor_principal_id = claim.attempt.principal_id;
+            attempts.spawn(async move {
+                deliver_and_finalize(
+                    &attempt_pool,
+                    claim,
+                    attempt_gateway.as_ref(),
+                    &actor_principal_id,
+                    None,
+                    now,
+                    config,
+                )
+                .await
+            });
+        }
+
+        if attempts.is_empty() {
+            tokio::select! {
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break;
+                    }
+                }
+                () = tokio::time::sleep(config.poll_interval()) => {}
+            }
+            continue;
+        }
+
+        if attempts.len() >= config.max_concurrency() || !found_work {
+            tokio::select! {
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break;
+                    }
+                }
+                joined = attempts.join_next() => {
+                    finish_delivery_task(joined)?;
+                }
+            }
+        }
+    }
+
+    while let Some(joined) = attempts.join_next().await {
+        finish_delivery_task(Some(joined))?;
+    }
+    Ok(())
+}
+
+fn finish_delivery_task(
+    joined: Option<JoinedIdentityDeliveryTask>,
+) -> Result<(), IdentityDeliveryError> {
+    match joined {
+        Some(Ok(Ok(_))) | None => Ok(()),
+        Some(Ok(Err(error))) => Err(error),
+        Some(Err(error)) => Err(IdentityDeliveryError::Worker(error.to_string())),
+    }
 }
 
 pub fn spawn_identity_delivery_worker(
@@ -499,16 +1014,16 @@ pub fn spawn_identity_delivery_worker(
     gateway: Arc<dyn IdentityDeliveryGateway>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        loop {
-            match process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds()).await
-            {
-                Ok(Some(_)) => continue,
-                Ok(None) => tokio::time::sleep(Duration::from_millis(100)).await,
-                Err(_) => {
-                    tracing::error!("identity delivery worker failed");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
+        let (_shutdown_guard, shutdown) = tokio::sync::watch::channel(false);
+        if let Err(error) = run_identity_delivery_worker(
+            pool,
+            gateway,
+            IdentityDeliveryWorkerConfig::default(),
+            shutdown,
+        )
+        .await
+        {
+            tracing::error!(error = %error, "identity delivery worker stopped");
         }
     })
 }
@@ -642,6 +1157,7 @@ async fn claim_delivery(
     provider_id: &str,
     delivery_id: Option<Uuid>,
     now: i64,
+    config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
     let row = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, i64, i32, Option<Value>)>(
@@ -652,7 +1168,7 @@ async fn claim_delivery(
           AND ($2::UUID IS NULL OR delivery_id = $2)
           AND (
               (status = 'queued' AND next_attempt_at <= $3)
-              OR ($2::UUID IS NOT NULL AND status = 'retryable_failed' AND next_attempt_at <= $3)
+              OR (status = 'retryable_failed' AND next_attempt_at <= $3)
               OR (status = 'processing' AND claim_expires_at <= $3)
           )
         ORDER BY created_at, delivery_id
@@ -695,6 +1211,7 @@ async fn claim_delivery(
         tx.commit().await?;
         return Ok(None);
     }
+    let provider_attempt_permitted = attempt_count < config.max_attempts();
     let claim_token = Uuid::new_v4();
     sqlx::query(
         r#"
@@ -708,15 +1225,16 @@ async fn claim_delivery(
             provider_receipt_id = NULL,
             claim_token = $2,
             claim_expires_at = $3,
-            attempt_count = attempt_count + 1,
+            attempt_count = attempt_count + CASE WHEN attempt_count < $5 THEN 1 ELSE 0 END,
             updated_at = $4
         WHERE delivery_id = $1
         "#,
     )
     .bind(delivery_id)
     .bind(claim_token)
-    .bind(now + 60)
+    .bind(now.saturating_add(config.claim_lease().as_secs() as i64))
     .bind(now)
+    .bind(config.max_attempts())
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -729,11 +1247,12 @@ async fn claim_delivery(
             credential_hash,
             credential_expires_at,
             credential_material: None,
-            attempt_number: attempt_count + 1,
+            attempt_number: attempt_count + if provider_attempt_permitted { 1 } else { 0 },
         },
         credential_envelope,
         provider_id: provider_id.to_string(),
         claim_token,
+        provider_attempt_permitted,
     }))
 }
 
@@ -794,76 +1313,52 @@ async fn credential_is_active(
     }
 }
 
-async fn lock_active_credential(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+async fn credential_is_active_now(
+    pool: &PgPool,
     kind: IdentityDeliveryKind,
     credential_hash: &str,
 ) -> Result<bool, sqlx::Error> {
     match kind {
         IdentityDeliveryKind::Invite => {
-            let state = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+            sqlx::query_scalar::<_, bool>(
                 r#"
-                SELECT redeemed_at, revoked_at
-                FROM game_invitation
-                WHERE token_hash = $1
-                FOR SHARE
+                SELECT EXISTS (
+                    SELECT 1 FROM game_invitation
+                    WHERE token_hash = $1 AND redeemed_at IS NULL AND revoked_at IS NULL
+                )
                 "#,
             )
             .bind(credential_hash)
-            .fetch_optional(&mut **tx)
-            .await?;
-            Ok(matches!(state, Some((None, None))))
+            .fetch_one(pool)
+            .await
         }
         IdentityDeliveryKind::Recovery => {
-            let state = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+            sqlx::query_scalar::<_, bool>(
                 r#"
-                SELECT used_at, revoked_at
-                FROM auth_account_recovery_credential
-                WHERE token_hash = $1
-                FOR SHARE
+                SELECT EXISTS (
+                    SELECT 1 FROM auth_account_recovery_credential
+                    WHERE token_hash = $1 AND used_at IS NULL AND revoked_at IS NULL
+                )
                 "#,
             )
             .bind(credential_hash)
-            .fetch_optional(&mut **tx)
-            .await?;
-            Ok(matches!(state, Some((None, None))))
+            .fetch_one(pool)
+            .await
         }
         IdentityDeliveryKind::CommunityInvitation => {
-            let state = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+            sqlx::query_scalar::<_, bool>(
                 r#"
-                SELECT consumed_at, revoked_at
-                FROM community_invitation_credential
-                WHERE token_hash = $1
-                FOR SHARE
+                SELECT EXISTS (
+                    SELECT 1 FROM community_invitation_credential
+                    WHERE token_hash = $1 AND consumed_at IS NULL AND revoked_at IS NULL
+                )
                 "#,
             )
             .bind(credential_hash)
-            .fetch_optional(&mut **tx)
-            .await?;
-            Ok(matches!(state, Some((None, None))))
+            .fetch_one(pool)
+            .await
         }
     }
-}
-
-async fn lock_claimed_delivery(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    claim: &ClaimedIdentityDelivery,
-) -> Result<bool, sqlx::Error> {
-    Ok(sqlx::query_scalar::<_, Uuid>(
-        r#"
-        SELECT delivery_id
-        FROM auth_delivery_intent
-        WHERE delivery_id = $1
-          AND status = 'processing'
-          AND claim_token = $2
-        FOR UPDATE
-        "#,
-    )
-    .bind(claim.attempt.delivery_id)
-    .bind(claim.claim_token)
-    .fetch_optional(&mut **tx)
-    .await?
-    .is_some())
 }
 
 async fn cancel_claimed_delivery(
@@ -913,10 +1408,30 @@ async fn cancel_claimed_delivery(
 
 async fn delivery_outcome(
     claim: &mut ClaimedIdentityDelivery,
+    pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    credential_active: bool,
     now: i64,
+    config: IdentityDeliveryWorkerConfig,
 ) -> IdentityDeliveryOutcome {
+    if !claim.provider_attempt_permitted {
+        return IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::AttemptsExhausted,
+        );
+    }
+    let credential_active = match credential_is_active_now(
+        pool,
+        claim.attempt.kind,
+        claim.attempt.credential_hash.as_str(),
+    )
+    .await
+    {
+        Ok(active) => active,
+        Err(_) => {
+            return IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::LocalTransient,
+            )
+        }
+    };
     if !credential_active {
         return IdentityDeliveryOutcome::Cancelled(
             IdentityDeliveryCancellationCode::CredentialInactive,
@@ -944,7 +1459,12 @@ async fn delivery_outcome(
         }
     };
     claim.attempt.credential_material = Some(credential_material);
-    gateway.deliver(&claim.attempt).await
+    match tokio::time::timeout(config.attempt_timeout(), gateway.deliver(&claim.attempt)).await {
+        Ok(outcome) => outcome,
+        Err(_) => IdentityDeliveryOutcome::RetryableFailure(
+            IdentityDeliveryFailureCode::ProviderUnavailable,
+        ),
+    }
 }
 
 pub fn delivery_aad(delivery_id: Uuid, kind: IdentityDeliveryKind) -> String {
@@ -961,31 +1481,24 @@ async fn deliver_and_finalize(
     actor_principal_id: &PrincipalId,
     requested_event_kind: Option<&str>,
     now: i64,
+    config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    // The provider is deliberately outside every database transaction. The
+    // claim token and immutable credential hash fence completion; source
+    // revocation/consumption wins through the conditional finalization CAS.
+    let outcome = delivery_outcome(&mut claim, pool, gateway, now, config).await;
+    let finalized_at = unix_now_seconds().max(now);
     let mut tx = pool.begin().await?;
-    // Lifecycle mutations lock the source credential before cancelling its intent.
-    // Keep that order and hold both rows through provider completion so delivery
-    // is serialized strictly before or after rotation, revocation, and consumption.
-    let credential_active = lock_active_credential(
+    let receipt = finalize_delivery(
         &mut tx,
-        claim.attempt.kind,
-        claim.attempt.credential_hash.as_str(),
+        claim,
+        outcome,
+        actor_principal_id,
+        requested_event_kind,
+        finalized_at,
+        config,
     )
     .await?;
-    if !lock_claimed_delivery(&mut tx, &claim).await? {
-        tx.commit().await?;
-        return Ok(None);
-    }
-    let outcome = delivery_outcome(&mut claim, gateway, credential_active, now).await;
-    let event_kind = match (&outcome, requested_event_kind) {
-        (IdentityDeliveryOutcome::Cancelled(_), _) => "auth_delivery_cancelled",
-        (_, Some(event_kind)) => event_kind,
-        (IdentityDeliveryOutcome::Delivered { .. }, None) => "auth_delivery_delivered",
-        (IdentityDeliveryOutcome::RetryableFailure(_), None) => "auth_delivery_retryable_failed",
-        (IdentityDeliveryOutcome::PermanentFailure(_), None) => "auth_delivery_permanent_failed",
-    };
-    let receipt =
-        finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now).await?;
     tx.commit().await?;
     Ok(receipt)
 }
@@ -995,12 +1508,59 @@ async fn finalize_delivery(
     claim: ClaimedIdentityDelivery,
     outcome: IdentityDeliveryOutcome,
     actor_principal_id: &PrincipalId,
-    event_kind: &str,
+    requested_event_kind: Option<&str>,
     now: i64,
+    config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let mut outcome = outcome;
+    if now >= claim.attempt.credential_expires_at
+        && !matches!(&outcome, IdentityDeliveryOutcome::Cancelled(_))
+    {
+        outcome = IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::CredentialExpired,
+        );
+    }
+    if matches!(
+        &outcome,
+        IdentityDeliveryOutcome::RetryableFailure(_)
+            | IdentityDeliveryOutcome::RetryableFailureAfter { .. }
+    ) && claim.attempt.attempt_number >= config.max_attempts()
+    {
+        outcome = IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::AttemptsExhausted,
+        );
+    }
+    let entropy = u64::from_le_bytes(
+        Uuid::new_v4().as_bytes()[..8]
+            .try_into()
+            .expect("UUID contains eight entropy bytes"),
+    );
+    let mut next_attempt_at = outcome.retry_after_seconds().map(|retry_after_seconds| {
+        now.saturating_add(config.retry_delay_seconds(
+            claim.attempt.attempt_number,
+            Some(retry_after_seconds),
+            entropy,
+        ))
+    });
+    if next_attempt_at.is_some_and(|retry_at| retry_at >= claim.attempt.credential_expires_at) {
+        outcome = IdentityDeliveryOutcome::PermanentFailure(
+            IdentityDeliveryFailureCode::CredentialExpired,
+        );
+        next_attempt_at = None;
+    }
+    let event_kind = match (&outcome, requested_event_kind) {
+        (IdentityDeliveryOutcome::Cancelled(_), _) => "auth_delivery_cancelled",
+        (_, Some(event_kind)) => event_kind,
+        (IdentityDeliveryOutcome::Delivered { .. }, None) => "auth_delivery_delivered",
+        (
+            IdentityDeliveryOutcome::RetryableFailure(_)
+            | IdentityDeliveryOutcome::RetryableFailureAfter { .. },
+            None,
+        ) => "auth_delivery_retryable_failed",
+        (IdentityDeliveryOutcome::PermanentFailure(_), None) => "auth_delivery_permanent_failed",
+    };
     let outcome_code = outcome.code().map(str::to_string);
     let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
-    let next_attempt_at = outcome.retry_after_seconds().map(|seconds| now + seconds);
     let delivered_at = (outcome.status() == "delivered").then_some(now);
     let attempt_count = sqlx::query_scalar::<_, i32>(
         r#"
@@ -1019,6 +1579,21 @@ async fn finalize_delivery(
         WHERE delivery_id = $1
           AND status = 'processing'
           AND claim_token = $2
+          AND CASE $10
+              WHEN 'invite' THEN EXISTS (
+                  SELECT 1 FROM game_invitation
+                  WHERE token_hash = $11 AND redeemed_at IS NULL AND revoked_at IS NULL
+              )
+              WHEN 'recovery' THEN EXISTS (
+                  SELECT 1 FROM auth_account_recovery_credential
+                  WHERE token_hash = $11 AND used_at IS NULL AND revoked_at IS NULL
+              )
+              WHEN 'community_invitation' THEN EXISTS (
+                  SELECT 1 FROM community_invitation_credential
+                  WHERE token_hash = $11 AND consumed_at IS NULL AND revoked_at IS NULL
+              )
+              ELSE FALSE
+          END
         RETURNING attempt_count
         "#,
     )
@@ -1031,11 +1606,70 @@ async fn finalize_delivery(
     .bind(delivered_at)
     .bind(&provider_receipt_id)
     .bind(now)
+    .bind(claim.attempt.kind.as_str())
+    .bind(claim.attempt.credential_hash.as_str())
     .fetch_optional(&mut **tx)
     .await?;
-    let Some(attempt_count) = attempt_count else {
-        return Ok(None);
+    let (attempt_count, event_kind, outcome) = if let Some(attempt_count) = attempt_count {
+        (attempt_count, event_kind, outcome)
+    } else {
+        let cancelled_attempt_count = sqlx::query_scalar::<_, i32>(
+            r#"
+            UPDATE auth_delivery_intent
+            SET status = 'cancelled',
+                outcome_kind = 'cancelled',
+                outcome_code = 'credential_inactive',
+                next_attempt_at = NULL,
+                delivered_at = NULL,
+                last_error = 'credential_inactive',
+                provider_receipt_id = NULL,
+                claim_token = NULL,
+                claim_expires_at = NULL,
+                credential_envelope = NULL,
+                updated_at = $3
+            WHERE delivery_id = $1
+              AND status = 'processing'
+              AND claim_token = $2
+              AND NOT CASE $4
+                  WHEN 'invite' THEN EXISTS (
+                      SELECT 1 FROM game_invitation
+                      WHERE token_hash = $5 AND redeemed_at IS NULL AND revoked_at IS NULL
+                  )
+                  WHEN 'recovery' THEN EXISTS (
+                      SELECT 1 FROM auth_account_recovery_credential
+                      WHERE token_hash = $5 AND used_at IS NULL AND revoked_at IS NULL
+                  )
+                  WHEN 'community_invitation' THEN EXISTS (
+                      SELECT 1 FROM community_invitation_credential
+                      WHERE token_hash = $5 AND consumed_at IS NULL AND revoked_at IS NULL
+                  )
+                  ELSE FALSE
+              END
+            RETURNING attempt_count
+            "#,
+        )
+        .bind(claim.attempt.delivery_id)
+        .bind(claim.claim_token)
+        .bind(now)
+        .bind(claim.attempt.kind.as_str())
+        .bind(claim.attempt.credential_hash.as_str())
+        .fetch_optional(&mut **tx)
+        .await?;
+        let Some(attempt_count) = cancelled_attempt_count else {
+            // A cancellation or a newer lease changed the token while provider
+            // I/O was in flight. The obsolete worker has no authority to write.
+            return Ok(None);
+        };
+        (
+            attempt_count,
+            "auth_delivery_cancelled",
+            IdentityDeliveryOutcome::Cancelled(
+                IdentityDeliveryCancellationCode::CredentialInactive,
+            ),
+        )
     };
+    let outcome_code = outcome.code().map(str::to_string);
+    let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
     record_delivery_audit(
         tx,
         IdentityDeliveryAuditRecord {
@@ -1112,11 +1746,16 @@ pub fn unix_now_seconds() -> i64 {
 mod tests {
     use super::{
         DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryCancellationCode,
-        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryKind,
-        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
-        LOCAL_DETERMINISTIC_PROVIDER_ID,
+        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts,
+        IdentityDeliveryKind, IdentityDeliveryOutcome, IdentityDeliveryRetryPolicy,
+        IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
+        DISABLED_PROVIDER_ID, LOCAL_DETERMINISTIC_PROVIDER_ID,
     };
+    use axum::response::IntoResponse;
     use principal::PrincipalId;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -1154,6 +1793,98 @@ mod tests {
                 provider_receipt_id: "provider-receipt-1".to_string()
             }
         );
+    }
+
+    #[tokio::test]
+    async fn http_json_gateway_bounds_a_blackholed_provider() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            std::future::pending::<()>().await;
+        });
+        let timeouts = IdentityDeliveryHttpTimeouts::new(
+            Duration::from_millis(20),
+            Duration::from_millis(40),
+            Duration::from_millis(20),
+            Duration::from_millis(60),
+            1024,
+        )
+        .unwrap();
+        let gateway = super::HttpJsonIdentityDeliveryGateway::new(
+            "fixture-blackhole",
+            reqwest::Url::parse(&format!("http://{address}/delivery")).unwrap(),
+            None,
+            reqwest::Client::new(),
+        )
+        .with_timeouts(timeouts);
+        let mut delivery_attempt = attempt(1);
+        delivery_attempt.credential_material = Some("one-time-secret".to_string());
+        let started = Instant::now();
+        assert_eq!(
+            gateway.deliver(&delivery_attempt).await,
+            IdentityDeliveryOutcome::RetryableFailure(
+                IdentityDeliveryFailureCode::ProviderUnavailable
+            )
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn http_json_gateway_honors_retry_after_then_reuses_delivery_id() {
+        let requests = Arc::new(AtomicUsize::new(0));
+        let handler_requests = requests.clone();
+        let app = axum::Router::new().route(
+            "/delivery",
+            axum::routing::post(move |axum::Json(payload): axum::Json<serde_json::Value>| {
+                let handler_requests = handler_requests.clone();
+                async move {
+                    assert_eq!(payload["delivery_id"], payload["idempotency_key"]);
+                    if handler_requests.fetch_add(1, Ordering::SeqCst) == 0 {
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            [(axum::http::header::RETRY_AFTER, "7")],
+                            axum::Json(serde_json::json!({"status": "unavailable"})),
+                        )
+                            .into_response()
+                    } else {
+                        axum::Json(serde_json::json!({
+                            "status": "delivered",
+                            "provider_receipt_id": "provider-receipt-after-retry"
+                        }))
+                        .into_response()
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let gateway = super::HttpJsonIdentityDeliveryGateway::new(
+            "fixture-retry",
+            reqwest::Url::parse(&format!("http://{address}/delivery")).unwrap(),
+            None,
+            reqwest::Client::new(),
+        );
+        let mut delivery_attempt = attempt(1);
+        delivery_attempt.credential_material = Some("one-time-secret".to_string());
+        assert_eq!(
+            gateway.deliver(&delivery_attempt).await,
+            IdentityDeliveryOutcome::RetryableFailureAfter {
+                code: IdentityDeliveryFailureCode::ProviderUnavailable,
+                retry_after_seconds: 7,
+            }
+        );
+        delivery_attempt.attempt_number = 2;
+        assert_eq!(
+            gateway.deliver(&delivery_attempt).await,
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: "provider-receipt-after-retry".to_string(),
+            }
+        );
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
     }
 
     fn attempt(attempt_number: i32) -> IdentityDeliveryAttempt {
@@ -1220,5 +1951,39 @@ mod tests {
         assert_eq!(cancelled.kind(), "cancelled");
         assert_eq!(cancelled.code(), Some("credential_inactive"));
         assert_eq!(cancelled.retry_after_seconds(), None);
+    }
+
+    #[test]
+    fn worker_config_rejects_an_attempt_deadline_that_can_outlive_its_claim() {
+        let retry =
+            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
+                .unwrap();
+        assert!(IdentityDeliveryWorkerConfig::new(
+            4,
+            Duration::from_millis(100),
+            Duration::from_secs(10),
+            Duration::from_secs(9),
+            retry,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn retry_policy_applies_full_jitter_and_provider_floor() {
+        let retry =
+            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
+                .unwrap();
+        let config = IdentityDeliveryWorkerConfig::new(
+            4,
+            Duration::from_millis(100),
+            Duration::from_secs(30),
+            Duration::from_secs(5),
+            retry,
+        )
+        .unwrap();
+        assert_eq!(config.retry_delay_seconds(1, None, 0), 1);
+        assert_eq!(config.retry_delay_seconds(3, None, 7), 8);
+        assert_eq!(config.retry_delay_seconds(3, Some(17), 0), 17);
+        assert_eq!(config.retry_delay_seconds(30, Some(600), 0), 60);
     }
 }
