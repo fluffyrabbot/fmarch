@@ -17,7 +17,7 @@ use admission::{enforce_http_admission, HttpAdmission};
 const MIN_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 10_000;
 const MIN_DATABASE_POOL_CONNECTIONS: u64 = 5;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct RuntimeConfig {
     database_url: String,
     bind: SocketAddr,
@@ -29,6 +29,10 @@ struct RuntimeConfig {
     operator_audit_max_in_flight: usize,
     scheduler: commands::day_scheduler::DayEventSchedulerConfig,
     bootstrap_admin: Option<BootstrapAdminConfig>,
+    classic_enabled: bool,
+    dev_auth_requested: bool,
+    local_proof_secret: Option<String>,
+    identity_delivery: IdentityDeliveryConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +46,51 @@ enum IdentityDeliveryMode {
     Disabled,
     HttpJson,
     LocalDeterministic,
+}
+
+#[derive(Clone)]
+enum IdentityDeliveryConfig {
+    Disabled,
+    HttpJson {
+        provider_id: String,
+        endpoint: url::Url,
+        auth_token: String,
+        timeouts: api::identity_delivery::IdentityDeliveryHttpTimeouts,
+    },
+    LocalDeterministic {
+        fail_first_attempt: bool,
+    },
+}
+
+impl IdentityDeliveryConfig {
+    fn gateway(
+        &self,
+    ) -> Result<std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway>, std::io::Error>
+    {
+        match self {
+            Self::Disabled => Ok(std::sync::Arc::new(
+                api::identity_delivery::DisabledIdentityDeliveryGateway,
+            )),
+            Self::HttpJson {
+                provider_id,
+                endpoint,
+                auth_token,
+                timeouts,
+            } => api::identity_delivery::HttpJsonIdentityDeliveryGateway::configured(
+                provider_id.clone(),
+                endpoint.clone(),
+                Some(auth_token.clone()),
+                *timeouts,
+            )
+            .map(|gateway| std::sync::Arc::new(gateway) as _)
+            .map_err(invalid_runtime_config),
+            Self::LocalDeterministic { fail_first_attempt } => Ok(std::sync::Arc::new(
+                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(
+                    *fail_first_attempt,
+                ),
+            )),
+        }
+    }
 }
 
 fn unix_now_seconds() -> i64 {
@@ -104,7 +153,7 @@ struct HttpCapacity {
 struct WorkerBudget {
     subject_erasure_idle_interval: Duration,
     subject_erasure_error_backoff: Duration,
-    live_listener_restart_backoff: Duration,
+    worker_restart_backoff: Duration,
     restart_limit: u32,
     readiness_grace: Duration,
     heartbeat_stale_after: Duration,
@@ -117,6 +166,9 @@ impl RuntimeConfig {
         let configured_bind = optional_env("FMARCH_BIND")?;
         let platform_port = optional_env("PORT")?;
         let bind = bind_from_values(configured_bind.as_deref(), platform_port.as_deref())?;
+        let classic_enabled = strict_bool_env("FMARCH_CLASSIC_AUTH", true)?;
+        let dev_auth_requested = strict_bool_env("FMARCH_DEV_AUTH", false)?;
+        let local_proof_secret = optional_env("FMARCH_LOCAL_PROOF_SECRET")?;
         let media = media_config_from_env()?;
         let database = DatabaseCapacity {
             max_connections: bounded_env(
@@ -246,7 +298,10 @@ impl RuntimeConfig {
                 )? as i64,
             },
             auth: api::AuthBudget {
-                identity_delivery_worker_config: identity_delivery_worker_config_from_env()?,
+                identity_delivery_worker_config: identity_delivery_worker_config_from_env(
+                    database.max_connections as usize,
+                    authority_transaction_max_in_flight,
+                )?,
                 password_max_in_flight: bounded_env("FMARCH_PASSWORD_MAX_IN_FLIGHT", 4, 1, 64)?
                     as usize,
                 workos_verification_max_in_flight: bounded_env(
@@ -305,6 +360,12 @@ impl RuntimeConfig {
             },
         };
         api.validate(database.max_connections as usize)?;
+        let identity_delivery = identity_delivery_config_from_env(
+            classic_enabled,
+            dev_auth_requested,
+            cfg!(debug_assertions),
+            api.auth.identity_delivery_worker_config.attempt_timeout(),
+        )?;
         let workers = WorkerBudget {
             subject_erasure_idle_interval: Duration::from_millis(bounded_env(
                 "FMARCH_SUBJECT_ERASURE_IDLE_INTERVAL_MS",
@@ -318,8 +379,8 @@ impl RuntimeConfig {
                 100,
                 60_000,
             )?),
-            live_listener_restart_backoff: Duration::from_millis(bounded_env(
-                "FMARCH_LIVE_LISTENER_RESTART_BACKOFF_MS",
+            worker_restart_backoff: Duration::from_millis(bounded_env(
+                "FMARCH_WORKER_RESTART_BACKOFF_MS",
                 1_000,
                 100,
                 60_000,
@@ -393,6 +454,10 @@ impl RuntimeConfig {
                 optional_env("FMARCH_BOOTSTRAP_ADMIN_PASSWORD")?,
                 optional_env("FMARCH_BOOTSTRAP_ADMIN_LABEL")?,
             )?,
+            classic_enabled,
+            dev_auth_requested,
+            local_proof_secret,
+            identity_delivery,
         };
         config.validate_cross_budgets()?;
         Ok(config)
@@ -408,10 +473,44 @@ impl RuntimeConfig {
                 "FMARCH_COMMAND_LOCK_TIMEOUT_MS must not exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS",
             ));
         }
-        if self.workers.heartbeat_stale_after <= self.workers.readiness_grace {
+        let longest_heartbeat_gap = self
+            .workers
+            .subject_erasure_idle_interval
+            .max(self.scheduler.poll_interval)
+            .max(
+                self.api
+                    .auth
+                    .identity_delivery_worker_config
+                    .poll_interval(),
+            )
+            .max(Duration::from_secs(1));
+        if self.workers.heartbeat_stale_after <= longest_heartbeat_gap {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "worker heartbeat staleness must exceed the readiness startup grace",
+                "worker heartbeat staleness must exceed every normal worker heartbeat interval",
+            ));
+        }
+        let startup_database_budget = Duration::from_millis(
+            self.database
+                .acquire_timeout_ms
+                .saturating_add(self.database.statement_timeout_ms),
+        );
+        if self.workers.readiness_grace <= startup_database_budget {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker readiness grace must exceed one bounded database acquire and statement",
+            ));
+        }
+        if self.workers.shutdown_drain_timeout
+            < self
+                .api
+                .auth
+                .identity_delivery_worker_config
+                .attempt_timeout()
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker shutdown drain timeout must cover one bounded identity delivery attempt",
             ));
         }
         Ok(())
@@ -572,6 +671,8 @@ fn bounded_env(
 }
 
 fn identity_delivery_worker_config_from_env(
+    database_pool_connections: usize,
+    authority_transaction_max_in_flight: usize,
 ) -> Result<api::identity_delivery::IdentityDeliveryWorkerConfig, std::io::Error> {
     let retry = api::identity_delivery::IdentityDeliveryRetryPolicy::new(
         Duration::from_secs(bounded_env(
@@ -589,8 +690,20 @@ fn identity_delivery_worker_config_from_env(
         bounded_env("FMARCH_IDENTITY_DELIVERY_MAX_ATTEMPTS", 8, 1, 100)? as i32,
     )
     .map_err(invalid_runtime_config)?;
+    let max_concurrency =
+        bounded_env("FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY", 4, 1, 64)? as usize;
+    let database_headroom = database_pool_connections
+        .checked_sub(authority_transaction_max_in_flight.saturating_add(1))
+        .filter(|headroom| *headroom > 0)
+        .ok_or_else(|| {
+            invalid_runtime_config(
+                "identity delivery requires a database connection outside the authority budget and the process reserve"
+                    .to_string(),
+            )
+        })?;
     api::identity_delivery::IdentityDeliveryWorkerConfig::new(
-        bounded_env("FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY", 4, 1, 64)? as usize,
+        max_concurrency,
+        max_concurrency.min(database_headroom),
         Duration::from_millis(bounded_env(
             "FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS",
             100,
@@ -673,6 +786,189 @@ fn identity_delivery_mode(
     ))
 }
 
+fn identity_delivery_config_from_env(
+    classic_enabled: bool,
+    dev_auth_requested: bool,
+    debug_build: bool,
+    attempt_timeout: Duration,
+) -> Result<IdentityDeliveryConfig, std::io::Error> {
+    let endpoint = optional_env("FMARCH_IDENTITY_DELIVERY_ENDPOINT")?;
+    let provider_id = optional_env("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")?;
+    let auth_token = optional_env("FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN")?;
+    let connect_timeout = optional_env("FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS")?;
+    let response_timeout = optional_env("FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS")?;
+    let body_timeout = optional_env("FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS")?;
+    let total_timeout = optional_env("FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS")?;
+    let max_response_bytes = optional_env("FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES")?;
+    let local_fail_first = optional_env("FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT")?;
+    let http_companion_configured = provider_id.is_some()
+        || auth_token.is_some()
+        || connect_timeout.is_some()
+        || response_timeout.is_some()
+        || body_timeout.is_some()
+        || total_timeout.is_some()
+        || max_response_bytes.is_some();
+
+    if !classic_enabled {
+        if endpoint.is_some() || http_companion_configured || local_fail_first.is_some() {
+            return Err(invalid_runtime_config(
+                "identity delivery settings must be absent when classic authentication is disabled"
+                    .to_string(),
+            ));
+        }
+        return Ok(IdentityDeliveryConfig::Disabled);
+    }
+    if endpoint.is_none() && http_companion_configured {
+        return Err(invalid_runtime_config(
+            "identity delivery provider, token, and deadline settings require FMARCH_IDENTITY_DELIVERY_ENDPOINT"
+                .to_string(),
+        ));
+    }
+
+    match identity_delivery_mode(
+        classic_enabled,
+        endpoint.is_some(),
+        dev_auth_requested,
+        debug_build,
+    )? {
+        IdentityDeliveryMode::Disabled => Ok(IdentityDeliveryConfig::Disabled),
+        IdentityDeliveryMode::LocalDeterministic => {
+            let fail_first_attempt = parse_optional_bool(
+                "FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT",
+                local_fail_first.as_deref(),
+                false,
+            )?;
+            Ok(IdentityDeliveryConfig::LocalDeterministic { fail_first_attempt })
+        }
+        IdentityDeliveryMode::HttpJson => {
+            if local_fail_first.is_some() {
+                return Err(invalid_runtime_config(
+                    "FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT is valid only for the local deterministic delivery gateway"
+                        .to_string(),
+                ));
+            }
+            let endpoint = endpoint
+                .filter(|value| !value.trim().is_empty() && value.trim() == value)
+                .ok_or_else(|| {
+                    invalid_runtime_config(
+                        "FMARCH_IDENTITY_DELIVERY_ENDPOINT must be non-empty and unpadded"
+                            .to_string(),
+                    )
+                })?
+                .parse::<url::Url>()
+                .map_err(|error| {
+                    invalid_runtime_config(format!(
+                        "FMARCH_IDENTITY_DELIVERY_ENDPOINT is invalid: {error}"
+                    ))
+                })?;
+            let provider_id = provider_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    invalid_runtime_config(
+                        "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID is required with the delivery endpoint"
+                            .to_string(),
+                    )
+                })?;
+            let auth_token = auth_token
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    invalid_runtime_config(
+                        "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN is required with the delivery endpoint"
+                            .to_string(),
+                    )
+                })?;
+            let timeouts = api::identity_delivery::IdentityDeliveryHttpTimeouts::new(
+                Duration::from_millis(parse_optional_bounded_u64(
+                    "FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS",
+                    connect_timeout.as_deref(),
+                    1_000,
+                    1,
+                    120_000,
+                )?),
+                Duration::from_millis(parse_optional_bounded_u64(
+                    "FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS",
+                    response_timeout.as_deref(),
+                    3_000,
+                    1,
+                    120_000,
+                )?),
+                Duration::from_millis(parse_optional_bounded_u64(
+                    "FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS",
+                    body_timeout.as_deref(),
+                    1_000,
+                    1,
+                    120_000,
+                )?),
+                Duration::from_millis(parse_optional_bounded_u64(
+                    "FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS",
+                    total_timeout.as_deref(),
+                    5_000,
+                    1,
+                    120_000,
+                )?),
+                parse_optional_bounded_u64(
+                    "FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES",
+                    max_response_bytes.as_deref(),
+                    64 * 1024,
+                    1,
+                    1024 * 1024,
+                )? as usize,
+            )
+            .map_err(invalid_runtime_config)?;
+            if timeouts.total() >= attempt_timeout {
+                return Err(invalid_runtime_config(
+                    "identity delivery HTTP total timeout must leave time inside the whole-attempt deadline for database finalization"
+                        .to_string(),
+                ));
+            }
+            Ok(IdentityDeliveryConfig::HttpJson {
+                provider_id,
+                endpoint,
+                auth_token,
+                timeouts,
+            })
+        }
+    }
+}
+
+fn parse_optional_bounded_u64(
+    name: &str,
+    raw: Option<&str>,
+    default: u64,
+    minimum: u64,
+    maximum: u64,
+) -> Result<u64, std::io::Error> {
+    let Some(raw) = raw else {
+        return Ok(default);
+    };
+    let parsed = raw.parse::<u64>().map_err(|_| {
+        invalid_runtime_config(format!(
+            "{name} must be an integer between {minimum} and {maximum}"
+        ))
+    })?;
+    if !(minimum..=maximum).contains(&parsed) {
+        return Err(invalid_runtime_config(format!(
+            "{name} must be between {minimum} and {maximum}"
+        )));
+    }
+    Ok(parsed)
+}
+
+fn parse_optional_bool(
+    name: &str,
+    raw: Option<&str>,
+    default: bool,
+) -> Result<bool, std::io::Error> {
+    match raw {
+        None => Ok(default),
+        Some("1") => Ok(true),
+        Some("0") => Ok(false),
+        Some(_) => Err(invalid_runtime_config(format!(
+            "{name} must be exactly 0 or 1"
+        ))),
+    }
+}
+
 fn local_proof_auth_from_values(
     enabled: bool,
     debug_build: bool,
@@ -751,6 +1047,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
 
     let config = RuntimeConfig::from_env()?;
+    let identity_delivery_gateway = config.identity_delivery.gateway()?;
     server::validate_database_transport(&config.database_url, "DATABASE_URL")
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
     // Reject absent, malformed, or placeholder profile-index custody before
@@ -760,13 +1057,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // connection. `--check-content` intentionally exits above this requirement.
     let subject_authority = identity::configured_subject_key_authority().await?;
     identity::install_subject_key_store(subject_authority.key_store.clone())?;
-    let dev_auth_requested = strict_bool_env("FMARCH_DEV_AUTH", false)?;
-    let local_proof_secret = optional_env("FMARCH_LOCAL_PROOF_SECRET")?;
     let local_proof_auth = local_proof_auth_from_values(
-        dev_auth_requested,
+        config.dev_auth_requested,
         cfg!(debug_assertions),
         config.bind,
-        local_proof_secret.as_deref(),
+        config.local_proof_secret.as_deref(),
     )?;
     let dev_auth_enabled = local_proof_auth.is_some();
     let local_proof_instance_id = local_proof_auth
@@ -845,7 +1140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Classic is a first-class method, enabled by default; WorkOS is additive.
     // Startup requires at least one enabled sign-in method. FMARCH_DEV_AUTH
     // unlocks only the loopback, secret-authenticated local-proof control.
-    let classic_enabled = strict_bool_env("FMARCH_CLASSIC_AUTH", true)?;
+    let classic_enabled = config.classic_enabled;
     if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -903,46 +1198,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Delivery transport is a classic-method concern (invite and recovery
-    // credentials), independent of whether WorkOS is also configured.
-    let http_gateway = if classic_enabled {
-        api::identity_delivery::HttpJsonIdentityDeliveryGateway::from_env()
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
-    } else {
-        None
-    };
-    let delivery_mode = identity_delivery_mode(
-        classic_enabled,
-        http_gateway.is_some(),
-        dev_auth_enabled,
-        cfg!(debug_assertions),
-    )?;
-    if http_gateway.as_ref().is_some_and(|gateway| {
-        gateway.total_timeout()
-            > config
-                .api
-                .auth
-                .identity_delivery_worker_config
-                .attempt_timeout()
-    }) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "identity delivery HTTP total timeout must not exceed the worker attempt timeout",
-        )
-        .into());
-    }
-    let gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway> =
-        match delivery_mode {
-            IdentityDeliveryMode::HttpJson => std::sync::Arc::new(
-                http_gateway.expect("HTTP delivery mode requires a configured gateway"),
-            ),
-            IdentityDeliveryMode::LocalDeterministic => std::sync::Arc::new(
-                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::from_env(),
-            ),
-            IdentityDeliveryMode::Disabled => {
-                std::sync::Arc::new(api::identity_delivery::DisabledIdentityDeliveryGateway)
-            }
-        };
+    // RuntimeConfig owns transport parsing and deadline validation before any
+    // external authority or database side effects occur.
+    let gateway = identity_delivery_gateway;
     let worker_health = api::RuntimeWorkerHealth::new(config.workers.heartbeat_stale_after)
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
     let mut api_state = api::ApiState::new(pool.clone(), media_store, config.api.clone())?
@@ -1007,26 +1265,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     enum StopReason {
-        Signal(&'static str),
+        Signal(Result<&'static str, String>),
         Fatal(runtime_supervisor::SupervisorFailure),
-        ServerExited,
+        ServerExited(Result<(), String>),
+        SupervisorExited,
     }
 
     let stop_reason = tokio::select! {
         result = &mut server => {
-            result.map_err(std::io::Error::other)??;
-            StopReason::ServerExited
+            StopReason::ServerExited(match result {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(error)) => Err(error.to_string()),
+                Err(error) => Err(format!("HTTP server task join failed: {error}")),
+            })
         }
-        signal = process_shutdown_signal() => StopReason::Signal(signal?),
+        signal = process_shutdown_signal() => {
+            StopReason::Signal(signal.map_err(|error| error.to_string()))
+        }
         failure = supervisor.wait_for_fatal() => match failure {
             Some(failure) => StopReason::Fatal(failure),
-            None => StopReason::ServerExited,
+            None => StopReason::SupervisorExited,
         },
     };
     supervisor.request_shutdown();
-    if !matches!(&stop_reason, StopReason::ServerExited) {
+    let mut cleanup_failures = Vec::new();
+    if !matches!(&stop_reason, StopReason::ServerExited(_)) {
         match tokio::time::timeout(config.workers.shutdown_drain_timeout, &mut server).await {
-            Ok(result) => result.map_err(std::io::Error::other)??,
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => cleanup_failures.push(format!(
+                "HTTP server failed during graceful shutdown: {error}"
+            )),
+            Ok(Err(error)) => cleanup_failures.push(format!(
+                "HTTP server task join failed during graceful shutdown: {error}"
+            )),
             Err(_) => {
                 tracing::error!(
                     event = "http_graceful_shutdown_timed_out",
@@ -1034,27 +1305,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "HTTP graceful-shutdown deadline elapsed; aborting remaining connections"
                 );
                 server.abort();
-                let _ = server.await;
+                match server.await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => cleanup_failures.push(format!(
+                        "aborted HTTP server returned an error while joining: {error}"
+                    )),
+                    Err(error) if error.is_cancelled() => {}
+                    Err(error) => cleanup_failures.push(format!(
+                        "aborted HTTP server task failed while joining: {error}"
+                    )),
+                }
             }
         }
     }
-    let worker_shutdown = supervisor.shutdown().await;
+    if let Err(error) = supervisor.shutdown().await {
+        cleanup_failures.push(format!("runtime supervisor shutdown failed: {error}"));
+    }
     pool.close().await;
-    worker_shutdown.map_err(std::io::Error::other)?;
-    match stop_reason {
-        StopReason::Signal(signal) => {
+
+    let terminal_error = match stop_reason {
+        StopReason::Signal(Ok(signal)) => {
             tracing::info!(signal, "fmarch server stopped gracefully");
-            Ok(())
+            None
         }
-        StopReason::Fatal(failure) => Err(std::io::Error::other(format!(
+        StopReason::Signal(Err(error)) => {
+            Some(format!("process shutdown signal listener failed: {error}"))
+        }
+        StopReason::Fatal(failure) => Some(format!(
             "required runtime worker {} failed: {}",
             failure.worker, failure.reason
-        ))
-        .into()),
-        StopReason::ServerExited => Err(std::io::Error::other(
-            "HTTP server exited without an explicit shutdown request",
-        )
-        .into()),
+        )),
+        StopReason::ServerExited(Ok(())) => {
+            Some("HTTP server exited without an explicit shutdown request".to_string())
+        }
+        StopReason::ServerExited(Err(error)) => Some(format!("HTTP server failed: {error}")),
+        StopReason::SupervisorExited => {
+            Some("runtime supervisor stopped without a terminal worker report".to_string())
+        }
+    };
+    if let Some(error) = terminal_error {
+        cleanup_failures.insert(0, error);
+    }
+    if cleanup_failures.is_empty() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(cleanup_failures.join("; ")).into())
     }
 }
 

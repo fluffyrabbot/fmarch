@@ -13,6 +13,7 @@ pub struct WorkerHealthView {
     pub last_heartbeat_at: Option<i64>,
     pub progress: u64,
     pub backlog: Option<u64>,
+    pub in_flight: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +24,7 @@ struct WorkerHealthState {
     last_heartbeat_at: Option<i64>,
     progress: u64,
     backlog: Option<u64>,
+    in_flight: Option<u64>,
     last_iteration_succeeded: bool,
 }
 
@@ -57,6 +59,7 @@ impl RuntimeWorkerHealth {
                     last_heartbeat_at: None,
                     progress: 0,
                     backlog: None,
+                    in_flight: None,
                     last_iteration_succeeded: false,
                 },
             );
@@ -72,11 +75,22 @@ impl RuntimeWorkerHealth {
         {
             worker.running = true;
             worker.last_heartbeat_at = None;
+            worker.in_flight = None;
             worker.last_iteration_succeeded = false;
         }
     }
 
     pub fn heartbeat(&self, name: &str, progress_delta: u64, backlog: Option<u64>) {
+        self.heartbeat_with_load(name, progress_delta, backlog, None);
+    }
+
+    pub fn heartbeat_with_load(
+        &self,
+        name: &str,
+        progress_delta: u64,
+        backlog: Option<u64>,
+        in_flight: Option<u64>,
+    ) {
         if let Some(worker) = self
             .inner
             .write()
@@ -87,6 +101,7 @@ impl RuntimeWorkerHealth {
             worker.last_heartbeat_at = Some(unix_now_seconds());
             worker.progress = worker.progress.saturating_add(progress_delta);
             worker.backlog = backlog;
+            worker.in_flight = in_flight;
             worker.last_iteration_succeeded = true;
         }
     }
@@ -102,6 +117,7 @@ impl RuntimeWorkerHealth {
             worker.last_heartbeat_at = Some(unix_now_seconds());
             worker.last_iteration_succeeded = false;
             worker.backlog = None;
+            worker.in_flight = None;
         }
     }
 
@@ -114,6 +130,7 @@ impl RuntimeWorkerHealth {
         {
             worker.running = false;
             worker.last_heartbeat_at = None;
+            worker.in_flight = None;
             worker.last_iteration_succeeded = false;
             if restarting {
                 worker.restart_count = worker.restart_count.saturating_add(1);
@@ -143,6 +160,7 @@ impl RuntimeWorkerHealth {
                     last_heartbeat_at: worker.last_heartbeat_at,
                     progress: worker.progress,
                     backlog: worker.backlog,
+                    in_flight: worker.in_flight,
                 }
             })
             .collect()
@@ -184,8 +202,10 @@ mod tests {
         let snapshot = health.snapshot();
         assert_eq!(snapshot[0].progress, 2);
         assert_eq!(snapshot[0].backlog, Some(3));
+        assert_eq!(snapshot[0].in_flight, None);
         health.iteration_failed("required");
         assert!(!health.required_workers_ready());
+        assert_eq!(health.snapshot()[0].in_flight, None);
     }
 
     #[test]
@@ -193,5 +213,41 @@ mod tests {
         let health = RuntimeWorkerHealth::default();
         health.register("optional", false);
         assert!(health.required_workers_ready());
+    }
+
+    #[test]
+    fn operational_load_is_recorded_atomically_and_reset_by_lifecycle_changes() {
+        let health = RuntimeWorkerHealth::default();
+        health.register("identity_delivery", true);
+        health.mark_starting("identity_delivery");
+        assert_eq!(health.snapshot()[0].in_flight, None);
+
+        health.heartbeat_with_load("identity_delivery", 2, Some(7), Some(3));
+        let snapshot = health.snapshot();
+        assert_eq!(snapshot[0].progress, 2);
+        assert_eq!(snapshot[0].backlog, Some(7));
+        assert_eq!(snapshot[0].in_flight, Some(3));
+
+        health.iteration_failed("identity_delivery");
+        assert_eq!(health.snapshot()[0].in_flight, None);
+
+        health.heartbeat_with_load("identity_delivery", 1, Some(4), Some(2));
+        health.mark_stopped("identity_delivery", true);
+        let snapshot = health.snapshot();
+        assert_eq!(snapshot[0].progress, 3);
+        assert_eq!(snapshot[0].in_flight, None);
+        assert_eq!(snapshot[0].restart_count, 1);
+
+        health.mark_starting("identity_delivery");
+        assert_eq!(health.snapshot()[0].in_flight, None);
+    }
+
+    #[test]
+    fn ordinary_heartbeat_clears_unreported_operational_load() {
+        let health = RuntimeWorkerHealth::default();
+        health.register("worker", false);
+        health.heartbeat_with_load("worker", 1, Some(2), Some(1));
+        health.heartbeat("worker", 1, Some(1));
+        assert_eq!(health.snapshot()[0].in_flight, None);
     }
 }

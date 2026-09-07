@@ -149,8 +149,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert_ordered(
         delivery,
         &[
-            "delivery_outcome(&mut claim, pool, gateway, now, config).await",
+            "delivery_outcome(&mut claim, pool, gateway, now, config, database_slots).await",
             "let finalized_at = unix_now_seconds().max(now)",
+            "let _database_permit = acquire_delivery_database_slot(database_slots).await",
             "let mut tx = pool.begin().await?",
             "finalize_delivery(",
             "requested_event_kind,",
@@ -259,5 +260,40 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert!(
         !source.contains("clippy::too_many_arguments"),
         "typed lifecycle records must remove identity-delivery high-arity lint debt"
+    );
+}
+
+#[test]
+fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
+    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/identity_delivery.rs");
+    let source = std::fs::read_to_string(source_path).unwrap();
+    let worker_start = source
+        .find("pub async fn run_identity_delivery_worker_observed")
+        .expect("supervised worker entry point");
+    let worker_end = source[worker_start..]
+        .find("async fn finish_delivery_task")
+        .map(|offset| worker_start + offset)
+        .expect("worker completion boundary");
+    let worker = &source[worker_start..worker_end];
+
+    for contract in [
+        "IdentityDeliveryWorkerObservation",
+        "Semaphore::new(config.max_database_in_flight())",
+        "biased;",
+        "changed = shutdown.changed()",
+        "if *shutdown.borrow()",
+        "tokio::time::timeout(",
+        "config.attempt_timeout()",
+        "in_flight: attempts.len()",
+        "tokio::time::sleep(config.poll_interval())",
+    ] {
+        assert!(
+            worker.contains(contract),
+            "worker lost contract: {contract}"
+        );
+    }
+    assert!(
+        !source.contains("spawn_identity_delivery_worker"),
+        "production worker ownership must remain with the process supervisor"
     );
 }

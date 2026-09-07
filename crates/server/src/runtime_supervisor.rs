@@ -70,6 +70,7 @@ impl RuntimeSupervisor {
                 pool,
                 identity_gateway,
                 identity_delivery_config,
+                &budget,
             ));
         }
         let mut tasks = Vec::with_capacity(specs.len());
@@ -150,6 +151,13 @@ impl RuntimeSupervisor {
                 Ok(Err(error)) => failures.push(format!("supervisor task join failed: {error}")),
                 Err(_) => {
                     task.abort();
+                    match task.await {
+                        Ok(()) => {}
+                        Err(error) if error.is_cancelled() => {}
+                        Err(error) => failures.push(format!(
+                            "aborted supervisor task failed while joining: {error}"
+                        )),
+                    }
                     failures.push("supervisor drain deadline elapsed".to_string());
                 }
             }
@@ -158,6 +166,15 @@ impl RuntimeSupervisor {
             Ok(())
         } else {
             Err(failures.join("; "))
+        }
+    }
+}
+
+impl Drop for RuntimeSupervisor {
+    fn drop(&mut self) {
+        let _ = self.shutdown.send(true);
+        for task in &self.tasks {
+            task.abort();
         }
     }
 }
@@ -269,11 +286,15 @@ fn identity_delivery_spec(
     pool: PgPool,
     gateway: Arc<dyn IdentityDeliveryGateway>,
     config: IdentityDeliveryWorkerConfig,
+    budget: &WorkerBudget,
 ) -> WorkerSpec {
     WorkerSpec {
         name: IDENTITY_DELIVERY_WORKER,
         required: true,
-        policy: WorkerPolicy::Fatal,
+        policy: WorkerPolicy::Restart {
+            backoff: budget.worker_restart_backoff,
+            limit: budget.restart_limit,
+        },
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             let gateway = gateway.clone();
@@ -284,8 +305,13 @@ fn identity_delivery_spec(
                     gateway,
                     config,
                     shutdown,
-                    move |progress| {
-                        heartbeat_health.heartbeat(IDENTITY_DELIVERY_WORKER, progress, None);
+                    move |observation| {
+                        heartbeat_health.heartbeat_with_load(
+                            IDENTITY_DELIVERY_WORKER,
+                            observation.completed,
+                            None,
+                            Some(observation.in_flight as u64),
+                        );
                     },
                 )
                 .await
@@ -300,7 +326,7 @@ fn live_listener_spec(api_state: ApiState, budget: &WorkerBudget) -> WorkerSpec 
         name: LIVE_EVENT_LISTENER,
         required: true,
         policy: WorkerPolicy::Restart {
-            backoff: budget.live_listener_restart_backoff,
+            backoff: budget.worker_restart_backoff,
             limit: budget.restart_limit,
         },
         factory: Arc::new(move |shutdown, health| {

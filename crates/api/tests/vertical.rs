@@ -1,8 +1,9 @@
 use api::{
     identity_delivery::{
-        process_next_identity_delivery, unix_now_seconds, IdentityDeliveryAttempt,
+        process_next_identity_delivery_with_config, unix_now_seconds, IdentityDeliveryAttempt,
         IdentityDeliveryFailureCode, IdentityDeliveryFuture, IdentityDeliveryGateway,
-        IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
+        IdentityDeliveryOutcome, IdentityDeliveryWorkerConfig,
+        LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostConsoleStateResponse, HostSetupStateResponse, MediaUploadResponse,
     WebsocketTicketResponse,
@@ -33,6 +34,23 @@ use wire::{
     SlotLifecycle, SlotMentionNotification, SubmitPostMedia, SubmitPostMention,
     SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
+
+async fn process_next_identity_delivery(
+    pool: &sqlx::PgPool,
+    gateway: &dyn IdentityDeliveryGateway,
+    now: i64,
+) -> Result<
+    Option<api::identity_delivery::IdentityDeliveryReceipt>,
+    api::identity_delivery::IdentityDeliveryError,
+> {
+    process_next_identity_delivery_with_config(
+        pool,
+        gateway,
+        now,
+        IdentityDeliveryWorkerConfig::default(),
+    )
+    .await
+}
 
 const TEST_LOCAL_PROOF_SECRET: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

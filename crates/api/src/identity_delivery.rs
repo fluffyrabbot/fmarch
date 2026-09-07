@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, fmt::Formatter, future::Future, pin::Pin};
 use thiserror::Error;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
@@ -115,6 +116,7 @@ impl IdentityDeliveryRetryPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IdentityDeliveryWorkerConfig {
     max_concurrency: usize,
+    max_database_in_flight: usize,
     poll_interval: Duration,
     claim_lease: Duration,
     attempt_timeout: Duration,
@@ -126,6 +128,7 @@ pub struct IdentityDeliveryWorkerConfig {
 impl IdentityDeliveryWorkerConfig {
     pub fn new(
         max_concurrency: usize,
+        max_database_in_flight: usize,
         poll_interval: Duration,
         claim_lease: Duration,
         attempt_timeout: Duration,
@@ -133,6 +136,12 @@ impl IdentityDeliveryWorkerConfig {
     ) -> Result<Self, String> {
         if !(1..=64).contains(&max_concurrency) {
             return Err("identity delivery concurrency must be between 1 and 64".to_string());
+        }
+        if !(1..=max_concurrency).contains(&max_database_in_flight) {
+            return Err(
+                "identity delivery database concurrency must be positive and must not exceed provider concurrency"
+                    .to_string(),
+            );
         }
         if poll_interval.is_zero() || poll_interval > Duration::from_secs(60) {
             return Err("identity delivery poll interval must be in (0ms, 60s]".to_string());
@@ -152,6 +161,7 @@ impl IdentityDeliveryWorkerConfig {
         }
         Ok(Self {
             max_concurrency,
+            max_database_in_flight,
             poll_interval,
             claim_lease,
             attempt_timeout,
@@ -163,6 +173,10 @@ impl IdentityDeliveryWorkerConfig {
 
     pub fn max_concurrency(self) -> usize {
         self.max_concurrency
+    }
+
+    pub fn max_database_in_flight(self) -> usize {
+        self.max_database_in_flight
     }
 
     pub fn poll_interval(self) -> Duration {
@@ -219,6 +233,7 @@ impl Default for IdentityDeliveryWorkerConfig {
     fn default() -> Self {
         Self {
             max_concurrency: 4,
+            max_database_in_flight: 2,
             poll_interval: Duration::from_millis(100),
             claim_lease: Duration::from_secs(30),
             attempt_timeout: Duration::from_secs(10),
@@ -431,15 +446,6 @@ pub struct LocalDeterministicIdentityDeliveryGateway {
 }
 
 impl LocalDeterministicIdentityDeliveryGateway {
-    pub fn from_env() -> Self {
-        Self {
-            fail_first_attempt: std::env::var("FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT")
-                .ok()
-                .as_deref()
-                == Some("1"),
-        }
-    }
-
     pub fn new(fail_first_attempt: bool) -> Self {
         Self { fail_first_attempt }
     }
@@ -474,65 +480,6 @@ pub struct HttpJsonIdentityDeliveryGateway {
 }
 
 impl HttpJsonIdentityDeliveryGateway {
-    pub fn from_env() -> Result<Option<Self>, String> {
-        let Some(endpoint) = std::env::var("FMARCH_IDENTITY_DELIVERY_ENDPOINT")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-        else {
-            return Ok(None);
-        };
-        let endpoint = Url::parse(endpoint.trim())
-            .map_err(|error| format!("FMARCH_IDENTITY_DELIVERY_ENDPOINT is invalid: {error}"))?;
-        let local_host = matches!(endpoint.host_str(), Some("127.0.0.1" | "localhost"));
-        if endpoint.scheme() != "https" && !local_host {
-            return Err(
-                "FMARCH_IDENTITY_DELIVERY_ENDPOINT must use https outside localhost".to_string(),
-            );
-        }
-        let provider_id = std::env::var("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| {
-                "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID is required when the delivery endpoint is configured"
-                    .to_string()
-            })?;
-        let auth_token = std::env::var("FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| {
-                "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN is required when the delivery endpoint is configured"
-                    .to_string()
-            })?;
-        let timeouts = IdentityDeliveryHttpTimeouts::new(
-            delivery_duration_from_env(
-                "FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS",
-                DEFAULT_DELIVERY_CONNECT_TIMEOUT,
-            )?,
-            delivery_duration_from_env(
-                "FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS",
-                DEFAULT_DELIVERY_RESPONSE_TIMEOUT,
-            )?,
-            delivery_duration_from_env(
-                "FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS",
-                DEFAULT_DELIVERY_BODY_TIMEOUT,
-            )?,
-            delivery_duration_from_env(
-                "FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS",
-                DEFAULT_DELIVERY_TOTAL_TIMEOUT,
-            )?,
-            delivery_usize_from_env(
-                "FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES",
-                DEFAULT_DELIVERY_RESPONSE_BYTES,
-            )?,
-        )?;
-        Ok(Some(Self::configured(
-            provider_id,
-            endpoint,
-            Some(auth_token),
-            timeouts,
-        )?))
-    }
-
     pub fn new(
         provider_id: impl Into<String>,
         endpoint: Url,
@@ -766,33 +713,6 @@ struct IdentityDeliveryProviderResponse {
     retry_after_seconds: Option<i64>,
 }
 
-fn delivery_duration_from_env(name: &str, default: Duration) -> Result<Duration, String> {
-    let Some(raw) = std::env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        return Ok(default);
-    };
-    let milliseconds = raw
-        .parse::<u64>()
-        .map_err(|_| format!("{name} must be an unsigned integer number of milliseconds"))?;
-    if !(1..=120_000).contains(&milliseconds) {
-        return Err(format!("{name} must be between 1 and 120000 milliseconds"));
-    }
-    Ok(Duration::from_millis(milliseconds))
-}
-
-fn delivery_usize_from_env(name: &str, default: usize) -> Result<usize, String> {
-    let Some(raw) = std::env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    else {
-        return Ok(default);
-    };
-    raw.parse::<usize>()
-        .map_err(|_| format!("{name} must be an unsigned integer"))
-}
-
 fn parse_retry_after_seconds(headers: &reqwest::header::HeaderMap) -> Option<i64> {
     headers
         .get(RETRY_AFTER)?
@@ -827,6 +747,12 @@ pub struct IdentityDeliveryReceipt {
 
 type IdentityDeliveryTaskOutput = Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError>;
 type JoinedIdentityDeliveryTask = Result<IdentityDeliveryTaskOutput, tokio::task::JoinError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryWorkerObservation {
+    pub completed: u64,
+    pub in_flight: usize,
+}
 
 #[derive(Debug, Error)]
 pub enum IdentityDeliveryError {
@@ -905,20 +831,7 @@ pub(super) async fn process_identity_delivery_intent_with_config(
         Some(event_kind),
         now,
         config,
-    )
-    .await
-}
-
-pub async fn process_next_identity_delivery(
-    pool: &PgPool,
-    gateway: &dyn IdentityDeliveryGateway,
-    now: i64,
-) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    process_next_identity_delivery_with_config(
-        pool,
-        gateway,
-        now,
-        IdentityDeliveryWorkerConfig::default(),
+        None,
     )
     .await
 }
@@ -933,16 +846,17 @@ pub async fn process_next_identity_delivery_with_config(
         return Ok(None);
     };
     let actor_principal_id = claim.attempt.principal_id;
-    deliver_and_finalize(pool, claim, gateway, &actor_principal_id, None, now, config).await
-}
-
-pub async fn run_identity_delivery_worker(
-    pool: PgPool,
-    gateway: Arc<dyn IdentityDeliveryGateway>,
-    config: IdentityDeliveryWorkerConfig,
-    shutdown: tokio::sync::watch::Receiver<bool>,
-) -> Result<(), IdentityDeliveryError> {
-    run_identity_delivery_worker_observed(pool, gateway, config, shutdown, |_| {}).await
+    deliver_and_finalize(
+        pool,
+        claim,
+        gateway,
+        &actor_principal_id,
+        None,
+        now,
+        config,
+        None,
+    )
+    .await
 }
 
 pub async fn run_identity_delivery_worker_observed<F>(
@@ -953,10 +867,11 @@ pub async fn run_identity_delivery_worker_observed<F>(
     mut observe_progress: F,
 ) -> Result<(), IdentityDeliveryError>
 where
-    F: FnMut(u64) + Send,
+    F: FnMut(IdentityDeliveryWorkerObservation) + Send,
 {
     let mut attempts = JoinSet::new();
-    loop {
+    let database_slots = Arc::new(Semaphore::new(config.max_database_in_flight()));
+    'worker: loop {
         if *shutdown.borrow() {
             break;
         }
@@ -964,31 +879,66 @@ where
         let mut found_work = false;
         while attempts.len() < config.max_concurrency() {
             let now = unix_now_seconds();
-            let Some(claim) =
-                claim_delivery(&pool, gateway.provider_id(), None, now, config).await?
-            else {
+            let claim = tokio::select! {
+                biased;
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break 'worker;
+                    }
+                    continue;
+                }
+                claim = claim_delivery(&pool, gateway.provider_id(), None, now, config) => claim?,
+            };
+            let Some(claim) = claim else {
+                observe_progress(IdentityDeliveryWorkerObservation {
+                    completed: 0,
+                    in_flight: attempts.len(),
+                });
                 break;
             };
+            if *shutdown.borrow() {
+                // The exact claim token remains safely fenced and becomes
+                // reclaimable at lease expiry. No new provider side effect is
+                // started after shutdown has been observed.
+                break 'worker;
+            }
             found_work = true;
             let attempt_pool = pool.clone();
             let attempt_gateway = gateway.clone();
+            let attempt_database_slots = database_slots.clone();
             let actor_principal_id = claim.attempt.principal_id;
             attempts.spawn(async move {
-                deliver_and_finalize(
-                    &attempt_pool,
-                    claim,
-                    attempt_gateway.as_ref(),
-                    &actor_principal_id,
-                    None,
-                    now,
-                    config,
+                tokio::time::timeout(
+                    config.attempt_timeout(),
+                    deliver_and_finalize(
+                        &attempt_pool,
+                        claim,
+                        attempt_gateway.as_ref(),
+                        &actor_principal_id,
+                        None,
+                        now,
+                        config,
+                        Some(&attempt_database_slots),
+                    ),
                 )
                 .await
+                .map_err(|_| {
+                    IdentityDeliveryError::Worker(
+                        "identity delivery attempt deadline elapsed".to_string(),
+                    )
+                })?
+            });
+            observe_progress(IdentityDeliveryWorkerObservation {
+                completed: 0,
+                in_flight: attempts.len(),
             });
         }
 
         if attempts.is_empty() {
-            observe_progress(0);
+            observe_progress(IdentityDeliveryWorkerObservation {
+                completed: 0,
+                in_flight: 0,
+            });
             tokio::select! {
                 changed = shutdown.changed() => {
                     if changed.is_err() || *shutdown.borrow() {
@@ -1008,49 +958,50 @@ where
                     }
                 }
                 joined = attempts.join_next() => {
-                    observe_progress(finish_delivery_task(joined)?);
+                    observe_progress(finish_delivery_task(joined, attempts.len())?);
+                }
+                () = tokio::time::sleep(config.poll_interval()) => {
+                    observe_progress(IdentityDeliveryWorkerObservation {
+                        completed: 0,
+                        in_flight: attempts.len(),
+                    });
                 }
             }
         }
     }
 
     while let Some(joined) = attempts.join_next().await {
-        observe_progress(finish_delivery_task(Some(joined))?);
+        observe_progress(finish_delivery_task(Some(joined), attempts.len())?);
     }
     Ok(())
 }
 
 fn finish_delivery_task(
     joined: Option<JoinedIdentityDeliveryTask>,
-) -> Result<u64, IdentityDeliveryError> {
+    in_flight: usize,
+) -> Result<IdentityDeliveryWorkerObservation, IdentityDeliveryError> {
     match joined {
-        Some(Ok(Ok(Some(_)))) => Ok(1),
-        Some(Ok(Ok(None))) | None => Ok(0),
-        Some(Ok(Err(error))) => Err(error),
+        Some(Ok(Ok(receipt))) => Ok(IdentityDeliveryWorkerObservation {
+            completed: u64::from(receipt.is_some()),
+            in_flight,
+        }),
+        Some(Ok(Err(error))) => {
+            tracing::error!(
+                event = "identity_delivery_attempt_failed",
+                error = %error,
+                "identity delivery attempt failed; its fenced claim remains retryable"
+            );
+            Ok(IdentityDeliveryWorkerObservation {
+                completed: 0,
+                in_flight,
+            })
+        }
+        None => Ok(IdentityDeliveryWorkerObservation {
+            completed: 0,
+            in_flight,
+        }),
         Some(Err(error)) => Err(IdentityDeliveryError::Worker(error.to_string())),
     }
-}
-
-pub fn spawn_identity_delivery_worker(
-    pool: PgPool,
-    gateway: Arc<dyn IdentityDeliveryGateway>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        loop {
-            let (_shutdown_guard, shutdown) = tokio::sync::watch::channel(false);
-            if let Err(error) = run_identity_delivery_worker(
-                pool.clone(),
-                gateway.clone(),
-                IdentityDeliveryWorkerConfig::default(),
-                shutdown,
-            )
-            .await
-            {
-                tracing::error!(error = %error, "identity delivery worker restarting");
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        }
-    })
 }
 
 /// Reseals one independently committed batch of persisted delivery credentials.
@@ -1437,24 +1388,28 @@ async fn delivery_outcome(
     gateway: &dyn IdentityDeliveryGateway,
     now: i64,
     config: IdentityDeliveryWorkerConfig,
+    database_slots: Option<&Arc<Semaphore>>,
 ) -> IdentityDeliveryOutcome {
     if !claim.provider_attempt_permitted {
         return IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::AttemptsExhausted,
         );
     }
-    let credential_active = match credential_is_active_now(
-        pool,
-        claim.attempt.kind,
-        claim.attempt.credential_hash.as_str(),
-    )
-    .await
-    {
-        Ok(active) => active,
-        Err(_) => {
-            return IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::LocalTransient,
-            )
+    let credential_active = {
+        let _database_permit = acquire_delivery_database_slot(database_slots).await;
+        match credential_is_active_now(
+            pool,
+            claim.attempt.kind,
+            claim.attempt.credential_hash.as_str(),
+        )
+        .await
+        {
+            Ok(active) => active,
+            Err(_) => {
+                return IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::LocalTransient,
+                )
+            }
         }
     };
     if !credential_active {
@@ -1507,12 +1462,14 @@ async fn deliver_and_finalize(
     requested_event_kind: Option<&str>,
     now: i64,
     config: IdentityDeliveryWorkerConfig,
+    database_slots: Option<&Arc<Semaphore>>,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
     // The provider is deliberately outside every database transaction. The
     // claim token and immutable credential hash fence completion; source
     // revocation/consumption wins through the conditional finalization CAS.
-    let outcome = delivery_outcome(&mut claim, pool, gateway, now, config).await;
+    let outcome = delivery_outcome(&mut claim, pool, gateway, now, config, database_slots).await;
     let finalized_at = unix_now_seconds().max(now);
+    let _database_permit = acquire_delivery_database_slot(database_slots).await;
     let mut tx = pool.begin().await?;
     let receipt = finalize_delivery(
         &mut tx,
@@ -1526,6 +1483,21 @@ async fn deliver_and_finalize(
     .await?;
     tx.commit().await?;
     Ok(receipt)
+}
+
+async fn acquire_delivery_database_slot(
+    slots: Option<&Arc<Semaphore>>,
+) -> Option<OwnedSemaphorePermit> {
+    match slots {
+        Some(slots) => Some(
+            slots
+                .clone()
+                .acquire_owned()
+                .await
+                .expect("identity delivery database admission remains open"),
+        ),
+        None => None,
+    }
 }
 
 async fn finalize_delivery(
@@ -1990,6 +1962,7 @@ mod tests {
                 .unwrap();
         assert!(IdentityDeliveryWorkerConfig::new(
             4,
+            2,
             Duration::from_millis(100),
             Duration::from_secs(10),
             Duration::from_secs(9),
@@ -2005,6 +1978,7 @@ mod tests {
                 .unwrap();
         let config = IdentityDeliveryWorkerConfig::new(
             4,
+            2,
             Duration::from_millis(100),
             Duration::from_secs(30),
             Duration::from_secs(5),

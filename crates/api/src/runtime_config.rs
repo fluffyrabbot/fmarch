@@ -143,6 +143,21 @@ impl ApiRuntimeConfig {
                     .to_string(),
             ));
         }
+        let identity_database_budget = self
+            .auth
+            .identity_delivery_worker_config
+            .max_database_in_flight();
+        if self
+            .authority
+            .transaction_max_in_flight
+            .saturating_add(identity_database_budget)
+            >= database_pool_connections
+        {
+            return Err(ApiRuntimeConfigError(
+                "identity delivery database work and authority transactions must leave one database connection reserved"
+                    .to_string(),
+            ));
+        }
         if self.websocket.projection_capacity == 0
             || self.websocket.max_connections == 0
             || self.websocket.max_connections_per_principal == 0

@@ -548,27 +548,34 @@ replacement lint allowance.
 
 ## Closed identity-delivery boundary: cancellation and audit records
 
-`IdentityDeliveryCancellationRequest` is the immutable boundary between a
-claimed intent row that has failed the credential-active check and its
-transactional cancellation. The claim owner constructs it directly from the
-locked row; the transaction stays explicit, and the cancellation retains the
-existing status, outcome, retry, claim-token, receipt, envelope-redaction, and
-timestamp mutations.
+Identity delivery is a leased, fenced saga rather than a transaction spanning
+provider I/O. A short `FOR UPDATE SKIP LOCKED` claim commits an opaque token and
+lease, then releases every database lock before credential preflight and the
+bounded provider request. Finalization is a second short transaction whose CAS
+requires the exact token and immutable credential hash. Cancellation,
+revocation, claim expiry, and a newer worker therefore defeat stale completion
+without holding scarce connections across a network call.
 
 `IdentityDeliveryAuditRecord` owns the exact event, actor, principal,
 credential, delivery, provider, outcome, and receipt fields persisted by the
 worker. Cancellation and finalization construct the record directly, so the
 cancel path no longer fabricates a dummy `ClaimedIdentityDelivery` merely to
-write audit metadata. The worker still locks the source credential before the
-claimed intent, holds both through provider completion, records the audit in
-the same transaction as its state transition, and commits only after
-finalization.
+write audit metadata. The worker records audit and state transition atomically
+only after the fenced finalization succeeds.
+
+The process supervisor owns the only production worker entry point. Provider
+fan-out and database admission are separate bounded budgets; claim scans and
+in-flight ticks feed readiness without waiting for a provider completion; and
+SIGTERM stops new provider starts before draining already-owned attempts.
+Transport configuration and its byte/deadline limits are parsed fail-closed in
+the composition root before external authority or database side effects.
 
 `identity_delivery_boundary.rs` fixes those ownership, lock-order, SQL, JSON,
-and transaction contracts. Focused serial SQLx coverage exercises inactive
-credential cancellation, retryable failure followed by delivery, and permanent
-provider failure while checking actor/principal/provider attribution, envelope
-handling, claim clearing, receipts, and exact audit metadata.
+and transaction contracts. Focused serial SQLx coverage exercises concurrent
+claims, claim loss, inactive credential cancellation, retryable failure followed
+by delivery, permanent provider failure, bounded transport response handling,
+and crash recovery while checking actor/principal/provider attribution,
+envelope handling, claim clearing, receipts, and exact audit metadata.
 
 ## Closed media boundary: attached variant reads
 
