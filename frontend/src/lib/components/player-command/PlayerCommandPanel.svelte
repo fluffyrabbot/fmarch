@@ -344,7 +344,7 @@
   .player-command-panel__context {
     background: var(--fm-surface-muted);
     border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     display: grid;
     gap: 0;
     padding: 4px 10px;

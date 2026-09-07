@@ -219,7 +219,7 @@
   .host-task-workspace__day-event {
     background: var(--fm-surface-muted);
     border: 1px solid var(--fm-line-strong);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     display: grid;
     gap: 12px;
     padding: 12px;
@@ -259,7 +259,7 @@
   .host-task-workspace__winner-grid label {
     align-items: center;
     border: 1px solid var(--fm-line-strong);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     display: flex;
     gap: 8px;
     min-block-size: 44px;

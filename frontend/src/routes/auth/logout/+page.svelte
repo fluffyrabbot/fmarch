@@ -92,7 +92,7 @@
   .logout__reject {
     background: var(--fm-danger-wash);
     border: 1px solid var(--fm-danger-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-danger-ink);
     font-size: 13px;
     font-weight: 800;

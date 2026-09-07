@@ -23,6 +23,7 @@ export function GET({ cookies, url }) {
     throw redirect(303, UI_WORKBENCH_PATH);
   }
 
+  cookies.set("fmarch_ui_preview", ["player", "player-normal", "moderator"].includes(scenarioId) ? scenarioId : "", browserSessionCookieOptions(url));
   cookies.set(
     FIXTURE_SESSION_COOKIE_NAME,
     scenario.token,

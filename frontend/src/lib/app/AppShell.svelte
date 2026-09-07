@@ -1,11 +1,16 @@
 <script>
   import "../styles/app.css";
   import { APP_SHELL_CONTRACT } from "./app-shell-model.mjs";
-  import { activePhaseTheme } from "./phase-theme.mjs";
+  import { getContext } from "svelte";
+  import { readable } from "svelte/store";
+  import { THEME_CONTEXT } from "./theme-context.mjs";
+  import { resolveTheme } from "./theme.mjs";
 
   export let shell;
 
-  $: phaseTheme = $activePhaseTheme ?? shell.phase ?? undefined;
+  const themeContext = getContext(THEME_CONTEXT);
+  const themeStore = themeContext?.resolved ?? readable(null);
+  $: theme = $themeStore ?? resolveTheme({ phaseId: shell.phaseId });
   $: primarySurfaces = shell.surfaces.filter((surface) => surface.group === "primary");
   $: workspaceSurfaces = shell.surfaces.filter((surface) => surface.group === "workspace");
 </script>
@@ -14,7 +19,10 @@
   class="fm-app-shell"
   data-component={APP_SHELL_CONTRACT.component}
   data-surface={shell.activeSurface}
-  data-phase={phaseTheme}
+  data-theme={theme.themeId}
+  data-scheme={theme.scheme}
+  data-palette={theme.palette}
+  data-phase={theme.phase ?? undefined}
 >
   <a
     class="fm-skip-link"

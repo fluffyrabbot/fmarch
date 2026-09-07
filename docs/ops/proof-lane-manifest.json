@@ -1012,6 +1012,7 @@
       "tier": "frozen",
       "paths": [
         "tools/frontend_role_smoke.mjs",
+        "tools/frontend_theme_proof.mjs",
         "tools/frontend_cross_browser.mjs",
         "tools/fixtures/frontend-media.png",
         "tools/frontend_role_smoke_scenarios.mjs",

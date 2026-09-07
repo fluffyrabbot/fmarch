@@ -187,7 +187,7 @@ export function buildGameRouteData({
       activeSurface: "player",
       principalId,
       capabilities: normalizedCapabilities,
-      phase,
+      phase: { id: coldLoad.commandState?.phase?.phaseId },
     }),
     game: Object.freeze({
       id: gameId,

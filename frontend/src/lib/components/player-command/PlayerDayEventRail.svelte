@@ -97,7 +97,7 @@
   .player-day-event-rail article {
     background: var(--fm-surface-muted);
     border: 1px solid var(--fm-line-strong);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     padding: 10px;
   }
 
@@ -109,8 +109,8 @@
   .player-day-event-rail button {
     background: var(--fm-ink);
     border: 1px solid var(--fm-ink);
-    border-radius: 8px;
-    color: var(--fm-on-dark);
+    border-radius: var(--fm-radius-control);
+    color: var(--fm-action-ink);
     font: inherit;
     font-weight: 850;
     min-block-size: 44px;

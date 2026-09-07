@@ -483,7 +483,7 @@
   .admin-bootstrap form { align-items: end; display: grid; gap: 12px; grid-template-columns: minmax(220px, 1fr) auto; }
 
   .admin-operator-inbox { align-items: start; display: grid; gap: 22px; grid-template-columns: 260px minmax(0, 1fr); }
-  .admin-operator-inbox__queue, .admin-operator-inbox__canvas { background: var(--fm-surface-tint); border: 1px solid var(--fm-line-soft); border-radius: 12px; min-inline-size: 0; }
+  .admin-operator-inbox__queue, .admin-operator-inbox__canvas { background: var(--fm-surface-tint); border: 1px solid var(--fm-line-soft); border-radius: var(--fm-radius-panel); min-inline-size: 0; }
   .admin-operator-inbox__queue { display: grid; gap: 12px; padding: 14px; }
   .admin-operator-inbox__queue > header { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
   .admin-operator-inbox__queue h2, .admin-operator-inbox__queue p, .admin-operator-inbox__canvas h2, .admin-operator-inbox__canvas p { margin: 0; }

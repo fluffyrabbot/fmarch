@@ -13,11 +13,11 @@
   align-content: start;
   background: var(--fm-raised-veil);
   border: 1px solid var(--fm-line);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   display: grid;
   gap: 12px;
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--fm-space-card);
 }
 
 /* ---- well: inset readout inside a card or action tile ---- */
@@ -25,11 +25,11 @@
 .fm-well {
   background: var(--fm-surface-muted);
   border: 1px solid var(--fm-line-strong);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   display: grid;
   gap: 2px;
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--fm-space-well);
 }
 
 .fm-well--warm {
@@ -74,7 +74,7 @@
 .fm-field textarea {
   background: var(--fm-raised);
   border: 1px solid var(--fm-line-strong);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-ink);
   font: inherit;
   min-block-size: 44px;
@@ -114,7 +114,7 @@
   align-items: center;
   background: var(--fm-surface-muted);
   border: 1px solid var(--fm-line-strong);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-ink-muted);
   display: inline-flex;
   font-size: 13px;
@@ -129,7 +129,7 @@
 .fm-choice {
   align-items: center;
   border: 1px solid var(--fm-line-soft);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-ink);
   cursor: pointer;
   display: flex;
@@ -217,7 +217,7 @@
 .touch-control.touch-control--danger {
   background: var(--fm-danger);
   border-color: var(--fm-danger);
-  color: var(--fm-on-dark);
+  color: var(--fm-action-ink);
 }
 
 /* ---- disclosure: expandable evidence row (aria-expanded trigger + controlled detail) ---- */
@@ -279,7 +279,7 @@
 .fm-proof-disclosure {
   background: var(--fm-raised-veil);
   border: 1px solid var(--fm-line);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   min-inline-size: 0;
   overflow: clip;
 }
@@ -325,7 +325,7 @@
   display: grid;
   gap: 12px;
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--fm-space-card);
 }
 
 /* ---- surface drawer: a compact route-level summary for secondary context ---- */
@@ -399,13 +399,13 @@
   align-items: start;
   background: var(--fm-raised-veil);
   border: 1px solid var(--fm-line);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-ink);
   display: grid;
   gap: 2px;
   min-block-size: 56px;
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--fm-space-well);
   text-decoration: none;
 }
 
@@ -451,7 +451,7 @@
   appearance: none;
   background: var(--fm-surface-muted);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-small);
   block-size: 26px;
   display: block;
   inline-size: 100%;
@@ -490,11 +490,11 @@
 .fm-ledger {
   background: var(--fm-raised-veil);
   border: 1px solid var(--fm-line);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   display: grid;
   gap: 10px;
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--fm-space-card);
 }
 
 .fm-ledger__head {
@@ -515,7 +515,7 @@
   align-items: center;
   background: var(--fm-ink);
   border-radius: 999px;
-  color: var(--fm-on-dark);
+  color: var(--fm-action-ink);
   display: inline-flex;
   font-size: 13px;
   font-weight: 800;
@@ -534,12 +534,12 @@
 .fm-ledger__empty {
   background: var(--fm-surface-muted);
   border: 1px solid var(--fm-line-soft);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-ink-muted);
   font-weight: 700;
   margin: 0;
   min-block-size: 44px;
-  padding: 10px 12px;
+  padding: var(--fm-space-well);
 }
 
 .fm-ledger__list {
@@ -555,12 +555,12 @@
   align-items: start;
   background: var(--fm-raised);
   border: 1px solid var(--fm-line-soft);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   min-block-size: 44px;
-  padding: 10px 12px;
+  padding: var(--fm-space-well);
 }
 
 .fm-ledger__list--grid .fm-ledger__row {
@@ -600,13 +600,13 @@
   align-items: start;
   background: var(--fm-raised);
   border: 1px solid var(--fm-line-soft);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   min-block-size: 44px;
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--fm-space-well);
 }
 
 .fm-rowlist__row--stack {
@@ -637,7 +637,7 @@
   align-items: center;
   background: var(--fm-surface-cool);
   border: 1px solid var(--fm-line-cool);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-small);
   color: inherit;
   cursor: pointer;
   display: inline-flex;

@@ -90,9 +90,9 @@
     backdrop-filter: blur(14px);
     background: var(--fm-topbar-veil);
     border: 1px solid var(--fm-line-strong);
-    border-radius: 12px;
+    border-radius: var(--fm-radius-panel);
     bottom: calc(10px + env(safe-area-inset-bottom));
-    box-shadow: 0 12px 38px color-mix(in srgb, var(--fm-ground) 36%, transparent);
+    box-shadow: var(--fm-shadow-floating);
     display: flex;
     gap: 4px;
     inset-inline: max(12px, calc((100vw - 920px) / 2));
@@ -116,7 +116,7 @@
     align-items: center;
     background: transparent;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-ink);
     display: inline-flex;
     flex: 0 0 auto;
@@ -137,7 +137,7 @@
   .action-dock button.action-dock__primary {
     background: var(--fm-ink);
     border-color: var(--fm-ink);
-    color: var(--fm-on-dark);
+    color: var(--fm-action-ink);
   }
 
   .action-dock button:disabled {
@@ -152,7 +152,7 @@
     align-items: center;
     background: var(--fm-accent);
     border-radius: 999px;
-    color: var(--fm-on-dark);
+    color: var(--fm-action-ink);
     display: inline-flex;
     font-size: 11px;
     justify-content: center;
@@ -162,7 +162,7 @@
 
   @media (max-width: 560px) {
     .action-dock {
-      border-radius: 10px;
+      border-radius: var(--fm-radius-dock);
       inset-inline: 8px;
       flex-wrap: wrap;
     }

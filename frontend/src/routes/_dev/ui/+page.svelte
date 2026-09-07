@@ -92,6 +92,7 @@
       Use the full browser lane when behavior or responsive layout changes materially.
     </p>
   </aside>
+  <p><a class="fm-touch-button fm-touch-button--secondary" href="/appearance">Appearance</a></p>
 </main>
 
 <style>
@@ -128,15 +129,15 @@
 
   .ui-workbench__command {
     background: var(--fm-ink);
-    border-radius: 8px;
-    color: var(--fm-on-dark);
+    border-radius: var(--fm-radius-control);
+    color: var(--fm-action-ink);
     display: grid;
     gap: 8px;
     padding: 16px;
   }
 
   .ui-workbench__command span {
-    color: var(--fm-on-dark-soft);
+    color: var(--fm-action-ink-muted);
     font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;

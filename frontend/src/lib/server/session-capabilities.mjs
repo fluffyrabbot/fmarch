@@ -158,7 +158,7 @@ export function sessionContextFromRequest(request) {
   }
   if (
     pathname === "/" ||
-    /^\/(?:community|discussions|search|games)(?:\/.*)?$/.test(pathname) ||
+    /^\/(?:appearance|community|discussions|search|games)(?:\/.*)?$/.test(pathname) ||
     /^\/u\/[^/]+(?:\/.*)?$/.test(pathname)
   ) {
     return Object.freeze({ kind: "optional_public" });

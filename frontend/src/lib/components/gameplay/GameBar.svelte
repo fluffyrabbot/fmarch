@@ -102,7 +102,7 @@
 
   .game-bar__facts a {
     align-content: center;
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-ink);
     display: grid;
     min-block-size: 48px;

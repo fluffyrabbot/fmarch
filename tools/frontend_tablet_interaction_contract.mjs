@@ -141,7 +141,7 @@ const evidence = {
   forbiddenMatches,
   tokenOwnership: {
     tokenFile: tokenFilePath,
-    rule: "raw color literals (hex/rgb/hsl) are only legal in the token file",
+    rule: "raw color literals (hex/rgb/hsl) are only legal in theme definition files",
     rawColorMatches,
   },
   rootAppHtml,
@@ -179,7 +179,7 @@ async function scanSources(root) {
 function findRawColorLiterals(sources) {
   const matches = [];
   for (const source of sources) {
-    if (source.path === tokenFilePath) {
+    if (/^frontend\/src\/lib\/styles\/themes\/[a-z-]+\.css$/u.test(source.path)) {
       continue;
     }
     const extension = path.extname(source.path);
@@ -324,7 +324,7 @@ function provePlayerRouteLayoutCss({ route, frame, dock }) {
   assertPlayerReadingOrder(route);
   assert.doesNotMatch(route, /<PlayerCommandPanel\b/u);
   assert.doesNotMatch(route, /player-surface__command-stack/u);
-  assert.match(frame, /max-inline-size:\s*760px/u);
+  assert.match(frame, /max-inline-size:\s*var\(--fm-reading-width\)/u);
   assert.match(frame, /padding-block-end:\s*calc\(76px \+ env\(safe-area-inset-bottom\)\)/u);
   assert.match(dock, /data-component="player-action-dock"/u);
   assert.match(dock, /data-thumb-zone="player-primary-actions"/u);

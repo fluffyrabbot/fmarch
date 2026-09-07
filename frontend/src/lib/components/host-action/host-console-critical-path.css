@@ -55,7 +55,7 @@
   align-items: center;
   background: var(--fm-accent-wash);
   border: 1px solid var(--fm-accent-soft);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-control);
   color: var(--fm-accent-ink);
   display: inline-flex;
   font-size: 14px;
@@ -396,7 +396,7 @@
   align-items: center;
   background: var(--fm-ink);
   border-radius: 999px;
-  color: var(--fm-on-dark);
+  color: var(--fm-action-ink);
   display: inline-flex;
   font-size: 13px;
   justify-content: center;

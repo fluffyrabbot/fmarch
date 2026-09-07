@@ -89,7 +89,7 @@
 
   .auth-chooser__method {
     border: 1px solid var(--fm-line-soft);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     display: grid;
     gap: 10px;
     padding: 16px;

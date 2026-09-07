@@ -204,7 +204,7 @@
   .public-game-post header a { color: var(--fm-ink-muted); font-size: 13px; }
   .public-game-post p { font-size: 17px; line-height: 1.65; margin-block-end: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   .public-game-embed { display: grid; gap: 8px; margin-block-start: 12px; min-inline-size: 0; }
-  .public-game-embed-frame { aspect-ratio: 16 / 9; border: 1px solid var(--fm-line); border-radius: 6px; inline-size: 100%; max-block-size: 420px; }
+  .public-game-embed-frame { aspect-ratio: 16 / 9; border: 1px solid var(--fm-line); border-radius: var(--fm-radius-small); inline-size: 100%; max-block-size: 420px; }
   .public-game-quote {
     border-inline-start: 4px solid var(--fm-line-strong, var(--fm-line));
     display: grid;
