@@ -13,6 +13,7 @@ const SUBJECT_ERASURE_WORKER: &str = "subject-erasure";
 const DAY_EVENT_WORKER: &str = "day-event-scheduler";
 const IDENTITY_DELIVERY_WORKER: &str = "identity-delivery";
 const LIVE_EVENT_LISTENER: &str = "live-event-listener";
+const MEDIA_RECONCILIATION_WORKER: &str = "media-reconciliation";
 
 type WorkerFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'static>>;
 type WorkerFactory =
@@ -63,6 +64,7 @@ impl RuntimeSupervisor {
         let mut specs = vec![
             subject_erasure_spec(pool.clone(), &budget),
             day_event_spec(pool.clone(), scheduler, &budget),
+            media_reconciliation_spec(pool.clone(), api_state.clone(), &budget),
             live_listener_spec(api_state, &budget),
         ];
         if classic_enabled {
@@ -344,6 +346,66 @@ fn live_listener_spec(api_state: ApiState, budget: &WorkerBudget) -> WorkerSpec 
     }
 }
 
+fn media_reconciliation_spec(
+    pool: PgPool,
+    api_state: ApiState,
+    budget: &WorkerBudget,
+) -> WorkerSpec {
+    let interval = budget.media_reconciliation_interval;
+    let batch_size = budget.media_reconciliation_batch_size;
+    WorkerSpec {
+        name: MEDIA_RECONCILIATION_WORKER,
+        required: true,
+        policy: WorkerPolicy::Fatal,
+        factory: Arc::new(move |shutdown, health| {
+            let pool = pool.clone();
+            let state = api_state.clone();
+            Box::pin(run_media_reconciliation_worker(
+                pool, state, interval, batch_size, shutdown, health,
+            ))
+        }),
+    }
+}
+
+async fn run_media_reconciliation_worker(
+    pool: PgPool,
+    state: ApiState,
+    interval: Duration,
+    batch_size: i64,
+    shutdown: watch::Receiver<bool>,
+    health: RuntimeWorkerHealth,
+) -> Result<(), String> {
+    loop {
+        if *shutdown.borrow() {
+            return Ok(());
+        }
+        match api::reconcile_media_uploads_once(&state, batch_size).await {
+            Ok(report) => {
+                let backlog = media_reconciliation_backlog(&pool).await.ok();
+                health.heartbeat_with_load(
+                    MEDIA_RECONCILIATION_WORKER,
+                    report.completed(),
+                    backlog,
+                    Some(0),
+                );
+                if report.failures > 0 {
+                    health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
+                }
+            }
+            Err(_) => {
+                tracing::error!(
+                    event = "media_reconciliation_worker_failed",
+                    "media reconciliation worker iteration failed"
+                );
+                health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
+            }
+        }
+        if wait_or_shutdown(interval, shutdown.clone()).await {
+            return Ok(());
+        }
+    }
+}
+
 async fn run_subject_erasure_worker(
     pool: PgPool,
     idle_interval: Duration,
@@ -434,6 +496,15 @@ async fn subject_erasure_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
 async fn day_event_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM day_event_schedule_work WHERE auto_resolve_pending OR narrative_pending",
+    )
+    .fetch_one(pool)
+    .await
+    .map(|count| count.max(0) as u64)
+}
+
+async fn media_reconciliation_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM media_upload_ledger WHERE state IN ('installing', 'reclaiming')",
     )
     .fetch_one(pool)
     .await

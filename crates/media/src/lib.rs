@@ -344,8 +344,6 @@ pub enum MediaError {
     VariantAggregateBytesExceeded { id: ContentId, max: u64 },
     #[error("prepared media {id} stored-footprint byte count overflowed")]
     StoredFootprintOverflow { id: ContentId },
-    #[error("installed media {id} has a manifest and cannot be reclaimed as incomplete")]
-    InstalledMediaCannotBeReclaimed { id: ContentId },
     #[error("variant encoding failed for {key}: {reason}")]
     VariantEncoding { key: VariantKey, reason: String },
     #[error("variant set for {id} is corrupt: {reason}")]

@@ -10,8 +10,8 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use url::Url;
 
 use super::variants::{
-    corrupt_set, fixed_variant_keys, parse_manifest, prepare_upload, validate_manifest_policy,
-    verify_member_bytes, MANIFEST_MAX_BYTES, MANIFEST_NAME,
+    corrupt_set, parse_manifest, prepare_upload, validate_manifest_policy, verify_member_bytes,
+    MANIFEST_MAX_BYTES, MANIFEST_NAME,
 };
 use super::*;
 
@@ -551,34 +551,6 @@ impl MediaRepository {
             }
         }
     }
-
-    /// Reclaim canonical/member objects only when no installed-last manifest exists. A corrupt or
-    /// valid manifest fails closed. The caller must hold the global installation/recovery lease for
-    /// this content identity so an upload cannot race the proof-of-absence and deletion sequence.
-    pub async fn reclaim_incomplete_upload(
-        &self,
-        id: ContentId,
-        limits: VariantLimits,
-    ) -> Result<(), MediaError> {
-        if self.probe_installed_manifest(id, limits).await?.is_some() {
-            return Err(MediaError::InstalledMediaCannotBeReclaimed { id });
-        }
-        match &self.backend {
-            RepositoryBackend::Local(store) => {
-                let store = store.clone();
-                tokio::task::spawn_blocking(move || store.reclaim_incomplete_upload(id))
-                    .await
-                    .map_err(join_error)?
-            }
-            RepositoryBackend::Object(store) => {
-                for key in fixed_variant_keys(id) {
-                    delete_idempotently(store.as_ref(), &variant_object_path(key)?).await?;
-                }
-                delete_idempotently(store.as_ref(), &object_path(&format!("blobs/{id}/orig"))?)
-                    .await
-            }
-        }
-    }
 }
 
 /// `object_store` treats a custom virtual-hosted endpoint as a complete bucket
@@ -819,13 +791,6 @@ where
     })
     .await
     .map_err(join_error)?
-}
-
-async fn delete_idempotently(store: &dyn ObjectStore, path: &ObjectPath) -> Result<(), MediaError> {
-    match store.delete(path).await {
-        Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
-        Err(error) => Err(object_error("reclaim-delete", error)),
-    }
 }
 
 async fn get_bounded(
@@ -1324,7 +1289,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn manifest_probe_is_shallow_and_completed_installation_cannot_be_reclaimed() {
+    async fn manifest_probe_is_shallow() {
         let object_store = Arc::new(CountingObjectStore::default());
         let repository = MediaRepository::object(
             object_store.clone(),
@@ -1351,63 +1316,6 @@ mod tests {
                 "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
             )]
         );
-        assert!(matches!(
-            repository.reclaim_incomplete_upload(id, limits).await,
-            Err(MediaError::InstalledMediaCannotBeReclaimed { id: actual }) if actual == id
-        ));
-    }
-
-    #[tokio::test]
-    async fn incomplete_object_and_local_installations_are_reclaimed_idempotently() {
-        let object_store = Arc::new(CountingObjectStore::default());
-        let repository = MediaRepository::object(
-            object_store.clone(),
-            MediaLimits::default(),
-            MediaReadLimits::default(),
-        );
-        let id = ContentId::from_bytes([5; CONTENT_ID_BYTES]);
-        let member_path = variant_object_path(fixed_variant_keys(id)[0]).unwrap();
-        let original_path = object_path(&format!("blobs/{id}/orig")).unwrap();
-        object_store
-            .put(&member_path, Bytes::from_static(b"partial-member").into())
-            .await
-            .unwrap();
-        object_store
-            .put(&original_path, Bytes::from_static(b"partial-orig").into())
-            .await
-            .unwrap();
-
-        repository
-            .reclaim_incomplete_upload(id, VariantLimits::default())
-            .await
-            .unwrap();
-        repository
-            .reclaim_incomplete_upload(id, VariantLimits::default())
-            .await
-            .unwrap();
-        assert!(
-            get_bounded(object_store.as_ref(), &member_path, u64::MAX, "test-member")
-                .await
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            get_bounded(object_store.as_ref(), &original_path, u64::MAX, "test-orig")
-                .await
-                .unwrap()
-                .is_none()
-        );
-
-        let directory = tempfile::tempdir().unwrap();
-        let store = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
-        let ingested = store.ingest(&png()).unwrap();
-        let local_id = ingested.handle().id();
-        let local_repository = MediaRepository::local(store.clone(), MediaReadLimits::default());
-        local_repository
-            .reclaim_incomplete_upload(local_id, VariantLimits::default())
-            .await
-            .unwrap();
-        assert!(store.lookup(local_id).unwrap().is_none());
     }
 
     #[tokio::test]

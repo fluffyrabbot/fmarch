@@ -153,6 +153,8 @@ struct HttpCapacity {
 struct WorkerBudget {
     subject_erasure_idle_interval: Duration,
     subject_erasure_error_backoff: Duration,
+    media_reconciliation_interval: Duration,
+    media_reconciliation_batch_size: i64,
     worker_restart_backoff: Duration,
     restart_limit: u32,
     readiness_grace: Duration,
@@ -226,6 +228,9 @@ impl RuntimeConfig {
             bounded_env("FMARCH_SESSION_IDLE_TTL_SECONDS", 604_800, 60, 31_536_000)? as i64,
         )
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+        let variant_limits = media::VariantLimits::default();
+        let minimum_media_read_bytes =
+            media::MediaReadLimits::required_in_flight_bytes(variant_limits)? as u64;
         let api = api::ApiRuntimeConfig {
             websocket: api::WebSocketBudget {
                 projection_capacity: bounded_env("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536)?
@@ -306,10 +311,11 @@ impl RuntimeConfig {
                     required_bounded_env("FMARCH_MEDIA_READ_MAX_IN_FLIGHT", 1, 1_024)? as usize,
                     required_bounded_env(
                         "FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES",
-                        16 * 1024 * 1024 + 32 * 1024,
+                        minimum_media_read_bytes,
                         u32::MAX as u64,
                     )? as usize,
                 )?,
+                variant_limits,
             },
             auth: api::AuthBudget {
                 identity_delivery_worker_config: identity_delivery_worker_config_from_env(
@@ -393,6 +399,18 @@ impl RuntimeConfig {
                 100,
                 60_000,
             )?),
+            media_reconciliation_interval: Duration::from_millis(bounded_env(
+                "FMARCH_MEDIA_RECONCILIATION_INTERVAL_MS",
+                5_000,
+                100,
+                60_000,
+            )?),
+            media_reconciliation_batch_size: bounded_env(
+                "FMARCH_MEDIA_RECONCILIATION_BATCH_SIZE",
+                32,
+                1,
+                1_024,
+            )? as i64,
             worker_restart_backoff: Duration::from_millis(bounded_env(
                 "FMARCH_WORKER_RESTART_BACKOFF_MS",
                 1_000,
@@ -481,6 +499,21 @@ impl RuntimeConfig {
         self.scheduler.validate().map_err(|error| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string())
         })?;
+        let maximum_media_footprint = media::MediaLimits::default()
+            .maximum_stored_footprint_bytes(self.api.media.variant_limits)
+            .map_err(|error| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string())
+            })?;
+        if u64::try_from(self.api.media.account_quota_bytes)
+            .map_or(true, |quota| quota < maximum_media_footprint)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "FMARCH_MEDIA_ACCOUNT_QUOTA_BYTES must fit one maximum retained upload ({maximum_media_footprint} bytes)"
+                ),
+            ));
+        }
         if self.api.command.lock_timeout > Duration::from_millis(self.http.request_timeout_ms) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -491,6 +524,7 @@ impl RuntimeConfig {
             .workers
             .subject_erasure_idle_interval
             .max(self.scheduler.poll_interval)
+            .max(self.workers.media_reconciliation_interval)
             .max(
                 self.api
                     .auth
@@ -513,6 +547,14 @@ impl RuntimeConfig {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "worker readiness grace must exceed one bounded database acquire and statement",
+            ));
+        }
+        if Duration::from_secs(self.api.media.upload_lease_seconds as u64)
+            <= Duration::from_millis(self.http.request_timeout_ms)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "FMARCH_MEDIA_UPLOAD_LEASE_SECONDS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS",
             ));
         }
         if self.workers.shutdown_drain_timeout

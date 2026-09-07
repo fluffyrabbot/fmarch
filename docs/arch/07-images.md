@@ -152,7 +152,11 @@ Current implemented slice:
   Hosted startup requires typed `FMARCH_MEDIA_READ_MAX_IN_FLIGHT` and
   `FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES` values. A shared request semaphore bounds object-store
   fan-out, and byte permits conservatively cover the manifest plus requested member while they are
-  materialized; exhaustion fails fast as retryable admission rather than allocating or queueing.
+  materialized. Returned `Bytes` retain both permits through every clone until the response body is
+  released, so slow clients remain inside the same byte budget. Full member codec verification runs
+  on bounded blocking workers rather than Tokio executor threads. Exhaustion fails fast as retryable
+  admission rather than allocating or queueing, and the local proof adapter exercises the same
+  admission contract.
 - Server release builds have no filesystem media fallback. They require the S3 variables and fail
   startup when object-store construction is invalid. `FMARCH_MEDIA_ROOT` remains only as an
   explicit debug-build adapter; repo-owned local harnesses use it independently of their auth mode
@@ -168,16 +172,24 @@ Current implemented slice:
   Only a fully prepared upload reaches persistence; it atomically installs each immutable file and
   installs the variant manifest last, without claiming a filesystem-wide transaction for internal
   commit failures.
-- The per-account upload ledger is also the durable upload-operation journal. Preparation first
-  establishes the canonical identity without storage effects; a fresh row is then created directly
-  as the leased `pending:<content-id>` operation, eliminating the old unidentifiable `NULL` gap.
-  Only an installed immutable set advances it to the final content id.
-  Principal-scoped advisory serialization reaps expired reservations, replaces interrupted retries
-  for the same content, compacts prior duplicate final charges, and guarantees one quota charge per
-  principal/content pair. A crash or request cancellation therefore leaves only an expiring lease;
-  a retry converges on the same content-addressed objects and durable charge. The media CPU permit
-  moves into the blocking codec task, so cancelling its waiter cannot admit more codec work while
-  that uncancellable task is still running.
+- The per-account upload ledger is an explicit durable install saga. Preparation first establishes
+  the canonical identity and exact retained footprint (canonical raster, all six members, and the
+  manifest) without storage effects. The unique principal/content row then moves through
+  `installing`, `ready`, `reclaiming`, or `failed` under a token-fenced, database-time lease; quota
+  accounts retained bytes rather than caller compression and counts every non-failed operation.
+  The media capacity permit moves into blocking preparation and remains attached to the prepared
+  buffers through the final object-store await, so cancellation cannot detach memory-heavy work.
+- Object installation and database finalization deliberately converge as a saga rather than claim
+  cross-system atomicity. A commit-ambiguous storage error retains its journal evidence. Identical
+  retries take over only an expired lease and idempotently verify or finish immutable objects. A
+  required supervised reconciler gives an expired installer a second quarantine lease, then probes
+  the installed-last manifest: complete sets become `ready`; operations without a manifest become
+  `failed` and release quota, but their immutable fragments remain. A database lease cannot fence a
+  delayed object-store writer, so online deletion would risk publishing a manifest whose members
+  were concurrently removed. Content and principal advisory fences serialize journal and quota
+  transitions; a future garbage collector must use generation-scoped objects with an independently
+  fenced promotion before it may delete fragments. Journal rows are never blindly deleted, so
+  restart recovery remains auditable.
 - A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
   the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,
   format, MIME, dimensions, length, BLAKE3, and alpha flag—never paths or original bytes.

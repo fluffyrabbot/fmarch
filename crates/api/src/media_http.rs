@@ -6,7 +6,7 @@
 
 use super::auth_http::MethodAuthenticated;
 use super::game_http::require_channel_thread_access;
-use super::{acquire_workload_slot, unix_now_seconds, ApiError, ApiState};
+use super::{acquire_workload_slot, ApiError, ApiState};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
@@ -63,12 +63,10 @@ enum DeclaredUploadFormat {
     Jpeg,
 }
 
-const MEDIA_PENDING_PREFIX: &str = "pending:";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MediaQuotaClaim {
-    Pending,
-    AlreadyCharged,
+    InstallLease,
+    AlreadyReady,
 }
 
 async fn media_upload(
@@ -93,7 +91,6 @@ async fn media_upload(
     let store = state.media_store.clone();
     let variant_limits = state.variant_limits;
     let encoded = body.to_vec();
-    let encoded_bytes = encoded.len() as i64;
     let prepared = match store
         .prepare_upload_with_guard(encoded, variant_limits, media_permit)
         .await
@@ -102,35 +99,29 @@ async fn media_upload(
         Err(error) => return Err(media_api_error(error)),
     };
     let content_id = prepared.handle().id();
+    let stored_bytes = i64::try_from(prepared.stored_footprint_bytes()).map_err(|_| {
+        media_internal_error("prepared media footprint exceeds quota arithmetic".to_string())
+    })?;
     let (upload_id, quota_claim) = reserve_media_quota(
         &state.pool,
         state.media_account_quota_bytes,
         state.media_upload_lease_seconds,
         principal_id,
-        encoded_bytes,
+        stored_bytes,
         content_id,
-        unix_now_seconds(),
     )
     .await?;
-    let committed = match store.commit_prepared_upload(prepared).await {
+    let committed = match store.commit_guarded_prepared_upload(prepared).await {
         Ok(committed) => committed,
-        Err(error) => {
-            release_media_quota(&state.pool, upload_id).await;
-            return Err(media_api_error(error));
-        }
+        // Object-store failures are commit-ambiguous. The fenced journal lease is retained so an
+        // identical retry can verify/reuse immutable objects and converge instead of erasing the
+        // only recovery evidence.
+        Err(error) => return Err(media_api_error(error)),
     };
     let ingest = committed.ingest();
     let variants = committed.variants();
-    if quota_claim == MediaQuotaClaim::Pending {
-        complete_media_quota_content(
-            &state.pool,
-            upload_id,
-            principal_id,
-            content_id,
-            unix_now_seconds(),
-            state.media_upload_lease_seconds,
-        )
-        .await?;
+    if quota_claim == MediaQuotaClaim::InstallLease {
+        complete_media_quota_content(&state.pool, upload_id, principal_id, content_id).await?;
     }
 
     let response = MediaUploadResponse {
@@ -169,60 +160,86 @@ async fn reserve_media_quota(
     account_quota_bytes: i64,
     lease_seconds: i64,
     principal_id: PrincipalId,
-    encoded_bytes: i64,
+    stored_bytes: i64,
     content_id: ContentId,
-    now: i64,
 ) -> Result<(Uuid, MediaQuotaClaim), ApiError> {
     let upload_id = Uuid::new_v4();
     let mut tx = pool.begin().await?;
-    lock_media_quota(&mut tx, principal_id).await?;
-    reconcile_media_quota(&mut tx, principal_id, now.saturating_sub(lease_seconds)).await?;
     let content_id = content_id.to_string();
-    let existing = sqlx::query_scalar::<_, Uuid>(
-        "SELECT upload_id FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2 ORDER BY created_at, upload_id LIMIT 1",
+    lock_media_install(&mut tx, &content_id).await?;
+    lock_media_quota(&mut tx, principal_id).await?;
+    let now = database_now(&mut tx).await?;
+    let lease_expires_at = now.checked_add(lease_seconds).ok_or_else(|| {
+        media_internal_error("media upload lease deadline overflowed".to_string())
+    })?;
+    let existing = sqlx::query_as::<_, (Uuid, i64, String, Option<Uuid>, Option<i64>)>(
+        "SELECT upload_id, stored_bytes, state, lease_token, lease_expires_at FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2",
     )
     .bind(principal_id.as_uuid())
     .bind(&content_id)
     .fetch_optional(&mut *tx)
     .await?;
-    if existing.is_some() {
-        tx.commit().await?;
-        return Ok((upload_id, MediaQuotaClaim::AlreadyCharged));
+    if let Some((_, charged_bytes, state, _, expires_at)) = &existing {
+        if *charged_bytes != stored_bytes {
+            return Err(media_internal_error(
+                "media upload journal footprint is inconsistent".to_string(),
+            ));
+        }
+        if state == "ready" {
+            tx.commit().await?;
+            return Ok((upload_id, MediaQuotaClaim::AlreadyReady));
+        }
+        if matches!(state.as_str(), "installing" | "reclaiming")
+            && expires_at.is_some_and(|deadline| deadline > now)
+        {
+            return Err(ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message: "identical media is already being installed; retry shortly".to_string(),
+            });
+        }
     }
 
-    let pending_content_id = format!("{MEDIA_PENDING_PREFIX}{content_id}");
-    // Retrying identical bytes replaces the previous lease before accounting, so a crashed
-    // full-quota upload can resume immediately rather than waiting for expiry.
-    sqlx::query("DELETE FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2")
-        .bind(principal_id.as_uuid())
-        .bind(&pending_content_id)
-        .execute(&mut *tx)
-        .await?;
     let used = sqlx::query_scalar::<_, i64>(
-        "SELECT COALESCE(SUM(encoded_bytes), 0)::BIGINT FROM media_upload_ledger WHERE principal_id = $1",
+        "SELECT COALESCE(SUM(stored_bytes), 0)::BIGINT FROM media_upload_ledger WHERE principal_id = $1 AND state <> 'failed' AND content_id <> $2",
     )
     .bind(principal_id.as_uuid())
+    .bind(&content_id)
     .fetch_one(&mut *tx)
     .await?;
-    if used.saturating_add(encoded_bytes) > account_quota_bytes {
+    if used.saturating_add(stored_bytes) > account_quota_bytes {
         return Err(ApiError::Reject {
             status: StatusCode::PAYLOAD_TOO_LARGE,
             error: wire::RejectCode::NotAuthorized,
             message: "account media storage quota is exhausted".to_string(),
         });
     }
-    sqlx::query(
-        "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, $4, $5)",
-    )
-    .bind(upload_id)
-    .bind(principal_id.as_uuid())
-    .bind(encoded_bytes)
-    .bind(pending_content_id)
-    .bind(now)
-    .execute(&mut *tx)
-    .await?;
+    if existing.is_some() {
+        sqlx::query(
+            "UPDATE media_upload_ledger SET upload_id = $3, stored_bytes = $4, state = 'installing', lease_token = $3, lease_expires_at = $5, updated_at = $6 WHERE principal_id = $1 AND content_id = $2",
+        )
+        .bind(principal_id.as_uuid())
+        .bind(&content_id)
+        .bind(upload_id)
+        .bind(stored_bytes)
+        .bind(lease_expires_at)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            "INSERT INTO media_upload_ledger (upload_id, principal_id, stored_bytes, content_id, state, lease_token, lease_expires_at, created_at, updated_at) VALUES ($1, $2, $3, $4, 'installing', $1, $5, $6, $6)",
+        )
+        .bind(upload_id)
+        .bind(principal_id.as_uuid())
+        .bind(stored_bytes)
+        .bind(&content_id)
+        .bind(lease_expires_at)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+    }
     tx.commit().await?;
-    Ok((upload_id, MediaQuotaClaim::Pending))
+    Ok((upload_id, MediaQuotaClaim::InstallLease))
 }
 
 async fn complete_media_quota_content(
@@ -230,45 +247,35 @@ async fn complete_media_quota_content(
     upload_id: Uuid,
     principal_id: PrincipalId,
     content_id: ContentId,
-    now: i64,
-    lease_seconds: i64,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
-    lock_media_quota(&mut tx, principal_id).await?;
-    reconcile_media_quota(&mut tx, principal_id, now.saturating_sub(lease_seconds)).await?;
     let content_id = content_id.to_string();
-    let existing = sqlx::query_scalar::<_, Uuid>(
-        "SELECT upload_id FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2 ORDER BY created_at, upload_id LIMIT 1",
-    )
-    .bind(principal_id.as_uuid())
-    .bind(&content_id)
-    .fetch_optional(&mut *tx)
-    .await?;
-    if existing.is_some_and(|existing| existing != upload_id) {
-        sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
-            .bind(upload_id)
-            .execute(&mut *tx)
-            .await?;
-        tx.commit().await?;
-        return Ok(());
-    }
-    if existing == Some(upload_id) {
-        tx.commit().await?;
-        return Ok(());
-    }
-    let pending_content_id = format!("{MEDIA_PENDING_PREFIX}{content_id}");
+    lock_media_install(&mut tx, &content_id).await?;
+    lock_media_quota(&mut tx, principal_id).await?;
+    let now = database_now(&mut tx).await?;
     let updated = sqlx::query(
-        "UPDATE media_upload_ledger SET content_id = $2, created_at = $3 WHERE principal_id = $1 AND content_id = $4",
+        "UPDATE media_upload_ledger SET state = 'ready', lease_token = NULL, lease_expires_at = NULL, updated_at = $4 WHERE principal_id = $1 AND content_id = $2 AND upload_id = $3 AND lease_token = $3 AND state = 'installing'",
     )
     .bind(principal_id.as_uuid())
     .bind(&content_id)
+    .bind(upload_id)
     .bind(now)
-    .bind(&pending_content_id)
     .execute(&mut *tx)
     .await?;
-    if updated.rows_affected() != 1 {
+    if updated.rows_affected() == 0 {
+        let state = sqlx::query_scalar::<_, String>(
+            "SELECT state FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2",
+        )
+        .bind(principal_id.as_uuid())
+        .bind(&content_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if state.as_deref() == Some("ready") {
+            tx.commit().await?;
+            return Ok(());
+        }
         return Err(sqlx::Error::Protocol(
-            "media upload has no current lease to complete".to_string(),
+            "media upload has no matching install lease to complete".to_string(),
         ));
     }
     tx.commit().await?;
@@ -286,53 +293,224 @@ async fn lock_media_quota(
     Ok(())
 }
 
-async fn reconcile_media_quota(
+async fn lock_media_install(
     tx: &mut Transaction<'_, Postgres>,
-    principal_id: PrincipalId,
-    lease_cutoff: i64,
+    content_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "DELETE FROM media_upload_ledger WHERE principal_id = $1 AND created_at <= $2 AND (content_id IS NULL OR content_id LIKE 'pending:%')",
-    )
-    .bind(principal_id.as_uuid())
-    .bind(lease_cutoff)
-    .execute(&mut **tx)
-    .await?;
-    // Greenfield code now prevents duplicates; this compaction also converges any interrupted
-    // pre-cutover retries before quota is calculated.
-    sqlx::query(
-        r#"
-        WITH duplicate AS (
-          SELECT upload_id,
-                 ROW_NUMBER() OVER (PARTITION BY principal_id, content_id ORDER BY created_at, upload_id) AS ordinal
-          FROM media_upload_ledger
-          WHERE principal_id = $1
-            AND content_id IS NOT NULL
-            AND content_id NOT LIKE 'pending:%'
-        )
-        DELETE FROM media_upload_ledger AS ledger
-        USING duplicate
-        WHERE ledger.upload_id = duplicate.upload_id
-          AND duplicate.ordinal > 1
-        "#,
-    )
-    .bind(principal_id.as_uuid())
-    .execute(&mut **tx)
-    .await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("media-install:{content_id}"))
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
-async fn release_media_quota(pool: &PgPool, upload_id: Uuid) {
-    if sqlx::query(
-        "DELETE FROM media_upload_ledger WHERE upload_id = $1 AND (content_id IS NULL OR content_id LIKE 'pending:%')",
-    )
-        .bind(upload_id)
-        .execute(pool)
+async fn database_now(tx: &mut Transaction<'_, Postgres>) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+        .fetch_one(&mut **tx)
         .await
-        .is_err()
-    {
-        tracing::error!(%upload_id, "failed to release media quota reservation");
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MediaReconciliationReport {
+    pub examined: u64,
+    pub quarantined: u64,
+    pub restored_ready: u64,
+    pub retired: u64,
+    pub failures: u64,
+}
+
+impl MediaReconciliationReport {
+    pub fn completed(self) -> u64 {
+        self.restored_ready.saturating_add(self.retired)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MediaReconciliationClaim {
+    Quarantined,
+    Recover { lease_token: Uuid },
+}
+
+/// Advance expired upload operations through a two-lease recovery fence.
+///
+/// The first expired lease is only quarantined. A later pass probes the installed-last manifest;
+/// complete installs become ready, while operations without a manifest become failed and release
+/// quota. Immutable fragments are deliberately retained: a database lease cannot fence a delayed
+/// object-store writer, so online deletion could race that writer and corrupt a subsequently
+/// published manifest. The journal row is never deleted, keeping the ambiguous outcome auditable
+/// and allowing an identical retry to converge under a fresh fenced lease.
+pub async fn reconcile_media_uploads_once(
+    state: &ApiState,
+    batch_size: i64,
+) -> Result<MediaReconciliationReport, sqlx::Error> {
+    reconcile_media_uploads_with(
+        &state.pool,
+        &state.media_store,
+        state.variant_limits,
+        state.media_upload_lease_seconds,
+        batch_size,
+    )
+    .await
+}
+
+async fn reconcile_media_uploads_with(
+    pool: &PgPool,
+    store: &media::MediaRepository,
+    limits: media::VariantLimits,
+    lease_seconds: i64,
+    batch_size: i64,
+) -> Result<MediaReconciliationReport, sqlx::Error> {
+    let candidates = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT content_id
+        FROM media_upload_ledger
+        WHERE state IN ('installing', 'reclaiming')
+          AND lease_expires_at <= floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT
+        GROUP BY content_id
+        ORDER BY MIN(lease_expires_at), content_id
+        LIMIT $1
+        "#,
+    )
+    .bind(batch_size)
+    .fetch_all(pool)
+    .await?;
+    let mut report = MediaReconciliationReport::default();
+    for content_id in candidates {
+        report.examined = report.examined.saturating_add(1);
+        let Some(claim) = claim_media_reconciliation(pool, &content_id, lease_seconds).await?
+        else {
+            continue;
+        };
+        match claim {
+            MediaReconciliationClaim::Quarantined => {
+                report.quarantined = report.quarantined.saturating_add(1);
+            }
+            MediaReconciliationClaim::Recover { lease_token } => {
+                let id = match content_id.parse::<ContentId>() {
+                    Ok(id) => id,
+                    Err(_) => {
+                        report.failures = report.failures.saturating_add(1);
+                        tracing::error!(
+                            event = "media_reconciliation_invalid_content_id",
+                            "media reconciliation journal contains an invalid content identity"
+                        );
+                        continue;
+                    }
+                };
+                match store.probe_installed_manifest(id, limits).await {
+                    Ok(Some(_)) => {
+                        if finish_media_reconciliation(pool, &content_id, lease_token, "ready")
+                            .await?
+                        {
+                            report.restored_ready = report.restored_ready.saturating_add(1);
+                        }
+                    }
+                    Ok(None) => {
+                        if finish_media_reconciliation(pool, &content_id, lease_token, "failed")
+                            .await?
+                        {
+                            report.retired = report.retired.saturating_add(1);
+                        }
+                    }
+                    Err(_) => {
+                        report.failures = report.failures.saturating_add(1);
+                        tracing::error!(
+                            event = "media_reconciliation_probe_failed",
+                            %content_id,
+                            "media reconciliation could not classify an expired install"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(report)
+}
+
+async fn claim_media_reconciliation(
+    pool: &PgPool,
+    content_id: &str,
+    lease_seconds: i64,
+) -> Result<Option<MediaReconciliationClaim>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    lock_media_install(&mut tx, content_id).await?;
+    let now = database_now(&mut tx).await?;
+    let states = sqlx::query_as::<_, (String, Option<i64>)>(
+        "SELECT state, lease_expires_at FROM media_upload_ledger WHERE content_id = $1 FOR UPDATE",
+    )
+    .bind(content_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    if states.iter().any(|(state, expires_at)| {
+        matches!(state.as_str(), "installing" | "reclaiming")
+            && expires_at.is_some_and(|deadline| deadline > now)
+    }) {
+        tx.commit().await?;
+        return Ok(None);
+    }
+    let has_installing = states.iter().any(|(state, _)| state == "installing");
+    let has_reclaiming = states.iter().any(|(state, _)| state == "reclaiming");
+    if !has_installing && !has_reclaiming {
+        tx.commit().await?;
+        return Ok(None);
+    }
+    let lease_token = Uuid::new_v4();
+    let lease_expires_at = now.checked_add(lease_seconds).ok_or_else(|| {
+        sqlx::Error::Protocol("media reconciliation lease deadline overflowed".to_string())
+    })?;
+    sqlx::query(
+        "UPDATE media_upload_ledger SET state = 'reclaiming', lease_token = $2, lease_expires_at = $3, updated_at = $4 WHERE content_id = $1 AND state IN ('installing', 'reclaiming')",
+    )
+    .bind(content_id)
+    .bind(lease_token)
+    .bind(lease_expires_at)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Some(if has_installing {
+        MediaReconciliationClaim::Quarantined
+    } else {
+        MediaReconciliationClaim::Recover { lease_token }
+    }))
+}
+
+async fn finish_media_reconciliation(
+    pool: &PgPool,
+    content_id: &str,
+    lease_token: Uuid,
+    terminal_state: &'static str,
+) -> Result<bool, sqlx::Error> {
+    debug_assert!(matches!(terminal_state, "ready" | "failed"));
+    let mut tx = pool.begin().await?;
+    lock_media_install(&mut tx, content_id).await?;
+    if terminal_state == "failed" {
+        let principals = sqlx::query_scalar::<_, Uuid>(
+            "SELECT principal_id FROM media_upload_ledger WHERE content_id = $1 AND state = 'reclaiming' AND lease_token = $2 ORDER BY principal_id FOR UPDATE",
+        )
+        .bind(content_id)
+        .bind(lease_token)
+        .fetch_all(&mut *tx)
+        .await?;
+        for principal_id in principals {
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+                .bind(format!("media-quota:{principal_id}"))
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
+    let now = database_now(&mut tx).await?;
+    let updated = sqlx::query(
+        "UPDATE media_upload_ledger SET state = $3, lease_token = NULL, lease_expires_at = NULL, updated_at = $4 WHERE content_id = $1 AND state = 'reclaiming' AND lease_token = $2",
+    )
+    .bind(content_id)
+    .bind(lease_token)
+    .bind(terminal_state)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(updated.rows_affected() > 0)
 }
 
 fn declared_upload_format(headers: &HeaderMap) -> Result<DeclaredUploadFormat, ApiError> {
@@ -383,6 +561,12 @@ fn media_api_error(error: MediaError) -> ApiError {
             StatusCode::UNPROCESSABLE_ENTITY,
             "media cannot be processed within configured limits",
         ),
+        MediaError::ObjectStore { .. } | MediaError::ReadCapacityExhausted { .. } => {
+            ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message: "media storage is temporarily unavailable; retry shortly".to_string(),
+            }
+        }
         _ => {
             tracing::error!("media upload preparation failed");
             media_internal_error("media upload preparation failed".to_string())
@@ -524,10 +708,13 @@ async fn media_thread_variant(
 }
 
 fn media_lookup_error(error: MediaError) -> ApiError {
-    if matches!(error, MediaError::ReadCapacityExhausted { .. }) {
+    if matches!(
+        error,
+        MediaError::ReadCapacityExhausted { .. } | MediaError::ObjectStore { .. }
+    ) {
         return ApiError::Unavailable {
             retry_after_seconds: 1,
-            message: "media read capacity is exhausted; retry shortly".to_string(),
+            message: "media storage is temporarily unavailable; retry shortly".to_string(),
         };
     }
     let _ = error;
@@ -620,104 +807,159 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../database_schema/migrations")]
-    async fn quota_reservation_reaps_crash_leases_and_compacts_duplicate_charges(pool: PgPool) {
-        let principal_id = PrincipalId::fixture("media-quota-reconcile");
+    async fn expired_install_evidence_remains_quota_bearing_until_recovered(pool: PgPool) {
+        let principal_id = PrincipalId::fixture("media-quota-recovery");
         insert_principal(&pool, principal_id).await;
-        let content_id = ContentId::from_bytes([7; 32]).to_string();
-        for (upload_id, bytes, content_id, created_at) in [
-            (Uuid::new_v4(), 80_i64, None, 10_i64),
-            (
-                Uuid::new_v4(),
-                80,
-                Some(format!(
-                    "{MEDIA_PENDING_PREFIX}{}",
-                    ContentId::from_bytes([8; 32])
-                )),
-                10,
-            ),
-            (Uuid::new_v4(), 20, Some(content_id.clone()), 20),
-            (Uuid::new_v4(), 20, Some(content_id.clone()), 21),
-        ] {
-            sqlx::query(
-                "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, $4, $5)",
-            )
-            .bind(upload_id)
-            .bind(principal_id.as_uuid())
-            .bind(bytes)
-            .bind(content_id)
-            .bind(created_at)
+        let first_content = ContentId::from_bytes([7; 32]);
+        let second_content = ContentId::from_bytes([8; 32]);
+        let (first_upload, first_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 70, first_content)
+                .await
+                .unwrap();
+        assert_eq!(first_claim, MediaQuotaClaim::InstallLease);
+        sqlx::query("UPDATE media_upload_ledger SET lease_expires_at = 0 WHERE upload_id = $1")
+            .bind(first_upload)
             .execute(&pool)
             .await
             .unwrap();
-        }
 
-        let reservation_content = ContentId::from_bytes([10; 32]);
-        reserve_media_quota(&pool, 100, 60, principal_id, 70, reservation_content, 100)
+        assert!(matches!(
+            reserve_media_quota(&pool, 100, 60, principal_id, 40, second_content).await,
+            Err(ApiError::Reject {
+                status: StatusCode::PAYLOAD_TOO_LARGE,
+                ..
+            })
+        ));
+        let (replacement, replacement_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 70, first_content)
+                .await
+                .unwrap();
+        assert_ne!(replacement, first_upload);
+        assert_eq!(replacement_claim, MediaQuotaClaim::InstallLease);
+        complete_media_quota_content(&pool, replacement, principal_id, first_content)
             .await
             .unwrap();
-        let rows = sqlx::query_as::<_, (i64, Option<String>)>(
-            "SELECT encoded_bytes, content_id FROM media_upload_ledger WHERE principal_id = $1 ORDER BY created_at, upload_id",
+
+        let row = sqlx::query_as::<_, (i64, String, Option<Uuid>, Option<i64>)>(
+            "SELECT stored_bytes, state, lease_token, lease_expires_at FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2",
         )
         .bind(principal_id.as_uuid())
-        .fetch_all(&pool)
+        .bind(first_content.to_string())
+        .fetch_one(&pool)
         .await
         .unwrap();
-        let reservation_pending = format!("{MEDIA_PENDING_PREFIX}{reservation_content}");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows.iter().map(|row| row.0).sum::<i64>(), 90);
-        assert_eq!(
-            rows.iter()
-                .filter(|row| row.1.as_deref() == Some(reservation_pending.as_str()))
-                .count(),
-            1
-        );
-        assert_eq!(
-            rows.iter()
-                .filter(|row| row.1.as_deref() == Some(content_id.as_str()))
-                .count(),
-            1
-        );
+        assert_eq!(row, (70, "ready".to_string(), None, None));
     }
 
     #[sqlx::test(migrations = "../database_schema/migrations")]
-    async fn same_principal_content_has_one_convergent_charge_across_retries(pool: PgPool) {
+    async fn same_principal_content_has_one_fenced_charge_across_retries(pool: PgPool) {
         let principal_id = PrincipalId::fixture("media-quota-retry");
         insert_principal(&pool, principal_id).await;
         let content_id = ContentId::from_bytes([9; 32]);
 
         let (abandoned, first_claim) =
-            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_000)
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id)
                 .await
                 .unwrap();
-        assert_eq!(first_claim, MediaQuotaClaim::Pending);
-
-        let (retry, retry_claim) =
-            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_002)
-                .await
-                .unwrap();
-        assert_eq!(retry_claim, MediaQuotaClaim::Pending);
-        // The superseded installer can finish the current content lease because immutable object
-        // identity proves that both attempts installed the same bytes.
-        complete_media_quota_content(&pool, abandoned, principal_id, content_id, 1_004, 60)
+        assert_eq!(first_claim, MediaQuotaClaim::InstallLease);
+        assert!(matches!(
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id).await,
+            Err(ApiError::Unavailable { .. })
+        ));
+        sqlx::query("UPDATE media_upload_ledger SET lease_expires_at = 0 WHERE upload_id = $1")
+            .bind(abandoned)
+            .execute(&pool)
             .await
             .unwrap();
-        complete_media_quota_content(&pool, retry, principal_id, content_id, 1_005, 60)
+
+        let (retry, retry_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id)
+                .await
+                .unwrap();
+        assert_eq!(retry_claim, MediaQuotaClaim::InstallLease);
+        assert!(
+            complete_media_quota_content(&pool, abandoned, principal_id, content_id)
+                .await
+                .is_err()
+        );
+        complete_media_quota_content(&pool, retry, principal_id, content_id)
             .await
             .unwrap();
 
         let (_repeated, repeated_claim) =
-            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_006)
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id)
                 .await
                 .unwrap();
-        assert_eq!(repeated_claim, MediaQuotaClaim::AlreadyCharged);
+        assert_eq!(repeated_claim, MediaQuotaClaim::AlreadyReady);
 
         let rows = sqlx::query_as::<_, (Uuid, i64, String)>(
-            "SELECT upload_id, encoded_bytes, content_id FROM media_upload_ledger WHERE principal_id = $1",
+            "SELECT upload_id, stored_bytes, content_id FROM media_upload_ledger WHERE principal_id = $1",
         )
         .bind(principal_id.as_uuid())
         .fetch_all(&pool)
         .await
         .unwrap();
         assert_eq!(rows, vec![(retry, 100, content_id.to_string())]);
+    }
+
+    #[sqlx::test(migrations = "../database_schema/migrations")]
+    async fn reconciliation_quarantines_before_retiring_an_incomplete_install(pool: PgPool) {
+        let principal_id = PrincipalId::fixture("media-reconciliation");
+        insert_principal(&pool, principal_id).await;
+        let content_id = ContentId::from_bytes([11; 32]);
+        let upload_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO media_upload_ledger (upload_id, principal_id, stored_bytes, content_id, state, lease_token, lease_expires_at, created_at, updated_at) VALUES ($1, $2, 10, $3, 'installing', $1, 0, 0, 0)",
+        )
+        .bind(upload_id)
+        .bind(principal_id.as_uuid())
+        .bind(content_id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let store = media::MediaRepository::in_memory(
+            media::MediaLimits::default(),
+            media::MediaReadLimits::default(),
+        )
+        .unwrap();
+
+        let quarantined =
+            reconcile_media_uploads_with(&pool, &store, media::VariantLimits::default(), 60, 10)
+                .await
+                .unwrap();
+        assert_eq!(quarantined.quarantined, 1);
+        assert_eq!(quarantined.retired, 0);
+        assert_eq!(
+            sqlx::query_scalar::<_, String>(
+                "SELECT state FROM media_upload_ledger WHERE upload_id = $1",
+            )
+            .bind(upload_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            "reclaiming"
+        );
+
+        sqlx::query("UPDATE media_upload_ledger SET lease_expires_at = 0 WHERE upload_id = $1")
+            .bind(upload_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let retired =
+            reconcile_media_uploads_with(&pool, &store, media::VariantLimits::default(), 60, 10)
+                .await
+                .unwrap();
+        assert_eq!(retired.retired, 1);
+        assert_eq!(retired.failures, 0);
+        assert_eq!(
+            sqlx::query_as::<_, (String, Option<Uuid>, Option<i64>)>(
+                "SELECT state, lease_token, lease_expires_at FROM media_upload_ledger WHERE upload_id = $1",
+            )
+            .bind(upload_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            ("failed".to_string(), None, None)
+        );
     }
 }

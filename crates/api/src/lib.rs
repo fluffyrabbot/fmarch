@@ -38,7 +38,10 @@ pub use game_http::{
     PlayerDayEventAttention, PlayerVoteTarget,
 };
 pub use live_delivery::WebsocketTicketResponse;
-pub use media_http::{MediaUploadResponse, MediaUploadVariant};
+pub use media_http::{
+    reconcile_media_uploads_once, MediaReconciliationReport, MediaUploadResponse,
+    MediaUploadVariant,
+};
 pub use runtime_config::{
     ApiRuntimeConfig, ApiRuntimeConfigError, AuthBudget, AuthorityBudget, CommandBudget,
     MediaBudget, WebSocketBudget,
@@ -117,10 +120,25 @@ impl ApiState {
         let live_delivery_transaction_limit = runtime.websocket.delivery_max_in_flight;
         let auth = AuthHttpState::new(pool.clone(), &runtime.auth, &runtime.websocket);
         let live_event_wake = GameEventWakeHub::new();
+        let media_store = media_store.into();
+        let variant_limits = runtime.media.variant_limits;
+        let maximum_stored_footprint = media_store
+            .limits()
+            .maximum_stored_footprint_bytes(variant_limits)
+            .map_err(|error| {
+                ApiRuntimeConfigError(format!("invalid media storage policy: {error}"))
+            })?;
+        if u64::try_from(runtime.media.account_quota_bytes)
+            .map_or(true, |quota| quota < maximum_stored_footprint)
+        {
+            return Err(ApiRuntimeConfigError(format!(
+                "media account quota must fit one maximum retained upload ({maximum_stored_footprint} bytes)"
+            )));
+        }
         Ok(ApiState {
             pool,
             auth,
-            media_store: media_store.into(),
+            media_store,
             subject_key_store: if cfg!(debug_assertions) {
                 FilesystemSubjectKeyStore::from_environment()
                     .ok()
@@ -128,7 +146,7 @@ impl ApiState {
             } else {
                 None
             },
-            variant_limits: VariantLimits::default(),
+            variant_limits,
             server_name: "fmarch-dev".to_string(),
             live_projection: LiveProjectionPublisher::new(runtime.websocket.projection_capacity),
             live_projection_delivery_delay: runtime.websocket.projection_delivery_delay,
@@ -193,11 +211,6 @@ impl ApiState {
     pub fn without_local_proof_auth(mut self) -> Self {
         self.auth.local_proof_auth = None;
         self.auth.session_policy = self.auth.session_policy.without_local_proof_instance();
-        self
-    }
-
-    pub fn with_variant_limits(mut self, limits: VariantLimits) -> Self {
-        self.variant_limits = limits;
         self
     }
 

@@ -549,51 +549,6 @@ impl MediaStore {
         Ok(Some(snapshot.set))
     }
 
-    /// Delete only fixed-layout objects from an installation that has no completeness manifest.
-    /// The caller must hold the repository's exclusive installation/recovery lease for `id`.
-    pub(crate) fn reclaim_incomplete_upload(&self, id: ContentId) -> Result<(), MediaError> {
-        let Some(id_directory) = self.open_id_directory(id, false)? else {
-            return Ok(());
-        };
-        if let Some(recipe_directory) = self.open_recipe_directory(id, &id_directory, false)? {
-            self.ensure_manifest_absent(id, &recipe_directory)?;
-            for format in VariantFormat::ALL {
-                let Some(format_directory) =
-                    self.open_format_directory(id, &recipe_directory, format, false)?
-                else {
-                    continue;
-                };
-                for kind in VariantKind::ALL {
-                    self.ensure_manifest_absent(id, &recipe_directory)?;
-                    let path = self
-                        .recipe_path(id)
-                        .join(format.component())
-                        .join(kind.component());
-                    if let Some(file) =
-                        open_regular_file(&format_directory, kind.component(), &path)?
-                    {
-                        verify_attached_entry(&format_directory, kind.component(), &file, &path)?;
-                        format_directory.remove_file(kind.component())?;
-                        sync_dir(&format_directory)?;
-                    }
-                }
-                self.verify_format_attached(id, &recipe_directory, format, &format_directory)?;
-            }
-            self.ensure_manifest_absent(id, &recipe_directory)?;
-            self.verify_recipe_attached(id, &id_directory, &recipe_directory)?;
-        }
-
-        let original_path = self.id_path(id).join("orig");
-        if let Some(file) = open_regular_file(&id_directory, "orig", &original_path)? {
-            verify_attached_entry(&id_directory, "orig", &file, &original_path)?;
-            id_directory.remove_file("orig")?;
-            sync_dir(&id_directory)?;
-        }
-        self.verify_id_attached(id, &id_directory)?;
-        self.verify_store_attached()?;
-        Ok(())
-    }
-
     fn lookup_variant_snapshot_with_hook<F>(
         &self,
         id: ContentId,
@@ -892,18 +847,6 @@ impl MediaStore {
         self.verify_recipe_attached(id, &id_directory, &recipe_directory)
     }
 
-    fn ensure_manifest_absent(
-        &self,
-        id: ContentId,
-        recipe_directory: &Dir,
-    ) -> Result<(), MediaError> {
-        let path = self.recipe_path(id).join(MANIFEST_NAME);
-        if open_regular_file(recipe_directory, MANIFEST_NAME, &path)?.is_some() {
-            return Err(MediaError::InstalledMediaCannotBeReclaimed { id });
-        }
-        Ok(())
-    }
-
     fn recipe_path(&self, id: ContentId) -> PathBuf {
         self.id_path(id).join(VARIANT_RECIPE_REVISION)
     }
@@ -1186,19 +1129,6 @@ pub(crate) fn validate_manifest_policy(
         }
     }
     Ok(())
-}
-
-pub(crate) fn fixed_variant_keys(id: ContentId) -> Vec<VariantKey> {
-    VariantFormat::ALL
-        .into_iter()
-        .flat_map(|format| {
-            VariantKind::ALL.into_iter().map(move |kind| VariantKey {
-                source: id,
-                format,
-                kind,
-            })
-        })
-        .collect()
 }
 
 fn resize_premultiplied(

@@ -34,6 +34,7 @@ pub struct MediaBudget {
     pub account_quota_bytes: i64,
     pub upload_lease_seconds: i64,
     pub read_limits: media::MediaReadLimits,
+    pub variant_limits: media::VariantLimits,
 }
 
 #[derive(Clone)]
@@ -191,9 +192,9 @@ impl ApiRuntimeConfig {
                 "WebSocket audience must not be empty".to_string(),
             ));
         }
-        if self.media.account_quota_bytes < 12 * 1024 * 1024 {
+        if self.media.account_quota_bytes <= 0 {
             return Err(ApiRuntimeConfigError(
-                "media account quota must fit one maximum canonical upload".to_string(),
+                "media account quota must be positive".to_string(),
             ));
         }
         if !(60..=24 * 60 * 60).contains(&self.media.upload_lease_seconds) {
@@ -201,6 +202,14 @@ impl ApiRuntimeConfig {
                 "media upload lease must be between one minute and one day".to_string(),
             ));
         }
+        self.media
+            .read_limits
+            .validate_for_variants(self.media.variant_limits)
+            .map_err(|error| {
+                ApiRuntimeConfigError(format!(
+                    "media read capacity does not cover the variant policy: {error}"
+                ))
+            })?;
         if self.auth.rate_limit_retention_seconds
             < self
                 .auth
@@ -247,6 +256,7 @@ impl Default for ApiRuntimeConfig {
                 account_quota_bytes: 256 * 1024 * 1024,
                 upload_lease_seconds: 15 * 60,
                 read_limits: media::MediaReadLimits::default(),
+                variant_limits: media::VariantLimits::default(),
             },
             auth: AuthBudget {
                 identity_delivery_worker_config: IdentityDeliveryWorkerConfig::default(),

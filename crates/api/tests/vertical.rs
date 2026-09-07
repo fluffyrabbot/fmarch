@@ -1454,8 +1454,7 @@ async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::
     let app = api::router_with_state(
         ApiState::new(pool, store.clone(), api::ApiRuntimeConfig::default())
             .unwrap()
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_variant_limits(VariantLimits::default()),
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (token, _) = create_media_upload_account_session(&app, "authorized").await;
     let png = media_upload_png(3, 2);
@@ -1605,11 +1604,12 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     let variant_root = tempfile::tempdir().unwrap();
     let variant_store = MediaStore::open(variant_root.path(), MediaLimits::default()).unwrap();
     let variant_limits = VariantLimits::new(2_560, 2_560, 6_553_600, 8, 48).unwrap();
+    let mut variant_runtime = api::ApiRuntimeConfig::default();
+    variant_runtime.media.variant_limits = variant_limits;
     let variant_app = api::router_with_state(
-        ApiState::new(pool, variant_store, api::ApiRuntimeConfig::default())
+        ApiState::new(pool, variant_store, variant_runtime)
             .unwrap()
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_variant_limits(variant_limits),
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (variant_token, _) =
         create_media_upload_account_session(&variant_app, "variant-limit").await;

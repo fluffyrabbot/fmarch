@@ -476,14 +476,25 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
 
 enum PostMediaPreparationError {
     Invalid,
-    Store,
+    Store(media::MediaError),
     Invariant,
+}
+
+enum CommandPreparationError {
+    Reject(commands::Reject),
+    Unavailable,
+}
+
+impl From<commands::Reject> for CommandPreparationError {
+    fn from(reject: commands::Reject) -> Self {
+        Self::Reject(reject)
+    }
 }
 
 async fn prepare_wire_command(
     state: &CommandHttpState,
     command: wire::Command,
-) -> Result<commands::Command, commands::Reject> {
+) -> Result<commands::Command, CommandPreparationError> {
     let command = match command.into_dispatch() {
         wire::CommandDispatch::Direct(command) => command,
         wire::CommandDispatch::AttachDayProgram { game, program_ref } => {
@@ -500,7 +511,9 @@ async fn prepare_wire_command(
         }
     };
     let command = prepare_command_media(state, command).await?;
-    prepare_command_embed(state, command).await
+    prepare_command_embed(state, command)
+        .await
+        .map_err(CommandPreparationError::Reject)
 }
 
 async fn prepare_command_embed(
@@ -532,7 +545,7 @@ async fn prepare_command_embed(
 async fn prepare_command_media(
     state: &CommandHttpState,
     mut command: commands::Command,
-) -> Result<commands::Command, commands::Reject> {
+) -> Result<commands::Command, CommandPreparationError> {
     let media = match &mut command {
         commands::Command::SubmitPost { media, .. }
         | commands::Command::PublishSpectatorPost { media, .. } => media,
@@ -542,7 +555,7 @@ async fn prepare_command_media(
         return Ok(command);
     }
     if media.len() > 4 {
-        return Err(commands::Reject::InvalidTarget);
+        return Err(commands::Reject::InvalidTarget.into());
     }
     let requested = std::mem::take(media);
     let limits = state.variant_limits;
@@ -564,7 +577,7 @@ async fn prepare_command_media(
                 .media_store
                 .lookup_variant_set(id, limits)
                 .await
-                .map_err(|_| PostMediaPreparationError::Store)?
+                .map_err(PostMediaPreparationError::Store)?
                 .ok_or(PostMediaPreparationError::Invalid)?;
             let mut dimensions = BTreeMap::<String, (u32, u32, usize)>::new();
             for record in set.variants() {
@@ -604,14 +617,24 @@ async fn prepare_command_media(
         }
         .await;
         result.map_err(|error| match error {
-            PostMediaPreparationError::Invalid => commands::Reject::InvalidTarget,
-            PostMediaPreparationError::Store => {
+            PostMediaPreparationError::Invalid => {
+                CommandPreparationError::Reject(commands::Reject::InvalidTarget)
+            }
+            PostMediaPreparationError::Store(
+                media::MediaError::ReadCapacityExhausted { .. }
+                | media::MediaError::ObjectStore { .. },
+            ) => CommandPreparationError::Unavailable,
+            PostMediaPreparationError::Store(_) => {
                 tracing::error!("post media lookup failed");
-                commands::Reject::Internal("post media lookup failed".to_string())
+                CommandPreparationError::Reject(commands::Reject::Internal(
+                    "post media lookup failed".to_string(),
+                ))
             }
             PostMediaPreparationError::Invariant => {
                 tracing::error!("post media invariant failed");
-                commands::Reject::Internal("post media lookup failed".to_string())
+                CommandPreparationError::Reject(commands::Reject::Internal(
+                    "post media lookup failed".to_string(),
+                ))
             }
         })?;
     }
@@ -675,7 +698,18 @@ async fn command(
     };
     let prepared_command = prepare_wire_command(&state, msg.command).await;
     let body = match prepared_command {
-        Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+        Err(CommandPreparationError::Reject(reject)) => ServerMsg::Reject(RejectMsg::from(reject)),
+        Err(CommandPreparationError::Unavailable) => {
+            return command_api_error_response(
+                envelope.id,
+                ApiError::Unavailable {
+                    retry_after_seconds: 1,
+                    message:
+                        "media storage is temporarily unavailable; retry the exact same command_id"
+                            .to_string(),
+                },
+            );
+        }
         Ok(command) => {
             let _inflight = state.live_projection.inflight_guard(classified.game);
             match AuthorizedCommandCommit::new(
