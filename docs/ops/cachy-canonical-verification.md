@@ -163,3 +163,12 @@ This read-only gate does not deploy, sign in, issue commands, or claim authentic
 identity/durability, real-device, or release readiness. Those require the existing
 real hosted matrix capture and operator acceptance; imported fixture contracts
 cannot substitute for them.
+
+### LTS requalification after writeback errors
+
+The 2026-09-07 forced audit exposed repeated Btrfs writeback errors on kernel
+7.2.3 for a generated fmarch executable. The interrupted run is not passing
+evidence. Requalification uses installed kernel 6.18.48-cachyos-lts and a fresh
+`fmarch-canonical-lts-v1` build/database root; the previous root is retained for
+diagnosis. A kernel change invalidates proof environment identity. Use the
+forced remote audit before accepting this new environment.

@@ -3,12 +3,12 @@
   "profiles": {
     "linux": {
       "environment": {
-        "FMARCH_EXTERNAL_BUILD_ROOT": "${FLEET_CACHE_ROOT}/fmarch-canonical-v1",
+        "FMARCH_EXTERNAL_BUILD_ROOT": "${FLEET_CACHE_ROOT}/fmarch-canonical-lts-v1",
         "FMARCH_PROOF_TOOLCHAIN_ROOT": "${FLEET_CACHE_ROOT}/fmarch-toolchain",
         "CARGO_BUILD_JOBS": "2"
       },
       "writableDirectories": [
-        "${FLEET_CACHE_ROOT}/fmarch-canonical-v1",
+        "${FLEET_CACHE_ROOT}/fmarch-canonical-lts-v1",
         "${FLEET_CACHE_ROOT}/fmarch-toolchain"
       ],
       "fingerprint": [
