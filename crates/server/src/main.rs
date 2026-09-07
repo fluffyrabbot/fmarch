@@ -408,15 +408,15 @@ impl RuntimeConfig {
             )?),
             media_reconciliation_timeout: Duration::from_millis(bounded_env(
                 "FMARCH_MEDIA_RECONCILIATION_TIMEOUT_MS",
-                5_000,
+                2_000,
                 100,
                 300_000,
             )?),
             media_reconciliation_batch_size: bounded_env(
                 "FMARCH_MEDIA_RECONCILIATION_BATCH_SIZE",
-                32,
                 1,
-                1_024,
+                1,
+                32,
             )? as i64,
             worker_restart_backoff: Duration::from_millis(bounded_env(
                 "FMARCH_WORKER_RESTART_BACKOFF_MS",
@@ -527,6 +527,23 @@ impl RuntimeConfig {
                 "FMARCH_COMMAND_LOCK_TIMEOUT_MS must not exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS",
             ));
         }
+        let reconciliation_batch_timeout = self
+            .workers
+            .media_reconciliation_timeout
+            .checked_mul(
+                u32::try_from(self.workers.media_reconciliation_batch_size).map_err(|_| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "media reconciliation batch size does not fit deadline arithmetic",
+                    )
+                })?,
+            )
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "media reconciliation batch deadline overflowed",
+                )
+            })?;
         let longest_heartbeat_gap = self
             .workers
             .subject_erasure_idle_interval
@@ -534,7 +551,7 @@ impl RuntimeConfig {
             .max(
                 self.workers
                     .media_reconciliation_interval
-                    .saturating_add(self.workers.media_reconciliation_timeout),
+                    .saturating_add(reconciliation_batch_timeout),
             )
             .max(
                 self.api
@@ -560,10 +577,10 @@ impl RuntimeConfig {
                 "worker readiness grace must exceed one bounded database acquire and statement",
             ));
         }
-        if self.workers.readiness_grace <= self.workers.media_reconciliation_timeout {
+        if self.workers.readiness_grace <= reconciliation_batch_timeout {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "worker readiness grace must exceed the media reconciliation timeout",
+                "worker readiness grace must exceed one media reconciliation batch deadline",
             ));
         }
         if Duration::from_secs(self.api.media.upload_lease_seconds as u64)

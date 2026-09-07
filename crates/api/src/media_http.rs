@@ -21,6 +21,7 @@ use media::{
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
+use std::time::Duration;
 use uuid::Uuid;
 
 pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
@@ -342,6 +343,7 @@ enum MediaReconciliationClaim {
 pub async fn reconcile_media_uploads_once(
     state: &ApiState,
     batch_size: i64,
+    probe_timeout: Duration,
 ) -> Result<MediaReconciliationReport, sqlx::Error> {
     reconcile_media_uploads_with(
         &state.pool,
@@ -349,6 +351,7 @@ pub async fn reconcile_media_uploads_once(
         state.variant_limits,
         state.media_upload_lease_seconds,
         batch_size,
+        probe_timeout,
     )
     .await
 }
@@ -359,6 +362,7 @@ async fn reconcile_media_uploads_with(
     limits: media::VariantLimits,
     lease_seconds: i64,
     batch_size: i64,
+    probe_timeout: Duration,
 ) -> Result<MediaReconciliationReport, sqlx::Error> {
     let candidates = sqlx::query_scalar::<_, String>(
         r#"
@@ -397,26 +401,40 @@ async fn reconcile_media_uploads_with(
                         continue;
                     }
                 };
-                match store.probe_installed_manifest(id, limits).await {
-                    Ok(Some(_)) => {
+                match tokio::time::timeout(
+                    probe_timeout,
+                    store.probe_installed_manifest(id, limits),
+                )
+                .await
+                {
+                    Ok(Ok(Some(_))) => {
                         if finish_media_reconciliation(pool, &content_id, lease_token, "ready")
                             .await?
                         {
                             report.restored_ready = report.restored_ready.saturating_add(1);
                         }
                     }
-                    Ok(None) => {
+                    Ok(Ok(None)) => {
                         // Keep the second lease and its quota charge. The original object-store
                         // writer may still publish the installed-last manifest after this probe;
                         // its token cannot be fenced by PostgreSQL once the remote request exists.
                         report.deferred = report.deferred.saturating_add(1);
                     }
-                    Err(_) => {
+                    Ok(Err(_)) => {
                         report.failures = report.failures.saturating_add(1);
                         tracing::error!(
                             event = "media_reconciliation_probe_failed",
                             %content_id,
                             "media reconciliation could not classify an expired install"
+                        );
+                    }
+                    Err(_) => {
+                        report.failures = report.failures.saturating_add(1);
+                        tracing::error!(
+                            event = "media_reconciliation_probe_timed_out",
+                            %content_id,
+                            timeout_ms = probe_timeout.as_millis(),
+                            "media reconciliation manifest probe exceeded its deadline"
                         );
                     }
                 }
@@ -922,10 +940,16 @@ mod tests {
         )
         .unwrap();
 
-        let quarantined =
-            reconcile_media_uploads_with(&pool, &store, media::VariantLimits::default(), 60, 10)
-                .await
-                .unwrap();
+        let quarantined = reconcile_media_uploads_with(
+            &pool,
+            &store,
+            media::VariantLimits::default(),
+            60,
+            10,
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
         assert_eq!(quarantined.quarantined, 1);
         assert_eq!(quarantined.deferred, 0);
         assert_eq!(
@@ -944,10 +968,16 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        let deferred =
-            reconcile_media_uploads_with(&pool, &store, media::VariantLimits::default(), 60, 10)
-                .await
-                .unwrap();
+        let deferred = reconcile_media_uploads_with(
+            &pool,
+            &store,
+            media::VariantLimits::default(),
+            60,
+            10,
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
         assert_eq!(deferred.deferred, 1);
         assert_eq!(deferred.failures, 0);
         let (state, lease_token, lease_expires_at) =

@@ -9262,12 +9262,17 @@ async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(poo
     });
     gateway.wait_for_first_attempt().await;
 
-    sqlx::query("UPDATE auth_delivery_intent SET claim_expires_at = $2 WHERE delivery_id = $1")
-        .bind(delivery_id)
-        .bind(now)
-        .execute(&pool)
-        .await
-        .expect("provider I/O holds no delivery row lock");
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET claim_expires_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 1
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .expect("provider I/O holds no delivery row lock");
     let replacement = process_next_identity_delivery(&pool, gateway.as_ref(), now)
         .await
         .unwrap()
@@ -9850,13 +9855,22 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
         .await
         .unwrap();
 
-    let cancelled_at = unix_now_seconds();
+    let cancellation_window_start =
+        sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(
-        process_next_identity_delivery(&pool, gateway.as_ref(), cancelled_at)
+        process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
             .await
             .unwrap()
             .is_none()
     );
+    let cancellation_window_end =
+        sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     let cancelled = sqlx::query_as::<
         _,
         (
@@ -9907,7 +9921,10 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(audit.0, cancelled_at);
+    assert!(
+        (cancellation_window_start..=cancellation_window_end).contains(&audit.0),
+        "cancellation audit time must come from the database clock"
+    );
     assert_eq!(audit.1, "auth_delivery_cancelled");
     assert_eq!(
         audit.2,
@@ -11182,9 +11199,9 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let (expiring_delivery_id, expiring_at) = sqlx::query_as::<_, (Uuid, i64)>(
+    let expiring_delivery_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        SELECT delivery_id, credential_expires_at
+        SELECT delivery_id
         FROM auth_delivery_intent
         WHERE account_id = $1 AND delivery_kind = 'recovery' AND delivery_id <> $2
         ORDER BY created_at DESC, delivery_id DESC
@@ -11196,7 +11213,23 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
     .fetch_one(&pool)
     .await
     .unwrap();
-    let expired = process_next_identity_delivery(&pool, gateway.as_ref(), expiring_at)
+    sqlx::query(
+        r#"
+        WITH database_clock AS (
+            SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT AS now_seconds
+        )
+        UPDATE auth_delivery_intent AS delivery
+        SET created_at = database_clock.now_seconds - 2,
+            credential_expires_at = database_clock.now_seconds - 1
+        FROM database_clock
+        WHERE delivery.delivery_id = $1
+        "#,
+    )
+    .bind(expiring_delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let expired = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
         .await
         .unwrap()
         .expect("expired recovery delivery is finalized");

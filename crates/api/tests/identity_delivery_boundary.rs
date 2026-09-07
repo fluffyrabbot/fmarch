@@ -88,7 +88,16 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         .expect("audit boundary end");
 
     let claim = &source[claim_start..cancel_start];
-    assert!(claim.contains("EXTRACT(EPOCH FROM clock_timestamp())"));
+    assert!(
+        claim.contains("bounded_delivery_database_operation(config.database_timeout(), \"claim\"")
+    );
+    assert_eq!(
+        claim
+            .matches("EXTRACT(EPOCH FROM clock_timestamp())")
+            .count(),
+        2,
+        "selection and claim mutation must each use a fresh database clock"
+    );
     assert!(claim.contains("OR (status = 'retryable_failed' AND next_attempt_at <= $3)"));
     assert!(claim.contains(".bind(database_now)"));
     assert!(
@@ -103,7 +112,6 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "provider_id,",
         "cancelled_at: database_now",
         "cancel_claimed_delivery(&mut tx, request).await?",
-        ".bind(database_now.saturating_add(config.claim_lease().as_secs() as i64))",
         "tx.commit().await?",
     ] {
         assert!(
@@ -111,6 +119,22 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "claim cancellation lost contract: {claim_contract}"
         );
     }
+    let mutation_start = claim
+        .find("WITH mutation_clock AS MATERIALIZED")
+        .expect("claim mutation clock");
+    assert_ordered(
+        &claim[mutation_start..],
+        &[
+            "WITH mutation_clock AS MATERIALIZED",
+            "claim_expires_at = mutation_clock.claimed_at + $3",
+            "updated_at = mutation_clock.claimed_at",
+            "RETURNING mutation_clock.claimed_at, delivery.claim_expires_at",
+            "if claim_expires_at != claimed_at.saturating_add(claim_lease_seconds)",
+            "tx.commit().await?",
+            "claim_token,\n        claimed_at,\n        provider_attempt_permitted",
+        ],
+        "claim mutation lease",
+    );
     assert!(!claim.contains("let mut request"));
 
     let cancellation = &source[cancel_start..outcome_start];
@@ -280,6 +304,12 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
         .expect("worker completion boundary");
     let worker = &source[worker_start..worker_end];
 
+    assert!(source.contains(
+        "let lease_coverage_timeout = post_claim_timeout.saturating_add(database_timeout)"
+    ));
+    assert!(source
+        .contains("claim_lease <= lease_coverage_timeout.saturating_add(Duration::from_secs(1))"));
+
     for contract in [
         "IdentityDeliveryWorkerObservation",
         "Semaphore::new(config.max_database_in_flight())",
@@ -289,7 +319,9 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
         "deliver_and_finalize(",
         "claimed_at",
         "attempt_errors:",
-        "attempt_finished:",
+        "IdentityDeliveryWorkerObservationKind::EmptyClaim",
+        "IdentityDeliveryWorkerObservationKind::AttemptStarted",
+        "IdentityDeliveryWorkerObservationKind::TimerTick",
         "in_flight: attempts.len()",
         "tokio::time::sleep(config.poll_interval())",
     ] {

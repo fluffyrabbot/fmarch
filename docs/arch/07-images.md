@@ -191,7 +191,8 @@ Current implemented slice:
   before it may release charges or delete fragments. Journal rows are never blindly deleted, so
   restart recovery remains auditable and abandoned storage stays bounded by account quota.
   Reconciliation owns a reserved manifest-read lane, so saturated response bodies cannot starve
-  maintenance or drop readiness, and every iteration is deadline-bounded for prompt health and
+  maintenance or drop readiness. Every manifest probe has its own deadline, and startup plus
+  heartbeat budgets are cross-validated against the configured batch bound for prompt health and
   shutdown behavior when object storage stalls.
 - A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
   the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,

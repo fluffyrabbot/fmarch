@@ -1,6 +1,7 @@
 use super::{unix_now_seconds, WorkerBudget};
 use api::identity_delivery::{
     IdentityDeliveryGateway, IdentityDeliveryWorkerConfig, IdentityDeliveryWorkerObservation,
+    IdentityDeliveryWorkerObservationKind,
 };
 use api::{ApiState, RuntimeWorkerHealth};
 use sqlx::PgPool;
@@ -335,7 +336,11 @@ fn record_identity_delivery_health(
         health.iteration_failed(IDENTITY_DELIVERY_WORKER);
         return;
     }
-    if observation.attempt_finished {
+    if matches!(
+        observation.kind,
+        IdentityDeliveryWorkerObservationKind::EmptyClaim
+            | IdentityDeliveryWorkerObservationKind::AttemptFinished
+    ) {
         *failure_latched = false;
     }
     if !*failure_latched {
@@ -377,7 +382,7 @@ fn media_reconciliation_spec(
     budget: &WorkerBudget,
 ) -> WorkerSpec {
     let interval = budget.media_reconciliation_interval;
-    let iteration_timeout = budget.media_reconciliation_timeout;
+    let probe_timeout = budget.media_reconciliation_timeout;
     let batch_size = budget.media_reconciliation_batch_size;
     WorkerSpec {
         name: MEDIA_RECONCILIATION_WORKER,
@@ -390,7 +395,7 @@ fn media_reconciliation_spec(
                 pool,
                 state,
                 interval,
-                iteration_timeout,
+                probe_timeout,
                 batch_size,
                 shutdown,
                 health,
@@ -403,7 +408,7 @@ async fn run_media_reconciliation_worker(
     pool: PgPool,
     state: ApiState,
     interval: Duration,
-    iteration_timeout: Duration,
+    probe_timeout: Duration,
     batch_size: i64,
     shutdown: watch::Receiver<bool>,
     health: RuntimeWorkerHealth,
@@ -412,13 +417,8 @@ async fn run_media_reconciliation_worker(
         if *shutdown.borrow() {
             return Ok(());
         }
-        match tokio::time::timeout(
-            iteration_timeout,
-            api::reconcile_media_uploads_once(&state, batch_size),
-        )
-        .await
-        {
-            Ok(Ok(report)) => {
+        match api::reconcile_media_uploads_once(&state, batch_size, probe_timeout).await {
+            Ok(report) => {
                 let backlog = media_reconciliation_backlog(&pool).await.ok();
                 health.heartbeat_with_load(
                     MEDIA_RECONCILIATION_WORKER,
@@ -430,18 +430,10 @@ async fn run_media_reconciliation_worker(
                     health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
                 }
             }
-            Ok(Err(_)) => {
+            Err(_) => {
                 tracing::error!(
                     event = "media_reconciliation_worker_failed",
                     "media reconciliation worker iteration failed"
-                );
-                health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
-            }
-            Err(_) => {
-                tracing::error!(
-                    event = "media_reconciliation_worker_timed_out",
-                    timeout_ms = iteration_timeout.as_millis(),
-                    "media reconciliation worker iteration exceeded its deadline"
                 );
                 health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
             }
@@ -581,13 +573,15 @@ mod tests {
         record_identity_delivery_health, supervise_worker, RuntimeWorkerHealth, SupervisorFailure,
         WorkerPolicy, WorkerSpec, IDENTITY_DELIVERY_WORKER,
     };
-    use api::identity_delivery::IdentityDeliveryWorkerObservation;
+    use api::identity_delivery::{
+        IdentityDeliveryWorkerObservation, IdentityDeliveryWorkerObservationKind,
+    };
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{mpsc, watch};
 
     #[test]
-    fn identity_delivery_failure_stays_unhealthy_until_a_clean_iteration() {
+    fn identity_delivery_failure_ignores_timer_ticks_but_clears_after_an_empty_claim() {
         let health = RuntimeWorkerHealth::default();
         health.register(IDENTITY_DELIVERY_WORKER, true);
         let mut failure_latched = false;
@@ -598,7 +592,7 @@ mod tests {
                 completed: 0,
                 attempt_errors: 0,
                 in_flight: 1,
-                attempt_finished: false,
+                kind: IdentityDeliveryWorkerObservationKind::AttemptStarted,
             },
         );
         assert!(health.required_workers_ready());
@@ -610,7 +604,19 @@ mod tests {
                 completed: 0,
                 attempt_errors: 1,
                 in_flight: 0,
-                attempt_finished: true,
+                kind: IdentityDeliveryWorkerObservationKind::AttemptFinished,
+            },
+        );
+        assert!(!health.required_workers_ready());
+
+        record_identity_delivery_health(
+            &health,
+            &mut failure_latched,
+            IdentityDeliveryWorkerObservation {
+                completed: 0,
+                attempt_errors: 0,
+                in_flight: 1,
+                kind: IdentityDeliveryWorkerObservationKind::AttemptStarted,
             },
         );
         assert!(!health.required_workers_ready());
@@ -622,7 +628,7 @@ mod tests {
                 completed: 0,
                 attempt_errors: 0,
                 in_flight: 0,
-                attempt_finished: false,
+                kind: IdentityDeliveryWorkerObservationKind::TimerTick,
             },
         );
         assert!(!health.required_workers_ready());
@@ -631,10 +637,10 @@ mod tests {
             &health,
             &mut failure_latched,
             IdentityDeliveryWorkerObservation {
-                completed: 1,
+                completed: 0,
                 attempt_errors: 0,
                 in_flight: 0,
-                attempt_finished: true,
+                kind: IdentityDeliveryWorkerObservationKind::EmptyClaim,
             },
         );
         assert!(health.required_workers_ready());
