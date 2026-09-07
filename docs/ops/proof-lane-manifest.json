@@ -888,6 +888,7 @@
       "paths": [
         "tools/frontend_role_smoke.mjs",
         "tools/frontend_cross_browser.mjs",
+        "tools/fixtures/frontend-media.png",
         "tools/frontend_role_smoke_scenarios.mjs",
         "tools/frontend_role_smoke_flows.mjs"
       ],

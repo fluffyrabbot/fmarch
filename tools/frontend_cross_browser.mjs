@@ -29,7 +29,10 @@ if (process.argv.includes('--provision')) {
         '--workdir', '/workspace', '--env', `FMARCH_PROOF_BROWSER=${name}`,
         '--env', 'FMARCH_ALLOW_STATIC_ROLE_FALLBACK=0', '--env', 'FMARCH_PROOF_ARTIFACT_DIR=/proof-artifacts',
         image, 'node', 'tools/frontend_role_smoke.mjs',
-      ], {cwd: root, stdio: 'inherit', timeout: 850_000});
+      ], {cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 850_000});
+      await writeFile(path.join(artifactDir, 'browser.log'), `${child.stdout ?? ''}\n${child.stderr ?? ''}`);
+      process.stdout.write(child.stdout ?? '');
+      process.stderr.write(child.stderr ?? '');
       if (child.error) throw child.error;
       assert.equal(child.status, 0, `${name} role journeys failed`);
       const evidence = JSON.parse(await readFile(path.join(artifactDir, 'role-smoke.json'), 'utf8'));

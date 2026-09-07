@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { linuxVisualEnvironment } from "./linux_visual_environment.mjs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,10 +71,7 @@ const artifactDir = path.resolve(
 );
 const evidencePath = path.join(artifactDir, "role-smoke.json");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
-const MEDIA_FIXTURE_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGUlEQVR42mP8z8Dwn4GBgYGJgYGB4T8ABYsCBbpn0ZQAAAAASUVORK5CYII=",
-  "base64",
-);
+const MEDIA_FIXTURE_PNG = await readFile(new URL("./fixtures/frontend-media.png", import.meta.url));
 const PLAYER_MEDIA_ALLOWED_VARIANTS = Object.freeze([
   "tablet",
   "small",
