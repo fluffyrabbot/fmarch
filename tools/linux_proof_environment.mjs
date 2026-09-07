@@ -22,7 +22,7 @@ const snapshot = {
   schemaVersion: 1, platform: 'linux', arch: arch(), kernel: release(),
   node: process.version, npm: command('npm', ['--version']),
   rustc: command('rustc', ['--version', '--verbose']),
-  postgres: command('postgres', ['--version']),
+  postgres: {version: command('postgres', ['--version']), configure: command('pg_config', ['--configure']), sha256: await digestFile(command('pg_config', ['--bindir']) + '/postgres')},
   packages: command('pacman', ['-Q']).split('\n').sort(),
   browsers: JSON.parse(await readFile(new URL('node_modules/playwright-core/browsers.json', root), 'utf8')),
   chromium: {version: command(chromium.executablePath(), ['--version']), sha256: await digestFile(chromium.executablePath())},
