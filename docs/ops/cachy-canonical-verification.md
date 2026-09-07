@@ -157,7 +157,10 @@ cost baselines only from the new canonical environment after qualification;
 existing Darwin timings are not interchangeable.
 
 The Mac entrypoint should require a pushed task checkpoint when work is dirty,
-then enqueue the immutable SHA. Never synchronize working directories. Make
+then enqueue the immutable SHA. The current fleet CLI resolves the configured
+remote default branch when creating a task; it cannot yet select a pushed
+feature checkpoint. Add an explicit remote-ref input, resolve it after fetch,
+and bind that SHA into the signed job and returned receipt. Never synchronize working directories. Make
 "run locally anyway" explicit, because implicit fallback would recreate the
 problem this change is meant to solve.
 
