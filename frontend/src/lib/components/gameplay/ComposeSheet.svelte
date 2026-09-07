@@ -113,6 +113,7 @@
         bind:this={bodyElement}
         rows="5"
         data-testid="player-composer-body"
+        on:input={trackMentionCaret}
         on:keyup={trackMentionCaret}
         on:click={trackMentionCaret}
         on:select={trackMentionCaret}
