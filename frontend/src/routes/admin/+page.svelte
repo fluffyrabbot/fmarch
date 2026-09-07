@@ -529,7 +529,7 @@
 
   @media (max-width: 760px) {
     .admin-surface { gap: 10px; }
-    .admin-game-picker { gap: 8px; padding: 8px; }
+    .admin-game-picker { gap: 8px; min-block-size: 0; padding: 8px; }
     .admin-game-picker .fm-field > span { block-size: 1px; clip-path: inset(50%); inline-size: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
     .admin-operator-inbox { gap: 8px; }
     .admin-operator-inbox__tasks a > small { display: none; }
