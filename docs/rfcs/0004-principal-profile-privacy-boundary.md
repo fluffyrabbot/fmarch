@@ -11,6 +11,12 @@
 
 ## Summary
 
+This accepted decision record retains its original cutover rationale and rollout
+sequence. Current implementation status is in the
+[completion registry](../ops/completion-registry.json); all physical schema work
+follows [database schema evolution](../ops/database-schema-evolution.md), including
+append-only migrations and explicit epoch-reset requirements.
+
 There is no generic `User` record. The platform has separate, deliberately
 non-interchangeable concepts:
 

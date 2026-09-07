@@ -128,8 +128,11 @@ direct `main` work, and atomic history over PR ceremony.
 
 ## Deployment promotion
 
-- A push to `main` is allowed to deploy staging automatically. It must not deploy
-  production.
+- A push to `main` publishes history. Release staging with the exact-commit
+  coordinator; Railway services use pinned images with Git sources and image
+  auto-updates disabled. Follow
+  [the release runbook](docs/ops/railway-staging-target.md). A push must not
+  deploy production.
 - Promote production only from a clean, pushed `main` commit after the required
   local proof, both staging health checks, and commit-attribution checks pass.
 - Advance the remote `production` branch to that exact commit as the explicit

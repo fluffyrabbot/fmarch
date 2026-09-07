@@ -4,44 +4,25 @@ The concrete event taxonomy for both layers ([09-engine-and-packs](09-engine-and
 plus the **result contract** discipline ported from im-human's `V4_RESULT_CONTRACT.md`:
 event types are enumerated, each is versioned, and **unknown types are rejected outright**.
 
-Conventions: this is design intent at the type level, not generated code. Rust sketches show
-the shape; the authoritative types live in the `domain` and `wire` crates
-([03](03-backend.md), [04](04-wire-protocol.md)).
+Exact contracts live in the owning crates: `eventstore` owns stored headers and
+sealed bodies, `domain` owns resolution results, and platform/identity modules
+own their event families. `wire` exports browser projections rather than the
+stored log. Examples below explain semantics; they are not generated schemas.
 
 ## The envelope
 
-One envelope wraps every persisted event ([02-event-sourcing](02-event-sourcing.md)).
+[`eventstore::StoredEvent`](../../crates/eventstore/src/lib.rs) exposes a loaded
+logical event with global `seq`, aggregate `stream_id`, per-stream `stream_seq`,
+`kind`, `version`, and captured logical time. The physical row stores only the
+structural header in cleartext. `payload`, `actor`, `causation_id`, and `meta`
+are authenticated together in `sealed_body` ([02](02-event-sourcing.md)). There
+is no separate event UUID field or overloaded per-stream `seq`.
 
-```rust
-struct EventEnvelope {
-    id: Uuid,                 // unique event id
-    stream_id: GameId,        // aggregate = game
-    seq: u64,                 // per-stream monotonic order (the canonical game order)
-    kind: EventKind,          // tagged discriminant (see taxonomy below)
-    version: u16,             // schema version of THIS event kind (additive evolution)
-    occurred_at: LogicalTime, // deterministic timestamp
-    sealed_body: AeadEnvelope<EventBody>,
-}
-
-struct EventBody {
-    payload: EventPayload,      // shape determined by `kind`
-    actor: ActorId,             // who/what caused it
-    causation_id: Option<Uuid>, // command/event that caused this
-    meta: EventMeta,            // capability used, request id, run_id, etc. (audit)
-}
-
-enum ActorId {
-    Slot(SlotId),   // a seat acted (engine-visible identity)
-    Host,           // a host/cohost action
-    System,         // the engine/resolver
-    User(UserId),   // a platform-level action outside any game seat (forum posting, auth)
-}
-```
-
-> Note `ActorId` is the one place both identity worlds meet. The **engine** only ever emits
-> `Slot` / `System`. `User` and `Host` appear only on **platform** events. This keeps the
-> `User ≠ Slot` boundary ([01](01-domain-model.md), [09](09-engine-and-packs.md)) visible in
-> the type system.
+`ActorId` distinguishes `Slot`, `Host`, `System`, `Principal(PrincipalId)`, and
+`PrivacySubject(Uuid)`. Principal authority and privacy subjects never share a
+catch-all user string. The slot-only engine does not receive account identity;
+platform command audit metadata retains the initiating authority inside the
+sealed event body. Public game authorship is a separate projection contract.
 
 ## Two event families
 
@@ -50,88 +31,34 @@ enum ActorId {
 | **Platform events** | humans, hosts, the platform | posts, votes-as-submissions, channels, replacement, lifecycle | thread/channel/membership projections |
 | **Engine (resolution) events** | the resolver (`System`) | kills, saves, conversions, day outcome, investigations, wins | votecount/slot-state/reveal projections |
 
-Engine events are *only ever produced by `resolve`* ([09](09-engine-and-packs.md)) and
-arrive wrapped in a `resolution.applied` envelope.
+Phase resolution produces a validated `ResolutionApplied` plus its trace.
+Dedicated engine prompt/control paths can also emit validated engine results;
+platform effects use explicitly supported outer event kinds and shared folds,
+not arbitrary unvalidated inner-event payloads ([17](17-day-runtime-ownership.md)).
 
 ---
 
 ## Platform events
 
-```rust
-enum EventKind {
-    // ── Game lifecycle ──
-    GameCreated,            // exact pack ref + canonical artifact snapshot, host, config
-    SignupsOpened,
-    SlotAdded,              // { slot_id }
-    GamePersonaRegistered,  // canonical { persona_id, subject_id, claim_id }; presentation is a subject claim
-    GamePersonaRenamed,     // canonical { persona_id, subject_id, claim_id }
-    SlotOccupancyStarted,   // { occupancy_id, transition_id, slot_id, persona_id, reason }
-    SlotOccupancyEnded,     // { occupancy_id, transition_id, slot_id, persona_id, reason }
-    GameStarted,            // freezes roster; engine state seeded
-    GameCompleted,          // { winner_alignment, reason }
-    GameArchived,
+Representative persisted families (exact payloads and admission are owned by
+the corresponding command and projector modules):
 
-    // ── Membership / replacement (PLATFORM-ONLY; engine never sees these) ──
-    ReplacementRequested,   // { slot_id, reason }
-    // Replacement is one `SlotOccupancyEnded` + `SlotOccupancyStarted` transition;
-    // no principal-to-slot event is canonical.
-    SlotModkilled,          // host removes a seat from play (becomes an engine submission)
+| Family | Event kinds |
+|---|---|
+| Game and occupancy | `GameCreated`, `SlotAdded`, `GamePersonaRegistered`, `GamePersonaRenamed`, `SlotOccupancyStarted`, `SlotOccupancyEnded`, `GameStarted`, `GameCompleted` |
+| Slot and role state | `RoleAssigned`, `SlotStatusChanged` |
+| Posting | `PostSubmitted`, `PostEdited`, `PostRetracted` |
+| Private rooms | `PrivateChannelDeclared`, `PrivateChannelMemberGranted`, `PrivateChannelMemberRevoked`, `PrivateChannelRevoked` |
+| Vote/action intake | `VoteSubmitted`, `VoteWithdrawn`, `ActionSubmitted`, `ActionWithdrawn` |
+| Phase control | `DeadlineSet`, `DeadlineExtended`, `PhaseDeadlineElapsed`, `ThreadLocked`, `ThreadUnlocked`, `PhaseAdvanced` |
+| Engine output | `ResolutionApplied`, `ResolutionTrace` |
+| DayPrograms/DayEvents | See the sole-emitter table in [17-day-runtime-ownership](17-day-runtime-ownership.md#emit-table-dayevent-kinds) |
+| Member lifecycle | `MemberDeactivated`, `MemberErasureRequested`, `MemberCredentialsErased`, `MemberAuthorshipPseudonymized`, `MemberPersonalExportRecorded` |
 
-    // ── Roles ──
-    RoleAssigned,           // logical body: { slot_id, role_key, alignment, role_effects }; whole body sealed (06)
-
-    // ── Posting ──
-    PostSubmitted,          // logical body: { channel_id, author, body, media, phase_id, quotations?, mentions? }; whole body sealed (06, RFC 0002, RFC 0007)
-    PostEdited,             // { post_id, new_body_ref }   original recoverable
-    PostRetracted,          // { post_id }
-
-    // ── Channels ──
-    ChannelCreated,         // { channel_id, scope, phase_gate }
-    ChannelMemberAdded,     // { channel_id, slot_id }
-    ChannelMemberRemoved,
-    ChannelVisibilityChanged,
-    PrivateChannelDeclared, // { channel_id, group_id, kind, members, reveals_alignment, source }
-    PrivateChannelMemberGranted, // { channel_id, group_id, kind, slot_id, role_key, reveals_alignment, source }
-    PrivateChannelMemberRevoked, // { channel_id, group_id, kind, slot_id, reason, source }
-    PrivateChannelRevoked,  // { channel_id, group_id, kind, reason, source }
-
-    // ── Submissions (platform → engine seam, doc 09) ──
-    VoteSubmitted,          // { actor: slot, target: slot|no_lynch, phase_id }  (overwrites actor's current ballot)
-    VoteWithdrawn,          // { actor: slot, phase_id }  ballot-keyed: removes the actor's current ballot (the running tally is ballot-keyed, not action-keyed)
-    ActionSubmitted,        // { action_id, template_id, actor, targets, phase_id, grant_id? }
-    ActionWithdrawn,        // { action_id, actor, phase_id }
-
-    // ── Host phase control ──
-    DeadlineSet,            // { phase_id, at }   `at` captured as data (determinism)
-    DeadlineExtended,
-    PhaseDeadlineElapsed,   // { phase_id, deadline_at, observed_at, source:"scheduler" }; inert evidence, does not move phase_state
-    ThreadLocked,           // host: { channel_id }; vote hammer: { channel_id, phase_id, reason:"hammer", source:"vote_hammer", actor, target }
-    ThreadUnlocked,
-    PhaseAdvanceRequested,  // host triggers resolution of the current window
-    HostPromptResolved,     // { prompt_id, phase_id, kind, reason, decision, resolved_by }; revote/skip-next-day decisions append validated PhaseAdvanced provenance
-
-    // ── Platform DayEvents (mash/manual frontier, doc 14) ──
-    DayProgramAttached,             // { program: DayProgram, content_hash }; immutable generation compiled atomically
-    DayEventScheduled,              // { event: DayEvent }; immutable inline/materialized definition
-    DayEventOpened,                 // { event_id, phase_id, opened_at: UnixSeconds }
-    DayEventLocked,                 // { event_id, locked_at: UnixSeconds }
-    DayEventCancelled,              // { event_id, reason }
-    DayEventParticipationSubmitted, // { event_id, actor_slot, payload, phase_id }
-    DayEventParticipationWithdrawn, // { event_id, actor_slot }
-    DayEventResolved,               // { event_id, decision, winner_slots, reward_keys_applied }
-
-    // ── Member data lifecycle (platform identity; pure substrate in identity::data_lifecycle, doc 15) ──
-    MemberDeactivated,              // { reason }; Active → Deactivated
-    MemberErasureRequested,         // Deactivated → ErasureInProgress
-    MemberCredentialsErased,        // credentials/recovery/delivery secrets wiped
-    MemberAuthorshipPseudonymized,  // durable public authorship identifiers replaced
-    MemberPersonalExportRecorded,   // subject personal/account export receipt (≠ completed-game export)
-
-    // ── Engine output wrappers (see next section) ──
-    ResolutionApplied,
-    ResolutionTrace,
-}
-```
+Replacement is a paired occupancy-end/start transition. Host modkill uses
+`SlotStatusChanged`; it is not a separate `SlotModkilled` submission to the
+engine. Community discussion events have their own bounded context under
+[RFC 0003](../rfcs/0003-community-platform-v2.md).
 
 For game-thread `PostSubmitted`, `author` is a closed, public game-author
 sum type: `{ kind: "slot", slot_id }` for player posts,
@@ -152,29 +79,15 @@ closes, the resolver folds every non-withdrawn submission into engine events.
 
 ## Engine resolution events
 
-The resolver's output is persisted as **one `resolution.applied` envelope** that carries the
-ordered inner domain events, plus a companion `resolution.trace`. This mirrors im-human's
+The resolver's output is persisted as **one `ResolutionApplied` envelope** that carries the
+ordered inner domain events, plus a companion `ResolutionTrace`. This mirrors im-human's
 `resolution.v5.applied` and keeps a resolution atomic and replayable as a unit.
 
-```rust
-struct ResolutionApplied {
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,          // Day | Night | Twilight
-    phase_number: u32,
-    run_id: String,                 // deterministic resolver run id
-    result_version: u16,            // resolver contract version
-    seed: Seed,                     // the inputs' seed, recorded
-    counts: ResolutionCounts,       // { events, kills, saves, … } aggregates
-    events: Vec<InnerEvent>,        // ordered; each { index, kind, payload }
-    started_at: LogicalTime,
-    finished_at: LogicalTime,
-}
-```
-
-### Inner domain events (the closed, enumerated set)
-
-This is the result contract. **Adding a new inner event kind requires bumping
-`result_version` and updating the validator; unknown kinds are rejected** ([validation](#result-contract--validation)).
+The exact `ResolutionApplied` type in `domain::events` contains `phase_id`,
+`run_id`, `result_version`, `seed`, `counts`, indexed `events`, and captured
+`started_at`/`finished_at` logical times. It is persisted atomically with its
+trace. The following taxonomy summarizes inner-event semantics; consult the
+Rust enum for exact fields and serde representation.
 
 ```rust
 enum InnerEvent {
@@ -637,9 +550,10 @@ Ported discipline from im-human's `V4_RESULT_CONTRACT.md`:
 
 ### Maintenance checklist (when adding an event kind)
 
-1. Add the variant to `EventKind` / `InnerEvent`.
-2. Define/version its payload struct in the `domain` crate; regenerate `wire` TS
-   ([04](04-wire-protocol.md)).
+1. Add the kind to its owning event family and persistence admission; resolution
+   events add an `InnerEvent` variant.
+2. Define/version its payload in the owning domain or platform crate. Regenerate
+   `wire` TS when a shared browser contract changes ([04](04-wire-protocol.md)).
 3. Add the projection fold(s) it affects.
 4. Add a golden-trace / parity test ([09](09-engine-and-packs.md)).
 5. Bump `result_version` if it's an inner (resolution) event, add the
@@ -647,17 +561,15 @@ Ported discipline from im-human's `V4_RESULT_CONTRACT.md`:
 
 ---
 
-## Open calls carried forward
+## Settled input and pack contracts
 
-- **Vote syntax → submission parsing.** Strict tags (`##vote`) recommended
-  ([01](01-domain-model.md)); the parser emits `VoteSubmitted`/`VoteWithdrawn`.
-- **Initial IR vocabulary size.** v1 ships 8 abilities ([09](09-engine-and-packs.md)); the
-  first real pack (pick one culture — mafiascum is the most documented) will tell us which
-  ability to add first.
-- **First pack to author.** Recommend mafiascum as the reference pack: best-documented
-  precedence/visibility rules, exercises kill/protect/block/investigate/redirect without
-  needing conversion-heavy mechanics on day one.
+Votes enter through typed `SubmitVote`/`WithdrawVote` commands and authoritative
+target controls, never post-text parsing ([01](01-domain-model.md)). The engine
+port and multiple culture packs are implemented; the v1 eight-ability slice is
+historical. Exact vocabulary lives in `domain::ir`, with policy admission in
+`domain::pack::validation` and behavioral proof in the pack goldens and
+[engine-port checklist](11-engine-port-checklist.md).
 
-Next concrete step: encode this taxonomy as the `domain` + `wire` Rust types and author a
-**minimal mafiascum pack** that exercises a night resolution and a day vote end-to-end — the
-spine of the vertical slice ([08-roadmap](08-roadmap.md)).
+For new work, update the owning Rust event contract, its persistence admission,
+folds, and proof together. See [08-roadmap](08-roadmap.md) for sequencing and
+[04-wire-protocol](04-wire-protocol.md) when transport projections change.

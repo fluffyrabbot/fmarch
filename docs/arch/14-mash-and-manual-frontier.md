@@ -132,7 +132,7 @@ A **mash** is a large-format forum mafia game with:
 
 ---
 
-## Proposed Design
+## Implemented design
 
 ### Manual frontier invariant (irreversible, scoped)
 
@@ -418,7 +418,8 @@ Default product posture for mash: **12h day / 12h night** phase cadence, with ze
 
 **“Compose with” means:** both appear in the same host exception queue and `TASK_POSTURE` ranking — **not** shared decision schema, not jamming raffle winners through `ResolveHostPrompt` or fake pack prompt kinds.
 
-**Frontend note:** add to `TASK_POSTURE` in `host-task-workspace.mjs`:
+**Frontend ownership:** `TASK_POSTURE` in `host-task-workspace.mjs` ranks the
+DayEvent decision/open families alongside engine host prompts:
 
 ```js
 "day-event-resolve": { rank: 2, urgency: "attention", label: "Needs decision" }, // peer with host-prompts
@@ -493,17 +494,14 @@ Provenance defaults for all fiat/day-event adapters:
 | `SetSlotLifecycle` | `SlotStatusChanged` (existing) | No | Existing `"SlotStatusChanged"` arm | `slot_state` **status only** | Same helper as `SetSlotStatus`. **Not** free-floating `PlayerKilled`. **Does not** flip `death_reveal` / role / alignment reveal flags (parity with today's host lifecycle) |
 | `Mark` | Top-level `EffectsMarked` (platform outer kind, already hydrated as inner-shaped fields) | No | Existing `"EffectsMarked"` arm | `slot_effect`; optional `EffectNotification` | Platform v1 is Persistent only; source slot is optional/typed, never synthetic |
 | `Clear` | Top-level `EffectsCleared` | No | Existing arm | `slot_effect` | |
-| `Grant` | **Platform grant fact** that snapshot **and** projections both fold — see below | No **or** mini-envelope | **Must extend** snapshot rebuild (today ActionGranted only via ResolutionApplied) | `action_grant` (+ counters if Item) | **Must not** append naked `ActionGranted` that projections see but snapshot misses |
+| `Grant` | Top-level `ActionGranted` | No | Explicit outer-event snapshot arm | `action_grant` (+ counters if Item) | Shared planner and rebuild admission keep snapshot and projection consistent |
 | `RevealAlignment` / `RevealRole` | Reveal events folding the authoritative current assignment and the same flags as resolution `death_reveal` / `GameCompleted` paths | No | Reveal flags in snapshot if engine-visible | `slot_state` reveal flags | Command supplies target only; never accepts a contradictory role/alignment value |
 
-**Grant adapter decision (locked for design):**
-
-- Emit a **platform-level grant event** (name e.g. `ActionGrantedPlatform` **or** reuse outer `ActionGranted` with required fields filled by adapter) that:
-  1. folds into rebuildable `action_grant` projection, and
-  2. is handled in `current_snapshot` / stream rebuild **before** `ResolvePhase`,
-  3. carries `GrantSpec` including `GrantKind::VoteWeight` with `vote_weight`, uses, visibility, `source_action`, phase fields.
-- **Forbidden:** projection-only grant that leaves `StateSnapshot.action_grants` empty.
-- Vote weight **only** via `Grant { kind: VoteWeight, … }` — no parallel `SetVoteWeight`.
+**Grant adapter contract:** `plan_effect_events` emits top-level `ActionGranted`
+with the required grant, source, and phase fields. `current_snapshot` admits and
+folds it before a subsequent resolution, and projections fold the same fact.
+`GrantKind::VoteWeight` carries vote weight through that path; there is no
+parallel `SetVoteWeight` command or projection-only grant.
 
 **Kill / death adapter decision (locked for design):**
 
@@ -754,7 +752,9 @@ fn authorize_game_run(principal, game, class):
   else: reject NotHost / CohostPermissionDenied
 ```
 
-Wire/commands that today use `require(HostOf)` for pure game-run work **migrate** to this helper (or to `require(CohostOf)` + denylist check). `ExtendDeadline` is no longer a special snowflake — it is just one class that defaults allowed.
+Game-run handlers use the shared cohost permission helper, including the
+DayEvent handlers. Structural host authority remains separate. `ExtendDeadline`
+is one allowed class, not the sole cohost operation.
 
 **Audit:** every accepted mutator records the real principal. Host console activity should show host vs cohost without implying weaker physics for cohost actions.
 
@@ -1074,7 +1074,8 @@ Incremental backlog for solo greenfield. Multi-day depth expected on adapter PRs
 - [12-capacity-and-overload](12-capacity-and-overload.md) — page budgets, concurrency  
 - [13-interaction-architecture](13-interaction-architecture.md) — HostTask, player workspace, setup  
 - `crates/commands/src/model.rs` — command surface  
-- `crates/commands/src/lib.rs` — today mostly HostOf-only mutators + CohostOf on `ExtendDeadline`; target: shared authorize helper + cohost denylist  
+- `crates/commands/src/lib.rs` — shared game-run authority and effect planner;
+  `day_runtime.rs` owns DayEvent mutation
 - `crates/domain/src/pack.rs` — `HostPromptResolutionEffect`, `GrantKind` / `GrantSpec`  
 - `crates/caps/src/lib.rs` — HostOf subsumes CohostOf; cohost does not satisfy HostOf  
 - `frontend/.../host-task-workspace.mjs` — exception queue + TASK_POSTURE  
@@ -1135,22 +1136,12 @@ It continues to consume slot state, submissions, and folded effects — includin
 
 ## Appendix C — Normative v1 contracts
 
-### C.1 Platform event kinds (minimum)
+### C.1 Platform event kinds
 
-| Kind | version | Required fields (sketch) | Notes |
-|---|---|---|---|
-| `DayProgramAttached` | 1 | `program_id`, `content_hash`, `theme_ref?` | |
-| `DayEventScheduled` | 1 | `event_id`, `program_id`, `template_key`, `schedule`, `resolution_mode`, `rewards_ref`, compiled narrative templates | Materialize immutable definitions and exact narrative content/hash snapshots from program |
-| `DayEventOpened` | 1 | `event_id`, `phase_id`, `opened_at: UnixSeconds` | |
-| `DayEventLocked` | 1 | `event_id`, `locked_at`, `auto_seed?` | Seed is present only when the resolution policy requires it; every serialized seed is canonical unsigned-decimal text, never a JSON/CBOR integer |
-| `DayEventCancelled` | 1 | `event_id`, `reason` | |
-| `DayEventOpenDue` / `DayEventLockDue` | 1 | `event_id`, `due_at`, `observed_at`, `source` | Inert evidence |
-| `DayEventParticipationSubmitted` | 1 | `event_id`, `actor_slot`, `payload`, `phase_id` | |
-| `DayEventParticipationWithdrawn` | 1 | `event_id`, `actor_slot` | Only while Open |
-| `DayEventResolved` | 1 | `event_id`, `decision`, `winner_slots`, `reward_keys_applied`, `evidence` | Evidence records host/auto source, policy, canonical unsigned-decimal seed text when required, and canonical participants. Effects are **sibling events in same txn**, not only embedded opaque blobs |
-| `DayEventNarrativePublished` | 1 | `event_id`, `lifecycle`, `receipt_id`, `post_id` | Service-owned retry receipt; atomically paired with the host-authored `PostSubmitted`; deterministic receipt prevents duplicate publication |
-
-Plus existing kinds used by adapters: `EffectsMarked`, `EffectsCleared`, `SlotStatusChanged`, platform grant fact, channel membership, host-authored `PostSubmitted` (host-notice path; same kind as spectator posts, not player `SubmitPost`).
+[17-day-runtime-ownership](17-day-runtime-ownership.md#emit-table-dayevent-kinds)
+is the canonical event producer table. `game_platform::DayEventEvent` and the
+`commands::day_runtime` append path define exact payloads. This document owns
+mechanical semantics; it does not duplicate a partial payload schema.
 
 ### C.2 DayEventDecision (v1)
 
@@ -1180,7 +1171,10 @@ Payload variant must match event’s `ParticipationMode` or reject `Participatio
 
 `ResolveDayEvent` that applies rewards: **one DB transaction** → `DayEventResolved` + all adapter events + projection folds. Failure rolls back all.
 
-PR6 resolve-without-rewards: may append `DayEventResolved` with `rewards_applied: false` **only** if product allows decision recording; **default for PR6:** do not claim winners as mechanical until PR9 — prefer “decision pending application” state or hold resolve until adapters land. **Invariant:** UI must not show mechanical reward as applied before adapter events exist.
+Resolution and all reward adapter events commit atomically. The historical
+PR6/PR9 staging plan does not permit a separate “resolved but rewards pending”
+state in the current runtime. Narrative delivery is the separately retryable
+post-commit operation.
 
 ### C.5 Idempotency
 
@@ -1188,6 +1182,8 @@ Use existing command envelope `command_id` / `handle_idempotent`. Do not add `cl
 
 ### C.6 Program document
 
-- JSON schema version field `program_schema_version`
-- Content hash algorithm: **BLAKE3** hex of canonical JSON bytes (document exact canonicalization at implement time)
+- `DayProgram.version` is the program version; exact fields live in `game_platform`.
+- `DayProgram::content_hash` validates the typed value, serializes it with
+  `serde_json::to_vec`, and hashes those bytes with BLAKE3. Attachment retains
+  the immutable value/hash; clients submit a catalog reference, not arbitrary JSON.
 - Validation: every `RewardBinding.effects[]` deserializes as a reward template; recipient selectors are valid for the resolution mode; Mark tags ⊆ pack.effects (or explicit allow-list); Grant grant_ids ⊆ pack item_actions / grant policy as applicable

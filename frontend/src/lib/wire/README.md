@@ -5,11 +5,11 @@
 Regenerate both checked-in copies (crate + SPA) with:
 
 ```sh
-cargo run -p wire --bin export_types -- --write
+python3 scripts/with-heavy-build-lock.py -- cargo run -p wire --bin export_types -- --write
 ```
 
 Verify with:
 
 ```sh
-cargo run -p wire --bin export_types -- --check
+python3 scripts/with-heavy-build-lock.py -- cargo run -p wire --bin export_types -- --check
 ```

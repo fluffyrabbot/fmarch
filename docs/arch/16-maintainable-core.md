@@ -15,8 +15,8 @@ those contracts are still intentional.
 ## Mechanical baseline
 
 - `rust-toolchain.toml` pins Rust 1.95.0 with `clippy` and `rustfmt`.
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings` is
-  warning-clean.
+- The workspace Clippy lane requires `--all-targets --all-features -- -D warnings`.
+  Passing receipts establish warning-clean status for their recorded inputs.
 - Every crate area and the workspace-manifest area in
   `docs/ops/proof-lane-manifest.json` arms `cargo:clippy-workspace`.
 - `tools/proof_lane_select.test.mjs` protects the lane command, toolchain path,
@@ -26,20 +26,26 @@ those contracts are still intentional.
 
 ## Responsibility inventory
 
-The line counts below are a 2026-08-06 orientation snapshot, not a target.
+The table records ownership and change pressure. File lengths are deliberately
+omitted: they age quickly and are not a completion criterion. The sections below
+record the contracts each extraction established, not instructions to repeat it.
 
-| Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
-|---|---|---|---|---|
-| `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, temporary validation analysis, diagnostics, and execution-plan ordering | `pack/model` owns declarative types; `pack/validation` owns `ValidatedPack`, its execution plan, and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public validated-pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~7.1k); `resolver/intake.rs` (~0.7k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.5k); `resolver/outcome.rs` (~1.4k); `resolver/redirect.rs` (~0.3k); `resolver/suppression.rs` (~0.3k); `resolver/trace.rs` (~0.8k) | Night-action intake, block suppression/empower discovery, redirect graph planning/target rewriting, kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; `pack/validation.rs` exclusively owns policy admission, and action/trigger-specific dual-mode accessors live with their consumers | Resolver coordinator plus bounded intake, suppression, redirect, action, trigger, outcome, and trace families | intake → domain state/validated pack; suppression, redirect, action, and trigger → intake-owned action; suppression and redirect → validated pack/trace contract; redirect → suppression-discovered empowered slots via the coordinator; trace → event contract; outcome → action/trigger/domain state/validated pack; coordinator → bounded families | Split the broad night phase coordinator along protection/kill stage ownership, then continue by independently changing stage family; do not reopen validation, suppression, redirect, trigger, or intake ownership |
-| `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
-| `crates/media/src/variants.rs` (~2.3k) | Variant generation, immutable persistence, snapshot verification, repair, lookup, and descriptor-relative reads are coherent; each attached read receives one immutable request that owns its already-open file | Variant store plus an immutable attached-read request that keeps the descriptor and verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Split the next media responsibility only when an independent change exposes a coherent boundary; do not reopen the attached-read request |
-| `crates/database_schema/` | Closed physical-database boundary: one current-state baseline, schema readiness, fixed-role reconciliation, and catalog/ACL audit | Sole PostgreSQL catalog owner; persistence crates retain queries and domain behavior | server/API/tests → database-schema contract; eventstore/projections → catalog objects, never private migrations | Keep one greenfield baseline until durable-user compatibility is explicitly adopted; rebaseline and recreate disposable databases atomically |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
-| `crates/commands/src/lib.rs` (~4.5k); `operator_audit.rs` (~1.2k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` (~1.1k) | Action submission/admission/capacity, host-prompt resolution/replay, DayEvent resolution application, and the operator-facing resolution-audit/trace-inspection/performance-proof family are closed behind typed boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split broader command ownership only when its next independent change exposes a coherent boundary; do not reopen the DayEvent request |
-| `crates/operator_proof/src/lib.rs` (~6.1k); proof binaries under `src/bin/`; focused boundary test | Operator report contracts, artifact classification, manifest loading, and local proof executables are no longer production command ownership | Dedicated operator-proof library and executable package | operator-proof → public command/projection APIs; operator API → operator-proof report contracts; commands may use it only as a test dependency | Separate the fixture minimizer core from CLI I/O and keep generated matrices out of the ordinary command gate |
-| `crates/commands/tests/pipeline/residual_cases.rs` (~13.9k); `semantic_audit/cases.rs` (~49.2k); source-shared `residual_support.rs` (~8.7k) | Ordinary Postgres scenarios and the full semantic/generated corpus are physically separate; only harness support is shared | Ordinary pipeline target, dedicated semantic-audit target, serial concurrency target, and one shared support owner | scenario/audit targets → shared harness/public command API; never scenario ↔ scenario | Split support by coherent fixture family only when independent change pressure appears; keep audit cases out of ordinary compilation and path arming |
-| `tools/dev_test_game.mjs` / `.test.mjs` (~26.9k/~29.9k); `dev_test_game_configuration.mjs` (~0.3k); `dev_test_game_session_artifacts.mjs` (~0.7k) | Immutable CLI/environment/default/path normalization and session JSON/Markdown/stdout/proof-input assembly are closed behind dedicated owners; mutable process, network, browser, scenario, and assertion orchestration remains concentrated in the root | Small CLI/composition root over configuration, scenario, runtime, artifact, and assertion libraries | configuration → path contracts; artifacts → normalized values only; CLI root → configuration/artifacts/orchestration; assertions remain in the root | Split another scenario/runtime family only when its next independent change requires it; do not return configuration, path, or representation assembly to the root |
+| Area | Established owners | Remaining change pressure |
+|---|---|---|
+| Packs | `pack/model`, `pack/validation`, private validation tests | Split a validation family only when it changes independently |
+| Resolver | `intake`, `suppression`, `redirect`, `action`, `trigger`, `outcome`, `trace` | Broad protection/kill stage coordination in the resolver root |
+| API | Route families, authenticated extractors, delivery records, live publication | Keep transport dependent on application/domain ports |
+| Database | `database_schema` catalog, migrations, admission, ACL audit | Follow the schema-evolution runbook |
+| Projections | Effect and private-channel families | Other independently changing families in the dispatcher |
+| Commands | Action submission, host-prompt resolution, DayEvent runtime | Shared dispatch, transaction, and phase orchestration |
+| Operator proof | Reports, artifact classification, local executables | Minimizer core versus CLI I/O |
+| Command tests | Ordinary pipeline, semantic audit, serial concurrency, shared support | Remaining physical scenario/support families |
+| Media | Variant store and immutable descriptor-owning attached read | Split only a distinct changing responsibility |
+| Test-game harness | Configuration and session-artifact assembly | Scenario, process, network, and assertion orchestration |
+
+The [completion registry](../ops/completion-registry.json) owns the next
+recommended slice. The contracts below retain each boundary's dependency and
+proof details; this table does not independently mark the broader area complete.
 
 ## First closed boundary: API media HTTP
 
@@ -96,7 +102,7 @@ host, prompt, and private hydration.
 The boundary preserves subscribe-before-hydrate ordering, current-delta-before-
 clear ordering, empty-clean suppression, channel bounds, lag-triggered resync,
 delivery delay, and scoped private refreshes. Unit tests cover publication
-assembly and lag continuation; the source boundary contract prevents those
+assembly and lag reporting; the source boundary contract prevents those
 responsibilities or their removed high-arity lint expectation from drifting
 back into `lib.rs`.
 
@@ -116,8 +122,8 @@ The composition root mounts the delivery family as one router fragment and
 re-exports `WebsocketTicketResponse`. Command submission/preparation,
 completed-game import, auth persistence, game/community/media HTTP, and live
 change classification/publication remain outside. Ticket TTL/audience/single-use
-/session binding, capacity limits, initial ordering, private filtering, lag
-continuation, LISTEN/NOTIFY wakeup with `events.seq` catch-up, envelope IDs,
+/session binding, capacity limits, initial ordering, private filtering, terminal resync,
+LISTEN/NOTIFY wakeup with `events.seq` catch-up, envelope IDs,
 protocol version, and disconnect behavior remain unchanged.
 
 ## Closed API boundary: public-platform HTTP
@@ -273,23 +279,12 @@ rebuild hashes, and public projection APIs remain unchanged.
 
 ## Closed database boundary: physical schema authority
 
-`crates/database_schema` owns immutable append-only PostgreSQL migrations, an
-epoch manifest binding their checksums, a generated canonical current-catalog
-snapshot, a separately normalized authority fingerprint, schema readiness, and
-the application/key-admin role and ACL
-contract. The event store and every projection family consume that catalog but
-cannot carry their own migration directories. Server composition, hosted
-migration, readiness gates, SQLx tests, and catalog audits all point to the same
-owner.
-
-Static proof rejects edits, deletions, gaps, or reordering in the existing
-migration prefix and rejects drift in the generated current snapshot or
-authority fingerprint. Forward
-migrations may be direct or destructive while the product is greenfield, but
-the upgrade lane must make their resulting catalog and ACLs identical to a
-fresh database. Rebaselining is reserved for an explicit schema-epoch reset in
-which every persistent environment is recreated and re-bootstrapped; ordinary
-schema work never mutates applied SQLx history.
+`crates/database_schema` owns migrations, the epoch manifest, canonical catalog
+and authority snapshots, admission, and exact role/ACL reconciliation.
+Persistence crates consume that catalog and cannot own private migration
+histories. [Database schema evolution](../ops/database-schema-evolution.md)
+owns migration, upgrade-proof, and epoch-reset procedure; do not duplicate that
+policy in crate inventories.
 
 ## Closed domain boundary: pack model and validation
 

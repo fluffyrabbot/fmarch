@@ -11,7 +11,7 @@ It is general enough to host discussion. It is designed around the game, not ret
 | Language | Rust (axum + tokio) |
 | Persistence | Event-sourced, Postgres-backed |
 | Security | Server-trusted, capability authz, no E2EE |
-| Wire | Versioned CBOR over WebSocket; schema-first Rust→TS |
+| Transport | HTTP/JSON commands and reads; versioned CBOR WebSocket deltas; Rust→TS contracts |
 | Frontend | SvelteKit, tablet-first |
 | Media | BLAKE3 content-addressed, transcoded, EXIF-stripped |
 | Rulesets | Declarative packs over a closed IR |
@@ -25,7 +25,14 @@ The truth is an event log. "What was the votecount as of post #847?" has to be a
 - [Engine and packs](docs/arch/09-engine-and-packs.md) — the im-human EngineV4 port lives here
 - [Agent workflow / local proof](AGENTS.md)
 
-There was no root README before 2026-08-15; this file is a pointer into the architecture corpus, not a substitute for it.
+For local startup, proof selection, schema changes, and releases, use the
+[developer quickstart](docs/development.md). Architecture documents explain
+contracts; operating runbooks own procedures; the
+[completion registry](docs/ops/completion-registry.json) owns capability status.
+
+## Fleet verification
+
+The Linux fleet profile is a bounded contract gate: proof-harness, architecture, frontend, and static database-schema checks. It does not run Cargo, live databases, browser screenshots, or the canonical full proof sweep. Canonical proof remains governed by AGENTS.md pending a separately validated host migration.
 
 ## Fleet verification
 

@@ -32,7 +32,7 @@ value below wins.
    See [02-event-sourcing](02-event-sourcing.md).
 
 3. **Data-efficient.** Compact wire frames, deduplicated content-addressed media,
-   tablet-appropriate image sizes. Bytes are a feature. We push deltas, we don't poll.
+   tablet-appropriate image sizes. Live updates use deltas; bounded catch-up and recovery read authoritative state.
 
 4. **Professional-grade substrate.** Server-trusted with strong authz, encryption at
    rest for private content, an explicitly versioned wire protocol that lets a years-old
@@ -57,21 +57,23 @@ value below wins.
 
 ## The shape of the system
 
+```text
+SvelteKit server-rendered routes + hydrated browser UI
+  │ HTTP/JSON commands, authentication, reads, uploads
+  ▼
+Rust API → transaction-fenced authority → commands → events + projections
+  │                                                    │
+  │ capability-filtered CBOR WebSocket deltas           ▼
+  └────────────────────────────────────────────── Postgres
+
+Media → shared canonical/variant object store
+Private subject authority → separate object store
+One-shot migrator → schema and ACL changes before API admission
 ```
-            ┌─────────────────────────── clients (SvelteKit SPA, tablet-first) ───────────────────────────┐
-            │   game thread view   │   private channels   │   live votecount   │   MOD CONSOLE (touch)     │
-            └───────────────▲───────────────────────────────────────▲──────────────────────────────────────┘
-                            │  CBOR frames over WebSocket (versioned) │  REST for uploads / cold loads
-            ┌───────────────┴─────────────────────────────────────────┴──────────────────────────────────┐
-            │  Rust service (axum + tokio)                                                                 │
-            │    commands ─▶ capability check ─▶ validate ─▶ append events ─▶ update projections           │
-            └───────────────┬───────────────────────────────────────────────────────────────┬────────────┘
-                            │                                                                 │
-                  ┌─────────▼──────────┐                                          ┌───────────▼───────────┐
-                  │ Postgres           │                                          │ Blob store            │
-                  │  events (append)   │                                          │  content-addressed    │
-                  │  projections (RO)  │                                          │  AVIF/WebP variants   │
-                  └────────────────────┘                                          └───────────────────────┘
-```
+
+The engine is pure and slot-based. The platform owns people, communities,
+channels, persistence, and delivery. See [03](03-backend.md) for runtime
+ownership and the [release runbook](../ops/railway-staging-target.md) for hosted
+services and isolation.
 
 Continue to [01-domain-model](01-domain-model.md).

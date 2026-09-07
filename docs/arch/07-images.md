@@ -24,11 +24,11 @@ tablet-appropriate sizes**, and **privacy-stripped** on ingest.
               ─▶ decode to canonical raster
               ─▶ STRIP metadata (EXIF/GPS/etc.)
               ─▶ hash canonical bytes with BLAKE3  ──▶ content id
-              ─▶ dedup check (already have this id? skip transcode)
               ─▶ transcode to variants:
                     - AVIF (primary) + WebP (fallback)
                     - sizes: thumb / tablet / full-bounded
-              ─▶ store variants under content-addressed keys
+              ─▶ verify/install immutable canonical and variant objects
+              ─▶ commit manifest last
               ─▶ return handle { id, available_variants, intrinsic w/h }
 ```
 
@@ -36,8 +36,9 @@ tablet-appropriate sizes**, and **privacy-stripped** on ingest.
   output size before persistence ([defends DoS via huge uploads]).
 - **Hash after canonicalization + strip** so the content id is stable regardless of
   incidental metadata differences, maximizing dedup.
-- **Transcode is idempotent and cache-keyed by content id** — re-uploading the same image
-  is a no-op past the dedup check.
+- **Persistence is idempotent and keyed by content id.** Repeated uploads verify
+  existing immutable bytes. Upload preparation can still decode and transcode;
+  deduplicated storage does not promise a computation-free repeat.
 
 ## Storage layout
 
@@ -51,10 +52,11 @@ blobs/
   <id>/<recipe-revision>/webp/...     fallbacks
 ```
 
-- Keys are derived from the content id; immutable, so a CDN / browser can cache with a far-
-  future expiry and never revalidate.
+- Keys identify immutable bytes. Cache policy still follows authorization:
+  account-gated responses use `private, no-cache` and revalidate on reuse.
+  Immutable content identity is not permission to serve private bytes publicly.
 - Keeping a stripped `orig` lets us add new variant sizes/formats later by re-transcoding
-  from local source, without asking users to re-upload.
+  from the canonical store, without asking users to re-upload.
 - A recipe directory is immutable. Its name includes the policy, codec, resize, alpha, geometry,
   and storage-layout revision, so changing any input mints new keys rather than silently changing
   bytes behind an existing key.
