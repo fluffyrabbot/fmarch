@@ -33,6 +33,7 @@ export async function checkHostedReadiness(config, fetcher = fetch) {
 export async function runHostedAcceptance(env = process.env) {
   const config = hostedAcceptanceConfig(env);
   const {chromium} = await import('playwright');
+  const {BOARD_ROUTE_CONTRACT} = await import('../frontend/src/lib/app/app-shell-model.mjs');
   const checks = await checkHostedReadiness(config);
   const browser = await chromium.launch();
   try {
@@ -42,7 +43,9 @@ export async function runHostedAcceptance(env = process.env) {
     const response = await page.goto(config.frontend, {waitUntil: 'networkidle', timeout: 30_000});
     assert.ok(response?.ok(), 'hosted frontend navigation failed');
     assert.equal(new URL(page.url()).origin, config.frontend, 'unexpected frontend redirect');
-    assert.ok((await page.locator('body').innerText()).trim().length > 0, 'hosted frontend is empty');
+    await page.getByTestId(BOARD_ROUTE_CONTRACT.surfaceTestId).waitFor({state: 'visible', timeout: 10_000});
+    await page.getByTestId(BOARD_ROUTE_CONTRACT.indexTestId).waitFor({state: 'visible', timeout: 10_000});
+    assert.equal(await page.getByTestId(BOARD_ROUTE_CONTRACT.unavailableTestId).count(), 0, 'hosted game index is degraded');
     assert.deepEqual(errors, [], 'hosted frontend JavaScript errors');
     checks.push({kind: 'browser', status: 'passed', version: browser.version()});
     // Detect a deployment moving during browser acceptance.

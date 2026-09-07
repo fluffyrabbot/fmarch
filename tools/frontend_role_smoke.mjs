@@ -25,11 +25,11 @@ import {
   hostSetupScenario,
   navFocusCoverage,
   publicGameScenario,
-  publicationViewports,
+  publicationViewports as allPublicationViewports,
   routeStateScenarios,
   roles,
-  setupViewports,
-  viewports,
+  setupViewports as allSetupViewports,
+  viewports as allViewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 import {
   commandFlows,
@@ -52,6 +52,14 @@ if (!browserType) throw new Error(`Unknown proof browser: ${browserName}`);
 if (browserName !== "chromium" && process.env.FMARCH_ALLOW_STATIC_ROLE_FALLBACK === "1") {
   throw new Error("Cross-browser proof requires a real browser; static fallback is forbidden");
 }
+
+// Chromium owns the complete viewport matrix. Other engines repeat the same
+// critical journeys at the mobile and desktop layout boundaries.
+const criticalViewports = values => browserName === "chromium"
+  ? values : values.filter(viewport => ["mobile", "desktop"].includes(viewport.name));
+const viewports = criticalViewports(allViewports);
+const setupViewports = criticalViewports(allSetupViewports);
+const publicationViewports = criticalViewports(allPublicationViewports);
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -111,7 +119,7 @@ try {
   browser = await browserType.launch();
   const evidence = {
     status: "passed",
-    browser: {name: browserName, version: browser.version()},
+    browser: {name: browserName, version: browser.version(), node: process.version},
     visualEnvironment: process.platform === "linux" && browserName === "chromium" ? await linuxVisualEnvironment() : {platform:process.platform, arch:process.arch},
     baseUrl,
     viewports,
@@ -3566,10 +3574,14 @@ async function assertFocusTraversal(
       const node = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
       return node === null || node.getClientRects().length > 0;
     }), expectedOrder);
+  // blur() does not reset Firefox's sequential focus starting point after
+  // earlier workflow clicks. Anchor before the document, then exercise real Tab.
   await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
+    const anchor = document.createElement("span");
+    anchor.id = "proof-focus-start";
+    anchor.tabIndex = -1;
+    document.body.prepend(anchor);
+    anchor.focus();
   });
 
   const sequence = [];
@@ -3590,6 +3602,7 @@ async function assertFocusTraversal(
     }
   }
 
+  await page.evaluate(() => document.getElementById("proof-focus-start")?.remove());
   const focusedTestIds = sequence.map((item) => item.testId).filter(Boolean);
   for (const forbidden of forbiddenTestIds) {
     if (focusedTestIds.includes(forbidden)) {
