@@ -27,7 +27,15 @@
         "bash scripts/linux-proof.sh --mode full --jobs 2 --keep-going"
       ],
       "resourceClass": "heavy",
-      "stepTimeoutMs": 14400000
+      "stepTimeoutMs": 14400000,
+      "verificationModes": {
+        "push": [
+          "bash scripts/linux-proof.sh --mode push --base \"$FLEET_COMPARISON_SHA\" --jobs 2 --keep-going"
+        ],
+        "sprint": [
+          "bash scripts/linux-proof.sh --mode sprint --base \"$FLEET_COMPARISON_SHA\" --jobs 2 --keep-going"
+        ]
+      }
     }
   }
 }

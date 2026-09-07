@@ -31,9 +31,11 @@ on the canonical Cachy worker, task branches, and atomic history over PR ceremon
 - Code, workflow and test changes require a passing Linux receipt for their
   pushed checkpoint. Documentation-only changes use relevant contract checks
   and cite the unchanged qualified code checkpoint.
-- The current remote entrypoint submits the full repository workflow. The
-  push/sprint/only modes below describe the repository DAG on its qualified
-  worker; use them for planning on the Mac, not local Cargo execution.
+- Use `npm run proof:remote -- --mode push` for ordinary changes and `--mode
+  sprint` for active-frontier checkpoints. The default remains full. The worker
+  pins the comparison commit when queued. After success, use the fleet `land`
+  command with that job ID; it rejects moved source or default branches.
+  Local `proof:lanes` modes remain useful for planning on the Mac.
 - A 24 GiB host permits one closure-heavy local Rust build at a time across all
   workspaces. Execution-bearing `npm run proof:lanes` modes acquire the shared
   host lock through `scripts/with-heavy-build-lock.py`; they default to serial

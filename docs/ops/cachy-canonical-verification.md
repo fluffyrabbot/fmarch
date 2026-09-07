@@ -29,7 +29,13 @@ changes no application, workflow, test, or baseline implementation.
 ## Submit a checkpoint
 
 Commit and push a clean task branch, then run `npm run proof:remote` from that
-worktree. The helper uses `~/apps/fluffyfleet` (override with
+worktree. Use `npm run proof:remote -- --mode push` for the touched closure plus
+push sentinels, or `--mode sprint` for the active frontier. No arguments selects
+full. Commands come from the committed workflow, never arbitrary CLI text.
+The controller pins origin/main as the comparison SHA at submission, and the
+worker uses that SHA even if main moves while queued.
+
+The helper uses `~/apps/fluffyfleet` (override with
 `FLUFFYFLEET_ROOT`), fetches origin, checks that the remote branch still equals
 HEAD, and enqueues that immutable commit on Cachy. Inspect its signed receipt
 with `node scripts/fleet.mjs job TASK_ID --host cachy --evidence` in fluffyfleet.
@@ -109,3 +115,13 @@ Qualification fixed Linux directory fsync on capability descriptors, a
 spectator-test delivery race, mobile layout/caret behavior, PostgreSQL TLS
 provisioning, and the TLS cold-build budget/interrupt cleanup. Visual samples
 were reviewed on Linux without overwriting the existing baseline.
+
+## Land a verified checkpoint
+
+In fluffyfleet, preview with `node scripts/fleet.mjs land fmarch --job JOB_ID
+--host cachy`, then add `--apply` to advance origin/main. The command verifies
+the worker signature, successful exact-checkpoint verification, selected
+workflow commands, canonical host, and unchanged task/default remote branches.
+The push uses an explicit expected-value lease after checking ancestry, so a
+concurrent main update fails without overwriting it. Submit a fresh proof when
+the comparison base changes. Local checkout updates remain separate.

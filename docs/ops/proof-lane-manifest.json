@@ -1147,7 +1147,7 @@
     {
       "id": "tools:proof-infra",
       "tier": "active",
-      "paths": ["tools/"],
+      "paths": ["tools/", ".fluffyfleet.json", "scripts/linux-proof.sh", "scripts/provision-linux-proof.sh"],
       "lanes": [
         "test:proof-lane-contract",
         "test:proof-cache-maintenance",
