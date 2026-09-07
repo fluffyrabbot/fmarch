@@ -136,8 +136,9 @@ The full graph now includes `test:frontend-cross-browser`: the existing role,
 private-channel, confirmation and keyboard-focus journeys run in Firefox and
 Playwright WebKit at mobile and desktop viewport sizes. Each browser has separate artifacts and a recorded version.
 The added engines run in rootless Podman using the digest-pinned Playwright
-1.60.0 Noble image (Node 24.15.0), with no external network and a 4 GiB/2 CPU
-budget per engine. This isolates their ICU/libxml2 requirements from CachyOS;
+1.60.0 Noble image (Node 24.15.0), with no external network and inherited worker cgroup limits.
+Podman cgroup creation is disabled so browser memory remains within the worker
+18 GiB high/22 GiB maximum and 1200% CPU aggregate budget. This isolates their ICU/libxml2 requirements from CachyOS;
 the existing native Chromium/font identity stays separate. Static fallback is forbidden, and these screenshots do not replace the reviewed
 Chromium pixel baseline. Playwright WebKit on Linux is not native Safari or an
 actual iPad; retain those acceptance checks separately. New lanes stay unmeasured

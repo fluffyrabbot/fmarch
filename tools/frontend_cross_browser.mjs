@@ -22,7 +22,9 @@ if (process.argv.includes('--provision')) {
       await mkdir(artifactDir, {recursive: true});
       const child = spawnSync('podman', [
         'run', '--rm', '--init', '--pull=never', '--network=none',
-        '--memory=4g', '--cpus=2', '--pids-limit=512', '--shm-size=512m', '--timeout=830',
+        // Inherit the fleet service cgroup instead of escaping into a sibling
+        // libpod scope. The worker's aggregate memory/CPU caps include browsers.
+        '--cgroups=disabled', '--shm-size=512m', '--timeout=830',
         '--volume', `${root}:/workspace`, '--volume', `${artifactDir}:/proof-artifacts`,
         '--workdir', '/workspace', '--env', `FMARCH_PROOF_BROWSER=${name}`,
         '--env', 'FMARCH_ALLOW_STATIC_ROLE_FALLBACK=0', '--env', 'FMARCH_PROOF_ARTIFACT_DIR=/proof-artifacts',
