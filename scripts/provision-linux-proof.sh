@@ -5,7 +5,7 @@ set -euo pipefail
 [[ $(node --version) == v26.8.1 && $(npm --version) == 12.0.2 ]]
 [[ $(rustc --version) == 'rustc 1.95.0 '* ]]
 pgroot="$FMARCH_PROOF_TOOLCHAIN_ROOT/postgresql-16.15-openssl"
-if [[ ! -x "$pgroot/bin/pg_ctl" ]]; then
+if [[ ! -f "$pgroot/.provisioned" ]]; then
   mkdir -p "$FMARCH_PROOF_TOOLCHAIN_ROOT/source"
   cd "$FMARCH_PROOF_TOOLCHAIN_ROOT/source"
   archive=postgresql-16.15.tar.bz2
@@ -15,8 +15,9 @@ if [[ ! -x "$pgroot/bin/pg_ctl" ]]; then
     echo "$digest  $archive.download" | sha256sum --check
     mv "$archive.download" "$archive"
   fi
-  tar -xjf postgresql-16.15.tar.bz2
-  cd postgresql-16.15
+  mkdir -p postgresql-16.15-openssl
+  tar -xjf "$archive" -C postgresql-16.15-openssl --strip-components=1
+  cd postgresql-16.15-openssl
   ./configure --prefix="$pgroot" --without-icu --without-readline --with-ssl=openssl
   timeout --signal=TERM --kill-after=30s 20m make -j2
   timeout --signal=TERM --kill-after=30s 5m make install
@@ -24,3 +25,4 @@ fi
 [[ $("$pgroot/bin/pg_ctl" --version) == 'pg_ctl (PostgreSQL) 16.15' ]]
 
 [[ $("$pgroot/bin/pg_config" --configure) == *--with-ssl=openssl* ]]
+touch "$pgroot/.provisioned"
