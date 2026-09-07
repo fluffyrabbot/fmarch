@@ -51,7 +51,7 @@
     </span>
   </header>
   <p
-    class="fm-well"
+    class="private-queue-boundary"
     data-testid="player-private-boundary"
   >
     {view.boundary.detail}
@@ -79,12 +79,11 @@
         data-kind={item.kind}
       >
         <div class="private-item-heading">
-          <h3>{item.label}</h3>
+          <div class="private-item-summary"><h3>{item.label}</h3><p>{item.value}</p></div>
           {#if attention.state === "ready"}
             <span data-testid={`private-attention-${item.id}`}>{reviewed.has(item.id) ? "Reviewed" : "New"}</span>
           {/if}
         </div>
-        <p>{item.value}</p>
         <div class="private-item-actions">
         <button
           type="button"
@@ -128,6 +127,9 @@
 
 <style>
   section { scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + 16px); }
+  .private-queue-boundary { font-size: 13px; }
+  .private-item-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .player-private-queue__item { gap: 4px; }
   .private-item-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .private-item-heading > span { color: var(--fm-ink-subtle); font-size: 12px; white-space: nowrap; }
   .private-filter { margin-inline-start: auto; min-height: 44px; max-width: 130px; font: inherit; color: inherit; background: var(--fm-paper); border: 1px solid var(--fm-rule); border-radius: 4px; }
