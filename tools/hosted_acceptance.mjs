@@ -1,6 +1,7 @@
 // Explicit, read-only hosted gate. Never part of hermetic application proof.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -32,6 +33,9 @@ export async function checkHostedReadiness(config, fetcher = fetch) {
 
 export async function runHostedAcceptance(env = process.env) {
   const config = hostedAcceptanceConfig(env);
+  const git = (...args) => execFileSync('git', args, {cwd: new URL('../', import.meta.url), encoding: 'utf8', timeout: 10_000}).trim();
+  assert.equal(git('status', '--porcelain'), '', 'Hosted acceptance requires a clean checker checkout');
+  const checkerCommit = assertFullCommit(git('rev-parse', 'HEAD'));
   const {chromium} = await import('playwright');
   const {BOARD_ROUTE_CONTRACT} = await import('../frontend/src/lib/app/app-shell-model.mjs');
   const checks = await checkHostedReadiness(config);
@@ -53,7 +57,7 @@ export async function runHostedAcceptance(env = process.env) {
   } finally { await browser.close(); }
   const directory = path.resolve(env.FMARCH_HOSTED_ACCEPTANCE_OUTPUT ?? 'target/hosted-acceptance');
   await mkdir(directory, {recursive: true});
-  const receipt = {status: 'passed', scope: 'live-hosted-readiness-and-public-browser', generatedAt: new Date().toISOString(), target: config, checks, authenticatedJourneys: 'unproven', realSafariAndDevices: 'unproven', releaseReady: false};
+  const receipt = {checkerCommit, status: 'passed', scope: 'live-hosted-readiness-and-public-browser', generatedAt: new Date().toISOString(), target: config, checks, authenticatedJourneys: 'unproven', realSafariAndDevices: 'unproven', releaseReady: false};
   const file = path.join(directory, `${randomUUID()}.json`);
   await writeFile(file, JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'});
   console.log(`Hosted readiness/public-browser gate passed: ${file}`);
