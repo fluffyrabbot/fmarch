@@ -4,7 +4,7 @@ import test from "node:test";
 
 import {
   parseArguments,
-  localProofRuntime,
+  productionPointerPushArguments,
   railwayArguments,
   runtimeConfig,
   validateDatabaseAuthorityVariables,
@@ -25,46 +25,37 @@ const serviceIds = { apiServiceId, migratorServiceId, frontendServiceId };
 test("promotion arguments are fail closed", () => {
   assert.deepEqual(parseArguments([]), { checkOnly: false });
   assert.deepEqual(parseArguments(["--check"]), { checkOnly: true });
+  assert.deepEqual(parseArguments(["--fleet-receipt", "receipt.json", "--fleet-job", "job"]), {
+    checkOnly: false,
+    fleetReceipt: "receipt.json",
+    fleetJob: "job",
+  });
   assert.throws(() => parseArguments(["--force"]), /unknown production promotion argument/);
+  assert.throws(() => parseArguments(["--fleet-receipt"]), /requires a value/);
 });
 
 test("production promotion consumes the coordinated staging receipt", async () => {
   const source = await readFile(new URL("./production_promotion.mjs", import.meta.url), "utf8");
   const stagingReceipt = source.indexOf("const stagingReceipt = assertReleaseReceipt");
   const stagingValidation = source.indexOf("await validateCoordinatedEnvironment");
-  const releasePush = source.indexOf(
-    'run("git", ["push", "origin", `${head}:refs/heads/production`]',
-  );
   const coordinator = source.indexOf('"tools/release_coordinator.mjs"');
+  const releasePush = source.indexOf("productionPointerPushArguments(head, originProduction)");
   assert.equal(stagingReceipt >= 0, true);
   assert.equal(stagingValidation > stagingReceipt, true);
-  assert.equal(releasePush > stagingValidation, true);
-  assert.equal(coordinator > releasePush, true);
+  assert.equal(coordinator > stagingValidation, true);
+  assert.equal(releasePush > coordinator, true);
+  assert.equal(source.includes('"proof:lanes"'), false);
 });
 
-test("promotion proof preserves an explicit database or provisions the repo-local default", () => {
-  const privileged = {
-    DATABASE_MIGRATION_URL: "postgres://owner/private",
-    DATABASE_KEY_ADMIN_URL: "postgres://key-admin/private",
-    FMARCH_DATABASE_APPLICATION_PASSWORD: "application-secret",
-    FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "key-admin-secret",
-    PGCONNECT_TIMEOUT: "1",
-    PGOPTIONS: "-c search_path=attacker,public",
-  };
-  const explicit = localProofRuntime({
-    DATABASE_URL: "postgres://explicit/db",
-    KEEP: "yes",
-    ...privileged,
-  });
-  assert.equal(explicit.startLocalPostgres, false);
-  assert.equal(explicit.env.DATABASE_URL, "postgres://explicit/db");
-  assert.equal(explicit.env.KEEP, "yes");
-  for (const key of Object.keys(privileged)) assert.equal(explicit.env[key], undefined);
-
-  const local = localProofRuntime({ KEEP: "yes" });
-  assert.equal(local.startLocalPostgres, true);
-  assert.equal(local.env.DATABASE_URL, "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch");
-  assert.equal(local.env.KEEP, "yes");
+test("production pointer advancement is an exact expected-value CAS", () => {
+  const commit = "a".repeat(40);
+  const prior = "b".repeat(40);
+  assert.deepEqual(productionPointerPushArguments(commit, prior), [
+    `--force-with-lease=refs/heads/production:${prior}`,
+    "origin",
+    `${commit}:refs/heads/production`,
+  ]);
+  assert.throws(() => productionPointerPushArguments("main", prior), /full Git SHA/);
 });
 
 test("Railway commands use explicit project flags except after an explicit link", () => {

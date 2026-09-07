@@ -813,6 +813,9 @@
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
         "tools/release_coordinator_contract.test.mjs",
+        "tools/fleet_release_proof.mjs",
+        "tools/immutable_json_receipt.mjs",
+        "tools/release_gameday_contract.test.mjs",
         "tools/schema_epoch_reset_contract.test.mjs"
       ],
       "lanes": [

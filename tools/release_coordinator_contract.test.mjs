@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
   assertReleaseReceipt,
   bindReleaseAttempt,
   buildReleaseReceipt,
+  canonicalJson,
   validateDeploymentArtifact,
-  validateProofReceipt,
+  validateFleetProofReceipt,
+  validateProductionReleaseReadiness,
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
+import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import {
   canonicalDeploymentPolicy,
   parseMigrationCompletion,
@@ -51,22 +58,94 @@ const deployment = (id, digest, status = "SUCCESS") => ({
   status,
   meta: { imageDigest: digest },
 });
-const proofReceipt = {
-  schema: 3,
-  id: "full-proof",
-  state: "passed",
-  context: {
-    commit,
-    mode: "full",
-    clean: true,
-    worktree_sha256: "e".repeat(64),
-    manifest_sha256: "d".repeat(64),
-    database_identity_sha256: "f".repeat(64),
-    selected_lane_ids: ["lane"],
-  },
-  lanes: { lane: { state: "passed", status: 0 } },
-  finished_at: "2026-08-26T00:00:00.000Z",
+const fleetWorkflow = {
+  setup: ["npm ci --no-audit --no-fund"],
+  verify: ["bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going"],
 };
+const { privateKey: fleetPrivateKey, publicKey: fleetPublicKey } = generateKeyPairSync("ed25519");
+const fleetPublicKeyPem = fleetPublicKey.export({ type: "spki", format: "pem" });
+const fleetTrustRootSha256 = createHash("sha256")
+  .update(fleetPublicKey.export({ type: "spki", format: "der" }))
+  .digest("hex");
+
+function signedFleetReceipt({
+  releaseCommit = commit,
+  mode = "audit",
+  outcome = "passed",
+  stepOk = true,
+  signingKey = fleetPrivateKey,
+} = {}) {
+  const comparisonCommit = "9".repeat(40);
+  const jobId = "20260907T120000Z-release";
+  const document = {
+    schemaVersion: 1,
+    taskId: jobId,
+    jobId,
+    host: "cachy",
+    state: "finished",
+    error: null,
+    completedAt: "2026-09-07T12:30:00.000Z",
+    task: {
+      schemaVersion: 1,
+      id: jobId,
+      repository: "fmarch",
+      host: "cachy",
+      baseSha: releaseCommit,
+      resultSha: releaseCommit,
+      comparisonSha: comparisonCommit,
+      verificationMode: mode,
+      remoteRef: "ops/release-authority",
+      state: "finished",
+    },
+    evidence: {
+      schemaVersion: 1,
+      taskId: jobId,
+      repository: "fmarch",
+      host: "cachy",
+      platform: "linux",
+      baseSha: releaseCommit,
+      resultSha: releaseCommit,
+      comparisonSha: comparisonCommit,
+      verificationMode: mode,
+      verifyOnly: true,
+      outcome,
+      error: null,
+      workflow: {
+        profile: "linux",
+        environment: {
+          FLEET_COMPARISON_SHA: comparisonCommit,
+          FLEET_VERIFICATION_MODE: mode,
+        },
+        setup: fleetWorkflow.setup,
+        verify: fleetWorkflow.verify,
+      },
+      steps: [
+        {
+          label: `verify: ${fleetWorkflow.verify[0]}`,
+          ok: stepOk,
+          status: stepOk ? 0 : 1,
+          timedOut: false,
+        },
+      ],
+    },
+  };
+  const signature = sign(null, Buffer.from(canonicalJson(document)), signingKey);
+  return {
+    queueState: "finished",
+    document: {
+      ...document,
+      signature: { algorithm: "ed25519", value: signature.toString("base64") },
+    },
+  };
+}
+
+const fleetReceipt = signedFleetReceipt();
+const fleetProof = validateFleetProofReceipt(fleetReceipt, {
+  expectedCommit: commit,
+  publicKeyPem: fleetPublicKeyPem,
+  expectedTrustRootSha256: fleetTrustRootSha256,
+  expectedWorkflow: fleetWorkflow,
+});
 const attemptReceipt = bindReleaseAttempt({
   environment: "staging",
   commit,
@@ -82,6 +161,7 @@ test("repository validation rejects dirty, stale, or unpointed releases", () => 
     head: commit,
     originMain: commit,
     originProduction: commit,
+    productionIsAncestor: true,
     pushed: true,
     environment: "staging",
   };
@@ -91,23 +171,102 @@ test("repository validation rejects dirty, stale, or unpointed releases", () => 
   assert.throws(() => validateReleaseRepository({ ...valid, status: " M file" }), /clean/);
   assert.throws(() => validateReleaseRepository({ ...valid, originMain: "e".repeat(40) }), /origin\/main/);
   assert.throws(
-    () => validateReleaseRepository({ ...valid, environment: "production", originProduction: "e".repeat(40) }),
-    /production pointer/,
+    () => validateReleaseRepository({ ...valid, environment: "production", productionIsAncestor: false }),
+    /must be an ancestor/,
+  );
+  assert.equal(
+    validateReleaseRepository({
+      ...valid,
+      environment: "production",
+      originProduction: "e".repeat(40),
+    }),
+    true,
   );
 });
 
-test("proof receipt is exact-commit and full-mode bound", () => {
-  assert.equal(validateProofReceipt(proofReceipt, commit), true);
-  assert.throws(() => validateProofReceipt({ ...proofReceipt, context: { ...proofReceipt.context, mode: "push" } }, commit), /full/);
-  assert.throws(() => validateProofReceipt(proofReceipt, "e".repeat(40)), /commit/);
+test("release proof requires an exact-commit signed Cachy audit envelope", () => {
+  assert.equal(fleetProof.commit, commit);
+  assert.equal(fleetProof.verification_mode, "audit");
+  const substitutedAuthority = generateKeyPairSync("ed25519");
   assert.throws(
-    () => validateProofReceipt({ ...proofReceipt, context: { ...proofReceipt.context, clean: false } }, commit),
-    /clean worktree/,
+    () => validateFleetProofReceipt(
+      signedFleetReceipt({ signingKey: substitutedAuthority.privateKey }),
+      {
+        expectedCommit: commit,
+        publicKeyPem: substitutedAuthority.publicKey.export({ type: "spki", format: "pem" }),
+        expectedTrustRootSha256: fleetTrustRootSha256,
+        expectedWorkflow: fleetWorkflow,
+      },
+    ),
+    /pinned Cachy trust root/,
+  );
+  const tampered = structuredClone(fleetReceipt);
+  tampered.document.task.baseSha = "e".repeat(40);
+  assert.throws(
+    () => validateFleetProofReceipt(tampered, {
+      expectedCommit: commit,
+      publicKeyPem: fleetPublicKeyPem,
+      expectedTrustRootSha256: fleetTrustRootSha256,
+      expectedWorkflow: fleetWorkflow,
+    }),
+    /signature/,
   );
   assert.throws(
-    () => validateProofReceipt({ ...proofReceipt, schema: 2 }, commit),
-    /schema must be 3/,
+    () => validateFleetProofReceipt(signedFleetReceipt({ mode: "push" }), {
+      expectedCommit: commit,
+      publicKeyPem: fleetPublicKeyPem,
+      expectedTrustRootSha256: fleetTrustRootSha256,
+      expectedWorkflow: fleetWorkflow,
+    }),
+    /audit mode/,
   );
+  assert.throws(
+    () => validateFleetProofReceipt(signedFleetReceipt({ stepOk: false, outcome: "failed" }), {
+      expectedCommit: commit,
+      publicKeyPem: fleetPublicKeyPem,
+      expectedTrustRootSha256: fleetTrustRootSha256,
+      expectedWorkflow: fleetWorkflow,
+    }),
+    /did not pass/,
+  );
+});
+
+test("production readiness rejects every incomplete required registry item", () => {
+  const registry = {
+    version: 1,
+    sections: [
+      { id: "platform", required_for: "platform" },
+      { id: "release", required_for: "release" },
+      { id: "optional", required_for: "optional" },
+    ],
+    items: [
+      { id: "code", section: "platform", status: "complete" },
+      { id: "approval", section: "release", status: "complete" },
+      { id: "later", section: "optional", status: "deferred" },
+    ],
+  };
+  const readiness = validateProductionReleaseReadiness(registry);
+  assert.equal(readiness.status, "passed");
+  assert.deepEqual(readiness.completed_items, ["approval", "code"]);
+  assert.throws(
+    () => validateProductionReleaseReadiness({
+      ...registry,
+      items: registry.items.map((item) => item.id === "approval" ? { ...item, status: "blocked" } : item),
+    }),
+    /approval=blocked/,
+  );
+});
+
+test("immutable release receipts publish atomically and refuse replacement", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fmarch-release-receipt-"));
+  try {
+    const output = path.join(directory, "receipt.json");
+    await publishImmutableJson(output, { status: "passed" });
+    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), { status: "passed" });
+    await assert.rejects(publishImmutableJson(output, { status: "different" }), /already exists/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("deployment validation rejects failures and digest drift", () => {
@@ -464,7 +623,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       frontend: { status: "ok", release_commit: commit },
     },
     schemaHead: "0002_profile_mute_durable_target.sql",
-    proofReceipt,
+    fleetProof,
     attemptReceipt,
     runtimeValidation,
     hostedAcceptance: {status: 'passed', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
@@ -477,7 +636,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
   assert.equal(receipt.images.migrator_api_digest_equal, true);
   assert.throws(
     () => assertReleaseReceipt({ ...receipt, commit: "e".repeat(40) }),
-    /digest does not match/,
+    /commit drifted/,
   );
   assert.throws(
     () => assertReleaseReceipt({

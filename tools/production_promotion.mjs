@@ -5,12 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { preflightWorkosOidc } from "./workos_oidc_preflight.mjs";
+import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
+import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import {
   assertReleaseReceipt,
   validateDeploymentArtifact,
   validateHealth,
+  validateProductionReleaseReadiness,
 } from "./release_coordinator_contract.mjs";
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULTS = Object.freeze({
   projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
   apiServiceId: "18b6f450-3739-4f21-8e01-f58c63cec834",
@@ -23,7 +27,6 @@ const DEFAULTS = Object.freeze({
   productionApiUrl: "https://fmarch-production.up.railway.app",
   productionFrontendUrl: "https://fmarch-frontend-production.up.railway.app",
   internalApiUrl: "http://fmarch.railway.internal:8080",
-  localDatabaseUrl: "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
 });
 
 const terminalDeploymentStates = new Set([
@@ -38,9 +41,22 @@ const terminalDeploymentStates = new Set([
 ]);
 
 export function parseArguments(argv) {
-  const unknown = argv.filter((argument) => argument !== "--check");
-  assert.deepEqual(unknown, [], `unknown production promotion argument: ${unknown.join(", ")}`);
-  return { checkOnly: argv.includes("--check") };
+  const result = { checkOnly: false };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--check") result.checkOnly = true;
+    else if (argument === "--fleet-receipt") result.fleetReceipt = requiredValue(argv, ++index, argument);
+    else if (argument === "--fleet-public-key") result.fleetPublicKey = requiredValue(argv, ++index, argument);
+    else if (argument === "--fleet-job") result.fleetJob = requiredValue(argv, ++index, argument);
+    else throw new Error(`unknown production promotion argument: ${argument}`);
+  }
+  return result;
+}
+
+function requiredValue(argv, index, flag) {
+  const value = argv[index];
+  assert.ok(value && !value.startsWith("--"), `${flag} requires a value`);
+  return value;
 }
 
 export function validateRepositoryState({
@@ -904,17 +920,6 @@ export function validateDomainList(result, expectedDomain, label) {
   assert.equal(domain.syncStatus, "ACTIVE", `${label} domain is ${domain.syncStatus}`);
 }
 
-export function localProofRuntime(env) {
-  const proofEnv = scrubPrivilegedDatabaseEnvironment(env);
-  if (proofEnv.DATABASE_URL) {
-    return { startLocalPostgres: false, env: proofEnv };
-  }
-  return {
-    startLocalPostgres: true,
-    env: { ...proofEnv, DATABASE_URL: DEFAULTS.localDatabaseUrl },
-  };
-}
-
 function scrubPrivilegedDatabaseEnvironment(env) {
   const scrubbed = { ...env };
   for (const key of Object.keys(scrubbed)) {
@@ -935,18 +940,33 @@ export function railwayArguments(projectId, args, { linked = false } = {}) {
   return linked ? args : [...args, "--project", projectId];
 }
 
+export function productionPointerPushArguments(commit, expectedProductionCommit) {
+  assert.match(commit ?? "", /^[0-9a-f]{40}$/u, "production commit must be a full Git SHA");
+  assert.match(
+    expectedProductionCommit ?? "",
+    /^[0-9a-f]{40}$/u,
+    "expected production pointer must be a full Git SHA",
+  );
+  return [
+    `--force-with-lease=refs/heads/production:${expectedProductionCommit}`,
+    "origin",
+    `${commit}:refs/heads/production`,
+  ];
+}
+
 async function main() {
-  const { checkOnly } = parseArguments(process.argv.slice(2));
+  const args = parseArguments(process.argv.slice(2));
+  const { checkOnly } = args;
   const config = runtimeConfig();
   validateSecretCustodyPolicy(secretCustodyPolicy());
 
   run("git", ["fetch", "--quiet", "origin", "main", "production"]);
   const head = text("git", ["rev-parse", "HEAD"]);
+  const originProduction = text("git", ["rev-parse", "origin/production"]);
   const stagingReceiptPath = path.resolve(
     process.env.FMARCH_STAGING_RELEASE_RECEIPT ??
       path.join(
-        path.dirname(fileURLToPath(import.meta.url)),
-        "..",
+        repoRoot,
         "target",
         "releases",
         "staging",
@@ -967,6 +987,26 @@ async function main() {
     originMain: text("git", ["rev-parse", "origin/main"]),
     productionIsAncestor,
   });
+  const fleetReceiptPath = args.fleetReceipt ?? process.env.FMARCH_FLEET_RECEIPT;
+  const fleetPublicKeyPath =
+    args.fleetPublicKey ??
+    process.env.FMARCH_FLEET_PUBLIC_KEY ??
+    defaultFleetPublicKeyPath();
+  const fleetProof = await loadFleetReleaseProof({
+    repoRoot,
+    commit: head,
+    receiptPath: fleetReceiptPath,
+    publicKeyPath: fleetPublicKeyPath,
+    expectedJobId: args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID ?? null,
+  });
+  assert.deepEqual(
+    stagingReceipt.fleet_proof,
+    fleetProof,
+    "production must reuse the exact signed fleet proof bound by staging",
+  );
+  const completionRegistry = await loadCompletionRegistry();
+  await validateRegistry(completionRegistry);
+  validateProductionReleaseReadiness(completionRegistry);
 
   run(
     "railway",
@@ -1045,25 +1085,12 @@ async function main() {
     frontendUrl: config.stagingFrontendUrl,
   });
 
-  const proof = localProofRuntime(process.env);
-  if (proof.startLocalPostgres) {
-    run("npm", ["run", "dev:postgres", "--", "start"], {
-      env: proof.env,
-      stdio: "inherit",
-    });
-  }
-  run("npm", ["run", "proof:lanes", "--", "--mode", "full", "--run"], {
-    env: proof.env,
-    stdio: "inherit",
-  });
-
   if (checkOnly) {
     console.log(`production promotion check passed for ${head}`);
     return;
   }
 
   disconnectProductionGitSources(config, productionConfig);
-  run("git", ["push", "origin", `${head}:refs/heads/production`], { stdio: "inherit" });
   const coordinatorArguments = [
     "tools/release_coordinator.mjs",
     "--environment",
@@ -1072,7 +1099,14 @@ async function main() {
     head,
     "--reuse-staging-receipt",
     stagingReceiptPath,
+    "--fleet-receipt",
+    fleetReceiptPath,
+    "--fleet-public-key",
+    fleetPublicKeyPath,
   ];
+  if (args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID) {
+    coordinatorArguments.push("--fleet-job", args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID);
+  }
   if (stagingReceipt.schema_epoch_reset) {
     coordinatorArguments.push(
       "--schema-epoch-reset",
@@ -1081,6 +1115,9 @@ async function main() {
   }
   run(process.execPath, coordinatorArguments, {
     env: scrubPrivilegedDatabaseEnvironment(process.env),
+    stdio: "inherit",
+  });
+  run("git", ["push", ...productionPointerPushArguments(head, originProduction)], {
     stdio: "inherit",
   });
   console.log(`production promotion completed for ${head}`);
