@@ -2092,6 +2092,16 @@ async function assertMobileViewportBudget(page, { role, viewport }) {
   if (pageGeometry.scrollY !== 0) {
     throw new Error(`${role.id} mobile viewport budget must run at the top of the page`);
   }
+  if (actionBottom > maxActionBottom || pageGeometry.documentHeight > maxDocumentHeight) {
+    await page.screenshot({ path: path.join(artifactDir, `${role.id}-mobile-budget-failure.png`), fullPage: true });
+    await writeFile(path.join(artifactDir, `${role.id}-mobile-budget-failure.json`), JSON.stringify({
+      ...pageGeometry, actionBottom, maxActionBottom, maxDocumentHeight,
+      elements: await page.locator('h1,h2,h3,details,main section').evaluateAll(nodes => nodes.map(node => ({
+        tag: node.tagName, testId: node.dataset.testid, text: node.textContent.slice(0, 140),
+        top: node.getBoundingClientRect().y, height: node.getBoundingClientRect().height,
+      }))),
+    }, null, 2));
+  }
   if (actionBottom > maxActionBottom) {
     throw new Error(
       `${role.id} mobile primary action ends at ${actionBottom}px, beyond ${maxActionBottom}px first-viewport budget`,
