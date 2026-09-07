@@ -49,9 +49,9 @@
   <aside class="fm-preview-toolbar" aria-label="UI preview">
     <a href="/_dev/ui" data-sveltekit-reload>UI workbench</a>
     <span>Simulated data · commands disabled</span>
-    <button type="button" on:click={() => previewTransport?.setPhase("D01")}>Day</button>
-    <button type="button" on:click={() => previewTransport?.setPhase("N01")}>Night</button>
-    <button type="button" on:click={() => previewTransport?.setPhase("T01")}>Twilight</button>
+    <button type="button" disabled={!previewReady} on:click={() => previewTransport?.setPhase("D01")}>Day</button>
+    <button type="button" disabled={!previewReady} on:click={() => previewTransport?.setPhase("N01")}>Night</button>
+    <button type="button" disabled={!previewReady} on:click={() => previewTransport?.setPhase("T01")}>Twilight</button>
   </aside>
 {/if}
 {#if previewReady}
