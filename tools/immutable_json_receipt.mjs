@@ -11,16 +11,38 @@ async function syncDirectory(directory) {
   }
 }
 
+async function ensureDurableDirectory(directory) {
+  try {
+    await syncDirectory(directory);
+    return;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const parent = path.dirname(directory);
+  assertDistinctParent(directory, parent);
+  await ensureDurableDirectory(parent);
+  try {
+    await mkdir(directory);
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+  }
+  await syncDirectory(parent);
+  await syncDirectory(directory);
+}
+
+function assertDistinctParent(directory, parent) {
+  if (directory === parent) throw new Error(`cannot create receipt directory: ${directory}`);
+}
+
 export async function publishImmutableJson(output, value, { mode = 0o600 } = {}) {
   const directory = path.dirname(output);
-  await mkdir(directory, { recursive: true });
-  await syncDirectory(directory);
+  await ensureDurableDirectory(directory);
   const stage = path.join(
     directory,
     `.${path.basename(output)}.stage-${process.pid}-${randomUUID()}`,
   );
   let handle = await open(stage, "wx", mode);
-  let published = false;
+  let stagePresent = true;
   try {
     await syncDirectory(directory);
     await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`);
@@ -35,16 +57,17 @@ export async function publishImmutableJson(output, value, { mode = 0o600 } = {})
       }
       throw error;
     }
-    published = true;
     await syncDirectory(directory);
     await unlink(stage);
+    stagePresent = false;
     await syncDirectory(directory);
     return output;
   } finally {
     if (handle !== null) await handle.close();
-    if (!published) {
+    if (stagePresent) {
       try {
         await unlink(stage);
+        stagePresent = false;
         await syncDirectory(directory);
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
