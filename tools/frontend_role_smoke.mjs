@@ -2654,6 +2654,9 @@ async function installCommandMock(
 }
 
 async function installFixtureApiRoutes(page, { routes, projections = {}, state = {} }) {
+  await page.route("**/api/gameplay/games/*/channels/*/reading-checkpoint", route => route.fulfill({
+    contentType: "application/json", body: JSON.stringify({ revision: 0, position: null, available: false }),
+  }));
   for (const fixtureRoute of routes) {
     await page.route(fixtureRoute.pattern, async (route) => {
       if (
@@ -3985,6 +3988,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await proveReaderNavigation(page, baseUrl, routePath);
   await proveReadingReturn(page, baseUrl, routePath);
   await proveReloadReadingReturn(page, baseUrl, routePath);
+  await proveDurableReadingCheckpoint(page, baseUrl, routePath);
   return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, recoveryControls: true, offlineRetry: true, cancelledRetry: true, newestRetry: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
 }
 
@@ -4182,4 +4186,64 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
     }
     assert.equal(requests, channel === "main" ? 9 : 4);
   } finally { await page.unroute(endpoint, handler); }
+}
+
+
+async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
+  const peer = await page.context().newPage();
+  await installLiveProjectionHarness(peer, { roleId: "player" });
+  await installFixtureApiRoutes(peer, { routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState() });
+  let saved = { revision: 1, position: { source_seq: 20, offset_px: 110 }, available: true };
+  let writes = 0, peerReads = 0, unavailable = false;
+  const checkpointEndpoint = "**/api/gameplay/games/*/channels/*/reading-checkpoint";
+  const threadEndpoint = "**/api/gameplay/games/midsummer?**";
+  const checkpoint = async route => {
+    if (route.request().method() === "POST") {
+      const input = route.request().postDataJSON();
+      if (input.expected_revision !== saved.revision) return route.fulfill({ status: 409, json: saved });
+      saved = { revision: saved.revision + 1, position: input.position, available: true }; writes++;
+    } else if (route.request().frame().page() === peer) peerReads++;
+    return route.fulfill({ json: saved });
+  };
+  const thread = route => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has("around_seq")) return route.fallback();
+    if (unavailable) return route.fulfill({ status: 404 });
+    const posts = Array.from({ length: 60 }, (_, i) => ({ game: "midsummer", source_seq: i + 1, stream_seq: i + 1,
+      channel_id: "main", author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
+      body: `Durable historical post ${i + 1}.`, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 }));
+    return route.fulfill({ json: { next_before_seq: null, next_after_seq: 60, posts } });
+  };
+  for (const tab of [page, peer]) { await tab.route(checkpointEndpoint, checkpoint); await tab.route(threadEndpoint, thread); }
+  try {
+    await Promise.all([page, peer].map(tab => tab.goto(`${baseUrl}${routePath}?checkpoint-proof=ready`, { waitUntil: "networkidle" })));
+    for (const tab of [page, peer]) await tab.waitForFunction(() => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - 110) < 2);
+    const peerTop = await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top);
+    const initialReads = peerReads;
+    await page.locator("#thread-post-20").focus(); await page.keyboard.press("PageDown");
+    await page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("reading-checkpoint"));
+    assert.equal(writes, 1); assert.notEqual(saved.position.source_seq, 20);
+    const reconnectRequest = page.waitForRequest(request => {
+      const url = new URL(request.url());
+      return url.searchParams.has("_fmarch_projection_refresh") && url.searchParams.get("around_seq") === String(saved.position.source_seq);
+    });
+    await page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
+    await reconnectRequest;
+    assert.equal(writes, 1, "reconnect does not record a reading gesture");
+    for (let i = 0; peerReads === initialReads && i < 50; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    assert.ok(peerReads > initialReads, "peer refreshes after an invalidation");
+    assert.ok(Math.abs(await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top) - peerTop) < 2, "peer stays in place");
+    await peer.reload({ waitUntil: "networkidle" });
+    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
+    for (const outcome of ["hidden", "deleted"]) {
+      unavailable = true; saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
+      await page.goto(`${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { waitUntil: "networkidle" });
+      await page.getByTestId("reader-recovery-retry").waitFor();
+      assert.equal(await page.locator("#thread-post-20").count(), 0);
+      assert.equal(writes, 1, "restoration and background activity never create saves");
+    }
+  } finally {
+    await peer.close(); await page.unroute(checkpointEndpoint, checkpoint); await page.unroute(threadEndpoint, thread);
+    await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  }
 }

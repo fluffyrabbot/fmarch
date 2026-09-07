@@ -7628,7 +7628,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         tx.commit().await.unwrap();
     }
 
-    let app = router(pool);
+    let app = router(pool.clone());
     let main = app
         .clone()
         .oneshot(
@@ -7667,6 +7667,46 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     )
     .await;
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    let checkpoint_uri =
+        format!("/games/{game}/channels/private:role_pm:slot_1/reading-checkpoint");
+    let token = issue_dev_session(&app, "user_a", &[]).await;
+    let write = || {
+        Request::builder()
+            .method("POST")
+            .uri(&checkpoint_uri)
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"expected_revision":0,"position":{"source_seq":11,"offset_px":100}}"#,
+            ))
+            .unwrap()
+    };
+    assert_eq!(
+        app.clone().oneshot(write()).await.unwrap().status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        get_as_dev_principal(&app, "user_b", checkpoint_uri.clone())
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    sqlx::query("DELETE FROM private_channel_member WHERE game_id=$1")
+        .bind(game)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        get_as_dev_principal(&app, "user_a", checkpoint_uri.clone())
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        app.oneshot(write()).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -13379,4 +13419,80 @@ async fn private_attention_http_denies_forged_items_and_transfers_delivery_witho
         serde_json::from_slice(&to_bytes(delivered.into_body(), usize::MAX).await.unwrap())
             .unwrap();
     assert_eq!(value[0]["source_seq"], 41);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn reading_checkpoints_are_reader_owned_revisioned_and_visibility_checked(
+    pool: sqlx::PgPool,
+) {
+    let game = Uuid::new_v4();
+    let pack = test_pack_artifact("mafiascum");
+    install_test_pack_artifact(&pool, &pack).await;
+    sqlx::query("INSERT INTO game_index (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, updated_seq) VALUES ($1,$2,$3,$4,'active','D01',1,2,120)")
+        .bind(game).bind(&pack.pack_ref.key).bind(i64::from(pack.pack_ref.version)).bind(pack.pack_ref.content_hash.as_str()).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO thread_view (game_id,source_seq,stream_seq,channel_id,author_kind,body,occurred_at) SELECT $1,n,n,'main','host_narrator','post ' || n,1781928000 FROM generate_series(1,120) n")
+        .bind(game).execute(&pool).await.unwrap();
+    let app = router(pool.clone());
+    let token = issue_dev_session(&app, "checkpoint_reader", &[]).await;
+    let uri = format!("/games/{game}/channels/main/reading-checkpoint");
+    let write = |revision, seq| {
+        Request::builder().method("POST").uri(&uri)
+        .header("authorization", format!("Bearer {token}")).header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"expected_revision":revision,"position":{"source_seq":seq,"offset_px":107}}).to_string())).unwrap()
+    };
+    for (revision, seq) in [(0, 20), (1, 10)] {
+        let response = app.clone().oneshot(write(revision, seq)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    let conflict = app.clone().oneshot(write(1, 30)).await.unwrap();
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    let body: serde_json::Value =
+        serde_json::from_slice(&to_bytes(conflict.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(body["revision"], 2);
+    assert_eq!(body["position"]["source_seq"], 10);
+    let (a, b) = tokio::join!(
+        app.clone().oneshot(write(2, 20)),
+        app.clone().oneshot(write(2, 20))
+    );
+    let mut statuses = [a.unwrap().status().as_u16(), b.unwrap().status().as_u16()];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409]);
+    let other = get_as_dev_principal(&app, "checkpoint_other", uri.clone()).await;
+    let other: serde_json::Value =
+        serde_json::from_slice(&to_bytes(other.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(other["revision"], 0);
+    assert!(other["position"].is_null());
+    sqlx::query("INSERT INTO moderation_target_state (surface_id,source_seq,visibility,reason,moderator_principal_id,updated_seq) VALUES ($1,20,'hidden','test',$2,130)")
+        .bind(game).bind(PrincipalId::fixture("moderator").as_uuid()).execute(&pool).await.unwrap();
+    for deleted in [false, true] {
+        if deleted {
+            sqlx::query("DELETE FROM thread_view WHERE game_id=$1 AND source_seq=20")
+                .bind(game)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let response = get_as_dev_principal(&app, "checkpoint_reader", uri.clone()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["available"], false);
+        assert_eq!(body["position"]["source_seq"], 20);
+        assert_eq!(
+            app.clone().oneshot(write(3, 20)).await.unwrap().status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+    assert_eq!(
+        app.clone().oneshot(write(3, 0)).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
 }

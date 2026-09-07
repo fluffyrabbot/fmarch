@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from "svelte";
+  import { createReadingCheckpoint, deliberateReadingOrigin } from "$lib/app/reading-checkpoint.mjs";
   import { privateNewCount } from "$lib/app/private-attention.mjs";
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
   import { afterNavigate, pushState, replaceState } from "$app/navigation";
@@ -152,6 +153,7 @@
       !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
   });
   let readerNavigation;
+  let checkpointStatus = "ready";
   let readerThreadWindow = null;
   let readerTrip = null;
   let readerRecovery = { state: "idle", intent: "origin" };
@@ -217,13 +219,73 @@
       },
     });
     const unsubscribe = page.subscribe(value => readerNavigation.observe(value));
+    let mounted = true;
+    let sampleTimer;
+    let gestureUntil = 0;
+    const checkpoints = data.player.principalId ? createReadingCheckpoint({
+      game: data.game.id, channel: data.threadPager.channel, principal: data.player.principalId,
+      onInitial: value => {
+        if (value.position && !$page.state?.readerNavigation?.destination && !window.location.hash
+          && !$page.url.searchParams.has("post") && !$page.url.searchParams.has("private")) {
+          readerThreadWindow = { aroundSeq: String(value.position.source_seq) };
+          readerNavigation.checkpoint({ id: `thread-post-${value.position.source_seq}`, top: value.position.offset_px }, { resume: true });
+        }
+      },
+      onStatus: async status => {
+        if (status === checkpointStatus) return;
+        const origin = captureReadingPosition();
+        checkpointStatus = status;
+        await tick();
+        if (mounted) restoreReadingPosition(origin);
+      },
+      onDenied: () => {
+        readerNavigation.release();
+        if (data.threadPager.channel !== "main") {
+          projectionStore.invalidate(["thread"], { reason: "reading_checkpoint_access_denied" });
+          projectionStore.applySnapshot({ thread: { posts: [], nextBeforeSeq: null } });
+        }
+      },
+    }) : null;
+    void checkpoints?.refresh();
+    const sample = () => {
+      clearTimeout(sampleTimer);
+      sampleTimer = setTimeout(() => {
+        if (Date.now() > gestureUntil || readerTrip?.destination) return;
+        const origin = deliberateReadingOrigin();
+        if (!origin) return;
+        readerThreadWindow = { aroundSeq: origin.id.slice("thread-post-".length) };
+        readerNavigation.checkpoint(origin);
+        checkpoints?.save({ source_seq: Number(origin.id.slice("thread-post-".length)), offset_px: origin.top });
+      }, 350);
+    };
     const release = event => {
+      checkpoints?.interruptResume();
+      gestureUntil = 0; clearTimeout(sampleTimer);
       if (event.target?.closest?.('[data-testid="reader-recovery"]')) return;
       cancelReaderRecovery();
+      const target = event.target;
+      const reading = target?.closest?.('#player-thread') && !target.closest('button, a, input, textarea, select, [contenteditable="true"]');
+      const scrollKey = event.type === "keydown" && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key);
+      if (reading && (event.type !== "keydown" || scrollKey)) {
+        gestureUntil = Date.now() + 2000;
+        sample();
+      }
     };
     const interactions = ["pointerdown", "wheel", "touchstart", "keydown"];
     for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
+    const flushCheckpoint = () => {
+      if (Date.now() > gestureUntil || readerTrip?.destination) return;
+      const origin = deliberateReadingOrigin();
+      if (origin) checkpoints?.save({ source_seq: Number(origin.id.slice("thread-post-".length)), offset_px: origin.top });
+    };
+    window.addEventListener("pagehide", flushCheckpoint);
+    const scrolled = () => { if (Date.now() <= gestureUntil) sample(); };
+    window.addEventListener("scroll", scrolled, { passive: true });
     return () => {
+      flushCheckpoint(); mounted = false;
+      clearTimeout(sampleTimer); checkpoints?.dispose();
+      window.removeEventListener("pagehide", flushCheckpoint);
+      window.removeEventListener("scroll", scrolled);
       unsubscribe(); document.removeEventListener("focusin", rememberPost);
       for (const event of interactions) document.removeEventListener(event, release, { capture: true });
       readerNavigation.dispose();
@@ -960,6 +1022,9 @@
       onQuote={quotePlayerPost}
     >
       <svelte:fragment slot="recovery">
+      {#if checkpointStatus === "error"}
+        <p role="status">Reading position could not be synced. Keep reading to save again when connected.</p>
+      {/if}
       {#if readerRecovery.state !== "idle"}
         <div class="fm-card" data-testid="reader-recovery" role="group" aria-label="Thread recovery" aria-busy={readerRecovery.state === "pending"}>
           <p role="status">{readerNavigationMessage}</p>

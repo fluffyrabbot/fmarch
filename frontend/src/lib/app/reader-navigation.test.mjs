@@ -126,3 +126,15 @@ test("retry preserves the anchor, supersedes a cancelled attempt, and newest com
   assert.deepEqual(page.state, { unrelated: 1 }); assert.equal(focused, 1);
   controller.dispose();
 });
+
+test("deliberate checkpoints replace stale origins without restoring; initial resume restores once", async () => {
+  let page = { url: new URL("https://example.test/g/g"), state: { other: 1 } }, controller;
+  const restores = [];
+  controller = createReaderNavigation({ getPage: () => page,
+    replace: (_, state) => { page = { ...page, state }; controller.observe(page); },
+    onChange() {}, afterRender: () => Promise.resolve(), restore: origin => restores.push(origin) });
+  controller.checkpoint({ id: "thread-post-10", top: 100 }, { resume: true }); await settle();
+  controller.checkpoint({ id: "thread-post-20", top: 90 }); await settle();
+  assert.equal(restores.length, 1); assert.equal(page.state.readerNavigation.origin.id, "thread-post-20");
+  assert.equal(page.state.other, 1); controller.dispose();
+});

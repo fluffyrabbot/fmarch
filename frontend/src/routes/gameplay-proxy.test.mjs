@@ -179,3 +179,22 @@ test("private review writes require the same origin and forward only the session
   assert.equal(calls[0].headers.authorization, "Bearer opaque-session");
   assert.deepEqual(JSON.parse(calls[0].body), { item_id: "slot-mention-41-slot-7" });
 });
+
+test("checkpoint proxy covers main and private channels, preserves conflicts, and strips authority fields", async () => {
+  for (const channel of ["main", "private:role_pm:slot-7"]) {
+    const path = `games/game-1/channels/${channel}/reading-checkpoint`;
+    const url = new URL(`https://app.example/api/gameplay/${path}`);
+    const calls = [];
+    const context = { params: { path }, url, cookies: { get: () => "opaque-session" },
+      fetch: async (_, init) => { calls.push(init); return Response.json({ revision: 2 }, { status: 409 }); } };
+    const payload = { expected_revision: 1, position: { source_seq: 20, offset_px: -30, principal_id: "forged" }, principal_id: "forged" };
+    const request = origin => new Request(url, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(payload) });
+    assert.equal((await POST({ ...context, request: request("https://evil.example") })).status, 403);
+    const result = await POST({ ...context, request: request(url.origin) });
+    assert.equal(result.status, 409); assert.equal(result.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(JSON.parse(calls[0].body), { expected_revision: 1, position: { source_seq: 20, offset_px: -30 } });
+    assert.equal(calls[0].headers.authorization, "Bearer opaque-session");
+    const read = await GET({ ...context, request: new Request(url) });
+    assert.equal(read.status, 409); assert.equal(calls.length, 2);
+  }
+});

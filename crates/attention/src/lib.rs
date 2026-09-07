@@ -227,6 +227,35 @@ pub fn private_review_stream_id(principal: PrincipalId, game: Uuid, item_id: &st
     Uuid::new_v5(&PRIVATE_REVIEW_NAMESPACE, &identity)
 }
 
+pub const READING_CHECKPOINT_SET: &str = "ReaderCheckpointSet";
+const READING_CHECKPOINT_NAMESPACE: Uuid = Uuid::from_u128(0x8eeb8350482f4af5a82f5a88cdcc1e02);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReadingPosition {
+    pub source_seq: i64,
+    pub offset_px: i32,
+}
+impl ReadingPosition {
+    pub fn is_valid(self) -> bool {
+        (1..=9_007_199_254_740_991).contains(&self.source_seq)
+            && (-1_000_000..=1_000_000).contains(&self.offset_px)
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ReadingCheckpoint {
+    pub revision: i64,
+    pub position: Option<ReadingPosition>,
+}
+
+pub fn reading_checkpoint_stream_id(principal: PrincipalId, game: Uuid, channel: &str) -> Uuid {
+    let mut identity = Vec::with_capacity(32 + channel.len());
+    identity.extend_from_slice(principal.as_uuid().as_bytes());
+    identity.extend_from_slice(game.as_bytes());
+    identity.extend_from_slice(channel.as_bytes());
+    Uuid::new_v5(&READING_CHECKPOINT_NAMESPACE, &identity)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +275,41 @@ mod tests {
             read_through_seq: 4,
             version: 3,
         }
+    }
+
+    #[test]
+    fn reading_checkpoint_identity_is_scoped_to_reader_game_and_channel() {
+        let reader = PrincipalId::fixture("checkpoint_reader");
+        let game = Uuid::from_u128(17);
+        let stream = reading_checkpoint_stream_id(reader, game, "main");
+        assert_eq!(stream, reading_checkpoint_stream_id(reader, game, "main"));
+        assert_ne!(
+            stream,
+            reading_checkpoint_stream_id(PrincipalId::fixture("other"), game, "main")
+        );
+        assert_ne!(
+            stream,
+            reading_checkpoint_stream_id(reader, Uuid::from_u128(18), "main")
+        );
+        assert_ne!(
+            stream,
+            reading_checkpoint_stream_id(reader, game, "private")
+        );
+        assert!(!ReadingPosition {
+            source_seq: 0,
+            offset_px: 0
+        }
+        .is_valid());
+        assert!(!ReadingPosition {
+            source_seq: 1,
+            offset_px: 1_000_001
+        }
+        .is_valid());
+        assert!(ReadingPosition {
+            source_seq: 20,
+            offset_px: -100
+        }
+        .is_valid());
     }
 
     #[test]

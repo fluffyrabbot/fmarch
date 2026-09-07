@@ -91,6 +91,8 @@ use trust_safety::{
 use uuid::Uuid;
 
 mod attention_writes;
+mod reading_checkpoints;
+pub use reading_checkpoints::{reading_checkpoint, set_reading_checkpoint};
 mod effect_projection;
 mod moderation_writes;
 mod private_channel_projection;

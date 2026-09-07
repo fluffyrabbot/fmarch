@@ -75,6 +75,14 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
         } else focusDestination(next.destination);
       });
     },
+    checkpoint(origin, { resume = false } = {}) {
+      const page = getPage();
+      if (disposed || readerNavigationState(page)?.destination) return;
+      this.release();
+      const trip = { scope: readerScope(page.url), origin, destination: null };
+      if (!resume) { observed = trip; onChange(trip); }
+      replace("", { ...page.state, readerNavigation: trip });
+    },
     recover(intent = "origin") {
       const page = getPage();
       if (disposed || !["origin", "newest"].includes(intent) || readerNavigationState(page)?.destination !== null) return;
@@ -103,7 +111,6 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       });
     },
     release() {
-      if (!restoration) return;
       restoration = null;
       recovery?.abort();
       ++epoch;
