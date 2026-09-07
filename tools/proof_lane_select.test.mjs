@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
+  assertMappedSelection,
   MANIFEST_PATH,
   REPO_ROOT,
   artifactPathMatches,
@@ -100,11 +101,9 @@ function assertionSourceFiles(packageMetadata, kind, name) {
   return [target.src_path];
 }
 
-test('tracked timing baselines cover every current manifest lane exactly', () => {
-  assert.deepEqual(
-    Object.keys(timingBaseline.lanes).sort(),
-    Object.keys(manifest.lanes).sort(),
-  );
+test('tracked timing baselines describe real passing observations of current lanes', () => {
+  // New lanes remain unmeasured until qualified host timings exist.
+  for (const laneId of Object.keys(timingBaseline.lanes)) assert.ok(manifest.lanes[laneId]);
   for (const [laneId, timing] of Object.entries(timingBaseline.lanes)) {
     assert.ok(Number.isFinite(timing.seconds) && timing.seconds >= 0, `${laneId} needs a duration`);
     assert.equal(timing.status, 0, `${laneId} baseline must come from a passing observation`);
@@ -1875,3 +1874,10 @@ test('documentation changes select their bounded contract gate', () => {
   }
   assert.ok(packageScripts['test:proof-lane-contract'].includes('npm run test:documentation'));
 });
+ test('narrow proof refuses unmapped changes while full proof retains them', () => {
+  for (const mode of ['inner', 'push', 'sprint']) {
+    assert.throws(() => assertMappedSelection(selectLanes({changed: ['unknown/file.rs'], manifest, crateGraph: null, mode})), /Unmapped changes block/);
+  }
+  assert.doesNotThrow(() => assertMappedSelection(selectLanes({changed: ['unknown/file.rs'], manifest, crateGraph: null, mode: 'full'})));
+  assert.throws(() => execFileSync(process.execPath, ['tools/proof_lane_select.mjs', '--mode', 'push', '--changed', 'unknown/file.rs', '--json'], {cwd: REPO_ROOT, stdio: 'pipe'}), error => error.status === 1 && /Unmapped changes block/.test(error.stderr));
+ });
