@@ -1566,10 +1566,18 @@ ALTER SEQUENCE public.identity_lifecycle_audit_id_seq OWNED BY public.identity_l
 CREATE TABLE public.media_upload_ledger (
     upload_id uuid NOT NULL,
     principal_id uuid NOT NULL,
-    encoded_bytes bigint NOT NULL,
-    content_id text,
+    stored_bytes bigint NOT NULL,
+    content_id text NOT NULL,
     created_at bigint NOT NULL,
-    CONSTRAINT media_upload_ledger_encoded_bytes_check CHECK ((encoded_bytes > 0))
+    state text NOT NULL,
+    lease_token uuid,
+    lease_expires_at bigint,
+    updated_at bigint NOT NULL,
+    CONSTRAINT media_upload_ledger_content_id_check CHECK ((content_id ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT media_upload_ledger_lease_shape_check CHECK ((((state = ANY (ARRAY['installing'::text, 'reclaiming'::text])) AND (lease_token IS NOT NULL) AND (lease_expires_at IS NOT NULL)) OR ((state = ANY (ARRAY['ready'::text, 'failed'::text])) AND (lease_token IS NULL) AND (lease_expires_at IS NULL)))),
+    CONSTRAINT media_upload_ledger_state_check CHECK ((state = ANY (ARRAY['installing'::text, 'ready'::text, 'reclaiming'::text, 'failed'::text]))),
+    CONSTRAINT media_upload_ledger_stored_bytes_check CHECK ((stored_bytes > 0)),
+    CONSTRAINT media_upload_ledger_updated_at_check CHECK ((updated_at >= created_at))
 );
 
 
@@ -2795,6 +2803,14 @@ ALTER TABLE ONLY public.media_upload_ledger
 
 
 --
+-- Name: media_upload_ledger media_upload_ledger_principal_content_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_upload_ledger
+    ADD CONSTRAINT media_upload_ledger_principal_content_key UNIQUE (principal_id, content_id);
+
+
+--
 -- Name: member_inbox_cursor member_inbox_cursor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3833,6 +3849,13 @@ CREATE INDEX investigation_memory_investigator_idx ON public.investigation_memor
 --
 
 CREATE INDEX investigation_memory_result_private_kid_idx ON public.investigation_memory USING btree (result_private_kid, game_id, investigator_slot, target_slot, mode);
+
+
+--
+-- Name: media_upload_ledger_active_lease_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX media_upload_ledger_active_lease_idx ON public.media_upload_ledger USING btree (lease_expires_at, principal_id, content_id) WHERE (state = ANY (ARRAY['installing'::text, 'reclaiming'::text]));
 
 
 --

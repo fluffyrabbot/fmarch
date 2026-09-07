@@ -65,8 +65,8 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0008_game_slot_mentions.sql");
-  assert.equal(report.migration_file_count, 8);
+  assert.equal(report.migration_head, "0009_media_upload_operation_journal.sql");
+  assert.equal(report.migration_file_count, 9);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
   assert.equal(report.table_count, 101);
@@ -98,6 +98,24 @@ test("checked-in database schema is append-only with a generated current snapsho
   assert.match(
     checkedMigrations["0004_remove_admin_grant_assurance.sql"],
     /DROP COLUMN principal_id,[\s\S]*DROP COLUMN consumed_at/u,
+  );
+  const mediaJournal = checkedMigrations["0009_media_upload_operation_journal.sql"];
+  assert.match(mediaJournal, /RENAME COLUMN encoded_bytes TO stored_bytes/u);
+  assert.match(mediaJournal, /DELETE FROM public\.media_upload_ledger[\s\S]*content_id IS NULL/u);
+  assert.match(mediaJournal, /SET state = 'ready',[\s\S]*WHERE state IS NULL/u);
+  assert.match(mediaJournal, /ALTER COLUMN content_id SET NOT NULL/u);
+  assert.match(
+    mediaJournal,
+    /CHECK \(state IN \('installing', 'ready', 'reclaiming', 'failed'\)\)/u,
+  );
+  assert.match(
+    mediaJournal,
+    /state IN \('installing', 'reclaiming'\)[\s\S]*lease_token IS NOT NULL[\s\S]*lease_expires_at IS NOT NULL[\s\S]*state IN \('ready', 'failed'\)[\s\S]*lease_token IS NULL[\s\S]*lease_expires_at IS NULL/u,
+  );
+  assert.match(mediaJournal, /UNIQUE \(principal_id, content_id\)/u);
+  assert.match(
+    mediaJournal,
+    /CREATE INDEX media_upload_ledger_active_lease_idx[\s\S]*WHERE state IN \('installing', 'reclaiming'\)/u,
   );
 });
 

@@ -223,6 +223,18 @@ const EXPECTED_PROFILE_MUTE_COLUMNS: &[&str] = &[
     "version:bigint",
 ];
 
+const EXPECTED_MEDIA_UPLOAD_LEDGER_COLUMNS: &[&str] = &[
+    "upload_id:uuid:NO",
+    "principal_id:uuid:NO",
+    "stored_bytes:bigint:NO",
+    "content_id:text:NO",
+    "created_at:bigint:NO",
+    "state:text:NO",
+    "lease_token:uuid:YES",
+    "lease_expires_at:bigint:YES",
+    "updated_at:bigint:NO",
+];
+
 const EXPECTED_IDENTITY_LIFECYCLE_AUDIT_COLUMNS: &[&str] = &[
     "id:bigint",
     "event_at:bigint",
@@ -414,7 +426,9 @@ const EXPECTED_INDEXES: &[&str] = &[
     "investigation_memory_investigator_idx",
     "investigation_memory_pkey",
     "investigation_memory_result_private_kid_idx",
+    "media_upload_ledger_active_lease_idx",
     "media_upload_ledger_pkey",
+    "media_upload_ledger_principal_content_key",
     "media_upload_ledger_principal_idx",
     "member_inbox_cursor_pkey",
     "member_inbox_item_page_idx",
@@ -753,9 +767,14 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "investigation_memory_pkey:p",
     "investigation_memory_result_private_kid_fkey:f",
     "investigation_memory_result_private_kid_present:c",
-    "media_upload_ledger_encoded_bytes_check:c",
+    "media_upload_ledger_content_id_check:c",
+    "media_upload_ledger_lease_shape_check:c",
     "media_upload_ledger_pkey:p",
+    "media_upload_ledger_principal_content_key:u",
     "media_upload_ledger_principal_id_fkey:f",
+    "media_upload_ledger_state_check:c",
+    "media_upload_ledger_stored_bytes_check:c",
+    "media_upload_ledger_updated_at_check:c",
     "member_inbox_cursor_pkey:p",
     "member_inbox_cursor_read_through_seq_check:c",
     "member_inbox_item_pkey:p",
@@ -1407,6 +1426,21 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
         "profile mute column",
         &profile_mute_columns,
         EXPECTED_PROFILE_MUTE_COLUMNS,
+    );
+
+    let media_upload_ledger_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type || ':' || is_nullable \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'media_upload_ledger' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read media upload operation journal column inventory");
+    assert_inventory(
+        "media upload operation journal column",
+        &media_upload_ledger_columns,
+        EXPECTED_MEDIA_UPLOAD_LEDGER_COLUMNS,
     );
 
     let lifecycle_audit_columns: Vec<String> = sqlx::query_scalar(

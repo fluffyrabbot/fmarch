@@ -1452,7 +1452,21 @@
     {
       "acl": "",
       "kind": "relation",
+      "name": "media_upload_ledger_active_lease_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
       "name": "media_upload_ledger_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "media_upload_ledger_principal_content_key",
       "owner": "$schema_owner",
       "namespace": "public"
     },

@@ -319,6 +319,33 @@ VALUES ('87000000-0000-4000-8000-000000000001', 1, 1, 'main', 'slot', 'slot_1',
   'D01', 1, '[]'::jsonb, 'hello', '[]'::jsonb);
 `;
 
+const mediaUploadJournalSeedSql = String.raw`
+-- Behavioral fixtures for the 0009 recoverable media operation journal. The
+-- legacy ledger admitted identity-less rows, malformed keys, duplicate final
+-- charges, and prefixed in-flight charges. The upgrade must reject impossible
+-- evidence, retain completed evidence, and expose interrupted work under an
+-- expired lease that a reconciler can safely claim.
+INSERT INTO media_upload_ledger
+  (upload_id, principal_id, encoded_bytes, content_id, created_at)
+VALUES
+  ('88000000-0000-4000-8000-000000000001',
+   '10000000-0000-4000-8000-000000000001', 11, NULL, 10),
+  ('88000000-0000-4000-8000-000000000002',
+   '10000000-0000-4000-8000-000000000001', 12, 'not-a-content-id', 11),
+  ('88000000-0000-4000-8000-000000000003',
+   '10000000-0000-4000-8000-000000000001', 20, repeat('a', 64), 20),
+  ('88000000-0000-4000-8000-000000000004',
+   '10000000-0000-4000-8000-000000000001', 25, repeat('a', 64), 21),
+  ('88000000-0000-4000-8000-000000000005',
+   '10000000-0000-4000-8000-000000000001', 30,
+   'pending:' || repeat('a', 64), 22),
+  ('88000000-0000-4000-8000-000000000006',
+   '10000000-0000-4000-8000-000000000001', 40,
+   'pending:' || repeat('b', 64), 30),
+  ('88000000-0000-4000-8000-000000000007',
+   '10000000-0000-4000-8000-000000000001', 50, repeat('c', 64), 40);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -474,6 +501,49 @@ const migrationFixtures = [
         expected: "YES",
         message:
           "0008 must let setup discussion, which is deliberately outside a phase, still deliver",
+      },
+    ],
+  },
+  {
+    version: 9,
+    seed: mediaUploadJournalSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT string_agg(
+          upload_id::text || ':' || content_id || ':' || state || ':' ||
+          stored_bytes::text || ':' || COALESCE(lease_token::text, '-') || ':' ||
+          COALESCE(lease_expires_at::text, '-') || ':' || updated_at::text,
+          ',' ORDER BY content_id)
+        FROM media_upload_ledger
+        WHERE principal_id = '10000000-0000-4000-8000-000000000001'`,
+        expected:
+          "88000000-0000-4000-8000-000000000004:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:ready:30:-:-:21,88000000-0000-4000-8000-000000000006:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:installing:40:88000000-0000-4000-8000-000000000006:30:30,88000000-0000-4000-8000-000000000007:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:ready:50:-:-:40",
+        message:
+          "0009 must delete impossible evidence, converge duplicates conservatively, preserve ready content, and expose interrupted installs under expired leases",
+      },
+      {
+        sql: String.raw`SELECT string_agg(
+          column_name || ':' || data_type || ':' || is_nullable,
+          ',' ORDER BY ordinal_position)
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'media_upload_ledger'`,
+        expected:
+          "upload_id:uuid:NO,principal_id:uuid:NO,stored_bytes:bigint:NO,content_id:text:NO,created_at:bigint:NO,state:text:NO,lease_token:uuid:YES,lease_expires_at:bigint:YES,updated_at:bigint:NO",
+        message: "0009 must install the exact recoverable media journal columns",
+      },
+      {
+        sql: String.raw`SELECT count(*)::text
+        FROM pg_constraint
+        WHERE conrelid = 'media_upload_ledger'::regclass
+          AND conname IN (
+            'media_upload_ledger_content_id_check',
+            'media_upload_ledger_state_check',
+            'media_upload_ledger_lease_shape_check',
+            'media_upload_ledger_updated_at_check',
+            'media_upload_ledger_principal_content_key'
+          )`,
+        expected: "5",
+        message: "0009 must enforce journal identity, state, lease, time, and uniqueness",
       },
     ],
   },
