@@ -32,6 +32,8 @@ pub struct AuthorityBudget {
 pub struct MediaBudget {
     pub max_in_flight: usize,
     pub account_quota_bytes: i64,
+    pub upload_lease_seconds: i64,
+    pub read_limits: media::MediaReadLimits,
 }
 
 #[derive(Clone)]
@@ -194,6 +196,11 @@ impl ApiRuntimeConfig {
                 "media account quota must fit one maximum canonical upload".to_string(),
             ));
         }
+        if !(60..=24 * 60 * 60).contains(&self.media.upload_lease_seconds) {
+            return Err(ApiRuntimeConfigError(
+                "media upload lease must be between one minute and one day".to_string(),
+            ));
+        }
         if self.auth.rate_limit_retention_seconds
             < self
                 .auth
@@ -238,6 +245,8 @@ impl Default for ApiRuntimeConfig {
             media: MediaBudget {
                 max_in_flight: 2,
                 account_quota_bytes: 256 * 1024 * 1024,
+                upload_lease_seconds: 15 * 60,
+                read_limits: media::MediaReadLimits::default(),
             },
             auth: AuthBudget {
                 identity_delivery_worker_config: IdentityDeliveryWorkerConfig::default(),

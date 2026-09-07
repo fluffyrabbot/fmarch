@@ -3,7 +3,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
-use media::{MediaLimits, MediaRepository, MediaStore};
+use media::{MediaLimits, MediaReadLimits, MediaRepository, MediaStore};
 use principal::PrincipalId;
 use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -1940,7 +1940,8 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
 async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state(
     pool: sqlx::PgPool,
 ) {
-    let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
+    let media =
+        MediaRepository::in_memory(MediaLimits::default(), MediaReadLimits::default()).unwrap();
     let app_a = api::router_with_state(
         ApiState::new(
             pool.clone(),

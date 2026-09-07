@@ -206,9 +206,9 @@ async fn supervise_worker(
         }
         let reason = match attempt {
             Ok(Ok(())) => "worker exited before shutdown".to_string(),
-            Ok(Err(error)) => error,
-            Err(error) if error.is_panic() => format!("worker panicked: {error}"),
-            Err(error) => format!("worker join failed: {error}"),
+            Ok(Err(_)) => "worker reported a bounded failure".to_string(),
+            Err(error) if error.is_panic() => "worker panicked".to_string(),
+            Err(_) => "worker join failed".to_string(),
         };
         match spec.policy {
             WorkerPolicy::Fatal => {
@@ -226,7 +226,7 @@ async fn supervise_worker(
                     event = "runtime_worker_restarting",
                     worker = spec.name,
                     restart = restarts,
-                    error = %reason,
+                    failure = reason.as_str(),
                     "runtime worker exited unexpectedly; restarting"
                 );
                 if wait_or_shutdown(backoff, shutdown.clone()).await {
@@ -366,10 +366,9 @@ async fn run_subject_erasure_worker(
                     return Ok(());
                 }
             }
-            Err(error) => {
+            Err(_) => {
                 tracing::error!(
                     event = "subject_erasure_worker_failed",
-                    error = %error,
                     "subject erasure worker iteration failed"
                 );
                 health.iteration_failed(SUBJECT_ERASURE_WORKER);
@@ -413,11 +412,10 @@ async fn run_day_event_worker(
                 let backlog = day_event_backlog(&pool).await.ok();
                 health.heartbeat(DAY_EVENT_WORKER, progress, backlog);
             }
-            Err(error) => {
+            Err(_) => {
                 tracing::error!(
                     event = "day_event_worker_failed",
                     worker_id = %worker_id,
-                    error = %error,
                     "DayEvent scheduler iteration failed"
                 );
                 health.iteration_failed(DAY_EVENT_WORKER);

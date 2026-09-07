@@ -91,6 +91,7 @@ pub struct ApiState {
     authority_transaction_limit: usize,
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,
+    media_upload_lease_seconds: i64,
     websocket_poll_interval: Duration,
     websocket_heartbeat_interval: Duration,
     live_event_wake: GameEventWakeHub,
@@ -145,6 +146,7 @@ impl ApiState {
             authority_transaction_limit,
             media_slots: Arc::new(Semaphore::new(runtime.media.max_in_flight)),
             media_account_quota_bytes: runtime.media.account_quota_bytes,
+            media_upload_lease_seconds: runtime.media.upload_lease_seconds,
             websocket_poll_interval: runtime.websocket.poll_interval,
             websocket_heartbeat_interval: runtime.websocket.heartbeat_interval,
             live_event_wake,
@@ -330,6 +332,12 @@ impl ApiState {
     pub fn with_media_limit(mut self, limit: usize) -> Self {
         assert!((1..=32).contains(&limit));
         self.media_slots = Arc::new(Semaphore::new(limit));
+        self
+    }
+
+    pub fn with_media_upload_lease_seconds(mut self, seconds: i64) -> Self {
+        assert!((60..=24 * 60 * 60).contains(&seconds));
+        self.media_upload_lease_seconds = seconds;
         self
     }
 

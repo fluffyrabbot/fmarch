@@ -28,7 +28,7 @@ use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 mod repository;
 mod variants;
 
-pub use repository::{MediaRepository, S3MediaConfig};
+pub use repository::{MediaReadLimits, MediaRepository, S3MediaConfig};
 pub use variants::{
     MediaUploadCommitResult, PreparedMediaUpload, StoredVariant, VariantFormat,
     VariantGenerationResult, VariantGenerationStatus, VariantKey, VariantKind, VariantLimits,
@@ -335,6 +335,10 @@ pub enum MediaError {
         operation: &'static str,
         reason: String,
     },
+    #[error("invalid media read limits: {0}")]
+    InvalidReadLimits(&'static str),
+    #[error("media read {resource} capacity is exhausted")]
+    ReadCapacityExhausted { resource: &'static str },
 }
 
 /// Local, content-addressed canonical-raster store.

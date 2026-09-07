@@ -985,10 +985,9 @@ fn finish_delivery_task(
             completed: u64::from(receipt.is_some()),
             in_flight,
         }),
-        Some(Ok(Err(error))) => {
+        Some(Ok(Err(_))) => {
             tracing::error!(
                 event = "identity_delivery_attempt_failed",
-                error = %error,
                 "identity delivery attempt failed; its fenced claim remains retryable"
             );
             Ok(IdentityDeliveryWorkerObservation {

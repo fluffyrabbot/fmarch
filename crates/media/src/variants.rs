@@ -282,7 +282,7 @@ impl VariantSet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredVariant {
     pub(crate) record: VariantRecord,
-    pub(crate) encoded_bytes: Vec<u8>,
+    pub(crate) encoded_bytes: bytes::Bytes,
 }
 
 impl StoredVariant {
@@ -292,6 +292,12 @@ impl StoredVariant {
 
     pub fn encoded_bytes(&self) -> &[u8] {
         &self.encoded_bytes
+    }
+
+    /// Consume the verified member without copying its encoded body. HTTP adapters use this to
+    /// transfer ownership of the one requested object directly into their response body.
+    pub fn into_parts(self) -> (VariantRecord, bytes::Bytes) {
+        (self.record, self.encoded_bytes)
     }
 }
 
@@ -577,7 +583,7 @@ impl MediaStore {
             if requested == Some((record.key.format, record.key.kind)) {
                 requested_variant = Some(StoredVariant {
                     record: record.clone(),
-                    encoded_bytes: bytes,
+                    encoded_bytes: bytes.into(),
                 });
             }
             hook(VariantLookupStage::MemberVerified(index))?;

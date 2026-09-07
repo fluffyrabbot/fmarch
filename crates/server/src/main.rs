@@ -296,6 +296,20 @@ impl RuntimeConfig {
                     12 * 1024 * 1024,
                     10 * 1024 * 1024 * 1024,
                 )? as i64,
+                upload_lease_seconds: bounded_env(
+                    "FMARCH_MEDIA_UPLOAD_LEASE_SECONDS",
+                    15 * 60,
+                    60,
+                    24 * 60 * 60,
+                )? as i64,
+                read_limits: media::MediaReadLimits::new(
+                    required_bounded_env("FMARCH_MEDIA_READ_MAX_IN_FLIGHT", 1, 1_024)? as usize,
+                    required_bounded_env(
+                        "FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES",
+                        16 * 1024 * 1024 + 32 * 1024,
+                        u32::MAX as u64,
+                    )? as usize,
+                )?,
             },
             auth: api::AuthBudget {
                 identity_delivery_worker_config: identity_delivery_worker_config_from_env(
@@ -749,6 +763,25 @@ fn strict_bool_env(name: &str, default: bool) -> Result<bool, std::io::Error> {
     }
 }
 
+fn required_bounded_env(name: &str, minimum: u64, maximum: u64) -> Result<u64, std::io::Error> {
+    let raw = optional_env(name)?.ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, format!("{name} is required"))
+    })?;
+    let parsed = raw.parse::<u64>().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} must be an integer between {minimum} and {maximum}"),
+        )
+    })?;
+    if !(minimum..=maximum).contains(&parsed) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} must be between {minimum} and {maximum}"),
+        ));
+    }
+    Ok(parsed)
+}
+
 fn bind_from_values(
     configured_bind: Option<&str>,
     platform_port: Option<&str>,
@@ -1076,9 +1109,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
+    let media_read = config.api.media.read_limits;
     let media_store = match &config.media {
         MediaConfig::S3(config) => {
-            media::MediaRepository::s3(config.clone(), media::MediaLimits::default())?
+            media::MediaRepository::s3(config.clone(), media::MediaLimits::default(), media_read)?
         }
         MediaConfig::LocalDebug(root) => {
             if !cfg!(debug_assertions) {
@@ -1088,7 +1122,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
-            media::MediaStore::open(root, media::MediaLimits::default())?.into()
+            media::MediaRepository::local(
+                media::MediaStore::open(root, media::MediaLimits::default())?,
+                media_read,
+            )
         }
     };
     let statement_timeout = format!("{}ms", config.database.statement_timeout_ms);
@@ -1240,8 +1277,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         supervisor.request_shutdown();
         let shutdown_result = supervisor.shutdown().await;
         pool.close().await;
-        if let Err(shutdown_error) = shutdown_result {
-            tracing::error!(error = %shutdown_error, "runtime workers failed while aborting startup");
+        if shutdown_result.is_err() {
+            tracing::error!(
+                event = "runtime_startup_abort_failed",
+                "runtime workers failed while aborting startup"
+            );
         }
         return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, message).into());
     }
@@ -1386,9 +1426,9 @@ async fn process_shutdown_signal() -> Result<&'static str, std::io::Error> {
 mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
-        local_proof_auth_from_values, strict_bool_env, virtual_hosted_style_from_value,
-        wait_for_shutdown_request, IdentityDeliveryMode, MIN_DATABASE_POOL_CONNECTIONS,
-        MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+        local_proof_auth_from_values, required_bounded_env, strict_bool_env,
+        virtual_hosted_style_from_value, wait_for_shutdown_request, IdentityDeliveryMode,
+        MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
 
     const TEST_LOCAL_PROOF_SECRET: &str =
@@ -1547,6 +1587,24 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+    }
+
+    #[test]
+    fn required_media_read_capacity_has_no_ambient_default() {
+        const NAME: &str = "FMARCH_TEST_REQUIRED_MEDIA_READ_CAPACITY";
+        std::env::remove_var(NAME);
+        assert_eq!(
+            required_bounded_env(NAME, 1, 64).unwrap_err().kind(),
+            std::io::ErrorKind::NotFound
+        );
+        std::env::set_var(NAME, "65");
+        assert_eq!(
+            required_bounded_env(NAME, 1, 64).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        std::env::set_var(NAME, "16");
+        assert_eq!(required_bounded_env(NAME, 1, 64).unwrap(), 16);
+        std::env::remove_var(NAME);
     }
 
     #[test]

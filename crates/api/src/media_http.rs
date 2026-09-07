@@ -20,7 +20,7 @@ use media::{
 };
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
@@ -63,6 +63,14 @@ enum DeclaredUploadFormat {
     Jpeg,
 }
 
+const MEDIA_PENDING_PREFIX: &str = "pending:";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MediaQuotaClaim {
+    Pending,
+    AlreadyCharged,
+}
+
 async fn media_upload(
     State(state): State<ApiState>,
     MethodAuthenticated(authorization): MethodAuthenticated,
@@ -70,7 +78,7 @@ async fn media_upload(
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
     let principal_id = authorization.context.principal_id;
-    let _media_permit = acquire_workload_slot(
+    let media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
     )?;
@@ -85,11 +93,26 @@ async fn media_upload(
     let store = state.media_store.clone();
     let variant_limits = state.variant_limits;
     let encoded = body.to_vec();
-    let upload_id = reserve_media_quota(&state, principal_id, encoded.len() as i64).await?;
-    let committed = match store
-        .prepare_and_commit_upload(encoded, variant_limits)
+    let encoded_bytes = encoded.len() as i64;
+    let prepared = match store
+        .prepare_upload_with_guard(encoded, variant_limits, media_permit)
         .await
     {
+        Ok(prepared) => prepared,
+        Err(error) => return Err(media_api_error(error)),
+    };
+    let content_id = prepared.handle().id();
+    let (upload_id, quota_claim) = reserve_media_quota(
+        &state.pool,
+        state.media_account_quota_bytes,
+        state.media_upload_lease_seconds,
+        principal_id,
+        encoded_bytes,
+        content_id,
+        unix_now_seconds(),
+    )
+    .await?;
+    let committed = match store.commit_prepared_upload(prepared).await {
         Ok(committed) => committed,
         Err(error) => {
             release_media_quota(&state.pool, upload_id).await;
@@ -98,11 +121,17 @@ async fn media_upload(
     };
     let ingest = committed.ingest();
     let variants = committed.variants();
-    sqlx::query("UPDATE media_upload_ledger SET content_id = $2 WHERE upload_id = $1")
-        .bind(upload_id)
-        .bind(ingest.handle().id().to_string())
-        .execute(&state.pool)
+    if quota_claim == MediaQuotaClaim::Pending {
+        complete_media_quota_content(
+            &state.pool,
+            upload_id,
+            principal_id,
+            content_id,
+            unix_now_seconds(),
+            state.media_upload_lease_seconds,
+        )
         .await?;
+    }
 
     let response = MediaUploadResponse {
         content_id: ingest.handle().id().to_string(),
@@ -136,15 +165,37 @@ async fn media_upload(
 }
 
 async fn reserve_media_quota(
-    state: &ApiState,
+    pool: &PgPool,
+    account_quota_bytes: i64,
+    lease_seconds: i64,
     principal_id: PrincipalId,
     encoded_bytes: i64,
-) -> Result<Uuid, ApiError> {
+    content_id: ContentId,
+    now: i64,
+) -> Result<(Uuid, MediaQuotaClaim), ApiError> {
     let upload_id = Uuid::new_v4();
-    let now = unix_now_seconds();
-    let mut tx = state.pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("media-quota:{principal_id}"))
+    let mut tx = pool.begin().await?;
+    lock_media_quota(&mut tx, principal_id).await?;
+    reconcile_media_quota(&mut tx, principal_id, now.saturating_sub(lease_seconds)).await?;
+    let content_id = content_id.to_string();
+    let existing = sqlx::query_scalar::<_, Uuid>(
+        "SELECT upload_id FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2 ORDER BY created_at, upload_id LIMIT 1",
+    )
+    .bind(principal_id.as_uuid())
+    .bind(&content_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if existing.is_some() {
+        tx.commit().await?;
+        return Ok((upload_id, MediaQuotaClaim::AlreadyCharged));
+    }
+
+    let pending_content_id = format!("{MEDIA_PENDING_PREFIX}{content_id}");
+    // Retrying identical bytes replaces the previous lease before accounting, so a crashed
+    // full-quota upload can resume immediately rather than waiting for expiry.
+    sqlx::query("DELETE FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2")
+        .bind(principal_id.as_uuid())
+        .bind(&pending_content_id)
         .execute(&mut *tx)
         .await?;
     let used = sqlx::query_scalar::<_, i64>(
@@ -153,7 +204,7 @@ async fn reserve_media_quota(
     .bind(principal_id.as_uuid())
     .fetch_one(&mut *tx)
     .await?;
-    if used.saturating_add(encoded_bytes) > state.media_account_quota_bytes {
+    if used.saturating_add(encoded_bytes) > account_quota_bytes {
         return Err(ApiError::Reject {
             status: StatusCode::PAYLOAD_TOO_LARGE,
             error: wire::RejectCode::NotAuthorized,
@@ -161,20 +212,120 @@ async fn reserve_media_quota(
         });
     }
     sqlx::query(
-        "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, NULL, $4)",
+        "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(upload_id)
     .bind(principal_id.as_uuid())
     .bind(encoded_bytes)
+    .bind(pending_content_id)
     .bind(now)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    Ok(upload_id)
+    Ok((upload_id, MediaQuotaClaim::Pending))
+}
+
+async fn complete_media_quota_content(
+    pool: &PgPool,
+    upload_id: Uuid,
+    principal_id: PrincipalId,
+    content_id: ContentId,
+    now: i64,
+    lease_seconds: i64,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    lock_media_quota(&mut tx, principal_id).await?;
+    reconcile_media_quota(&mut tx, principal_id, now.saturating_sub(lease_seconds)).await?;
+    let content_id = content_id.to_string();
+    let existing = sqlx::query_scalar::<_, Uuid>(
+        "SELECT upload_id FROM media_upload_ledger WHERE principal_id = $1 AND content_id = $2 ORDER BY created_at, upload_id LIMIT 1",
+    )
+    .bind(principal_id.as_uuid())
+    .bind(&content_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if existing.is_some_and(|existing| existing != upload_id) {
+        sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
+            .bind(upload_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        return Ok(());
+    }
+    if existing == Some(upload_id) {
+        tx.commit().await?;
+        return Ok(());
+    }
+    let pending_content_id = format!("{MEDIA_PENDING_PREFIX}{content_id}");
+    let updated = sqlx::query(
+        "UPDATE media_upload_ledger SET content_id = $2, created_at = $3 WHERE principal_id = $1 AND content_id = $4",
+    )
+    .bind(principal_id.as_uuid())
+    .bind(&content_id)
+    .bind(now)
+    .bind(&pending_content_id)
+    .execute(&mut *tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(sqlx::Error::Protocol(
+            "media upload has no current lease to complete".to_string(),
+        ));
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn lock_media_quota(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_id: PrincipalId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("media-quota:{principal_id}"))
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn reconcile_media_quota(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_id: PrincipalId,
+    lease_cutoff: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM media_upload_ledger WHERE principal_id = $1 AND created_at <= $2 AND (content_id IS NULL OR content_id LIKE 'pending:%')",
+    )
+    .bind(principal_id.as_uuid())
+    .bind(lease_cutoff)
+    .execute(&mut **tx)
+    .await?;
+    // Greenfield code now prevents duplicates; this compaction also converges any interrupted
+    // pre-cutover retries before quota is calculated.
+    sqlx::query(
+        r#"
+        WITH duplicate AS (
+          SELECT upload_id,
+                 ROW_NUMBER() OVER (PARTITION BY principal_id, content_id ORDER BY created_at, upload_id) AS ordinal
+          FROM media_upload_ledger
+          WHERE principal_id = $1
+            AND content_id IS NOT NULL
+            AND content_id NOT LIKE 'pending:%'
+        )
+        DELETE FROM media_upload_ledger AS ledger
+        USING duplicate
+        WHERE ledger.upload_id = duplicate.upload_id
+          AND duplicate.ordinal > 1
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn release_media_quota(pool: &PgPool, upload_id: Uuid) {
-    if sqlx::query("DELETE FROM media_upload_ledger WHERE upload_id = $1")
+    if sqlx::query(
+        "DELETE FROM media_upload_ledger WHERE upload_id = $1 AND (content_id IS NULL OR content_id LIKE 'pending:%')",
+    )
         .bind(upload_id)
         .execute(pool)
         .await
@@ -313,24 +464,17 @@ async fn media_thread_variant(
         .media_store
         .lookup_variant(id, asset.format, asset.kind, state.variant_limits)
         .await
-        .map_err(|_| {
-            tracing::error!("thread media lookup failed");
-            media_internal_error("thread media lookup failed".to_string())
-        })?
+        .map_err(media_lookup_error)?
         .ok_or_else(|| media_not_found("media variant unavailable"))?;
 
-    let record = stored.record();
+    let (record, encoded_bytes) = stored.into_parts();
     let etag = format!("\"{}\"", record.blake3());
     let reference = format!("{game}/{channel}/{source_seq}/{id}");
     let not_modified = if_none_match_matches(&headers, etag.as_str());
     let mut response = if not_modified {
         StatusCode::NOT_MODIFIED.into_response()
     } else {
-        (
-            StatusCode::OK,
-            Bytes::copy_from_slice(stored.encoded_bytes()),
-        )
-            .into_response()
+        (StatusCode::OK, encoded_bytes).into_response()
     };
     let response_headers = response.headers_mut();
     response_headers.insert(
@@ -377,6 +521,21 @@ async fn media_thread_variant(
         }),
     );
     Ok(response)
+}
+
+fn media_lookup_error(error: MediaError) -> ApiError {
+    if matches!(error, MediaError::ReadCapacityExhausted { .. }) {
+        return ApiError::Unavailable {
+            retry_after_seconds: 1,
+            message: "media read capacity is exhausted; retry shortly".to_string(),
+        };
+    }
+    let _ = error;
+    tracing::error!(
+        event = "thread_media_lookup_failed",
+        "thread media lookup failed"
+    );
+    media_internal_error("thread media lookup failed".to_string())
 }
 
 fn if_none_match_matches(headers: &HeaderMap, etag: &str) -> bool {
@@ -443,5 +602,122 @@ fn media_not_found(message: impl Into<String>) -> ApiError {
         status: StatusCode::NOT_FOUND,
         error: wire::RejectCode::Internal,
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn insert_principal(pool: &PgPool, principal_id: PrincipalId) {
+        sqlx::query(
+            "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::TEXT[], 1)",
+        )
+        .bind(principal_id.as_uuid())
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "../database_schema/migrations")]
+    async fn quota_reservation_reaps_crash_leases_and_compacts_duplicate_charges(pool: PgPool) {
+        let principal_id = PrincipalId::fixture("media-quota-reconcile");
+        insert_principal(&pool, principal_id).await;
+        let content_id = ContentId::from_bytes([7; 32]).to_string();
+        for (upload_id, bytes, content_id, created_at) in [
+            (Uuid::new_v4(), 80_i64, None, 10_i64),
+            (
+                Uuid::new_v4(),
+                80,
+                Some(format!(
+                    "{MEDIA_PENDING_PREFIX}{}",
+                    ContentId::from_bytes([8; 32])
+                )),
+                10,
+            ),
+            (Uuid::new_v4(), 20, Some(content_id.clone()), 20),
+            (Uuid::new_v4(), 20, Some(content_id.clone()), 21),
+        ] {
+            sqlx::query(
+                "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(upload_id)
+            .bind(principal_id.as_uuid())
+            .bind(bytes)
+            .bind(content_id)
+            .bind(created_at)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let reservation_content = ContentId::from_bytes([10; 32]);
+        reserve_media_quota(&pool, 100, 60, principal_id, 70, reservation_content, 100)
+            .await
+            .unwrap();
+        let rows = sqlx::query_as::<_, (i64, Option<String>)>(
+            "SELECT encoded_bytes, content_id FROM media_upload_ledger WHERE principal_id = $1 ORDER BY created_at, upload_id",
+        )
+        .bind(principal_id.as_uuid())
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let reservation_pending = format!("{MEDIA_PENDING_PREFIX}{reservation_content}");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.iter().map(|row| row.0).sum::<i64>(), 90);
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.1.as_deref() == Some(reservation_pending.as_str()))
+                .count(),
+            1
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.1.as_deref() == Some(content_id.as_str()))
+                .count(),
+            1
+        );
+    }
+
+    #[sqlx::test(migrations = "../database_schema/migrations")]
+    async fn same_principal_content_has_one_convergent_charge_across_retries(pool: PgPool) {
+        let principal_id = PrincipalId::fixture("media-quota-retry");
+        insert_principal(&pool, principal_id).await;
+        let content_id = ContentId::from_bytes([9; 32]);
+
+        let (abandoned, first_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_000)
+                .await
+                .unwrap();
+        assert_eq!(first_claim, MediaQuotaClaim::Pending);
+
+        let (retry, retry_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_002)
+                .await
+                .unwrap();
+        assert_eq!(retry_claim, MediaQuotaClaim::Pending);
+        // The superseded installer can finish the current content lease because immutable object
+        // identity proves that both attempts installed the same bytes.
+        complete_media_quota_content(&pool, abandoned, principal_id, content_id, 1_004, 60)
+            .await
+            .unwrap();
+        complete_media_quota_content(&pool, retry, principal_id, content_id, 1_005, 60)
+            .await
+            .unwrap();
+
+        let (_repeated, repeated_claim) =
+            reserve_media_quota(&pool, 100, 60, principal_id, 100, content_id, 1_006)
+                .await
+                .unwrap();
+        assert_eq!(repeated_claim, MediaQuotaClaim::AlreadyCharged);
+
+        let rows = sqlx::query_as::<_, (Uuid, i64, String)>(
+            "SELECT upload_id, encoded_bytes, content_id FROM media_upload_ledger WHERE principal_id = $1",
+        )
+        .bind(principal_id.as_uuid())
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows, vec![(retry, 100, content_id.to_string())]);
     }
 }
