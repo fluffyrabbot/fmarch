@@ -344,6 +344,7 @@ async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
       ANALYZE thread_view;
       ANALYZE game_index;
       ANALYZE public_search_document;
+      ANALYZE publication_surface;
     `,
   );
 }
