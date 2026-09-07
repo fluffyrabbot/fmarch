@@ -20,22 +20,22 @@ const priorFrontendDigest = `sha256:${"d".repeat(64)}`;
 const currentCommit = "1".repeat(40);
 const priorCommit = "2".repeat(40);
 
-function proofReceipt(commit, id) {
+function fleetProof(commit, id) {
   return {
-    schema: 3,
-    id,
-    state: "passed",
-    context: {
-      commit,
-      mode: "full",
-      clean: true,
-      worktree_sha256: "a".repeat(64),
-      manifest_sha256: "e".repeat(64),
-      database_identity_sha256: "b".repeat(64),
-      selected_lane_ids: ["lane"],
-    },
-    lanes: { lane: { state: "passed", status: 0 } },
-    finished_at: "2026-08-27T00:00:00.000Z",
+    version: 1,
+    kind: "fmarch-fleet-release-proof",
+    job_id: id,
+    task_id: id,
+    host: "cachy",
+    repository: "fmarch",
+    platform: "linux",
+    verification_mode: "audit",
+    commit,
+    comparison_commit: "3".repeat(40),
+    remote_ref: `release/${id}`,
+    completed_at: "2026-08-27T00:00:00.000Z",
+    trust_root_sha256: "a".repeat(64),
+    receipt_sha256: "b".repeat(64),
   };
 }
 
@@ -86,7 +86,7 @@ function releaseReceipt(commit, runtime, frontend, id) {
       frontend: { status: "ok", release_commit: commit },
     },
     schemaHead: "0002_profile_mute_durable_target.sql",
-    proofReceipt: proofReceipt(commit, `${id}-proof`),
+    fleetProof: fleetProof(commit, `${id}-proof`),
     runtimeValidation: runtimeValidation(runtime),
     attemptReceipt: bindReleaseAttempt({
       environment: "staging",

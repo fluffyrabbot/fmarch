@@ -42,8 +42,8 @@ own the release boundary:
 
 | Railway environment | Release pointer | Deployment rule |
 | --- | --- | --- |
-| `staging` | `main` | Run `npm run release:staging -- --commit <full-sha>` after the full local proof. |
-| `production` | `production` | Advance the pointer, then reuse the exact staging-proven digests through `promote:production`. |
+| `staging` | `main` | Run `npm run release:staging -- --commit <full-sha> --fleet-receipt <signed-envelope.json>` after a Cachy `audit` proof. |
+| `production` | `production` | Reuse the exact staging-proven digests, complete production coordination, then advance the pointer with an expected-value lease. |
 
 The canonical Railway domains are:
 
@@ -54,7 +54,7 @@ The canonical Railway domains are:
 
 The `production` branch is a release pointer, not a place to work. It may only
 identify a commit already reachable from `origin/main`. Production promotion
-requires a clean worktree, the required local proof, successful staging
+requires a clean worktree, the required signed canonical-worker audit proof, successful staging
 migrator/API/frontend deployments, API and frontend health checks, and Railway
 deployment metadata showing that all three services run the same commit.
 
@@ -204,13 +204,29 @@ business integrity or plaintext confidentiality after API compromise.
     the live service exists; promotion fails closed when it is absent.
 12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Log out and require the browser to traverse the constrained WorkOS session-logout endpoint before returning to the canonical frontend root; then complete a fresh WorkOS sign-in. If classic-plus-WorkOS is enabled, also attach WorkOS to a recently authenticated Classic principal, require the link flow to traverse the same provider logout, and prove a fresh WorkOS sign-in succeeds afterward. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
+## Canonical Release Proof
+
+A release checkpoint uses the forced full Cachy workflow, not a local cache receipt:
+
+```sh
+npm run proof:remote -- --mode audit
+node "$FLUFFYFLEET_ROOT/scripts/fleet.mjs" job <job-id> --host cachy --evidence > <signed-envelope.json>
+```
+
+Inspect the signed envelope, then land that same job through the fleet `land`
+command. The coordinator verifies the envelope again against Cachy's configured
+receipt public key and binds its digest, job, task branch, comparison commit,
+workflow, and trust-root fingerprint into the staging release receipt. Pass the
+same envelope to production promotion; a different valid job is not a substitute
+for the proof staging actually consumed.
+
 ## Production Promotion
 
 After a `main` commit has deployed successfully to staging, run the fail-closed
 preflight:
 
 ```sh
-npm run promote:production -- --check
+npm run promote:production -- --check --fleet-receipt <signed-envelope.json>
 ```
 
 The preflight requires a clean synchronized `main`, a fast-forwardable
@@ -218,40 +234,44 @@ The preflight requires a clean synchronized `main`, a fast-forwardable
 bound by a passed exact-commit staging receipt, active canonical domains, healthy staging
 endpoints, exact canonical frontend origins/callbacks/public and private API URLs, matching
 API/frontend WorkOS client ids, live discovery-aligned WorkOS issuer/JWKS
-metadata in both environments, and complete production variables. It proves that API uses only
+metadata in both environments, complete production variables, and a completion registry in which
+every platform/release item—including human approval—is complete. It proves that API uses only
 `fmarch_application`, migrator alone has the owner URL/bootstrap passwords,
 no deployed service contains `DATABASE_KEY_ADMIN_URL`, and every database
-credential and identity secret is isolated from staging. It then runs the full proof-lane sweep. When
-`DATABASE_URL` is unset, the command starts the repo-local Postgres and supplies
-its canonical URL to every selected proof lane.
+credential and identity secret is isolated from staging. The supplied envelope must be an
+Ed25519-signed, verification-only Cachy receipt for the exact commit and the repository's
+`audit` workflow (`full --force`). Local proof-lane cache output is never release authority.
 
 Promote the verified commit with:
 
 ```sh
-npm run promote:production
+npm run promote:production -- --fleet-receipt <signed-envelope.json>
 ```
 
-The command advances the release pointer, reuses the staging-proven digests,
-sequences migrator before API/frontend, and verifies both production health endpoints.
+The command reuses the staging-proven digests, sequences migrator before API/frontend,
+verifies both production health endpoints, publishes the immutable release receipt, and only
+then advances the release pointer.
 It does not offer a force flag or a proof bypass.
 
 The underlying sequence is:
 
 1. Verify the worktree is clean and `HEAD` equals `origin/main`.
-2. Run the full proof sweep (`npm run proof:lanes -- --mode full --run`). Production
-   promotion is a sprint boundary, so it deliberately pays the full validation
-   cost rather than selecting only the current diff's push lanes.
-3. Verify the staging receipt, digest-pinned service sources, API dependency
+2. Verify the signed Cachy receipt against the configured worker trust root, exact
+   commit, task branch, `audit` mode, workflow commands, and successful step set.
+3. Require every platform/release completion-registry item to be complete; source,
+   external-evidence, and human gates are all fail-closed.
+4. Verify the staging receipt, digest-pinned service sources, API dependency
    readiness, frontend health, and embedded release commit.
-4. Disconnect any remaining canonical production Git sources while the prior
-   deployments continue serving, then fast-forward the remote `production`
-   branch to that exact SHA.
-5. Invoke the coordinator with the staging runtime/frontend digests, wait for
+5. Disconnect any remaining canonical production Git sources while the prior
+   deployments continue serving.
+6. Invoke the coordinator with the staging runtime/frontend digests, wait for
    migrator success, deploy API/frontend, and verify digest plus health commit
-   attribution before calling the release complete.
+   attribution before publishing the immutable release receipt.
+7. Advance `production` last with `--force-with-lease` bound to the pointer SHA
+   observed at preflight. Concurrent pointer movement rejects the promotion.
 
-If any service fails, leave the last successful API/frontend deployment running, diagnose
-the failed deployment, and do not move the release pointer again until the trio
+If any service fails, leave the release pointer unchanged, diagnose the failed deployment,
+and do not move the release pointer until the trio
 can be proven together. Do not deploy a dirty local directory to production.
 
 After a database restore, run the exact-commit migrator before exposing the
@@ -367,8 +387,9 @@ query terms, result content, response bodies, cursors, or request metadata. The 
 commit-attribution, telemetry-shape/privacy, or latency drift and reports missing/non-empty evidence
 as insufficient. It makes no synthetic weekly-availability claim; introduce that gate only when
 beta traffic is representative enough to support it. `npm run promote:production` consumes this
-same strict sentinel after exact-SHA staging health and before either the full local proof or the
-`production` release-pointer update, so a release decision cannot bypass it.
+same strict sentinel after exact-SHA staging health and before production
+coordination, so a release decision cannot bypass it. The `production`
+release pointer remains unchanged until that coordination has completed.
 
 ## Secrets And Evidence
 

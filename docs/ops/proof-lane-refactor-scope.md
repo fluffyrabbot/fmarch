@@ -215,8 +215,9 @@ lost the shape of the run it resumed. Six corrections:
   casualty was `check:release-topology-evidence`. The terminal verdict now
   reads `proof passed: N of M lane(s)` against the plan and names every lane
   left failed, blocked, skipped, quarantined, or preempted, via the exported
-  `summarizeLaneStates`. Release remains fail-closed independently:
-  `validateProofReceipt` already required every selected lane to be `passed`.
+  `summarizeLaneStates`. Release remains fail-closed independently: the release
+  coordinator now accepts only a signed Cachy `audit` envelope whose executed
+  verification steps all passed.
 - **The auto-resume preserves how the sweep runs.** `--jobs`, `--keep-going`,
   and `--skip` are not recorded in the receipt, so resuming with a bare
   `--resume` downgraded a parallel keep-going sweep to a serial fail-fast one.

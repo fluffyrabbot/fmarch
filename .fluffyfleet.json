@@ -1,5 +1,11 @@
 {
   "schemaVersion": 1,
+  "releaseAuthority": {
+    "host": "cachy",
+    "platform": "linux",
+    "verificationMode": "audit",
+    "receiptPublicKeySha256": "594c889a3071889e4dd073fd37731e93ae0d748d88bb86432b809234d1035798"
+  },
   "profiles": {
     "linux": {
       "environment": {

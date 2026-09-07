@@ -2,12 +2,14 @@ import {runHostedAcceptance} from './hosted_acceptance.mjs';
 import {prepareAuthenticatedAcceptance} from './hosted_authenticated_acceptance.mjs';
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
+import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
+import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import {
   TERMINAL_DEPLOYMENT_STATES,
   assertFullCommit,
@@ -20,7 +22,7 @@ import {
   receiptDigest,
   validateDeploymentArtifact,
   validateHealth,
-  validateProofReceipt,
+  validateProductionReleaseReadiness,
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
 import { validateRuntimeImage } from "./exact_image_content_smoke.mjs";
@@ -47,7 +49,9 @@ export function parseArguments(argv) {
     const argument = argv[index];
     if (argument === "--environment") result.environment = requiredValue(argv, ++index, argument);
     else if (argument === "--commit") result.commit = requiredValue(argv, ++index, argument);
-    else if (argument === "--proof-receipt") result.proofReceipt = requiredValue(argv, ++index, argument);
+    else if (argument === "--fleet-receipt") result.fleetReceipt = requiredValue(argv, ++index, argument);
+    else if (argument === "--fleet-public-key") result.fleetPublicKey = requiredValue(argv, ++index, argument);
+    else if (argument === "--fleet-job") result.fleetJob = requiredValue(argv, ++index, argument);
     else if (argument === "--runtime-digest") result.runtimeDigest = requiredValue(argv, ++index, argument);
     else if (argument === "--frontend-digest") result.frontendDigest = requiredValue(argv, ++index, argument);
     else if (argument === "--reuse-staging-receipt") result.reuseStagingReceipt = requiredValue(argv, ++index, argument);
@@ -154,42 +158,11 @@ function validateRepository(commit, environment) {
     head,
     originMain,
     originProduction,
+    productionIsAncestor:
+      spawnSync("git", ["merge-base", "--is-ancestor", originProduction, commit], { cwd: repoRoot }).status === 0,
     pushed: spawnSync("git", ["merge-base", "--is-ancestor", commit, "origin/main"], { cwd: repoRoot }).status === 0,
     environment,
   });
-}
-
-async function discoverProofReceipt(commit, explicitPath) {
-  const manifestBytes = await readFile(path.join(repoRoot, "docs", "ops", "proof-lane-manifest.json"));
-  const manifest = JSON.parse(manifestBytes.toString("utf8"));
-  const expectation = {
-    expectedManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
-    expectedLaneIds: Object.keys(manifest.lanes),
-  };
-  if (explicitPath) {
-    const receipt = JSON.parse(await readFile(path.resolve(explicitPath), "utf8"));
-    validateProofReceipt(receipt, commit, "full", expectation);
-    return receipt;
-  }
-  const directory = path.join(repoRoot, "target", "proof-lanes", "runs");
-  const candidates = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    try {
-      const receipt = JSON.parse(await readFile(path.join(directory, entry.name, "receipt.json"), "utf8"));
-      if (
-        receipt.state === "passed" &&
-        receipt.context?.commit === commit &&
-        receipt.context?.mode === "full"
-      ) candidates.push(receipt);
-    } catch {
-      // Partial and interrupted proof directories are expected and ineligible.
-    }
-  }
-  candidates.sort((left, right) => String(right.finished_at).localeCompare(String(left.finished_at)));
-  assert.ok(candidates[0], `no passed full proof receipt exists for ${commit}`);
-  validateProofReceipt(candidates[0], commit, "full", expectation);
-  return candidates[0];
 }
 
 function inspectLocalImage(reference) {
@@ -249,7 +222,7 @@ async function buildOrReuseImage({ repository, dockerfile, commit }) {
   }
 }
 
-async function resolveArtifacts(args, config, commit) {
+async function resolveArtifacts(args, config, commit, fleetProof) {
   if (args.reuseStagingReceipt) {
     assert.equal(args.environment, "production", "only production may reuse a staging receipt");
     const receipt = assertReleaseReceipt(
@@ -257,6 +230,11 @@ async function resolveArtifacts(args, config, commit) {
     );
     assert.equal(receipt.environment, "staging", "production can reuse only a staging receipt");
     assert.equal(receipt.commit, commit, "staging receipt commit does not match production release");
+    assert.deepEqual(
+      receipt.fleet_proof,
+      fleetProof,
+      "production must reuse the exact signed fleet proof bound by staging",
+    );
     return {
       runtimeDigest: receipt.images.runtime,
       frontendDigest: receipt.images.frontend,
@@ -325,8 +303,7 @@ async function bindAttempt(environment, commit, runtimeDigest, frontendDigest) {
     existing,
   });
   if (!existing) {
-    await mkdir(path.dirname(attemptPath), { recursive: true });
-    await writeFile(attemptPath, `${JSON.stringify(attempt, null, 2)}\n`, { flag: "wx" });
+    await publishImmutableJson(attemptPath, attempt);
   }
   return attempt;
 }
@@ -809,12 +786,27 @@ async function schemaHead() {
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArguments(argv);
   if (args.help) {
-    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> [--proof-receipt path] [--reuse-staging-receipt path] [--schema-epoch-reset N] [--check]");
+    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> [--fleet-public-key path] [--fleet-job id] [--reuse-staging-receipt path] [--schema-epoch-reset N] [--check]");
     return;
   }
   const commit = assertFullCommit(args.commit ?? commandText("git", ["rev-parse", "HEAD"]));
   validateRepository(commit, args.environment);
-  const proofReceipt = await discoverProofReceipt(commit, args.proofReceipt);
+  const fleetProof = await loadFleetReleaseProof({
+    repoRoot,
+    commit,
+    receiptPath: args.fleetReceipt ?? process.env.FMARCH_FLEET_RECEIPT,
+    publicKeyPath:
+      args.fleetPublicKey ??
+      process.env.FMARCH_FLEET_PUBLIC_KEY ??
+      defaultFleetPublicKeyPath(),
+    expectedJobId: args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID ?? null,
+  });
+  let releaseReadiness = null;
+  if (args.environment === "production") {
+    const registry = await loadCompletionRegistry({ root: repoRoot });
+    await validateRegistry(registry, { root: repoRoot });
+    releaseReadiness = validateProductionReleaseReadiness(registry);
+  }
   const config = runtimeConfig(args.environment);
   const acceptanceEnv = {...process.env, FMARCH_HOSTED_EXPECTED_COMMIT: commit, FMARCH_HOSTED_MATRIX_API_URL: config.apiUrl, FMARCH_HOSTED_MATRIX_FRONTEND_URL: config.frontendUrl, FMARCH_HOSTED_AUTHENTICATED: '1'};
   if (args.environment === 'staging') await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
@@ -823,7 +815,7 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
   const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } =
-    await resolveArtifacts(args, config, commit);
+    await resolveArtifacts(args, config, commit, fleetProof);
   const runtimeValidation = releaseRuntimeValidation({
     environment: args.environment,
     runtimeRepository: config.runtimeImage,
@@ -887,9 +879,10 @@ export async function main(argv = process.argv.slice(2)) {
     deployments: { migrator, api, frontend },
     health: { api: apiHealth, frontend: frontendHealth },
     schemaHead: await schemaHead(),
-    proofReceipt,
+    fleetProof,
     attemptReceipt,
     runtimeValidation,
+    releaseReadiness,
     sentinel,
     hostedAcceptance,
     schemaEpochReset,
@@ -897,8 +890,7 @@ export async function main(argv = process.argv.slice(2)) {
   const output = path.resolve(
     args.output ?? path.join(repoRoot, "target", "releases", args.environment, `${commit}.json`),
   );
-  await mkdir(path.dirname(output), { recursive: true });
-  await writeFile(output, `${JSON.stringify(receipt, null, 2)}\n`);
+  await publishImmutableJson(output, receipt);
   console.log(JSON.stringify({ status: "passed", environment: args.environment, commit, runtimeDigest, frontendDigest, receipt: output }, null, 2));
 }
 

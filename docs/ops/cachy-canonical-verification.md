@@ -176,8 +176,8 @@ forced remote audit before accepting this new environment.
 ### Authenticated staging acceptance
 
 `release:staging` now preflights two private session files before any staging
-mutation and requires live authenticated acceptance before writing a version-3
-release receipt. Earlier release receipts do not satisfy this new gate. Production
+mutation and requires live authenticated acceptance before writing a version-4
+release receipt. Earlier release receipts do not satisfy the current gate. Production
 does not run the synthetic staging journeys.
 
 The dedicated test accounts must already be admitted through fmarch's ordinary
