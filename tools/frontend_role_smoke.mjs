@@ -138,7 +138,7 @@ try {
   for (const viewport of viewports) {
     const boardContext = await newContextForViewport(viewport, boardScenario.token);
     const boardPage = await boardContext.newPage();
-    const boardResponse = await boardPage.goto(`${baseUrl}${boardScenario.path}`, {
+    const boardResponse = await navigateBrowserPage(boardPage, `${baseUrl}${boardScenario.path}`, {
       waitUntil: "networkidle",
     });
     if (!boardResponse?.ok()) {
@@ -246,7 +246,7 @@ try {
         projections: mockStateProjections,
         state: mockState,
       });
-      const response = await page.goto(`${baseUrl}${role.path}`, {
+      const response = await navigateBrowserPage(page, `${baseUrl}${role.path}`, {
         waitUntil: "networkidle",
       });
       if (!response?.ok()) {
@@ -455,7 +455,7 @@ try {
       commandRequests: privateChannelCommandRequests,
     });
     const privateChannelPath = "/g/midsummer/c/private%3Arole_pm%3Aslot-7";
-    const privateChannelResponse = await privateChannelPage.goto(
+    const privateChannelResponse = await navigateBrowserPage(privateChannelPage, 
       `${baseUrl}${privateChannelPath}`,
       {
         waitUntil: "networkidle",
@@ -557,7 +557,7 @@ try {
     for (const forbidden of forbiddenRoutes) {
       const context = await newContextForViewport(viewport, forbidden.token);
       const page = await context.newPage();
-      const response = await page.goto(`${baseUrl}${forbidden.path}`, {
+      const response = await navigateBrowserPage(page, `${baseUrl}${forbidden.path}`, {
         waitUntil: "networkidle",
       });
       if (String(response?.status()) !== forbidden.status) {
@@ -593,7 +593,7 @@ try {
     for (const scenario of routeStateScenarios) {
       const context = await newContextForViewport(viewport, scenario.token);
       const page = await context.newPage();
-      const response = await page.goto(`${baseUrl}${scenario.path}`, {
+      const response = await navigateBrowserPage(page, `${baseUrl}${scenario.path}`, {
         waitUntil: "networkidle",
       });
       if (!response?.ok()) {
@@ -627,7 +627,7 @@ try {
   for (const viewport of setupViewports) {
     const context = await newContextForViewport(viewport, hostSetupScenario.token);
     const page = await context.newPage();
-    const response = await page.goto(`${baseUrl}${hostSetupScenario.path}`, {
+    const response = await navigateBrowserPage(page, `${baseUrl}${hostSetupScenario.path}`, {
       waitUntil: "networkidle",
     });
     if (!response?.ok()) {
@@ -659,7 +659,7 @@ try {
   for (const viewport of publicationViewports) {
     const context = await newContextForViewport(viewport, null);
     const page = await context.newPage();
-    const response = await page.goto(`${baseUrl}${publicGameScenario.path}`, {
+    const response = await navigateBrowserPage(page, `${baseUrl}${publicGameScenario.path}`, {
       waitUntil: "networkidle",
     });
     if (!response?.ok()) {
@@ -853,7 +853,7 @@ async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
   const adminContext = await newContextForViewport(viewport, contract.admin.token);
   const adminPage = await adminContext.newPage();
   await adminPage.emulateMedia(contract.media);
-  const adminResponse = await adminPage.goto(`${baseUrl}${contract.admin.path}`, {
+  const adminResponse = await navigateBrowserPage(adminPage, `${baseUrl}${contract.admin.path}`, {
     waitUntil: "networkidle",
   });
   if (!adminResponse?.ok()) {
@@ -925,7 +925,7 @@ async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
   const publicationContext = await newContextForViewport(viewport, contract.publication.token);
   const publicationPage = await publicationContext.newPage();
   await publicationPage.emulateMedia(contract.media);
-  const publicationResponse = await publicationPage.goto(
+  const publicationResponse = await navigateBrowserPage(publicationPage, 
     `${baseUrl}${contract.publication.path}`,
     { waitUntil: "networkidle" },
   );
@@ -3158,7 +3158,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     reviewHref,
   });
 
-  await page.goto(baseRouteUrl, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, baseRouteUrl, { waitUntil: "networkidle" });
   await page.getByTestId("player-private-review-notification-N02-0-slot-7").waitFor({
     state: "visible",
   });
@@ -3772,12 +3772,7 @@ async function assertRouteStateScenario(page, { scenario, viewport, baseUrl }) {
 }
 
 async function assertVisibleBox(locator, label) {
-  const box = await locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    if (!element.getClientRects().length || style.visibility === "hidden") return null;
-    const {x, y, width, height} = element.getBoundingClientRect();
-    return {x, y, width, height};
-  });
+  const box = await locator.boundingBox();
   if (box === null || box.width <= 0 || box.height <= 0) {
     throw new Error(`${label} did not render a visible box`);
   }
@@ -3881,7 +3876,7 @@ function containsBox(outer, inner) {
 
 
 async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
-  await page.goto(`${baseUrl}${routePath}?post=443#thread-post-443`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}?post=443#thread-post-443`, { waitUntil: "networkidle" });
   await page.waitForFunction(() => document.activeElement?.id === "thread-post-443");
   const href = await page.getByTestId("thread-post-permalink-442").getAttribute("href");
   if (href !== "?post=442#thread-post-442") throw new Error("Post permalink lacks a server-resolvable address");
@@ -3900,7 +3895,7 @@ async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
 
 
 async function provePrivateAttention(page, baseUrl, routePath) {
-  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const id = "notification-N02-0-slot-7";
   const status = page.getByTestId(`private-attention-${id}`);
   const badge = page.getByTestId("player-private-new-count");
@@ -3932,7 +3927,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   assert.equal(new URL(page.url()).searchParams.get("private"), id);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
-  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const filter = page.getByTestId("private-attention-filter");
   await filter.selectOption("new");
   assert.equal(await status.count(), 0);
@@ -3972,7 +3967,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.route(endpoint, mock);
   await peer.route(endpoint, mock);
   try {
-    await Promise.all([page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" }), peer.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" })]);
+    await Promise.all([navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" }), navigateBrowserPage(peer, `${baseUrl}${routePath}`, { waitUntil: "networkidle" })]);
     await Promise.all([page, peer].map(tab => tab.getByTestId("private-attention-filter").selectOption("all")));
     await filter.selectOption("new");
     await filter.evaluate(el => el.scrollIntoView({ block: "center" }));
@@ -4048,7 +4043,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
   const completed = route => route.fulfill({ json: { ...commandRoute.body, game_completed: true } });
   await page.route("**/games/*/player-command-state**", completed);
   try {
-    await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
     await page.getByTestId("player-game-complete").waitFor();
     await proveNavigation(page, "private-attention-filter");
     assert.equal(await page.getByTestId("player-projection-command-health").count(), 0);
@@ -4060,7 +4055,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     await installLiveProjectionHarness(spectator, { roleId: "spectator", channel: "spectator" });
     await installFixtureApiRoutes(spectator, { routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState() });
     await spectator.route("**/channels/spectator/thread?**", route => route.fulfill({ json: { posts: [], next_before_seq: null, next_after_seq: null } }));
-    const response = await spectator.goto(`${baseUrl}/g/midsummer/c/spectator`, { waitUntil: "networkidle" });
+    const response = await navigateBrowserPage(spectator, `${baseUrl}/g/midsummer/c/spectator`, { waitUntil: "networkidle" });
     assert.equal(response.status(), 200);
     await proveNavigation(spectator, "player-private-queue");
     assert.equal(await spectator.getByTestId("player-private-new-count").count(), 0);
@@ -4070,7 +4065,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
 
 
 async function proveReadingReturn(page, baseUrl, routePath) {
-  await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const origin = page.locator("#thread-post-443");
   await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
   const top = await origin.evaluate(el => el.getBoundingClientRect().top);
@@ -4103,6 +4098,16 @@ async function proveReadingReturn(page, baseUrl, routePath) {
   await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.activeElement?.id === "player-actions");
   await page.getByTestId("return-to-thread").click(); await assertReturned();
+}
+
+// Navigate through the browser's own location API, keeping automation's
+// navigation tracking from manufacturing a pending navigation on Firefox.
+async function navigateBrowserPage(page, url, options = {}) {
+  const [response] = await Promise.all([
+    page.waitForNavigation(options),
+    page.evaluate(destination => location.assign(destination), url),
+  ]);
+  return response;
 }
 
 // Exercise an actual browser reload. Firefox's automation reload command can
@@ -4143,7 +4148,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
   try {
     for (outcome of channel === "main" ? ["ready", "hidden", "deleted", "offline", "cancelled"] : ["ready", "denied"]) {
       newest = null;
-      await page.goto(`${baseUrl}${routePath}?reader-proof=${outcome}`, { waitUntil: "networkidle" });
+      await navigateBrowserPage(page, `${baseUrl}${routePath}?reader-proof=${outcome}`, { waitUntil: "networkidle" });
       await page.getByTestId("player-thread-load-older").click();
       const origin = page.locator("#thread-post-10");
       await origin.waitFor();
@@ -4264,7 +4269,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
   };
   for (const tab of [page, peer]) { await tab.route(checkpointEndpoint, checkpoint); await tab.route(threadEndpoint, thread); }
   try {
-    await Promise.all([page, peer].map(tab => tab.goto(`${baseUrl}${routePath}?checkpoint-proof=ready`, { waitUntil: "networkidle" })));
+    await Promise.all([page, peer].map(tab => navigateBrowserPage(tab, `${baseUrl}${routePath}?checkpoint-proof=ready`, { waitUntil: "networkidle" })));
     for (const tab of [page, peer]) await tab.waitForFunction(() => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - 110) < 2);
     const peerTop = await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top);
     const initialReads = peerReads;
@@ -4326,14 +4331,14 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
     for (const outcome of ["hidden", "deleted"]) {
       unavailable = true; saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
-      await page.goto(`${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { waitUntil: "networkidle" });
+      await navigateBrowserPage(page, `${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { waitUntil: "networkidle" });
       await page.getByTestId("reader-recovery-retry").waitFor();
       assert.equal(await page.locator("#thread-post-20").count(), 0);
       assert.equal(writes, 1, "restoration and background activity never create saves");
     }
   } finally {
     await peer.close(); await page.unroute(checkpointEndpoint, checkpoint); await page.unroute(threadEndpoint, thread);
-    await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   }
 }
 
@@ -4346,7 +4351,7 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
   const denied = route => new URL(route.request().url()).searchParams.has("around_seq") ? route.fulfill({ status: 403 }) : route.fallback();
   await page.route(endpoint, checkpoint);
   try {
-    await page.goto(`${baseUrl}${routePath}?saved-resume=denied`, { waitUntil: "networkidle" });
+    await navigateBrowserPage(page, `${baseUrl}${routePath}?saved-resume=denied`, { waitUntil: "networkidle" });
     const post = page.locator('article[id^="thread-post-"]').first();
     const id = await post.getAttribute("id");
     await post.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center", behavior: "instant" }); });
