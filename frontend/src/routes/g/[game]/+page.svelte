@@ -227,7 +227,7 @@
     const checkpoints = data.player.principalId ? createReadingCheckpoint({
       game: data.game.id, channel: data.threadPager.channel, principal: data.player.principalId,
       onInitial: value => {
-        if (value.position && !$page.state?.readerNavigation?.destination && !window.location.hash
+        if (value.position && !$page.state?.readerNavigation?.localReturn && !$page.state?.readerNavigation?.destination && !window.location.hash
           && !$page.url.searchParams.has("post") && !$page.url.searchParams.has("private")) {
           readerThreadWindow = { aroundSeq: String(value.position.source_seq) };
           readerNavigation.checkpoint({ id: `thread-post-${value.position.source_seq}`, top: value.position.offset_px }, { resume: true });
@@ -257,7 +257,7 @@
       const saved = checkpoints?.takeRemote();
       if (!saved?.position) return;
       readerThreadWindow = { aroundSeq: String(saved.position.source_seq) };
-      readerNavigation.checkpoint({ id: `thread-post-${saved.position.source_seq}`, top: saved.position.offset_px }, { resume: true, verify: true });
+      readerNavigation.visit({ id: `thread-post-${saved.position.source_seq}`, top: saved.position.offset_px });
     };
     void checkpoints?.refresh();
     const sample = () => {
@@ -1025,8 +1025,15 @@
       </section>
     {/if}
 
-    {#if remoteCheckpoint && !readerTrip?.destination && readerRecovery.state !== "pending"}
-      <button class="fm-touch-button reader-saved-position" data-testid="resume-saved-position" on:click={resumeSavedPosition}>Resume saved position</button>
+    {#if !readerTrip?.destination && (remoteCheckpoint || readerTrip?.returnable)}
+      <div class="reader-saved-position" role="group" aria-label="Reading navigation">
+        {#if remoteCheckpoint && readerRecovery.state !== "pending"}
+          <button class="fm-touch-button" data-testid="resume-saved-position" on:click={resumeSavedPosition}>Resume saved position</button>
+        {/if}
+        {#if readerTrip?.returnable}
+          <button class="fm-touch-button" data-testid="return-previous-place" on:click={() => readerNavigation?.returnToPrevious()}>Return to previous place</button>
+        {/if}
+      </div>
     {/if}
     <PlayerThread
       {thread}
@@ -1170,7 +1177,7 @@
 {/if}
 
 <style>
-  .reader-saved-position { position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
+  .reader-saved-position { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .player-command-feedback {
     bottom: calc(82px + env(safe-area-inset-bottom));

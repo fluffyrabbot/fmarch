@@ -4243,9 +4243,32 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await verified;
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
     assert.equal(await resume.count(), 0); assert.equal(writes, 1);
+    const visited = { ...saved.position };
+    const returnButton = peer.getByTestId("return-previous-place");
+    await returnButton.waitFor();
+    const returnBox = await returnButton.boundingBox();
+    assert.ok(returnBox.width >= 44 && returnBox.height >= 44);
+    await peer.reload({ waitUntil: "networkidle" });
+    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
+    await returnButton.focus(); await peer.keyboard.press("Enter");
+    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await peer.reload({ waitUntil: "networkidle" });
+    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await peer.goForward();
+    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
+    await peer.goBack();
+    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await peer.goForward();
+    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}`, visited);
+    assert.equal(writes, 1, "history navigation never writes a reading checkpoint");
     unavailable = true;
     saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
     await peer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await peer.getByTestId("resume-saved-position").waitFor();
+    assert.equal(await returnButton.count(), 1);
+    const offered = await peer.getByTestId("resume-saved-position").boundingBox();
+    const returning = await returnButton.boundingBox();
+    assert.ok(offered.y + offered.height <= returning.y, "reading navigation controls do not overlap");
     await peer.getByTestId("resume-saved-position").click();
     await peer.getByTestId("reader-recovery-retry").waitFor();
     assert.equal(await peer.locator("#thread-post-20").count(), 0);
@@ -4279,6 +4302,7 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
     await page.goto(`${baseUrl}${routePath}?saved-resume=denied`, { waitUntil: "networkidle" });
     const post = page.locator('article[id^="thread-post-"]').first();
     const id = await post.getAttribute("id");
+    await post.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center", behavior: "instant" }); });
     saved = { revision: 1, position: { source_seq: Number(id.slice("thread-post-".length)), offset_px: 110 }, available: true };
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByTestId("resume-saved-position").waitFor();
@@ -4288,5 +4312,14 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
     assert.equal(await page.locator('article[id^="thread-post-"]').count(), 0);
     assert.equal(await page.getByTestId("resume-saved-position").count(), 0);
     await page.waitForFunction(() => document.activeElement?.id === "player-thread");
+    await page.getByTestId("return-previous-place").click();
+    await page.getByTestId("reader-recovery-retry").waitFor();
+    assert.equal(await page.locator('article[id^="thread-post-"]').count(), 0);
+    await page.unroute(threadEndpoint, denied);
+    await page.getByTestId("reader-recovery-retry").click();
+    await page.waitForFunction(id => document.activeElement?.id === id, id);
+    await page.goForward();
+    await page.waitForFunction(id => document.activeElement?.id === id, id);
+    await page.getByTestId("return-previous-place").waitFor();
   } finally { await page.unroute(endpoint, checkpoint); await page.unroute(threadEndpoint, denied); }
 }

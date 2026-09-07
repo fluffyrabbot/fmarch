@@ -138,3 +138,51 @@ test("deliberate checkpoints replace stale origins without restoring; initial re
   assert.equal(restores.length, 1); assert.equal(restores[0].verify, true); assert.equal(page.state.readerNavigation.origin.id, "thread-post-20");
   assert.equal(page.state.other, 1); controller.dispose();
 });
+
+test("saved visits retain independent positions through Back, Forward, checkpoints, and Count excursions", async () => {
+  const stack = [{ url: new URL("https://example.test/g/g"), state: { other: true } }];
+  let index = 0, controller, captured = { id: "thread-post-10", top: 110 };
+  const restored = [];
+  const write = (url, state, push) => {
+    const entry = { url: new URL(url || stack[index].url, stack[index].url), state };
+    if (push) { stack.splice(++index); stack.push(entry); } else stack[index] = entry;
+    controller.observe(entry);
+  };
+  controller = createReaderNavigation({ getPage: () => stack[index],
+    push: (url,state) => write(url,state,true), replace: (url,state) => write(url,state,false),
+    back: () => controller.observe(stack[--index]), capture: () => captured,
+    restore: (origin, context) => restored.push({ origin, context }), focusDestination() {},
+    afterRender: () => Promise.resolve(), onChange() {} });
+  assert.equal(controller.visit({ id: "thread-post-80", top: 90 }), true); await settle();
+  assert.equal(stack.length, 2); assert.equal(stack[0].state.readerNavigation.localReturn, true);
+  assert.equal(restored.at(-1).context.forceReload, true);
+  captured = { id: "thread-post-85", top: 100 };
+  controller.checkpoint(captured);
+  controller.open("count"); await settle(); controller.returnToThread(); await settle();
+  assert.equal(index, 1); assert.equal(stack[index].state.readerNavigation.returnable, true);
+  controller.returnToPrevious(); await settle();
+  assert.deepEqual(restored.at(-1).origin, { id: "thread-post-10", top: 110 });
+  assert.equal(restored.at(-1).context.forceReload, true);
+  controller.returnToPrevious(); assert.equal(index, 0);
+  controller.observe(stack[++index]); await settle();
+  assert.deepEqual(restored.at(-1).origin, captured);
+  const saved = readerNavigationSnapshot(stack[index]);
+  assert.deepEqual(readerNavigationFromSnapshot(saved, { ...stack[index], state: {} }), stack[index].state.readerNavigation);
+  controller.visit({ id: "thread-post-120", top: 80 }); await settle();
+  assert.equal(stack.length, 3);
+  controller.returnToPrevious(); await settle(); assert.deepEqual(restored.at(-1).origin, captured);
+  assert.equal(stack[0].state.other, true); controller.dispose();
+});
+
+test("visit constructs both history entries before the reactive page store catches up", () => {
+  const page = { url: new URL("https://example.test/g/g"), state: { unrelated: true } };
+  const writes = [];
+  const controller = createReaderNavigation({ getPage: () => page,
+    capture: () => ({ id: "thread-post-10", top: 100 }), onChange() {},
+    replace: (url,state) => writes.push({ url: new URL(url || page.url, page.url), state }),
+    push: (url,state) => writes.push({ url: new URL(url, page.url), state }) });
+  controller.visit({ id: "thread-post-80", top: 110 });
+  assert.equal(readerNavigationState(writes[0]).origin.id, "thread-post-10");
+  assert.equal(readerNavigationState(writes[1]).origin.id, "thread-post-80");
+  assert.equal(writes[0].state.unrelated, true); controller.dispose();
+});
