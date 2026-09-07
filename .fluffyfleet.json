@@ -3,10 +3,13 @@
   "profiles": {
     "linux": {
       "environment": {
-        "FMARCH_EXTERNAL_BUILD_ROOT": "${FLEET_CACHE_ROOT}/fmarch/${FLEET_TASK_ID}"
+        "FMARCH_EXTERNAL_BUILD_ROOT": "${FLEET_CACHE_ROOT}/fmarch-canonical",
+        "FMARCH_PROOF_TOOLCHAIN_ROOT": "${FLEET_CACHE_ROOT}/fmarch-toolchain",
+        "CARGO_BUILD_JOBS": "2"
       },
       "writableDirectories": [
-        "${FLEET_CACHE_ROOT}/fmarch/${FLEET_TASK_ID}"
+        "${FLEET_CACHE_ROOT}/fmarch-canonical",
+        "${FLEET_CACHE_ROOT}/fmarch-toolchain"
       ],
       "fingerprint": [
         "node --version",
@@ -15,14 +18,16 @@
       ],
       "setup": [
         "bash scripts/check-build-posture.sh --apply",
+        "bash scripts/provision-linux-proof.sh",
         "npm ci --no-audit --no-fund",
-        "npm ci --prefix frontend --no-audit --no-fund"
+        "npm ci --prefix frontend --no-audit --no-fund",
+        "npm exec -- playwright install chromium"
       ],
       "verify": [
-        "npm run test:proof-lane-contract",
-        "npm run test:frontend-contract",
-        "npm run test:database-schema:static"
-      ]
+        "bash scripts/linux-proof.sh --mode full"
+      ],
+      "resourceClass": "heavy",
+      "stepTimeoutMs": 14400000
     }
   }
 }
