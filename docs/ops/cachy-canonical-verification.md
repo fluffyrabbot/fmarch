@@ -172,3 +172,53 @@ evidence. Requalification uses installed kernel 6.18.48-cachyos-lts and a fresh
 `fmarch-canonical-lts-v1` build/database root; the previous root is retained for
 diagnosis. A kernel change invalidates proof environment identity. Use the
 forced remote audit before accepting this new environment.
+
+### Authenticated staging acceptance
+
+`release:staging` now preflights two private session files before any staging
+mutation and requires live authenticated acceptance before writing a version-3
+release receipt. Earlier release receipts do not satisfy this new gate. Production
+does not run the synthetic staging journeys.
+
+The dedicated test accounts must already be admitted through fmarch's ordinary
+community admission. `proof:hosted:login` opens Chromium on Cachy's desktop for
+normal WorkOS sign-in and saves only its backend-issued app cookie in a new 0600
+file. It does not create provider users, invent membership, or mint local-proof
+sessions. As of the 2026-09-07 investigation, staging has WorkOS configured,
+classic authentication disabled, and no identity-delivery transport configured.
+Creating WorkOS users alone therefore cannot produce admitted test sessions.
+Configure real invitation delivery and admit two dedicated test accounts before
+attempting these commands; fresh provider login, invitation delivery, MFA, and
+human acceptance remain separate evidence boundaries.
+
+```sh
+FMARCH_HOSTED_SESSION_OUTPUT=/secure/fmarch/member.json npm run proof:hosted:login
+FMARCH_HOSTED_SESSION_OUTPUT=/secure/fmarch/outsider.json npm run proof:hosted:login
+export FMARCH_HOSTED_ACCEPTANCE_MEMBER_STATE=/secure/fmarch/member.json
+export FMARCH_HOSTED_ACCEPTANCE_OUTSIDER_STATE=/secure/fmarch/outsider.json
+# Also set the existing hosted API/frontend origins and expected deployed SHA.
+npm run proof:hosted:prepare
+```
+
+Preparation creates one dedicated game using real `CreateGame`, `AddSlot`,
+`SeatPersona`, `AssignRole` and `StartGame` commands. It records command ids and
+acknowledged progress in a private preparation receipt before/after mutation.
+If interrupted, retain that receipt and inspect the exact game; do not blindly
+rerun preparation and create another game. Preparation is not acceptance.
+Use its returned game/channel/confirmation with the same two sessions:
+
+```sh
+export FMARCH_HOSTED_ACCEPTANCE_GAME=<prepared-game-uuid>
+export FMARCH_HOSTED_ACCEPTANCE_CHANNEL=private:role_pm:slot_1
+export FMARCH_HOSTED_ACCEPTANCE_CONFIRM=staging:<prepared-game-uuid>
+FMARCH_HOSTED_AUTHENTICATED=1 npm run proof:hosted
+```
+
+The gate checks two distinct active WorkOS-backed accounts, a member's private
+post acknowledgement, actual socket loss/reconnect with a missed peer update, reload and fresh-context
+persistence, and rejection of the same private route for the still-authenticated
+outsider. It retains booleans and runtime identities, not post bodies, cookies,
+provider credentials, screenshots, or account identifiers. It leaves two uniquely
+labelled posts in the dedicated test game on each run. Expired/missing sessions,
+missing configuration, partial journeys, and commit drift fail the gate. Linux
+proof contracts exercise gate validation; they do not count as live hosted proof.

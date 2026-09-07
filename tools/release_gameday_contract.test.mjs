@@ -94,6 +94,7 @@ function releaseReceipt(commit, runtime, frontend, id) {
       runtimeDigest: runtime,
       frontendDigest: frontend,
     }),
+    hostedAcceptance: {status: 'passed', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
     sentinel: { status: "passed", receipt_sha256: "f".repeat(64) },
     generatedAt: new Date("2026-08-27T00:00:00.000Z"),
   });

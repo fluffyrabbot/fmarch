@@ -1,3 +1,5 @@
+import {runHostedAcceptance} from './hosted_acceptance.mjs';
+import {prepareAuthenticatedAcceptance} from './hosted_authenticated_acceptance.mjs';
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -814,6 +816,8 @@ export async function main(argv = process.argv.slice(2)) {
   validateRepository(commit, args.environment);
   const proofReceipt = await discoverProofReceipt(commit, args.proofReceipt);
   const config = runtimeConfig(args.environment);
+  const acceptanceEnv = {...process.env, FMARCH_HOSTED_EXPECTED_COMMIT: commit, FMARCH_HOSTED_MATRIX_API_URL: config.apiUrl, FMARCH_HOSTED_MATRIX_FRONTEND_URL: config.frontendUrl, FMARCH_HOSTED_AUTHENTICATED: '1'};
+  if (args.environment === 'staging') await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
   if (args.check) {
     console.log(`release coordination check passed for ${args.environment} ${commit}`);
     return;
@@ -874,6 +878,7 @@ export async function main(argv = process.argv.slice(2)) {
   const sentinel = args.environment === "staging"
     ? await runStagingSentinel(config, commit, runtimeDigest)
     : null;
+  const hostedAcceptance = args.environment === 'staging' ? await runHostedAcceptance(acceptanceEnv) : null;
   const receipt = buildReleaseReceipt({
     environment: args.environment,
     commit,
@@ -886,6 +891,7 @@ export async function main(argv = process.argv.slice(2)) {
     attemptReceipt,
     runtimeValidation,
     sentinel,
+    hostedAcceptance,
     schemaEpochReset,
   });
   const output = path.resolve(

@@ -1,7 +1,8 @@
+import {assertAuthenticatedReceipt, stagingOrigins} from './hosted_authenticated_acceptance.mjs';
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
-export const RELEASE_RECEIPT_VERSION = 2;
+export const RELEASE_RECEIPT_VERSION = 3;
 export const TERMINAL_DEPLOYMENT_STATES = new Set([
   "SUCCESS",
   "FAILED",
@@ -230,6 +231,7 @@ export function buildReleaseReceipt({
   attemptReceipt,
   runtimeValidation,
   sentinel = null,
+  hostedAcceptance = null,
   schemaEpochReset = null,
   generatedAt = new Date(),
 }) {
@@ -252,8 +254,10 @@ export function buildReleaseReceipt({
   assert.match(schemaHead ?? "", /^\d{4}_[a-z0-9_]+\.sql$/u, "schema head is invalid");
   if (environment === "staging") {
     assert.equal(sentinel?.status, "passed", "staging release requires a passed search sentinel");
+    assertHostedReleaseAcceptance(hostedAcceptance, commit);
   } else {
     assert.equal(sentinel, null, "production release must not run the synthetic staging sentinel");
+    assert.equal(hostedAcceptance, null, "production must not run synthetic staging acceptance");
   }
   const base = {
     version: RELEASE_RECEIPT_VERSION,
@@ -278,6 +282,7 @@ export function buildReleaseReceipt({
     attempt_receipt_sha256: attemptReceipt.receipt_sha256,
     health,
     sentinel,
+    hosted_acceptance: hostedAcceptance,
   };
   return { ...base, receipt_sha256: receiptDigest(base) };
 }
@@ -292,9 +297,20 @@ export function assertReleaseReceipt(receipt) {
   assert.equal(receipt.images?.migrator_api_digest_equal, true);
   const { receipt_sha256: actual, ...base } = receipt;
   assert.equal(actual, receiptDigest(base), "release receipt digest does not match its contents");
+  if (receipt.environment === "staging") assertHostedReleaseAcceptance(receipt.hosted_acceptance, receipt.commit);
   const serialized = JSON.stringify(receipt).toUpperCase();
   for (const forbidden of ["DATABASE_URL", "PASSWORD", "TOKEN", "SECRET", "PRIVATE_KEY"]) {
     assert.equal(serialized.includes(forbidden), false, `release receipt contains forbidden ${forbidden}`);
   }
+  return receipt;
+}
+
+export function assertHostedReleaseAcceptance(receipt, commit) {
+  assert.equal(receipt?.status, 'passed', 'Staging release requires live hosted acceptance');
+  assert.equal(receipt.checkerCommit, commit, 'Hosted checker must match release commit');
+  assert.equal(receipt.target?.commit, commit, 'Hosted target must match release commit');
+  assert.equal(receipt.target?.api, stagingOrigins.api);
+  assert.equal(receipt.target?.frontend, stagingOrigins.frontend);
+  assertAuthenticatedReceipt(receipt.authenticatedJourneys);
   return receipt;
 }

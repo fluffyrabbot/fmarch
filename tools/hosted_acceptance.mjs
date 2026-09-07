@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertFullCommit, validateHealth } from './release_coordinator_contract.mjs';
+import {prepareAuthenticatedAcceptance, runAuthenticatedAcceptance} from './hosted_authenticated_acceptance.mjs';
 import { isExternallyHostedUrl } from './dev_test_game_hosted_target_url_policy.mjs';
 
 export function hostedAcceptanceConfig(env) {
@@ -38,7 +39,9 @@ export async function runHostedAcceptance(env = process.env) {
   const checkerCommit = assertFullCommit(git('rev-parse', 'HEAD'));
   const {chromium} = await import('playwright');
   const {BOARD_ROUTE_CONTRACT} = await import('../frontend/src/lib/app/app-shell-model.mjs');
+  const prepared = env.FMARCH_HOSTED_AUTHENTICATED === '1' ? await prepareAuthenticatedAcceptance(env, config) : null;
   const checks = await checkHostedReadiness(config);
+  let authenticated = null;
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
@@ -52,12 +55,13 @@ export async function runHostedAcceptance(env = process.env) {
     assert.equal(await page.getByTestId(BOARD_ROUTE_CONTRACT.unavailableTestId).count(), 0, 'hosted game index is degraded');
     assert.deepEqual(errors, [], 'hosted frontend JavaScript errors');
     checks.push({kind: 'browser', status: 'passed', version: browser.version()});
+    if (prepared) authenticated = await runAuthenticatedAcceptance(browser, config, prepared);
     // Detect a deployment moving during browser acceptance.
     await checkHostedReadiness(config);
   } finally { await browser.close(); }
   const directory = path.resolve(env.FMARCH_HOSTED_ACCEPTANCE_OUTPUT ?? 'target/hosted-acceptance');
   await mkdir(directory, {recursive: true});
-  const receipt = {checkerCommit, status: 'passed', scope: 'live-hosted-readiness-and-public-browser', generatedAt: new Date().toISOString(), target: config, checks, authenticatedJourneys: 'unproven', realSafariAndDevices: 'unproven', releaseReady: false};
+  const receipt = {checkerCommit, status: 'passed', scope: 'live-hosted-readiness-and-public-browser', generatedAt: new Date().toISOString(), target: config, checks, authenticatedJourneys: authenticated ?? 'unproven', realSafariAndDevices: 'unproven', releaseReady: false};
   const file = path.join(directory, `${randomUUID()}.json`);
   await writeFile(file, JSON.stringify(receipt, null, 2) + '\n', {flag: 'wx'});
   console.log(`Hosted readiness/public-browser gate passed: ${file}`);

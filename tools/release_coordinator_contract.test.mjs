@@ -467,6 +467,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     proofReceipt,
     attemptReceipt,
     runtimeValidation,
+    hostedAcceptance: {status: 'passed', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
     sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
     generatedAt: new Date("2026-08-26T00:00:00.000Z"),
   });
