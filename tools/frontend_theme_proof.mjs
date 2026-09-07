@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { THEMES } from "../frontend/src/lib/app/theme.mjs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // Exercise real route hydration and the same healthy transport as the workbench.
@@ -21,8 +21,7 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
           await page.goto(`${baseUrl}/appearance`, { waitUntil: "networkidle" });
           await page.getByLabel("Theme", { exact: true }).selectOption(themeId);
           await page.getByLabel("Color preference").selectOption("game");
-          await Promise.all([page.waitForURL(`${baseUrl}/appearance`), page.getByRole("button", { name: "Save appearance" }).click()]);
-          await page.waitForLoadState("networkidle");
+          await saveAppearance(page, context, themeId, "game");
           await page.goto(`${baseUrl}/_dev/ui/session?scenario=${role}`, { waitUntil: "networkidle" });
           const shell = page.locator('[data-component="fm-app-shell"]');
           for (const [button, phase, palette] of [["Day", "day", "day"], ["Night", "night", "night"], ["Twilight", "twilight", "twilight"]]) {
@@ -64,14 +63,23 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
       await page.goto(`${baseUrl}/appearance`, { waitUntil: "networkidle" });
       await page.getByLabel("Theme", { exact: true }).selectOption("slate");
       await page.getByLabel("Color preference").selectOption(scheme);
-      await page.getByRole("button", { name: "Save appearance" }).click();
-      await page.waitForLoadState("networkidle");
+      await saveAppearance(page, context, "slate", scheme);
       await page.goto(`${baseUrl}/_dev/ui/session?scenario=player`, { waitUntil: "networkidle" });
+      await page.getByTestId("player-surface").waitFor({ state: "visible" });
       await page.getByRole("button", { name: "Night", exact: true }).click();
       await page.waitForFunction(expected => {
         const shell = document.querySelector('[data-component="fm-app-shell"]');
         return shell?.dataset.phase === "night" && shell.dataset.palette === expected && shell.dataset.theme === "slate";
-      }, expected);
+      }, expected).catch(async error => {
+        await page.screenshot({ path: path.join(directory, `preference-failure-${scheme}.png`), fullPage: true });
+        await writeFile(path.join(directory, `preference-failure-${scheme}.json`), JSON.stringify({
+          scheme, expected,
+          actual: await page.locator('[data-component="fm-app-shell"]').evaluate(element => ({ ...element.dataset })),
+          preferenceCookie: (await context.cookies()).find(cookie => cookie.name === "fmarch_appearance")?.value,
+          body: await page.locator("body").innerText(),
+        }, null, 2));
+        throw error;
+      });
       evidence.push({ preference: scheme, system: "dark", phase: "night", palette: expected });
     }
     await page.emulateMedia({ colorScheme: "light" });
@@ -79,4 +87,13 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
     evidence.push({ preference: "system", system: "light", phase: "night", palette: "day" });
   } finally { await context.close(); }
   return { status: "passed", boundary: "Real routes, persisted preferences, workbench live refresh, teardown, responsive geometry, and semantic contrast", cases: evidence };
+}
+
+async function saveAppearance(page, context, themeId, scheme) {
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "networkidle" }),
+    page.getByRole("button", { name: "Save appearance" }).click(),
+  ]);
+  assert.equal((await context.cookies()).find(cookie => cookie.name === "fmarch_appearance")?.value,
+    `${themeId}:${scheme}`, "the server must persist the submitted appearance before another navigation");
 }
