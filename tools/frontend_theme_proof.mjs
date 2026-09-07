@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { THEMES } from "../frontend/src/lib/app/theme.mjs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,8 +11,8 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
   await mkdir(directory, { recursive: true });
   const evidence = [];
   for (const viewport of [{ name: "desktop", width: 1440, height: 920 }, { name: "mobile", width: 390, height: 844 }]) {
-    for (const themeId of ["paper", "slate"]) {
-      for (const role of ["player", "moderator"]) {
+    for (const { id: themeId } of THEMES) {
+      for (const role of ["player", "player-normal", "moderator"]) {
         const context = await browser.newContext({ viewport, colorScheme: "light", reducedMotion: "reduce" });
         const page = await context.newPage();
         const errors = [];
