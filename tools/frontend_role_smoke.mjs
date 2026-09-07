@@ -3781,7 +3781,10 @@ async function assertVisibleBox(locator, label) {
 
 async function assertHitTarget(locator, label) {
   const box = await assertVisibleBox(locator, label);
-  if (box.width < 44 || box.height < 44) {
+  // Firefox can report a CSS 44px box as 43.9999847 after coordinate
+  // subtraction. Allow sub-layout-unit numeric noise, not smaller targets.
+  const minimum = 44 - 0.001;
+  if (box.width < minimum || box.height < minimum) {
     throw new Error(
       `${label} rendered ${box.width}x${box.height}, expected at least 44x44`,
     );
