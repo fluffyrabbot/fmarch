@@ -3772,7 +3772,12 @@ async function assertRouteStateScenario(page, { scenario, viewport, baseUrl }) {
 }
 
 async function assertVisibleBox(locator, label) {
-  const box = await locator.boundingBox();
+  const box = await locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    if (!element.getClientRects().length || style.visibility === "hidden") return null;
+    const {x, y, width, height} = element.getBoundingClientRect();
+    return {x, y, width, height};
+  });
   if (box === null || box.width <= 0 || box.height <= 0) {
     throw new Error(`${label} did not render a visible box`);
   }
