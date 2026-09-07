@@ -887,7 +887,10 @@ fn create_private_temp(directory: &Dir) -> Result<(String, File), MediaError> {
 
 #[cfg(unix)]
 fn sync_dir(directory: &Dir) -> Result<(), MediaError> {
-    Dir::reopen_dir(directory)?.into_std_file().sync_all()?;
+    // Linux directory capabilities may use O_PATH, which fsync rejects.
+    // Open a readable descriptor relative to the retained capability; do not
+    // resolve an ambient path that could have been replaced since admission.
+    directory.open(".")?.sync_all()?;
     Ok(())
 }
 
