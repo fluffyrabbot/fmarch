@@ -59,18 +59,19 @@ pub struct OperatorApiState {
 }
 
 impl OperatorApiState {
-    pub fn new(pool: PgPool) -> Self {
-        OperatorApiState {
-            pool,
-            session_policy: identity::SessionPolicy::from_env(),
-            projection_audit_slots: Arc::new(Semaphore::new(
-                std::env::var("FMARCH_OPERATOR_AUDIT_MAX_IN_FLIGHT")
-                    .ok()
-                    .and_then(|value| value.parse::<usize>().ok())
-                    .unwrap_or(1)
-                    .clamp(1, 8),
-            )),
+    pub fn new(
+        pool: PgPool,
+        session_policy: identity::SessionPolicy,
+        projection_audit_max_in_flight: usize,
+    ) -> Result<Self, &'static str> {
+        if !(1..=8).contains(&projection_audit_max_in_flight) {
+            return Err("operator projection-audit concurrency must be between 1 and 8");
         }
+        Ok(OperatorApiState {
+            pool,
+            session_policy,
+            projection_audit_slots: Arc::new(Semaphore::new(projection_audit_max_in_flight)),
+        })
     }
 
     pub fn with_local_proof_instance(
@@ -82,8 +83,16 @@ impl OperatorApiState {
     }
 }
 
-pub fn router(pool: PgPool) -> Router {
-    router_with_state(OperatorApiState::new(pool))
+pub fn router(
+    pool: PgPool,
+    session_policy: identity::SessionPolicy,
+    projection_audit_max_in_flight: usize,
+) -> Result<Router, &'static str> {
+    Ok(router_with_state(OperatorApiState::new(
+        pool,
+        session_policy,
+        projection_audit_max_in_flight,
+    )?))
 }
 
 pub fn router_with_state(state: OperatorApiState) -> Router {

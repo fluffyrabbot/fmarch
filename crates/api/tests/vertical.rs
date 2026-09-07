@@ -117,7 +117,12 @@ fn router_with_local_proof_verifier(
 }
 
 fn test_api_state(pool: sqlx::PgPool) -> ApiState {
-    ApiState::new(pool, shared_test_media_store())
+    ApiState::new(
+        pool,
+        shared_test_media_store(),
+        api::ApiRuntimeConfig::default(),
+    )
+    .unwrap()
 }
 
 async fn community_invitation_for(pool: &sqlx::PgPool, account_id: &str) -> String {
@@ -1336,7 +1341,8 @@ async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool, store.clone())
+        ApiState::new(pool, store.clone(), api::ApiRuntimeConfig::default())
+            .unwrap()
             .with_local_proof_auth(test_local_proof_verifier())
             .with_variant_limits(VariantLimits::default()),
     );
@@ -1384,7 +1390,9 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let png = media_upload_png(2, 2);
 
@@ -1455,7 +1463,9 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     let media_limits = MediaLimits::new(1_024, 1, 1, 1, 4).unwrap();
     let store = MediaStore::open(root.path(), media_limits).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (token, _) = create_media_upload_account_session(&app, "invalid").await;
     let png = media_upload_png(2, 2);
@@ -1485,7 +1495,8 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     let variant_store = MediaStore::open(variant_root.path(), MediaLimits::default()).unwrap();
     let variant_limits = VariantLimits::new(2_560, 2_560, 6_553_600, 8, 48).unwrap();
     let variant_app = api::router_with_state(
-        ApiState::new(pool, variant_store)
+        ApiState::new(pool, variant_store, api::ApiRuntimeConfig::default())
+            .unwrap()
             .with_local_proof_auth(test_local_proof_verifier())
             .with_variant_limits(variant_limits),
     );
@@ -1507,8 +1518,13 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store.clone())
-            .with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(
+            pool.clone(),
+            store.clone(),
+            api::ApiRuntimeConfig::default(),
+        )
+        .unwrap()
+        .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (outgoing_token, outgoing_principal) =
         create_media_upload_account_session(&app, "private-post-member").await;
@@ -1682,7 +1698,9 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     drop(store);
     let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), restarted).with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(pool.clone(), restarted, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let incoming_ticket = issue_websocket_ticket(&app, &incoming_token, game, &channel_id).await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1934,7 +1952,9 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (mason_outgoing_token, mason_outgoing) =
         create_media_upload_account_session(&app, "mason-outgoing").await;
@@ -2369,7 +2389,9 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let (outgoing_token, outgoing) =
         create_media_upload_account_session(&app, "dead-chat-outgoing").await;
@@ -2817,11 +2839,17 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     // event is visible to the socket but its in-process broadcast is not, so
     // this tests the catch-up contract without racing the normal delta path.
     let other_instance = api::router_with_state(
-        ApiState::new(pool.clone(), store.clone())
-            .with_local_proof_auth(test_local_proof_verifier()),
+        ApiState::new(
+            pool.clone(),
+            store.clone(),
+            api::ApiRuntimeConfig::default(),
+        )
+        .unwrap()
+        .with_local_proof_auth(test_local_proof_verifier()),
     );
     let app = api::router_with_state(
-        ApiState::new(pool.clone(), store)
+        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+            .unwrap()
             .with_local_proof_auth(test_local_proof_verifier())
             .with_live_projection_delivery_delay(std::time::Duration::from_millis(500)),
     );
@@ -8720,7 +8748,7 @@ async fn local_proof_sessions_and_mint_credentials_are_bound_to_one_server_proce
     let reconstituted_instance = identity::LocalProofInstanceId::parse(first_stored_instance)
         .expect("stored local-proof designation remains canonical");
     let reconstituted_policy =
-        identity::SessionPolicy::from_env().with_local_proof_instance(reconstituted_instance);
+        identity::SessionPolicy::default().with_local_proof_instance(reconstituted_instance);
     assert!(matches!(
         identity::session::validate_session(
             &pool,

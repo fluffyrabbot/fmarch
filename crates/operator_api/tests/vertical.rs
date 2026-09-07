@@ -71,7 +71,8 @@ struct CommandRouteState {
 
 fn router(pool: sqlx::PgPool) -> Router {
     let operator = operator_api::router_with_state(
-        operator_api::OperatorApiState::new(pool.clone())
+        operator_api::OperatorApiState::new(pool.clone(), identity::SessionPolicy::default(), 1)
+            .unwrap()
             .with_local_proof_instance(local_proof_instance_id()),
     )
     .layer(middleware::from_fn_with_state(

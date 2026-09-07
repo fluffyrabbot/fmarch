@@ -28,7 +28,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{broadcast, watch, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
     host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta,
@@ -88,14 +88,17 @@ impl GameEventWakeHub {
         self.inner.sender.subscribe()
     }
 
-    pub(super) fn spawn_listener(&self, pool: PgPool) {
-        if tokio::runtime::Handle::try_current().is_err() {
-            return;
-        }
+    pub(super) async fn run_listener<F>(
+        &self,
+        pool: PgPool,
+        shutdown: watch::Receiver<bool>,
+        heartbeat: F,
+    ) -> Result<(), sqlx::Error>
+    where
+        F: Fn(u64) + Send + Sync,
+    {
         let weak = Arc::downgrade(&self.inner);
-        tokio::spawn(async move {
-            run_live_event_listener(pool, weak).await;
-        });
+        listen_live_events(&pool, &weak, shutdown, heartbeat).await
     }
 
     #[cfg(test)]
@@ -153,41 +156,34 @@ impl EventWake for NotifyEventWake {
     }
 }
 
-async fn run_live_event_listener(pool: PgPool, inner: std::sync::Weak<GameEventWakeInner>) {
-    loop {
-        if inner.strong_count() == 0 {
-            return;
-        }
-        match listen_live_events(&pool, &inner).await {
-            Ok(()) => {}
-            Err(error) => {
-                tracing::warn!(
-                    event = "live_event_listen_failed",
-                    error = %error,
-                    "live event LISTEN loop failed; retrying"
-                );
-            }
-        }
-        if inner.strong_count() == 0 {
-            return;
-        }
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-}
-
-async fn listen_live_events(
+async fn listen_live_events<F>(
     pool: &PgPool,
     inner: &std::sync::Weak<GameEventWakeInner>,
-) -> Result<(), sqlx::Error> {
+    mut shutdown: watch::Receiver<bool>,
+    heartbeat: F,
+) -> Result<(), sqlx::Error>
+where
+    F: Fn(u64) + Send + Sync,
+{
     let mut listener = PgListener::connect_with(pool).await?;
     listener
         .listen(projections::LIVE_EVENT_NOTIFY_CHANNEL)
         .await?;
+    heartbeat(0);
     let mut owner_check = tokio::time::interval(Duration::from_secs(1));
     owner_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
+        if *shutdown.borrow() {
+            return Ok(());
+        }
         tokio::select! {
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
+                    return Ok(());
+                }
+            }
             _ = owner_check.tick() => {
+                heartbeat(0);
                 if inner.strong_count() == 0 {
                     return Ok(());
                 }
@@ -201,6 +197,7 @@ async fn listen_live_events(
                     return Ok(());
                 };
                 let _ = hub.sender.send(game);
+                heartbeat(1);
             }
         }
     }

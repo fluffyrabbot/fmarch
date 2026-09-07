@@ -72,7 +72,7 @@ async fn stewardship_preserves_lineage_and_suspension_revokes_pending_invites(po
         &admission.credential,
         "member@example.test",
         "$argon2id$fixture",
-        &identity::SessionPolicy::from_env(),
+        &identity::SessionPolicy::default(),
         now + 1,
     )
     .await
@@ -157,7 +157,7 @@ async fn admission_is_target_bound_single_use_atomic_and_preserves_lineage(pool:
     )
     .await
     .unwrap();
-    let policy = identity::SessionPolicy::from_env();
+    let policy = identity::SessionPolicy::default();
 
     let mismatch = admit_classic(
         &pool,
@@ -262,7 +262,7 @@ async fn concurrent_acceptance_and_revocation_serialize_without_deadlock(pool: s
     )
     .await
     .unwrap();
-    let policy = identity::SessionPolicy::from_env();
+    let policy = identity::SessionPolicy::default();
     let acceptance_pool = pool.clone();
     let revocation_pool = pool.clone();
     let credential = invitation.credential.clone();
