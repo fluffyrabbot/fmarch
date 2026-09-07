@@ -144,17 +144,26 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert_ordered(
         delivery,
         &[
+            "delivery_outcome(&mut claim, pool, gateway, now, config).await",
+            "let finalized_at = unix_now_seconds().max(now)",
             "let mut tx = pool.begin().await?",
-            "lock_active_credential(",
-            "lock_claimed_delivery(&mut tx, &claim)",
-            "delivery_outcome(&mut claim, gateway, credential_active, now)",
-            "finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now)",
+            "finalize_delivery(",
+            "requested_event_kind,",
+            "finalized_at,",
         ],
         "delivery transaction",
     );
-    let finalization_position = delivery
-        .find("finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now)")
-        .unwrap();
+    assert!(
+        !delivery.contains("lock_active_credential") && !delivery.contains("lock_claimed_delivery"),
+        "provider delivery must not hold credential or intent row locks"
+    );
+    let provider_position = delivery.find("delivery_outcome(").unwrap();
+    let transaction_position = delivery.find("pool.begin().await?").unwrap();
+    assert!(
+        provider_position < transaction_position,
+        "provider delivery must finish before the finalization transaction begins"
+    );
+    let finalization_position = delivery.find("finalize_delivery(").unwrap();
     let final_commit_position = delivery.rfind("tx.commit().await?").unwrap();
     assert!(
         final_commit_position > finalization_position,
@@ -176,6 +185,13 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "claim_token = NULL",
             "claim_expires_at = NULL",
             "credential_envelope = CASE WHEN $3 = 'cancelled' THEN NULL ELSE credential_envelope END",
+            "AND claim_token = $2",
+            "AND CASE $10",
+            "WHEN 'invite' THEN EXISTS",
+            "WHEN 'recovery' THEN EXISTS",
+            "WHEN 'community_invitation' THEN EXISTS",
+            "let cancelled_attempt_count",
+            "AND NOT CASE $4",
             "record_delivery_audit(",
             "IdentityDeliveryAuditRecord {",
             "event_at: now",
