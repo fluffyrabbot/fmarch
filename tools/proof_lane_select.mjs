@@ -142,6 +142,7 @@ export function currentProofContext({ env = process.env } = {}) {
     worktree_sha256: digest.digest('hex'),
     manifest_sha256: createHash('sha256').update(readFileSync(MANIFEST_PATH)).digest('hex'),
     database_identity_sha256: proofDatabaseIdentity({ env }),
+    environment_sha256: env.FMARCH_PROOF_ENVIRONMENT_SHA ?? null,
   };
 }
 
@@ -158,6 +159,7 @@ export function planReceiptResume(receipt, manifest, context) {
     'worktree_sha256',
     'manifest_sha256',
     'database_identity_sha256',
+    'environment_sha256',
   ]) {
     if (expected[field] !== context[field]) {
       throw new Error(`proof receipt ${field} does not match the current workspace`);
