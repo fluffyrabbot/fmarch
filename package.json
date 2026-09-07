@@ -7,7 +7,7 @@
     "proof:lanes": "node tools/proof_lane_select.mjs",
     "proof:cache": "node tools/proof_lane_cache_admin.mjs",
     "test:proof-cache-maintenance": "node tools/proof_lane_cache_admin.mjs audit",
-    "test:proof-lane-contract": "python3 scripts/with-heavy-build-lock.test.py && node --test tools/proof_remote.test.mjs tools/proof_lane_select.test.mjs tools/proof_lane_execution.test.mjs tools/proof_lane_cache.test.mjs tools/proof_lane_cache_admin.test.mjs tools/frontend_artifact_paths.test.mjs tools/cargo_test_evidence.test.mjs tools/proof_test_evidence.test.mjs && npm run test:architecture-fitness",
+    "test:proof-lane-contract": "python3 scripts/with-heavy-build-lock.test.py && node --test tools/proof_remote.test.mjs tools/proof_lane_select.test.mjs tools/proof_lane_execution.test.mjs tools/proof_lane_cache.test.mjs tools/proof_lane_cache_admin.test.mjs tools/frontend_artifact_paths.test.mjs tools/cargo_test_evidence.test.mjs tools/proof_test_evidence.test.mjs && npm run test:architecture-fitness && npm run test:documentation",
     "test:architecture-fitness": "node --test tools/architecture_fitness.test.mjs && node tools/architecture_fitness.mjs",
     "release:staging": "node tools/release_coordinator.mjs --environment staging",
     "test:release-coordinator": "node --test tools/release_coordinator_contract.test.mjs",
@@ -190,9 +190,14 @@
     "frontend:dev": "npm --prefix frontend run dev",
     "ui:dev": "npm --prefix frontend run ui:dev",
     "test:ui-workbench": "node --test frontend/src/lib/dev/ui-workbench.test.mjs frontend/src/routes/_dev/ui/ui-workbench-route.test.mjs",
-    "proof:remote": "node tools/proof_remote.mjs"
+    "proof:remote": "node tools/proof_remote.mjs",
+    "generate:rust-reference": "node tools/rust_reference.mjs --write",
+    "check:rust-reference": "node tools/rust_reference.mjs --check",
+    "test:documentation": "node --test tools/documentation_check.test.mjs tools/rust_reference.test.mjs && node tools/documentation_check.mjs && npm run check:rust-reference"
   },
   "devDependencies": {
+    "github-slugger": "2.0.0",
+    "mdast-util-from-markdown": "2.0.3",
     "playwright": "1.60.0"
   }
 }

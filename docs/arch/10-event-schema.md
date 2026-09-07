@@ -1,5 +1,8 @@
 # 10 — Event schema & result contract
 
+See the generated [Rust contract reference](../reference/rust-contracts.md)
+for current declaration members and source links.
+
 The concrete event taxonomy for both layers ([09-engine-and-packs](09-engine-and-packs.md)),
 plus the **result contract** discipline ported from im-human's `V4_RESULT_CONTRACT.md`:
 event types are enumerated, each is versioned, and **unknown types are rejected outright**.
@@ -83,70 +86,12 @@ The resolver's output is persisted as **one `ResolutionApplied` envelope** that 
 ordered inner domain events, plus a companion `ResolutionTrace`. This mirrors im-human's
 `resolution.v5.applied` and keeps a resolution atomic and replayable as a unit.
 
-The exact `ResolutionApplied` type in `domain::events` contains `phase_id`,
-`run_id`, `result_version`, `seed`, `counts`, indexed `events`, and captured
-`started_at`/`finished_at` logical times. It is persisted atomically with its
-trace. The following taxonomy summarizes inner-event semantics; consult the
-Rust enum for exact fields and serde representation.
-
-```rust
-enum InnerEvent {
-    // ── Day flow ──
-    DayVoteRecorded,        // { actor, target?, withdrawn, sequence }  running ballots
-    DayVoteOutcome,         // OFFICIAL outcome (engine+pack resolved)
-    DayAnnouncement,        // prior-night death note emitted by day-note culture policy
-    LastWordsRecorded,      // last-word note for a day-death victim
-    HostPromptIssued,       // durable host/admin prompt emitted by engine policy
-    PhaseAnnouncement,      // deaths revealed at phase boundary
-
-    // ── Core night results ──
-    PlayerKilled,           // { slot_id, cause, attackers, unstoppable, death_reveal=Full }  see below
-    PlayerSaved,            // { slot_id, reasons, sources }
-    PlayerConverted,        // { target, new_role, new_alignment, original_role, original_alignment, source }  (R2: carries alignment; apply_events updates BOTH role_key and alignment)
-    ConversionBlocked,      // { target, status, reason }
-
-    // ── Persistent effects (Mark/Clear) ──
-    EffectsMarked,          // { effect, target, actor }
-    EffectsCleared,         // { effect, targets, actor }
-    ActionGranted,          // { grant_id, grant_option?, kind, actor, target, source_action, uses, phase_id, phase_kind, phase_number }
-    ActionGrantConsumed,    // { grant_id, actor, action_id, source_action, phase_id, phase_kind, phase_number, remaining_uses }
-    BadgeChanged,           // { badge_id, owner, previous_owner, vote_weight, actor, source_action, reason, destroyed, phase_id, phase_kind, phase_number }
-    DuelResolved,           // { knight, target, result, killed, source_action, phase_id, phase_kind, phase_number }
-    WolfSelfDestructed,     // { wolf_id, target_id, cause, unstoppable, source_action, phase_id, phase_kind, phase_number }
-    WolfCarryQueued,        // { owner_id, token_id, cause, role_key, phase_id, phase_kind, phase_number }
-    WolfCarryUsed,          // { owner_id, target_id, source_action_id, effect_id, role_key, phase_id, phase_kind, phase_number }
-    WolfBeautyMarked,       // { beauty_id, target_id, effect, source_action, phase_id, phase_kind, phase_number }
-    WolfBeautyDragged,      // { beauty_id, dragged_ids, cause, phase_id, phase_kind, phase_number }
-    ItaSessionOpened,       // { session_id, label, day, window, status, phase_id, phase_kind, phase_number }
-    ItaShotQueued,          // { session_id, action_id, actor, targets, submitted_at, queue_position, queue_length, previous_queue_length, counters }
-    ItaShotBuffered,        // { session_id, action_id, actor_id, targets, submitted_at, release_at, delay_ms }
-    ItaShotInvalidated,     // { session_id, action_id, actor_id, target_id, reason, invalidated_by?, submitted_at, timestamp }
-    ItaShotResolved,        // { session_id, action_id, actor, target, outcome, hit_chance, roll, kill, submitted_at, timestamp, counters }
-    ItaShotRefunded,        // { session_id, action_id, actor_id, target_id, reason, policy?, hit_chance?, roll?, hp_before?, hp_after?, protection_path?, submitted_at, timestamp, counters }
-    ItaSessionUpdated,      // { session_id, queue_length, queue_delta, shots_resolved, global_shots_fired, counters, phase_id, phase_kind, phase_number }
-    ItaSessionClosed,       // { session_id, last_status, phase_id, phase_kind, phase_number }
-    PlayersLinked,          // { link_id, slots, source }
-    RetaliationArmed,       // { retaliation_id, actor, target, source_action }
-    BackupTargeted,         // { backup, source_target, source_role, source_action, phase_id, phase_kind, phase_number }
-
-    // ── Information ──
-    InvestigationResult,    // { mode, investigator, target, result }  mode per InvestigateMode
-    AlignmentRevealed,      // { slot_id, alignment, source_action, phase_id, phase_kind, phase_number }
-    VoteDuelDeclared,       // { challenger, target, source_action, phase_id, phase_kind, phase_number }
-    EffectNotification,     // { effect, status, audience }  visible Mark/Clear or loud/announcing notice; NOT roleblock
-
-    // ── Interference ──
-    ActionIngestHalted,    // { action_id, actor, actor_role, template_id, targets, phase_id, phase_kind, phase_number, reason, grant_id }
-    ActionInterfered,       // { actor: SlotId, reason: String }  e.g. reason "roleblocked"
-    ActionRecorded,         // { actor, template_id, targets, phase_id, phase_kind, phase_number, status }  cadence/audit history
-
-    // ── Reactive ──
-    Trigger,                // { trigger_id, payload: TriggerPayload }  (bomb/vengeful/PGO retaliation)
-
-    // ── Win conditions ──
-    WinReached,             // { winner, reason, metadata }
-}
-```
+The generated reference lists the exact members of
+[`ResolutionApplied`](../reference/rust-contracts.md#resolutionapplied),
+[`ResolutionTrace`](../reference/rust-contracts.md#resolutiontrace), and
+[`InnerEvent`](../reference/rust-contracts.md#innerevent). Applied results and
+trace are persisted atomically. The mapping below records port semantics;
+serde representation and payload validation remain in the linked Rust source.
 
 ### im-human V4 result-kind mapping
 

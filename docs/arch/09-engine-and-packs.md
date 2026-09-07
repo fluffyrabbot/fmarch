@@ -1,5 +1,8 @@
 # 09 — The resolution engine & ruleset packs
 
+See the generated [Rust contract reference](../reference/rust-contracts.md)
+for current declaration members and source links.
+
 This is the multi-ruleset core, ported in **minimum robust form** from the prior
 `apps/im-human` engine (its "GodEngine" / Engine V4). That project's lasting insight — and
 the thing legacy forum-mafia software never has — is that **roles are data, not code**: they

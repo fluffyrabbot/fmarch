@@ -1,5 +1,8 @@
 # Architecture
 
+See the generated [Rust contract reference](../reference/rust-contracts.md)
+for current declaration members and source links.
+
 Working docs for a from-scratch, forum-mafia–focused text+image forum / messaging
 platform. Tablet-friendly (the moderator console especially), data-efficient on the
 wire and in storage, server-trusted with strong authorization.

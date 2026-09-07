@@ -41,17 +41,37 @@ identity modes are local-only.
 
 ## Change and verify
 
-1. Work directly on `main`, keeping each change coherent.
+1. Create a named task branch in its own worktree.
 2. Inspect the required lanes with `npm run proof:lanes`.
-3. Use focused checks during development (`npm run check:api` for the heavy API
-   compile gate, or the frontend proof entry points for UI work).
-4. Run `npm run proof:lanes -- --mode push --run` before an ordinary push.
-5. Commit only the intended paths and push after proof passes.
+3. Run bounded Node/static checks on the editing machine as needed. Ordinary
+   application proof belongs to the canonical Cachy worker.
+4. Commit the intended paths and push the clean task checkpoint.
+5. Submit `npm run proof:remote -- --mode push`, inspect the signed receipt,
+   and use the fleet `land` command for that job after it passes. See
+   [canonical verification](ops/cachy-canonical-verification.md) for commands.
 
 Sprint/full modes, frozen-lane reuse, exhaustive release proof, receipt
 maintenance, and host constraints are specified once in [AGENTS.md](../AGENTS.md).
 A bundle build or old passing artifact does not substitute for the selected
 proof boundary.
+
+## Documentation checks
+
+Run `npm run test:documentation` for local Markdown links, heading anchors,
+source-line bounds, documented npm script names, and Rust reference freshness.
+The same checks run in the proof contract push sentinel. Links are checked
+against repository files; local proof artifacts belong in code spans because
+ignored output is not published with the documentation. External URLs are not
+fetched. Command validation covers literal `npm run` examples, including
+`--prefix frontend`; it does not execute examples or interpret shell variables.
+
+The [Rust contract reference](reference/rust-contracts.md) owns the selected
+engine, event-envelope, and platform declaration tables. After changing those
+Rust declarations, run `npm run generate:rust-reference` and commit the output.
+The generator intentionally reads a bounded subset of Rust syntax and fails
+when selected shapes exceed it; extend its tests before adding new syntax.
+Architecture prose should explain behavior and link to these tables instead
+of duplicating member inventories.
 
 ## Schema and generated contracts
 

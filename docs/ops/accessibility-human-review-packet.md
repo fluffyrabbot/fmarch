@@ -39,16 +39,16 @@ npm run test:frontend-role-proof:quick
 - Preflight commit: `a22beb192d2308ed68a7a5a40b8e8043407dd078`
 - Preflight date: 2026-08-29 01:15 PDT
 - Keyboard traversal result/artifact: passed;
-  [`target/frontend-keyboard-traversal/keyboard-traversal.json`](../../target/frontend-keyboard-traversal/keyboard-traversal.json)
+  `target/frontend-keyboard-traversal/keyboard-traversal.json`
   records 20 surface/viewport combinations and 75 route-state/viewport
   combinations across the five viewports above.
 - Quick role proof result/artifacts: passed; frontend contract tests, build-mode
   route-state rendering, the static role contract, tablet interaction contract,
   and DOM smoke all exited successfully. Generated evidence:
-  [`route-state-render.json`](../../target/frontend-route-state-render/route-state-render.json),
-  [`role-contract.json`](../../target/frontend-static-role-contract/role-contract.json),
-  [`tablet-interaction.json`](../../target/frontend-tablet-interaction/tablet-interaction.json),
-  and [`dom-smoke.json`](../../target/frontend-role-dom-smoke/dom-smoke.json).
+  `target/frontend-route-state-render/route-state-render.json`,
+  `target/frontend-static-role-contract/role-contract.json`,
+  `target/frontend-tablet-interaction/tablet-interaction.json`,
+  and `target/frontend-role-dom-smoke/dom-smoke.json`.
 - Known automated limitations reviewed: yes
 
 The keyboard artifact proves build-mode Chromium tab order and focus outlines.
@@ -107,7 +107,7 @@ PDT. The board listed both seeded games; both public-thread links rendered live
 public records; Community rendered its genuine empty state; and the same public
 search rendered a genuine empty result despite the stale pre-reset cookie. The
 generated handoff at
-[`target/dev-test-game/session.md`](../../target/dev-test-game/session.md)
+`target/dev-test-game/session.md`
 matched the running frontend, game, and API port. `AR-LIVE-001` is therefore
 cleared as a preparation blocker, and the human Public journey may begin. This
 agent-driven rerun is not a keyboard, screen-reader, tablet, or human verdict.

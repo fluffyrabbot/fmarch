@@ -132,7 +132,7 @@
       "outputs": ["docs/ops/completeness-scorecard.md"],
       "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:completeness-scorecard"], "resources": [] }
     },
-    "test:proof-lane-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": [] } },
+    "test:proof-lane-contract": {"kind": "npm", "execution": {"class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": []}, "write_command": "npm run generate:rust-reference", "inputs": ["crates/domain/src/ir.rs", "crates/domain/src/phase.rs", "crates/domain/src/state.rs", "crates/eventstore/src/lib.rs", "crates/domain/src/events.rs", "crates/game_platform/src/lib.rs", "tools/rust_reference.mjs"], "outputs": ["docs/reference/rust-contracts.md"]},
     "test:proof-cache-maintenance": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-cache-maintenance"], "resources": [] } },
     "test:production-promotion": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:production-promotion"], "resources": [] } },
     "test:release-coordinator": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:release-coordinator"], "resources": [] } },
@@ -1167,11 +1167,12 @@
         "test:security-release-baseline"
       ]
     },
+    {"id": "proof:documentation", "tier": "active", "paths": ["tools/documentation_check.mjs", "tools/documentation_check.test.mjs", "tools/rust_reference.mjs", "tools/rust_reference.test.mjs"], "lanes": ["test:proof-lane-contract"]},
     {
       "id": "docs",
       "tier": "active",
       "paths": ["docs/", "AGENTS.md", "README.md"],
-      "lanes": []
+      "lanes": ["test:proof-lane-contract"]
     },
     {
       "id": "deploy:infra",

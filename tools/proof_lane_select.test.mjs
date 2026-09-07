@@ -1866,3 +1866,12 @@ test('--skip survives a resume so a resumed sweep still excludes what the operat
   const listed = run(['--list', '--skip', 'cargo:api']);
   assert.match(listed, /--skip is only valid with a selection --run/);
 });
+
+test('documentation changes select their bounded contract gate', () => {
+  for (const changed of ['docs/arch/10-event-schema.md', 'tools/documentation_check.mjs', 'tools/rust_reference.test.mjs']) {
+    const selection = selectLanes({ changed: [changed], manifest, crateGraph: FIXTURE_GRAPH });
+    assert.deepEqual(selection.unmapped, []);
+    assert.deepEqual(selection.laneIds, ['test:proof-lane-contract']);
+  }
+  assert.ok(packageScripts['test:proof-lane-contract'].includes('npm run test:documentation'));
+});
