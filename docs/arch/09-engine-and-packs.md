@@ -66,29 +66,11 @@ shapes. Rust types, pack validation, and the checked-in packs own exact fields.
 A pack is one culture's complete ruleset, as data. fmarch **adds two tables** that im-human
 kept outside its pack but which are genuinely culture-specific: `vote` and `phases`.
 
-```rust
-struct Pack {
-    name: String,
-    version: u32,        // this pack's revision
-    ir_version: u16,     // IR vocabulary it targets
-    item_actions: Map<Tag, ActionTemplate>, // generated item actions keyed by grant_id
-    roles: Map<RoleKey, Role>,
-    precedence: Vec<PrecedenceRule>,        // conflict resolution
-    visibility: Map<IrAbility, VisibilityRule>,
-    redirects: RedirectPolicy,
-    triggers: Vec<TriggerRule>,
-    vote: VotePolicy,    // NEW vs im-human: vote rules are culture-specific
-    phases: PhasePolicy, // NEW: cadence / subsegments per culture
-    investigation_overrides: Option<Map<Tag, ResultOverride>>, // OPTIONAL; result-flip table (below)
-    investigation_results: InvestigationResultPolicy, // OPTIONAL; culture-owned result labels
-    effects: Map<Tag, EffectPolicy>, // OPTIONAL; lifecycle/visibility policy for Mark/Clear tags
-    conversion_policy: ConversionPolicy, // OPTIONAL; timing/conflict policy for Convert
-    ita: ItaPolicy,     // OPTIONAL; Mafia Universe ITA session policy, default empty
-    death_retaliation: DeathRetaliationPolicy, // OPTIONAL; culture-gated chosen final shots
-    idiot_policy: IdiotPolicy, // OPTIONAL; culture-gated first-lynch survival and vote loss
-    win: WinPolicy,      // win conditions, evaluated on the post-resolution state (below)
-}
-```
+Current declarations: [`Pack`](../reference/rust-contracts.md#pack).
+
+Pack revision and IR vocabulary version are separate. Item actions are keyed by
+the grant that unlocks them; policy defaults and required fields are defined by
+serde attributes and pack validation in the source.
 
 `domain::validate_pack` is the v1 semantic gate after deserialize. It rejects unsupported
 `version` / `ir_version`, invalid role/alignment/effect references, illegal
@@ -191,47 +173,14 @@ game-scoped pack artifact custody.
 
 ### Roles → action templates
 
-```rust
-struct Role {
-    description: String,
-    alignment: Option<AlignmentKey>,   // pack-defined; engine treats as opaque tag
-    actions: Vec<ActionTemplate>,
-    effects: Vec<Tag>,                 // persistent effect tags carried by the role (default empty)
-}
+Current declarations: [`Role`](../reference/rust-contracts.md#role),
+[`ActionTemplate`](../reference/rust-contracts.md#actiontemplate),
+[`Constraints`](../reference/rust-contracts.md#constraints).
 
-struct ActionTemplate {
-    id: String,
-    source_ids: Vec<String>,          // source-catalog ids covered by this canonical fmarch id
-    ability: IrAbility,
-    additional_abilities: Vec<IrAbility>, // default empty; one submission can compose primitives
-    window: Window,                 // Day | Night | Any
-    targets: TargetSpec,            // None | One | Many | Group  (cardinality lives in Constraints.max_targets)
-    modifiers: Vec<Modifier>,
-    constraints: Constraints,
-    mode: Option<InvestigateMode>,  // REQUIRED iff ability == Investigate; absent/null otherwise
-    result_memory: Option<ResultMemorySpec>, // OPTIONAL; prior-result baseline policy for Investigate
-    redirect: Option<RedirectKind>, // REQUIRED iff ability == Redirect; see redirect policy
-    effect_duration: Option<EffectDuration>, // Persistent | Resolution; action-local migration override
-    grant: Option<GrantSpec>,       // REQUIRED iff ability == Grant
-    badge: Option<BadgeSpec>,       // REQUIRED iff ability == Badge
-    duel: Option<DuelSpec>,         // REQUIRED iff ability == Duel
-    conversion: Option<ConversionSpec>, // v2 Convert policy: AssignRole | RestoreOriginal
-}
-
-struct Constraints {
-    max_targets: u16,
-    self_allowed: bool,
-    unique_targets: bool,
-    target_state: Option<TargetState>, // Any | Alive | Dead; omitted targeted actions default Alive
-    roleblockable: bool,
-    priority: i32,                  // resolution priority within a window
-    x_shots: Option<u16>,          // limited-use abilities
-    cooldown_cycles: Option<u16>,  // same-phase-kind cooldown after legal use
-    active_from: Option<ActivationGate>, // novice/activated phase gate
-    phase_parity: Option<PhaseParity>, // Odd | Even, for odd/even phase-kind actions
-    cycle_parity: Option<PhaseParity>, // Odd | Even, for odd/even game-cycle actions
-}
-```
+Action templates declare when and whom a slot can target. Constraints own
+cardinality, legal target state, limited uses, and cadence. Ability-specific
+configuration is validated before resolution; a role name does not supply
+missing action semantics.
 
 `invalid_action_contract_fixture_is_rejected_by_pack_linter` proves missing `Investigate.mode`
 and illegal non-`Investigate` mode are rejected at the pack boundary; the Postgres command test
@@ -628,16 +577,7 @@ passive-first resolver branch.
 
 ### Precedence — who beats whom
 
-```rust
-struct PrecedenceRule {
-    id: String,
-    when: PrecedenceWhen,           // { effect: IrAbility, target_state: Option<String> }
-    beats: Vec<IrAbility>,
-    blocked_by: Vec<IrAbility>,
-    unless_modifiers: Vec<Modifier>,// e.g. Protect beats Kill UNLESS Strongman
-    notes: String,
-}
-```
+Current declarations: [`PrecedenceRule`](../reference/rust-contracts.md#precedencerule).
 
 `Pack.night_resolution` is the first linter-backed conflict catalog over those precedence
 edges. When enabled, it names the concrete pack action ids that participate in standard
@@ -680,12 +620,7 @@ intercept cause and generated attacker are merged into its attribution and trace
 
 ### Visibility — what a result reveals
 
-```rust
-struct VisibilityRule {
-    sees: Vec<VisField>,            // ActorId | TargetId | ActionType | Result | VisTag
-    unless_modifiers: Vec<Modifier>,// e.g. tracker sees target UNLESS Ninja
-}
-```
+Current declarations: [`VisibilityRule`](../reference/rust-contracts.md#visibilityrule).
 
 `VisibilityRule` governs hide/show of a single emitting action's fields. It does **not** flip
 a *result value* — that is the job of the `investigation_overrides` table below.
@@ -711,13 +646,7 @@ the investigated slot carries that effect tag. This is the **canonical home for 
 `miller` → `Parity` reads `scum`), framers (`Mark` writes `framed` before Investigate →
 `Parity` reads `scum`), and any other `Mark`-driven result tampering.
 
-```rust
-/// Optional pack table: investigation_overrides: Map<Tag, ResultOverride>
-/// e.g. { "godfather": { "Parity": "town" }, "miller": { "Parity": "scum" } }
-struct ResultOverride {
-    by_mode: Map<InvestigateMode, String>, // mode (at minimum Parity) -> overridden result value
-}
-```
+Current declarations: [`ResultOverride`](../reference/rust-contracts.md#resultoverride).
 
 The resolver consults this table when emitting an `InvestigationResult`: if the investigated
 slot carries a tag present in `investigation_overrides`, and that tag's `ResultOverride` has
@@ -730,19 +659,8 @@ night ability order; absent a match, the normal result stands.
 
 ### Redirects — fixpoint policy
 
-```rust
-struct RedirectPolicy {
-    order: Vec<IrAbility>,
-    loop_cap: u16,                  // termination guard for redirect cycles
-    tie_breaker: TieBreaker,        // Stable | Random | First
-}
-
-enum RedirectKind {
-    Swap,      // Bus Driver: two targets swap places for later target readers
-    Pull,      // Lightning Rod: target-reading actions are pulled to actor/target
-    Retarget,  // Redirector: actions aimed at first target move to second target
-}
-```
+Current declarations: [`RedirectPolicy`](../reference/rust-contracts.md#redirectpolicy),
+[`RedirectKind`](../reference/rust-contracts.md#redirectkind).
 
 > **v1 scope.** v1 applies redirect actions as an ordered target-rewrite graph before
 > Kill/Protect/Investigate read targets. A single redirect action can rewrite a target at most
@@ -760,20 +678,11 @@ ability landing on a slot (for example `Kill`) or a resolver observation such as
 This is how bomb/vengeful retaliation and PGO visitor kills are expressed without new
 role-specific primitives.
 
-```rust
-struct TriggerRule {
-    id: String,
-    on: TriggerOn,
-    if_target_has: Vec<Tag>,        // modifiers/effects the target must carry
-    if_actor_has: Vec<Tag>,         // modifiers/effects the observed actor must carry
-    produces: TriggerProduction,    // { ability, actor: ActorRef, target: TargetRef, modifiers }
-}
-
-enum TriggerOn { Ability(IrAbility), Event(TriggerEvent) }
-enum TriggerEvent { Visit, Lynch, Death, EffectMarked, PhaseEnd, Win }
-enum ActorRef  { Actor, Target, TargetGuard, Other }
-enum TargetRef { Actor, Target, Killer, Other }
-```
+Current declarations: [`TriggerRule`](../reference/rust-contracts.md#triggerrule),
+[`TriggerOn`](../reference/rust-contracts.md#triggeron),
+[`TriggerEvent`](../reference/rust-contracts.md#triggerevent),
+[`ActorRef`](../reference/rust-contracts.md#actorref),
+[`TargetRef`](../reference/rust-contracts.md#targetref).
 
 > **Trigger fixpoint & loop-cap.** After core resolution, the resolver fires every trigger
 > whose `on` observation lands on a slot matching `if_target_has` (matched against the slot's
@@ -872,34 +781,10 @@ projection. The live running tally remains a cheap projection
 ([02-event-sourcing](02-event-sourcing.md)), but the *authoritative* `day.vote.outcome`
 ([10-event-schema](10-event-schema.md)) is engine-emitted.
 
-```rust
-struct VotePolicy {
-    method: VoteMethod,             // Plurality | Majority | Supermajority{num,den}
-    no_lynch_allowed: bool,
-    self_vote_allowed: bool,
-    hammer: bool,                   // does reaching threshold end the day immediately?
-    weights: WeightPolicy,          // Equal | PerRole(Map<RoleKey,f64>) | Dynamic(policy)
-    threshold_adjustments: Map<RoleKey, f64>, // target role -> threshold delta
-    tie_breaker: VoteTieBreaker,    // NoElimination | Random | HostDecides | EarliestReached
-}
-
-struct DynamicVoteWeightPolicy {
-    base: f64,
-    effect_rules: Vec<DynamicVoteWeightRule>,
-    grant_rules: Vec<DynamicVoteWeightGrantRule>,
-}
-
-struct DynamicVoteWeightRule {
-    effect: Tag,
-    weight: f64,
-    priority: i32,
-}
-
-struct DynamicVoteWeightGrantRule {
-    grant_id: Tag,
-    priority: i32,
-}
-```
+Current declarations: [`VotePolicy`](../reference/rust-contracts.md#votepolicy),
+[`DynamicVoteWeightPolicy`](../reference/rust-contracts.md#dynamicvoteweightpolicy),
+[`DynamicVoteWeightRule`](../reference/rust-contracts.md#dynamicvoteweightrule),
+[`DynamicVoteWeightGrantRule`](../reference/rust-contracts.md#dynamicvoteweightgrantrule).
 
 `WeightPolicy::PerRole` is strict pack data: every referenced role must exist and every
 weight must be finite and non-negative. The mafiascum pack uses this for `doublevoter`
@@ -960,15 +845,7 @@ effect/grant-based dynamic vote weights, and sheriff badge weights are supported
 Resolver prompt producers emit durable `HostPromptIssued` rows; packs also declare how those
 prompts are resolved by hosts:
 
-```rust
-struct HostPromptResolutionEffectPolicy {
-    id: String,
-    prompt_kind: String,
-    prompt_reason: String,
-    decision: HostPromptDecisionKind,        // SelectSlot | Acknowledge
-    effect: HostPromptResolutionEffect,      // PkKill | AdvanceRevote | SkipNextDay | AcknowledgeOnly
-}
-```
+Current declarations: [`HostPromptResolutionEffectPolicy`](../reference/rust-contracts.md#hostpromptresolutioneffectpolicy).
 
 Validation rejects incompatible decision/effect pairs, duplicate prompt pairs, and v22 packs that
 emit Beloved Princess or day-vote prompts without matching resolution effects. Command-side
@@ -1375,15 +1252,10 @@ DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch \
 
 Phases are ordered, zero-padded, culture-parameterized (from im-human's `ID_SEMANTICS.md`):
 
-```rust
-struct PhasePolicy {
-    cadence: Vec<PhaseKind>,        // e.g. [Day, Night] or [Day, Night, Twilight]
-    subsegments: Map<PhaseKind, Vec<Subsegment>>, // SOD/EOD windows, optional
-    twilight: bool,                 // explicit twilight phase between night and next day
-}
-// phase_id is rendered zero-padded for lexicographic order: "D01", "N01", "T01",
-// with optional lowercase subsegment suffixes: "D01a".."D01e".
-```
+Current declarations: [`PhasePolicy`](../reference/rust-contracts.md#phasepolicy).
+
+Phase IDs use zero-padded coordinates such as `D01`, `N01`, and `T01`, with
+optional lowercase subsegment suffixes (`D01a` through `D01e`).
 
 For v1 we ship **only the forum cadence** (long day with SOD/EOD subsegments, two-segment
 night, optional twilight). Chat-mafia / real-time variants are future packs; the structure
@@ -1418,15 +1290,9 @@ the command remains host-gated until fmarch grows a first-class scheduler princi
 
 Win detection is a pack table over the **post-resolution state** — minimal but real:
 
-```rust
-struct WinPolicy { rules: Vec<WinRule> }            // empty => engine never declares a win
-struct WinRule   { winner: AlignmentKey, when: WinCondition }
-
-enum WinCondition {
-    FactionEliminated(AlignmentKey),     // the named faction has 0 alive
-    FactionReachesParity(AlignmentKey),  // the named faction's alive count >= all OTHER alive combined
-}
-```
+Current declarations: [`WinPolicy`](../reference/rust-contracts.md#winpolicy),
+[`WinRule`](../reference/rust-contracts.md#winrule),
+[`WinCondition`](../reference/rust-contracts.md#wincondition).
 
 Rules are evaluated **in order** on the state *after* the resolution's events are folded
 forward (`apply_events`, below); the **first match wins**. `FactionEliminated(f)` fires when
@@ -1586,18 +1452,10 @@ The engine consumes a window's submissions and resolves them. Submissions are th
 player/action input crossing into the engine; host/culture phase inputs such as pending
 day announcements are carried separately in `ResolutionInput.day_phase_inputs`.
 
-```rust
-struct Submission {
-    action_id: String,
-    actor: SlotId,                  // the acting seat; never a UserId
-    template_id: String,            // which of the actor's role actions
-    targets: Vec<SlotId>,
-    phase_id: PhaseId,
-    submitted_at: LogicalTime,      // deterministic; never wall-clock
-    withdrawn: bool,                // votes/actions can be retracted before resolution
-    metadata: Map<String, Json>,
-}
-```
+Current declarations: [`Submission`](../reference/rust-contracts.md#submission).
+
+The actor is a game slot, not an account identity. Submission timestamps are
+logical engine time; withdrawing a submission removes it from resolution intake.
 
 A **day vote is just a submission** whose template resolves to the vote, retractable via
 `withdrawn`. This unifies night actions and votes under one ingestion path.
@@ -1610,129 +1468,25 @@ quotas remain future additive IR.
 
 ## The resolver contract
 
-```rust
-fn resolve(input: ResolutionInput) -> ResolutionOutput
+Current declarations: [`ResolutionInput`](../reference/rust-contracts.md#resolutioninput),
+[`ResolutionOutput`](../reference/rust-contracts.md#resolutionoutput).
 
-struct ResolutionInput {
-    game_id: GameId,
-    phase_id: PhaseId,
-    run_id: String,
-    state: StateSnapshot,           // slots, roles, persistent effects, action history, alive/dead
-    submissions: Vec<Submission>,
-    day_phase_inputs: DayPhaseInputs,
-    pack: Pack,
-    seed: Seed,                     // resolver RNG seed; part of the inputs
-    logical_time: LogicalTime,
-}
+`resolve` consumes a semantically validated pack (`Arc<ValidatedPack>`) and
+returns `Result<ResolutionOutput, ResolutionInputError>`. The boundary rejects
+a phase coordinate that disagrees with the snapshot. Successful output contains
+the applied envelope, audit trace, and state obtained by folding the events.
 
-struct ResolutionOutput {
-    applied: ResolutionApplied,     // deterministic, indexed event envelope (see 10)
-    trace: ResolutionTrace,         // which table/rule drove each decision
-    post_state: StateSnapshot,      // state after folding applied.events
-}
-```
+The resolver and goldens share the snapshot and persistent record declarations:
 
-The `StateSnapshot` the resolver reads (and that the goldens encode) is canonically:
-
-```rust
-struct StateSnapshot {
-    phase_kind: PhaseKind,          // Day | Night | Twilight
-    phase_number: u32,
-    slots: Vec<SlotState>,
-    effect_records: Vec<EffectRecord>,
-    action_history: Vec<ActionUseRecord>,
-    use_counters: Vec<ActionCounterRecord>,
-    investigation_memory: Vec<InvestigationMemoryRecord>,
-    delayed_deaths: Vec<DelayedDeathRecord>,
-    visit_history: Vec<VisitRecord>,
-    action_grants: Vec<ActionGrantRecord>,
-    conversion_origins: Vec<ConversionOriginRecord>,
-    linked_slots: Vec<LinkRecord>,
-    retaliations: Vec<RetaliationRecord>,
-    badges: Vec<BadgeRecord>,
-}
-
-struct ActionUseRecord {
-    actor: SlotId,
-    template_id: String,
-    targets: Vec<SlotId>,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-    status: String,                 // "resolved" | "suppressed" | "missing"
-}
-
-struct ActionCounterRecord {
-    counter_id: Tag,
-    actor: SlotId,
-    template_id: String,
-    consumed_action: String,
-    cadence_policy: String,         // e.g. "x_shot"
-    phase_scope: String,            // e.g. "game"
-    limit: u16,
-    used: u16,
-    remaining: u16,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-
-struct ActionGrantRecord {
-    grant_id: Tag,
-    grant_option: Option<Tag>,
-    kind: GrantKind,                // ExtraAction | Item
-    actor: SlotId,                  // source slot that created the grant
-    target: SlotId,                 // slot receiving the generated capability/item
-    source_action: ActionId,
-    uses: u16,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-
-struct LinkRecord {
-    link_id: String,
-    slots: Vec<SlotId>,
-    source: SlotId,
-}
-
-struct RetaliationRecord {
-    retaliation_id: String,
-    actor: SlotId,
-    target: SlotId,
-    source_action: String,
-}
-
-struct ConversionOriginRecord {
-    target: SlotId,
-    original_role: RoleKey,
-    original_alignment: Option<AlignmentKey>,
-    source: SlotId,
-}
-
-struct EffectRecord {
-    effect: Tag,
-    target: SlotId,
-    source: SlotId,
-    source_action: Option<String>,
-    phase_id: Option<PhaseId>,
-    phase_kind: Option<PhaseKind>,
-    phase_number: Option<u32>,
-    duration: EffectDuration,       // Persistent | Resolution
-    visibility: EffectVisibility,   // Hidden | Public | Actor | Target | ActorAndTarget
-}
-
-struct SlotState {
-    slot_id: SlotId,
-    role_key: RoleKey,
-    alignment: Option<AlignmentKey>,
-    role_reveal: RevealState,       // private | public
-    alignment_reveal: RevealState,  // private | public
-    status: SlotLifecycle,          // alive | dead | modkilled
-    status_tags: Vec<Tag>,          // pack-visible tags: treestump, limited_vote:*, etc.
-    effects: Vec<Tag>,              // role-level and persistent effect tags on the slot
-}
-```
+Current declarations: [`StateSnapshot`](../reference/rust-contracts.md#statesnapshot),
+[`ActionUseRecord`](../reference/rust-contracts.md#actionuserecord),
+[`ActionCounterRecord`](../reference/rust-contracts.md#actioncounterrecord),
+[`ActionGrantRecord`](../reference/rust-contracts.md#actiongrantrecord),
+[`LinkRecord`](../reference/rust-contracts.md#linkrecord),
+[`RetaliationRecord`](../reference/rust-contracts.md#retaliationrecord),
+[`ConversionOriginRecord`](../reference/rust-contracts.md#conversionoriginrecord),
+[`EffectRecord`](../reference/rust-contracts.md#effectrecord),
+[`SlotState`](../reference/rust-contracts.md#slotstate).
 
 `StateSnapshot.effect_records` is the canonical source-aware active effect state. `SlotState.effects`
 is the derived fast tag index where role-level `Role.effects` (and any active `Mark`-applied tags)
@@ -1742,10 +1496,12 @@ surface to resolver predicates — e.g. the `godfather` tag that drives `investi
 
 Two resolver-input scalars are pinned so JSON authors and goldens don't drift:
 
-```rust
-type Seed        = u64;  // resolver RNG seed; a bare integer in JSON
-type LogicalTime = u64;  // monotonic logical time (submitted_at, engine timestamps); a bare integer
-```
+Current declarations: [`Seed`](../reference/rust-contracts.md#seed),
+[`LogicalTime`](../reference/rust-contracts.md#logicaltime).
+
+Both aliases are `u64`, represented as bare integers in engine JSON. `Seed`
+controls deterministic randomness; `LogicalTime` records engine time rather
+than platform wall-clock seconds.
 
 `TargetSpec` carries **no embedded count**: it is `None | One | Many | Group`. Cardinality is
 the **single responsibility of `Constraints.max_targets`** (e.g. the bus driver is

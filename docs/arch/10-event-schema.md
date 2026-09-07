@@ -199,23 +199,8 @@ Track as that bag; the `20 → 21` upcast copies `visited` and drops extras.
 
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 
-```rust
-struct DayVoteOutcome {
-    status: VoteStatus,             // Lynch | NoLynch | NoMajority | Tie | Hammer
-    winner: Option<SlotId>,         // the eliminated slot, if any
-    contenders: Vec<SlotId>,
-    tallies: Map<SlotId, f64>,      // weighted counts
-    votes: Map<SlotId, SlotId>,     // active ballots only (withdrawn omitted)
-    weights: Map<SlotId, f64>,
-    majority: Option<f64>,          // base threshold for majority/supermajority methods
-    thresholds: Map<SlotId, f64>,   // effective candidate threshold after loved/hated policy
-    total_weight: f64,
-    tiebreak: Option<String>,
-    reason: Option<String>,
-}
-
-enum VoteStatus { Lynch, NoLynch, NoMajority, Tie, Hammer }
-```
+Current declarations: [`DayVoteOutcome`](../reference/rust-contracts.md#dayvoteoutcome),
+[`VoteStatus`](../reference/rust-contracts.md#votestatus).
 
 `Hammer` is the explicit status for a pack-declared hammer vote that reached threshold and
 froze the official vote snapshot at that ballot. `Tie` is the explicit status for a
@@ -244,61 +229,15 @@ the Mafia Universe day-note vertical: prior-night victims are supplied as `DayPh
 last words are derived from a day lynch. They are emitted before the single trailing
 `PhaseAnnouncement`.
 
-```rust
-struct DayAnnouncement {
-    player_id: SlotId,
-    cause: String,
-    template_id: Option<String>,    // v63 pack-declared public note template
-    audience: Option<String>,       // v63 pack-declared audience, e.g. "public"
-    source_action_id: Option<String>,
-    attackers: Vec<SlotId>,
-    unstoppable: bool,
-    role_key: Option<RoleKey>,
-    role_payload: Option<DayNoteRolePayload>, // v63 RoleKey or Hidden
-    recorded_at: Option<LogicalTime>,
-    sequence: u32,
-    day: u32,
-    night: u32,
-    phase_id: PhaseId,
-}
-
-struct LastWordsRecorded {
-    player_id: SlotId,
-    reason: String,                 // v1: "lynch"
-    template_id: Option<String>,    // v63 pack-declared public note template
-    audience: Option<String>,       // v63 pack-declared audience, e.g. "public"
-    window: Option<String>,         // v63 pack-declared speaking window
-    sequence: u32,
-    day: u32,
-    phase_id: PhaseId,
-    vote: LastWordsVoteSummary,
-}
-
-struct LastWordsVoteSummary {
-    status: VoteStatus,
-    winner: Option<SlotId>,
-    tallies: Map<SlotId, f64>,
-    majority: Option<f64>,
-    total_weight: f64,
-}
-```
+Current declarations: [`DayAnnouncement`](../reference/rust-contracts.md#dayannouncement),
+[`LastWordsRecorded`](../reference/rust-contracts.md#lastwordsrecorded),
+[`LastWordsVoteSummary`](../reference/rust-contracts.md#lastwordsvotesummary).
 
 `WolfSelfDestructed` is the typed culture note for im-human `note.wolf.self_destruct`.
 It is emitted before the paired death events; the actual state changes are still ordinary
 `PlayerKilled` events for the target and self-sacrificing wolf.
 
-```rust
-struct WolfSelfDestructed {
-    wolf_id: SlotId,
-    target_id: SlotId,
-    cause: String,                  // v1: "self_destruct"
-    unstoppable: bool,
-    source_action: String,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-```
+Payloads are variants of [`InnerEvent`](../reference/rust-contracts.md#innerevent): `WolfSelfDestructed`.
 
 `WolfCarryQueued` is an fmarch-local durable engine event: it records the pending
 White Wolf carry token after the eligible White Wolf death. `WolfCarryUsed` is the
@@ -307,28 +246,7 @@ faction kill consumes that token for one extra target. The generated carry kill 
 still an ordinary `PlayerKilled { cause: "wolf_carry" }`, so projections and
 trigger observations do not need a separate death lane.
 
-```rust
-struct WolfCarryQueued {
-    owner_id: SlotId,
-    token_id: Tag,                  // v1: "white_wolf_carry_token"
-    cause: String,                  // v1: "wolf_carry"
-    role_key: RoleKey,              // v1: "white_wolf_king"
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-
-struct WolfCarryUsed {
-    owner_id: SlotId,
-    target_id: SlotId,
-    source_action_id: String,
-    effect_id: String,
-    role_key: RoleKey,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-```
+Payloads are variants of [`InnerEvent`](../reference/rust-contracts.md#innerevent): `WolfCarryQueued`, `WolfCarryUsed`.
 
 `WolfBeautyMarked` is an fmarch-local durable mark event for the Wolf Beauty charm:
 the ordinary `EffectsMarked` tag remains on the target, while this event preserves
@@ -336,44 +254,12 @@ which Beauty owns that mark. `WolfBeautyDragged` is the canonical mapping for
 im-human `note.wolf_beauty.drag`; it is emitted when the Beauty dies to an enabled
 day-death cause and is followed by ordinary `PlayerKilled` events for dragged slots.
 
-```rust
-struct WolfBeautyMarked {
-    beauty_id: SlotId,
-    target_id: SlotId,
-    effect: Tag,                    // v1: "wolf_beauty_mark"
-    source_action: String,
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-
-struct WolfBeautyDragged {
-    beauty_id: SlotId,
-    dragged_ids: Vec<SlotId>,
-    cause: String,                  // v1: "trigger:wolf_beauty_drag"
-    phase_id: PhaseId,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-}
-```
+Payloads are variants of [`InnerEvent`](../reference/rust-contracts.md#innerevent): `WolfBeautyMarked`, `WolfBeautyDragged`.
 
 `PhaseAnnouncement` (deaths revealed at a phase boundary) has the pinned payload:
 
-```rust
-struct PhaseAnnouncement {
-    phase_id: PhaseId,
-    template_id: Option<String>,    // v66 day-death public trailer template
-    audience: Option<String>,       // v66 day-death public trailer audience
-    deaths: Vec<Death>,             // empty if no one died this resolution
-}
-
-struct Death {
-    slot_id: SlotId,
-    cause: String,
-    template_id: Option<String>,    // v67 per-cause public death template
-    audience: Option<String>,       // v67 per-cause public death audience
-}
-```
+Current declarations: [`PhaseAnnouncement`](../reference/rust-contracts.md#phaseannouncement),
+[`Death`](../reference/rust-contracts.md#death).
 
 **Every resolution emits exactly ONE trailing `PhaseAnnouncement` as its final inner event.**
 It lists the deaths produced in that resolution — for a night, the slots that got
@@ -394,15 +280,9 @@ death-reveal tag, distinct from `PlayerKilled.cause` when the layer needs that d
 > true final inner event. Canonical order: *phase results → `PhaseAnnouncement` → optional
 > `WinReached`*. Win-check runs once at phase end, never mid-resolution.
 
-`WinReached` (engine-declared victory) has the pinned payload:
+`WinReached` records engine-declared victory:
 
-```rust
-struct WinReached {
-    winner: AlignmentKey,           // the winning faction tag (pack-opaque, e.g. "town" / "mafia")
-    reason: String,                 // human-readable cause, e.g. "faction mafia reaches parity (1 vs 1 others)"
-    metadata: Json,                 // optional structured detail; `null` when no pack policy adds detail
-}
-```
+Payloads are variants of [`InnerEvent`](../reference/rust-contracts.md#innerevent): `WinReached`.
 
 `WinReached.reason` is a stable, resolver-derived string, but (R3) it is **NOT part of the
 asserted golden contract** — the asserted contract is `{winner}`. The golden harness **strips
@@ -418,19 +298,7 @@ A reveal-flags projection flips role/alignment visibility off `WinReached`
 
 ### The trace
 
-```rust
-struct ResolutionTrace {
-    phase_id: PhaseId,
-    run_id: String,
-    trace_version: u16,
-    edges: Vec<TraceEdge>,          // redirect/interaction graph
-    generated: Vec<GeneratedActionTrace>, // trigger-produced actions and action grants
-    effect_changes: Vec<EffectDeltaTrace>,
-    visibility: Vec<VisibilityTrace>,
-    decisions: Vec<DecisionTrace>,  // which pack rule drove each outcome ← key for audit
-    notes: Vec<String>,             // loop-cap hits, diagnostics
-}
-```
+Current declarations: [`ResolutionTrace`](../reference/rust-contracts.md#resolutiontrace).
 
 The trace is not folded into player-facing projections; it's the **audit + golden-test
 oracle** ([09](09-engine-and-packs.md)). The pure resolver returns it beside

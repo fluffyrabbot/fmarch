@@ -5,7 +5,8 @@ Regenerate with `npm run generate:rust-reference`; verify with `npm run check:ru
 
 These tables are source declarations, not JSON/CBOR schemas. They include tuple
 payload type names without recursively expanding them. Follow the source links
-for serde attributes, conditional type derives, docs, and runtime validation.
+for serde attributes, visibility, conditional type derives, docs, and runtime validation.
+Tuple-field rows describe representation; they do not imply public constructors.
 The bounded reader rejects unsupported selected declaration/member shapes;
 it does not expand macros, evaluate cfg, or resolve Rust types.
 
@@ -114,6 +115,171 @@ Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L321) (enu
 | <code>Alive</code> | <code>unit</code> |
 | <code>Dead</code> | <code>unit</code> |
 | <code>Modkilled</code> | <code>unit</code> |
+
+## Submission
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L860) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>action_id</code> | <code>action_id: String</code> |
+| <code>actor</code> | <code>actor: SlotId</code> |
+| <code>template_id</code> | <code>template_id: String</code> |
+| <code>targets</code> | <code>targets: Vec&lt;SlotId&gt;</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>submitted_at</code> | <code>submitted_at: LogicalTime</code> |
+| <code>withdrawn</code> | <code>withdrawn: bool</code> |
+| <code>metadata</code> | <code>metadata: BTreeMap&lt;String, serde_json::Value&gt;</code> |
+
+## StateSnapshot
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L32) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>phase_deadline</code> | <code>phase_deadline: Option&lt;i64&gt;</code> |
+| <code>phase_policy</code> | <code>phase_policy: PhasePolicy</code> |
+| <code>slots</code> | <code>slots: Vec&lt;SlotState&gt;</code> |
+| <code>private_channels</code> | <code>private_channels: Vec&lt;PrivateChannelRecord&gt;</code> |
+| <code>effect_records</code> | <code>effect_records: Vec&lt;EffectRecord&gt;</code> |
+| <code>action_history</code> | <code>action_history: Vec&lt;ActionUseRecord&gt;</code> |
+| <code>use_counters</code> | <code>use_counters: Vec&lt;ActionCounterRecord&gt;</code> |
+| <code>investigation_memory</code> | <code>investigation_memory: Vec&lt;InvestigationMemoryRecord&gt;</code> |
+| <code>delayed_deaths</code> | <code>delayed_deaths: Vec&lt;DelayedDeathRecord&gt;</code> |
+| <code>visit_history</code> | <code>visit_history: Vec&lt;VisitRecord&gt;</code> |
+| <code>action_grants</code> | <code>action_grants: Vec&lt;ActionGrantRecord&gt;</code> |
+| <code>conversion_origins</code> | <code>conversion_origins: Vec&lt;ConversionOriginRecord&gt;</code> |
+| <code>linked_slots</code> | <code>linked_slots: Vec&lt;LinkRecord&gt;</code> |
+| <code>retaliations</code> | <code>retaliations: Vec&lt;RetaliationRecord&gt;</code> |
+| <code>backup_targets</code> | <code>backup_targets: Vec&lt;BackupTargetRecord&gt;</code> |
+| <code>target_lynch_win_targets</code> | <code>target_lynch_win_targets: Vec&lt;TargetLynchWinTargetRecord&gt;</code> |
+| <code>wolf_carry_tokens</code> | <code>wolf_carry_tokens: Vec&lt;WolfCarryTokenRecord&gt;</code> |
+| <code>wolf_beauty_marks</code> | <code>wolf_beauty_marks: Vec&lt;WolfBeautyMarkRecord&gt;</code> |
+| <code>badges</code> | <code>badges: Vec&lt;BadgeRecord&gt;</code> |
+| <code>buffered_ita_shots</code> | <code>buffered_ita_shots: Vec&lt;BufferedItaShotRecord&gt;</code> |
+
+## ActionUseRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L119) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>actor</code> | <code>actor: SlotId</code> |
+| <code>template_id</code> | <code>template_id: String</code> |
+| <code>targets</code> | <code>targets: Vec&lt;SlotId&gt;</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>status</code> | <code>status: String</code> |
+
+## ActionCounterRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L141) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>counter_id</code> | <code>counter_id: Tag</code> |
+| <code>actor</code> | <code>actor: SlotId</code> |
+| <code>template_id</code> | <code>template_id: String</code> |
+| <code>consumed_action</code> | <code>consumed_action: String</code> |
+| <code>cadence_policy</code> | <code>cadence_policy: String</code> |
+| <code>phase_scope</code> | <code>phase_scope: String</code> |
+| <code>limit</code> | <code>limit: u16</code> |
+| <code>used</code> | <code>used: u16</code> |
+| <code>remaining</code> | <code>remaining: u16</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+
+## ActionGrantRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L206) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>grant_id</code> | <code>grant_id: Tag</code> |
+| <code>grant_option</code> | <code>grant_option: Option&lt;Tag&gt;</code> |
+| <code>kind</code> | <code>kind: GrantKind</code> |
+| <code>actor</code> | <code>actor: SlotId</code> |
+| <code>target</code> | <code>target: SlotId</code> |
+| <code>source_action</code> | <code>source_action: String</code> |
+| <code>uses</code> | <code>uses: u16</code> |
+| <code>vote_weight</code> | <code>vote_weight: Option&lt;f64&gt;</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+
+## LinkRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L232) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>link_id</code> | <code>link_id: String</code> |
+| <code>slots</code> | <code>slots: Vec&lt;SlotId&gt;</code> |
+| <code>source</code> | <code>source: SlotId</code> |
+
+## RetaliationRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L240) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>retaliation_id</code> | <code>retaliation_id: String</code> |
+| <code>actor</code> | <code>actor: SlotId</code> |
+| <code>target</code> | <code>target: SlotId</code> |
+| <code>source_action</code> | <code>source_action: String</code> |
+
+## ConversionOriginRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L222) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>target</code> | <code>target: SlotId</code> |
+| <code>original_role</code> | <code>original_role: RoleKey</code> |
+| <code>original_alignment</code> | <code>original_alignment: Option&lt;AlignmentKey&gt;</code> |
+| <code>source</code> | <code>source: SlotId</code> |
+
+## EffectRecord
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L305) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>effect</code> | <code>effect: Tag</code> |
+| <code>target</code> | <code>target: SlotId</code> |
+| <code>source</code> | <code>source: SlotId</code> |
+| <code>source_action</code> | <code>source_action: Option&lt;String&gt;</code> |
+| <code>phase_id</code> | <code>phase_id: Option&lt;PhaseId&gt;</code> |
+| <code>duration</code> | <code>duration: EffectDuration</code> |
+| <code>visibility</code> | <code>visibility: EffectVisibility</code> |
+
+## SlotState
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L347) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>slot_id</code> | <code>slot_id: SlotId</code> |
+| <code>role_key</code> | <code>role_key: RoleKey</code> |
+| <code>alignment</code> | <code>alignment: Option&lt;AlignmentKey&gt;</code> |
+| <code>role_reveal</code> | <code>role_reveal: RevealState</code> |
+| <code>alignment_reveal</code> | <code>alignment_reveal: RevealState</code> |
+| <code>status</code> | <code>status: SlotLifecycle</code> |
+| <code>status_tags</code> | <code>status_tags: Vec&lt;Tag&gt;</code> |
+| <code>effects</code> | <code>effects: Vec&lt;Tag&gt;</code> |
+
+## Seed
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L18) (type).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Target</code> | <code>u64</code> |
+
+## LogicalTime
+
+Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L19) (type).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Target</code> | <code>u64</code> |
 
 ## ActorId
 
@@ -249,6 +415,107 @@ Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L946) (s
 | <code>decisions</code> | <code>decisions: Vec&lt;DecisionTrace&gt;</code> |
 | <code>notes</code> | <code>notes: Vec&lt;String&gt;</code> |
 
+## DayVoteOutcome
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L488) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>status</code> | <code>status: VoteStatus</code> |
+| <code>winner</code> | <code>winner: Option&lt;SlotId&gt;</code> |
+| <code>contenders</code> | <code>contenders: Vec&lt;SlotId&gt;</code> |
+| <code>tallies</code> | <code>tallies: BTreeMap&lt;SlotId, f64&gt;</code> |
+| <code>votes</code> | <code>votes: BTreeMap&lt;SlotId, SlotId&gt;</code> |
+| <code>weights</code> | <code>weights: BTreeMap&lt;SlotId, f64&gt;</code> |
+| <code>majority</code> | <code>majority: Option&lt;f64&gt;</code> |
+| <code>thresholds</code> | <code>thresholds: BTreeMap&lt;SlotId, f64&gt;</code> |
+| <code>total_weight</code> | <code>total_weight: f64</code> |
+| <code>tiebreak</code> | <code>tiebreak: Option&lt;String&gt;</code> |
+| <code>reason</code> | <code>reason: Option&lt;String&gt;</code> |
+
+## VoteStatus
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L478) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Lynch</code> | <code>unit</code> |
+| <code>NoLynch</code> | <code>unit</code> |
+| <code>NoMajority</code> | <code>unit</code> |
+| <code>Tie</code> | <code>unit</code> |
+| <code>Hammer</code> | <code>unit</code> |
+
+## DayAnnouncement
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L525) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>player_id</code> | <code>player_id: SlotId</code> |
+| <code>cause</code> | <code>cause: String</code> |
+| <code>template_id</code> | <code>template_id: Option&lt;String&gt;</code> |
+| <code>audience</code> | <code>audience: Option&lt;String&gt;</code> |
+| <code>source_action_id</code> | <code>source_action_id: Option&lt;String&gt;</code> |
+| <code>attackers</code> | <code>attackers: Vec&lt;SlotId&gt;</code> |
+| <code>unstoppable</code> | <code>unstoppable: bool</code> |
+| <code>role_key</code> | <code>role_key: Option&lt;RoleKey&gt;</code> |
+| <code>role_payload</code> | <code>role_payload: Option&lt;crate::pack::DayNoteRolePayload&gt;</code> |
+| <code>recorded_at</code> | <code>recorded_at: Option&lt;LogicalTime&gt;</code> |
+| <code>sequence</code> | <code>sequence: u32</code> |
+| <code>day</code> | <code>day: u32</code> |
+| <code>night</code> | <code>night: u32</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+
+## LastWordsRecorded
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L547) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>player_id</code> | <code>player_id: SlotId</code> |
+| <code>reason</code> | <code>reason: String</code> |
+| <code>template_id</code> | <code>template_id: Option&lt;String&gt;</code> |
+| <code>audience</code> | <code>audience: Option&lt;String&gt;</code> |
+| <code>window</code> | <code>window: Option&lt;String&gt;</code> |
+| <code>sequence</code> | <code>sequence: u32</code> |
+| <code>day</code> | <code>day: u32</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>vote</code> | <code>vote: LastWordsVoteSummary</code> |
+
+## LastWordsVoteSummary
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L564) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>status</code> | <code>status: VoteStatus</code> |
+| <code>winner</code> | <code>winner: Option&lt;SlotId&gt;</code> |
+| <code>tallies</code> | <code>tallies: BTreeMap&lt;SlotId, f64&gt;</code> |
+| <code>majority</code> | <code>majority: Option&lt;f64&gt;</code> |
+| <code>total_weight</code> | <code>total_weight: f64</code> |
+
+## PhaseAnnouncement
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L812) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>template_id</code> | <code>template_id: Option&lt;String&gt;</code> |
+| <code>audience</code> | <code>audience: Option&lt;String&gt;</code> |
+| <code>deaths</code> | <code>deaths: Vec&lt;Death&gt;</code> |
+
+## Death
+
+Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L823) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>slot_id</code> | <code>slot_id: SlotId</code> |
+| <code>cause</code> | <code>cause: String</code> |
+| <code>template_id</code> | <code>template_id: Option&lt;String&gt;</code> |
+| <code>audience</code> | <code>audience: Option&lt;String&gt;</code> |
+
 ## DayEventState
 
 Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L395) (enum).
@@ -311,3 +578,465 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 | <code>ParticipationSubmitted</code> | <code>{ event_id: DayEventId, actor_slot: SlotId, payload: ParticipationPayload, phase_id: PhaseId }</code> |
 | <code>ParticipationWithdrawn</code> | <code>{ event_id: DayEventId, actor_slot: SlotId }</code> |
 | <code>Resolved</code> | <code>{ event_id: DayEventId, decision: DayEventDecision, winner_slots: Vec&lt;SlotId&gt;, reward_keys_applied: Vec&lt;RewardKey&gt;, evidence: DayEventResolutionEvidence }</code> |
+
+## DayEvent
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L985) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>id</code> | <code>id: DayEventId</code> |
+| <code>program_id</code> | <code>program_id: ProgramId</code> |
+| <code>template_key</code> | <code>template_key: TemplateKey</code> |
+| <code>phase_scope</code> | <code>phase_scope: PhaseScope</code> |
+| <code>schedule</code> | <code>schedule: DayEventSchedule</code> |
+| <code>participation</code> | <code>participation: ParticipationSpec</code> |
+| <code>state</code> | <code>state: DayEventState</code> |
+| <code>resolution</code> | <code>resolution: DayEventResolutionMode</code> |
+| <code>rewards</code> | <code>rewards: Vec&lt;RewardBinding&gt;</code> |
+| <code>narrative</code> | <code>narrative: NarrativeTemplates</code> |
+| <code>channel_policy</code> | <code>channel_policy: EventChannelPolicy</code> |
+
+## NarrativeTemplate
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L595) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>key</code> | <code>key: TemplateKey</code> |
+| <code>body</code> | <code>body: String</code> |
+
+## EventChannelPolicy
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L640) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>PublicMain</code> | <code>unit</code> |
+| <code>Private</code> | <code>{ membership: EventChannelMembership }</code> |
+
+## UnixSeconds
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L206) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>0</code> | <code>i64</code> |
+
+## DurationSeconds
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L288) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>0</code> | <code>i64</code> |
+
+## DayEventSchedule
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L355) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Absolute</code> | <code>{ open_at: UnixSeconds, lock_at: Option&lt;UnixSeconds&gt; }</code> |
+| <code>RelativeToPhase</code> | <code>{ phase_id: PhaseId, open_offset: DurationSeconds, lock_offset: Option&lt;DurationSeconds&gt; }</code> |
+| <code>HostOpened</code> | <code>unit</code> |
+| <code>OnTrigger</code> | <code>{ trigger: ProgramTrigger }</code> |
+
+## ParticipationSpec
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L499) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>who</code> | <code>who: ParticipantFilter</code> |
+| <code>mode</code> | <code>mode: ParticipationMode</code> |
+| <code>limits</code> | <code>limits: ParticipationLimits</code> |
+
+## RewardBinding
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L819) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>reward_key</code> | <code>reward_key: RewardKey</code> |
+| <code>display_name_theme_key</code> | <code>display_name_theme_key: TemplateKey</code> |
+| <code>effects</code> | <code>effects: Vec&lt;RewardEffectTemplate&gt;</code> |
+
+## RewardEffectTemplate
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L812) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>recipient</code> | <code>recipient: RecipientSelector</code> |
+| <code>operation</code> | <code>operation: EffectOperationTemplate</code> |
+
+## EffectPlan
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L953) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>origin</code> | <code>origin: EffectOrigin</code> |
+| <code>effects</code> | <code>effects: Vec&lt;ConcreteEffect&gt;</code> |
+| <code>reason</code> | <code>reason: String</code> |
+
+## DayEventDecision
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1150) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>SelectWinners</code> | <code>{ slots: Vec&lt;SlotId&gt; }</code> |
+| <code>SelectMapping</code> | <code>{ assignments: Vec&lt;RewardAssignment&gt; }</code> |
+| <code>CancelInstead</code> | <code>{ reason: String }</code> |
+
+## ParticipationPayload
+
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L540) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>OptIn</code> | <code>unit</code> |
+| <code>Choice</code> | <code>{ option_id: OptionId }</code> |
+| <code>FreeformRef</code> | <code>{ body_ref: ContentRef }</code> |
+| <code>Ballot</code> | <code>{ option_id: OptionId }</code> |
+
+## Pack
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L24) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>name</code> | <code>name: String</code> |
+| <code>version</code> | <code>version: u32</code> |
+| <code>ir_version</code> | <code>ir_version: u16</code> |
+| <code>item_actions</code> | <code>item_actions: BTreeMap&lt;Tag, ActionTemplate&gt;</code> |
+| <code>roles</code> | <code>roles: BTreeMap&lt;RoleKey, Role&gt;</code> |
+| <code>precedence</code> | <code>precedence: Vec&lt;PrecedenceRule&gt;</code> |
+| <code>visibility</code> | <code>visibility: BTreeMap&lt;IrAbility, VisibilityRule&gt;</code> |
+| <code>visibility_families</code> | <code>visibility_families: Vec&lt;VisibilityFamily&gt;</code> |
+| <code>win_families</code> | <code>win_families: Vec&lt;WinFamily&gt;</code> |
+| <code>redirects</code> | <code>redirects: RedirectPolicy</code> |
+| <code>triggers</code> | <code>triggers: Vec&lt;TriggerRule&gt;</code> |
+| <code>vote</code> | <code>vote: VotePolicy</code> |
+| <code>phases</code> | <code>phases: PhasePolicy</code> |
+| <code>investigation_overrides</code> | <code>investigation_overrides: Option&lt;BTreeMap&lt;Tag, ResultOverride&gt;&gt;</code> |
+| <code>investigation_results</code> | <code>investigation_results: InvestigationResultPolicy</code> |
+| <code>effects</code> | <code>effects: BTreeMap&lt;Tag, EffectPolicy&gt;</code> |
+| <code>effect_source_death_reveals</code> | <code>effect_source_death_reveals: Vec&lt;EffectSourceDeathRevealPolicy&gt;</code> |
+| <code>ita</code> | <code>ita: ItaPolicy</code> |
+| <code>day_notes</code> | <code>day_notes: DayNotePolicy</code> |
+| <code>wolf_carry</code> | <code>wolf_carry: WolfCarryPolicy</code> |
+| <code>wolf_beauty</code> | <code>wolf_beauty: WolfBeautyPolicy</code> |
+| <code>guard_policy</code> | <code>guard_policy: GuardPolicy</code> |
+| <code>faction_actions</code> | <code>faction_actions: FactionActionPolicy</code> |
+| <code>night_resolution</code> | <code>night_resolution: NightResolutionPolicy</code> |
+| <code>death_retaliation</code> | <code>death_retaliation: DeathRetaliationPolicy</code> |
+| <code>death_reveal</code> | <code>death_reveal: DeathRevealPolicy</code> |
+| <code>idiot_policy</code> | <code>idiot_policy: IdiotPolicy</code> |
+| <code>saulus_policy</code> | <code>saulus_policy: SaulusPolicy</code> |
+| <code>backup_policy</code> | <code>backup_policy: BackupPolicy</code> |
+| <code>conversion_policy</code> | <code>conversion_policy: ConversionPolicy</code> |
+| <code>target_lynch_win_policies</code> | <code>target_lynch_win_policies: Vec&lt;TargetLynchWinPolicy&gt;</code> |
+| <code>self_lynch_win_policies</code> | <code>self_lynch_win_policies: Vec&lt;SelfLynchWinPolicy&gt;</code> |
+| <code>beloved_princess_policy</code> | <code>beloved_princess_policy: BelovedPrincessPolicy</code> |
+| <code>day_vote_prompt_policies</code> | <code>day_vote_prompt_policies: Vec&lt;DayVotePromptPolicy&gt;</code> |
+| <code>host_prompt_resolution_effects</code> | <code>host_prompt_resolution_effects: Vec&lt;HostPromptResolutionEffectPolicy&gt;</code> |
+| <code>lover_policy</code> | <code>lover_policy: LoverPolicy</code> |
+| <code>private_channels</code> | <code>private_channels: PrivateChannelPolicy</code> |
+| <code>treestump_policy</code> | <code>treestump_policy: TreestumpPolicy</code> |
+| <code>win</code> | <code>win: WinPolicy</code> |
+
+## Role
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L164) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>description</code> | <code>description: String</code> |
+| <code>alignment</code> | <code>alignment: Option&lt;AlignmentKey&gt;</code> |
+| <code>modifiers</code> | <code>modifiers: Vec&lt;RoleModifier&gt;</code> |
+| <code>actions</code> | <code>actions: Vec&lt;ActionTemplate&gt;</code> |
+| <code>effects</code> | <code>effects: Vec&lt;Tag&gt;</code> |
+
+## ActionTemplate
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1439) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>id</code> | <code>id: String</code> |
+| <code>source_ids</code> | <code>source_ids: Vec&lt;String&gt;</code> |
+| <code>ability</code> | <code>ability: IrAbility</code> |
+| <code>additional_abilities</code> | <code>additional_abilities: Vec&lt;IrAbility&gt;</code> |
+| <code>window</code> | <code>window: Window</code> |
+| <code>targets</code> | <code>targets: TargetSpec</code> |
+| <code>modifiers</code> | <code>modifiers: Vec&lt;Modifier&gt;</code> |
+| <code>constraints</code> | <code>constraints: Constraints</code> |
+| <code>mode</code> | <code>mode: Option&lt;InvestigateMode&gt;</code> |
+| <code>result_memory</code> | <code>result_memory: Option&lt;ResultMemorySpec&gt;</code> |
+| <code>info</code> | <code>info: Option&lt;InfoSpec&gt;</code> |
+| <code>effect</code> | <code>effect: Option&lt;Tag&gt;</code> |
+| <code>reads_effect</code> | <code>reads_effect: Option&lt;Tag&gt;</code> |
+| <code>redirect</code> | <code>redirect: Option&lt;RedirectKind&gt;</code> |
+| <code>effect_duration</code> | <code>effect_duration: Option&lt;EffectDuration&gt;</code> |
+| <code>grant</code> | <code>grant: Option&lt;GrantSpec&gt;</code> |
+| <code>grant_options</code> | <code>grant_options: Vec&lt;GrantSpec&gt;</code> |
+| <code>badge</code> | <code>badge: Option&lt;BadgeSpec&gt;</code> |
+| <code>duel</code> | <code>duel: Option&lt;DuelSpec&gt;</code> |
+| <code>alignment_failback</code> | <code>alignment_failback: Option&lt;AlignmentFailbackSpec&gt;</code> |
+| <code>self_destruct</code> | <code>self_destruct: Option&lt;SelfDestructSpec&gt;</code> |
+| <code>conversion</code> | <code>conversion: Option&lt;ConversionSpec&gt;</code> |
+
+## Constraints
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1534) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>max_targets</code> | <code>max_targets: u16</code> |
+| <code>self_allowed</code> | <code>self_allowed: bool</code> |
+| <code>personal_only</code> | <code>personal_only: bool</code> |
+| <code>unique_targets</code> | <code>unique_targets: bool</code> |
+| <code>lazy_requires_multiple_non_town</code> | <code>lazy_requires_multiple_non_town: bool</code> |
+| <code>disabled_at_or_below_alive</code> | <code>disabled_at_or_below_alive: Option&lt;u16&gt;</code> |
+| <code>uncooperative_result</code> | <code>uncooperative_result: Option&lt;String&gt;</code> |
+| <code>target_state</code> | <code>target_state: Option&lt;TargetState&gt;</code> |
+| <code>target_role_filter</code> | <code>target_role_filter: Option&lt;TargetRoleFilter&gt;</code> |
+| <code>roleblockable</code> | <code>roleblockable: bool</code> |
+| <code>priority</code> | <code>priority: i32</code> |
+| <code>x_shots</code> | <code>x_shots: Option&lt;u16&gt;</code> |
+| <code>cooldown_cycles</code> | <code>cooldown_cycles: Option&lt;u16&gt;</code> |
+| <code>active_from</code> | <code>active_from: Option&lt;ActivationGate&gt;</code> |
+| <code>phase_parity</code> | <code>phase_parity: Option&lt;PhaseParity&gt;</code> |
+| <code>cycle_parity</code> | <code>cycle_parity: Option&lt;PhaseParity&gt;</code> |
+
+## PrecedenceRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1578) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>id</code> | <code>id: String</code> |
+| <code>when</code> | <code>when: PrecedenceWhen</code> |
+| <code>beats</code> | <code>beats: Vec&lt;IrAbility&gt;</code> |
+| <code>blocked_by</code> | <code>blocked_by: Vec&lt;IrAbility&gt;</code> |
+| <code>unless_modifiers</code> | <code>unless_modifiers: Vec&lt;Modifier&gt;</code> |
+| <code>notes</code> | <code>notes: String</code> |
+
+## VisibilityRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1608) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>sees</code> | <code>sees: Vec&lt;VisField&gt;</code> |
+| <code>unless_modifiers</code> | <code>unless_modifiers: Vec&lt;Modifier&gt;</code> |
+
+## ResultOverride
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1774) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>by_mode</code> | <code>by_mode: BTreeMap&lt;InvestigateMode, String&gt;</code> |
+
+## RedirectPolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1635) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>order</code> | <code>order: Vec&lt;IrAbility&gt;</code> |
+| <code>loop_cap</code> | <code>loop_cap: u16</code> |
+| <code>tie_breaker</code> | <code>tie_breaker: TieBreaker</code> |
+
+## RedirectKind
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L240) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Swap</code> | <code>unit</code> |
+| <code>Rotate</code> | <code>unit</code> |
+| <code>Pull</code> | <code>unit</code> |
+| <code>Retarget</code> | <code>unit</code> |
+
+## TriggerRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1643) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>id</code> | <code>id: String</code> |
+| <code>on</code> | <code>on: TriggerOn</code> |
+| <code>if_target_has</code> | <code>if_target_has: Vec&lt;Tag&gt;</code> |
+| <code>if_actor_has</code> | <code>if_actor_has: Vec&lt;Tag&gt;</code> |
+| <code>produces</code> | <code>produces: TriggerProduction</code> |
+
+## TriggerOn
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1655) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Ability</code> | <code>(IrAbility)</code> |
+| <code>Event</code> | <code>(TriggerEvent)</code> |
+
+## TriggerEvent
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1661) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Visit</code> | <code>unit</code> |
+| <code>Lynch</code> | <code>unit</code> |
+| <code>Death</code> | <code>unit</code> |
+| <code>EffectMarked</code> | <code>unit</code> |
+| <code>PhaseEnd</code> | <code>unit</code> |
+| <code>Win</code> | <code>unit</code> |
+
+## ActorRef
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1680) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Actor</code> | <code>unit</code> |
+| <code>Target</code> | <code>unit</code> |
+| <code>TargetGuard</code> | <code>unit</code> |
+| <code>Other</code> | <code>unit</code> |
+
+## TargetRef
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1688) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>Actor</code> | <code>unit</code> |
+| <code>Target</code> | <code>unit</code> |
+| <code>Killer</code> | <code>unit</code> |
+| <code>Other</code> | <code>unit</code> |
+
+## VotePolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1696) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>method</code> | <code>method: VoteMethod</code> |
+| <code>no_lynch_allowed</code> | <code>no_lynch_allowed: bool</code> |
+| <code>self_vote_allowed</code> | <code>self_vote_allowed: bool</code> |
+| <code>hammer</code> | <code>hammer: bool</code> |
+| <code>weights</code> | <code>weights: WeightPolicy</code> |
+| <code>threshold_adjustments</code> | <code>threshold_adjustments: BTreeMap&lt;RoleKey, f64&gt;</code> |
+| <code>tiebreaker_roles</code> | <code>tiebreaker_roles: Vec&lt;RoleKey&gt;</code> |
+| <code>tie_breaker</code> | <code>tie_breaker: VoteTieBreaker</code> |
+| <code>vote_duel_tie_breaker</code> | <code>vote_duel_tie_breaker: Option&lt;VoteDuelTieBreaker&gt;</code> |
+
+## DynamicVoteWeightPolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1727) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>base</code> | <code>base: f64</code> |
+| <code>effect_rules</code> | <code>effect_rules: Vec&lt;DynamicVoteWeightRule&gt;</code> |
+| <code>grant_rules</code> | <code>grant_rules: Vec&lt;DynamicVoteWeightGrantRule&gt;</code> |
+
+## DynamicVoteWeightRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1737) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>effect</code> | <code>effect: Tag</code> |
+| <code>weight</code> | <code>weight: f64</code> |
+| <code>priority</code> | <code>priority: i32</code> |
+
+## DynamicVoteWeightGrantRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1745) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>grant_id</code> | <code>grant_id: Tag</code> |
+| <code>priority</code> | <code>priority: i32</code> |
+
+## HostPromptResolutionEffectPolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1035) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>id</code> | <code>id: String</code> |
+| <code>prompt_kind</code> | <code>prompt_kind: String</code> |
+| <code>prompt_reason</code> | <code>prompt_reason: String</code> |
+| <code>decision</code> | <code>decision: HostPromptDecisionKind</code> |
+| <code>effect</code> | <code>effect: HostPromptResolutionEffect</code> |
+
+## PhasePolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1764) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>cadence</code> | <code>cadence: Vec&lt;PhaseKind&gt;</code> |
+| <code>subsegments</code> | <code>subsegments: BTreeMap&lt;PhaseKind, Vec&lt;String&gt;&gt;</code> |
+| <code>twilight</code> | <code>twilight: bool</code> |
+
+## WinPolicy
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1869) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>rules</code> | <code>rules: Vec&lt;WinRule&gt;</code> |
+| <code>survival_awards</code> | <code>survival_awards: Vec&lt;SurvivalWinAward&gt;</code> |
+
+## WinRule
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1879) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>winner</code> | <code>winner: AlignmentKey</code> |
+| <code>when</code> | <code>when: WinCondition</code> |
+| <code>blocked_by_alive</code> | <code>blocked_by_alive: Vec&lt;AlignmentKey&gt;</code> |
+
+## WinCondition
+
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1910) (enum).
+
+| Member | Rust declaration |
+|---|---|
+| <code>FactionEliminated</code> | <code>(AlignmentKey)</code> |
+| <code>FactionReachesParity</code> | <code>(AlignmentKey)</code> |
+| <code>AllOtherFactionsEliminated</code> | <code>(AlignmentKey)</code> |
+
+## ResolutionInput
+
+Source: [crates/domain/src/resolver.rs](../../crates/domain/src/resolver.rs#L118) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>game_id</code> | <code>game_id: String</code> |
+| <code>phase_id</code> | <code>phase_id: PhaseId</code> |
+| <code>run_id</code> | <code>run_id: String</code> |
+| <code>state</code> | <code>state: StateSnapshot</code> |
+| <code>submissions</code> | <code>submissions: Vec&lt;Submission&gt;</code> |
+| <code>day_phase_inputs</code> | <code>day_phase_inputs: DayPhaseInputs</code> |
+| <code>pack</code> | <code>pack: Arc&lt;ValidatedPack&gt;</code> |
+| <code>seed</code> | <code>seed: Seed</code> |
+| <code>logical_time</code> | <code>logical_time: LogicalTime</code> |
+
+## ResolutionOutput
+
+Source: [crates/domain/src/resolver.rs](../../crates/domain/src/resolver.rs#L184) (struct).
+
+| Member | Rust declaration |
+|---|---|
+| <code>applied</code> | <code>applied: ResolutionApplied</code> |
+| <code>trace</code> | <code>trace: ResolutionTrace</code> |
+| <code>post_state</code> | <code>post_state: StateSnapshot</code> |

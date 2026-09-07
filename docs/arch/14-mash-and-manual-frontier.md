@@ -219,97 +219,31 @@ flowchart TB
 
 Posts are **narrative**. Commands and events are **authority**. A DayEvent is never “the special post that counts.”
 
-#### Conceptual type sketch
+#### Platform type contracts
 
-```rust
-/// Platform-domain object. Not an engine InnerEvent; not part of pure resolve.
-/// Lives as stream events + projections owned by commands/projections crates.
-struct DayEvent {
-    id: DayEventId,                 // stable within game
-    program_id: ProgramId,
-    template_key: String,           // e.g. "theme.raffle", "quest.scavenger"
-    phase_scope: PhaseScope,        // DuringDay { n } | AnyRunning | ExplicitWindow
-    schedule: DayEventSchedule,
-    participation: ParticipationSpec,
-    state: DayEventState,           // projection fold
-    resolution: DayEventResolutionMode,
-    rewards: Vec<RewardBinding>,    // operation templates; no unresolved concrete SlotId
-    narrative: NarrativeTemplates,
-    channel_policy: EventChannelPolicy,
-}
+Current declarations: [`DayEvent`](../reference/rust-contracts.md#dayevent),
+[`NarrativeTemplate`](../reference/rust-contracts.md#narrativetemplate),
+[`EventChannelPolicy`](../reference/rust-contracts.md#eventchannelpolicy),
+[`UnixSeconds`](../reference/rust-contracts.md#unixseconds),
+[`DurationSeconds`](../reference/rust-contracts.md#durationseconds),
+[`DayEventSchedule`](../reference/rust-contracts.md#dayeventschedule),
+[`DayEventState`](../reference/rust-contracts.md#dayeventstate),
+[`DayEventResolutionMode`](../reference/rust-contracts.md#dayeventresolutionmode),
+[`ParticipationSpec`](../reference/rust-contracts.md#participationspec),
+[`RewardBinding`](../reference/rust-contracts.md#rewardbinding),
+[`RewardEffectTemplate`](../reference/rust-contracts.md#rewardeffecttemplate),
+[`EffectPlan`](../reference/rust-contracts.md#effectplan).
 
-/// Authored program content owns the immutable narrative catalog. Event
-/// templates reference catalog keys; attach compiles the event-derived channel/body/hash
-/// snapshot into each scheduled event so later catalog edits cannot rewrite it.
-struct NarrativeTemplate {
-    key: String,
-    body: String,
-}
+DayEvent belongs to the platform domain; commands append stream facts and
+projections fold them. It is outside pure engine resolution. Authored narrative
+catalog entries are compiled into an immutable event snapshot during attachment.
+Reward templates carry operations and recipient selectors; an effect plan
+contains fully resolved targets and pack bindings.
 
-enum EventChannelPolicy {
-    PublicMain,
-    Private { membership: EligibleSlots | Participants },
-}
-
-/// Platform wall-clock values are explicit and unit-safe. They are never engine
-/// LogicalTime and never inferred from an event envelope's occurred_at field.
-struct UnixSeconds(i64);
-struct DurationSeconds(i64);
-
-enum DayEventSchedule {
-    Absolute {
-        open_at: UnixSeconds,
-        lock_at: Option<UnixSeconds>,
-    },
-    RelativeToPhase {
-        phase_id: PhaseId,
-        /// Offset from the phase's open instant (when PhaseAdvanced/OpenDayPhase
-        /// established the phase window), not from engine LogicalTime.
-        open_offset: DurationSeconds,
-        lock_offset: Option<DurationSeconds>,
-    },
-    HostOpened,
-    OnTrigger { trigger: ProgramTrigger },
-}
-
-enum DayEventState {
-    Scheduled,
-    Open,
-    Locked,
-    Resolved,
-    Cancelled,
-}
-
-/// Platform resolution — NOT engine HostPromptIssued / ResolveHostPrompt.
-enum DayEventResolutionMode {
-    Auto { policy: AutoResolvePolicy },       // L3
-    HostDecision,                             // L1: platform HostTask + ResolveDayEvent
-    // Hybrid is deferred until auto proposal / host acceptance semantics exist.
-}
-
-struct ParticipationSpec {
-    who: ParticipantFilter,  // AliveSlots | AllOccupied | HostInvited | ChannelMembers
-    mode: ParticipationMode, // OptIn | SubmitChoice | SubmitFreeformRef | VoteAmongOptions
-    limits: ParticipationLimits,
-}
-
-struct RewardBinding {
-    reward_key: String,
-    display_name_theme_key: String,
-    effects: Vec<RewardEffectTemplate>, // catalog operations + recipient selectors
-}
-
-struct RewardEffectTemplate {
-    recipient: RecipientSelector,       // Winner | Participant | HostChosen | ExplicitSlot
-    operation: EffectOperationTemplate, // no concrete target before resolution
-}
-
-struct EffectPlan {
-    origin: EffectOrigin,
-    effects: Vec<ConcreteEffect>,       // every target and pack binding resolved
-    reason: String,
-}
-```
+Platform `UnixSeconds` and `DurationSeconds` are explicit units, never engine
+`LogicalTime` or values inferred from an envelope timestamp. Relative schedules
+start from the phase opening instant. Host decisions and automatic policies are
+platform resolution modes; hybrid proposal/acceptance remains deferred.
 
 #### State machine
 
@@ -320,7 +254,7 @@ stateDiagram-v2
   Scheduled --> Cancelled: host_cancel
   Open --> Locked: evidence_due_then_command|host_lock|capacity
   Open --> Cancelled: host_cancel
-  Locked --> Resolved: auto|host_resolve|hybrid
+  Locked --> Resolved: auto|host_resolve
   Locked --> Cancelled: host_cancel
   Resolved --> [*]
   Cancelled --> [*]
@@ -410,7 +344,7 @@ Default product posture for mash: **12h day / 12h night** phase cadence, with ze
 
 | Concern | Engine host prompts | DayEvent host decisions |
 |---|---|---|
-| Origin | Inner `HostPromptIssued` inside `ResolutionApplied` | Platform DayEvent state (`Locked` + `HostDecision` / hybrid) |
+| Origin | Inner `HostPromptIssued` inside `ResolutionApplied` | Platform DayEvent state (`Locked` + `HostDecision`) |
 | Projection | `host_prompt` | `day_event` (+ host-console task selector) |
 | Resolve command | `ResolveHostPrompt` | `ResolveDayEvent` |
 | Effect table | Pack `host_prompt_resolution_effects` (closed: PkKill, AdvanceRevote, …) | Reward templates compiled to the concrete-effect adapter matrix |
@@ -434,47 +368,19 @@ DayEvent decision/open families alongside engine host prompts:
 
 **Split from phase control:** phase/thread motion stays on **existing commands** (`ExtendDeadline`, `AdvancePhase`, `ResolvePhase`, `LockThread`, `UnlockThread`). Those are **not** EffectSpec variants. Host palette UI may group them as “controls” next to “effects,” but they do not share the EffectSpec enum.
 
-#### v1 concrete catalog sketch
+#### Concrete effect contract
 
-```rust
-/// Fully bound platform operation. Program documents store the corresponding
-/// EffectOperationTemplate plus RecipientSelector, not this concrete target.
-enum ConcreteEffect {
-    /// Lifecycle death/modkill/alive — adapter uses SlotStatusChanged (existing host path).
-    /// Status only: does **not** apply death_reveal / RoleRevealed / AlignmentRevealed.
-    /// Pair with RevealRole / RevealAlignment when a public role/alignment flip is intended.
-    SetSlotLifecycle {
-        target: SlotId,
-        status: SlotLifecycle, // Dead | Alive | Modkilled | …
-    },
-    Mark {
-        target: SlotId,
-        effect: Tag,              // must exist in pack.effects when pack-gated
-        // Platform v1 supports Persistent only. Resolution effects exist only
-        // inside one pure resolver invocation and cannot be injected mid-phase.
-    },
-    Clear {
-        target: SlotId,
-        effect: Tag,
-    },
-    /// Includes VoteWeight, Item, ExtraAction — only Grant path for vote weight.
-    Grant {
-        target: SlotId,
-        grant: GrantSpec, // domain::GrantSpec; kind VoteWeight | Item | ExtraAction
-    },
-    /// Reveal-class only: fold the same reveal flags as resolution death_reveal /
-    /// GameCompleted paths. Never implied by SetSlotLifecycle alone.
-    RevealAlignment {
-        target: SlotId,
-    },
-    RevealRole {
-        target: SlotId,
-    },
-}
-// Explicitly NOT catalog: SetVoteWeight (use Grant VoteWeight),
-// ExtendDeadline, RequestPhaseAdvance, Convert, Link, channel membership,
-// PublishNarrative, free-floating InvestigateResult, ItaShot, …
-```
+Current declarations: [`ConcreteEffect`](../reference/rust-contracts.md#concreteeffect).
+
+Lifecycle changes use the existing `SlotStatusChanged` adapter and do not
+imply a public role or alignment reveal. Add an explicit reveal operation when
+a flip is intended. Platform marks support persistent effects; resolution-only
+effects belong inside one pure resolver invocation. Grants cover vote weight,
+items, and extra actions.
+
+The catalog excludes deadline changes, phase advancement, conversion, links,
+channel membership, narrative publication, standalone investigation results,
+and ITA shots. These require their owning command paths.
 
 #### Effect application adapter matrix (normative intent)
 
@@ -613,7 +519,7 @@ Per [13](13-interaction-architecture.md), healthy projections are evidence, not 
 | Task family | When | Primary action | Gate |
 |---|---|---|---|
 | Existing engine host-prompts | Unresolved `host_prompt` rows | `ResolveHostPrompt` | host-team (`CohostOf` + denylist) |
-| `day-event-resolve` | Locked + HostDecision/hybrid needs host | `ResolveDayEvent` | host-team (`CohostOf` + denylist) |
+| `day-event-resolve` | Locked + HostDecision needs host | `ResolveDayEvent` | host-team (`CohostOf` + denylist) |
 | `day-event-open` | HostOpened schedule or due+pending | `OpenDayEvent` | host-team (`CohostOf` + denylist) |
 | Fiat palette | Always in secondary drawer | `ApplyEffectPlan` | host-team (`CohostOf` + denylist) |
 | Phase controls | Existing posture | `ExtendDeadline`, `ResolvePhase`, … | host-team (`CohostOf` + denylist) |
@@ -1145,25 +1051,17 @@ mechanical semantics; it does not duplicate a partial payload schema.
 
 ### C.2 DayEventDecision (v1)
 
-```rust
-enum DayEventDecision {
-    SelectWinners { slots: Vec<SlotId> },
-    SelectMapping { assignments: Vec<(SlotId, String /* reward_key */)> },
-    AcceptAuto, // hybrid/auto: host ack of computed winners
-    CancelInstead { reason: String }, // prefer CancelDayEvent command; optional
-}
-```
+Current declarations: [`DayEventDecision`](../reference/rust-contracts.md#dayeventdecision).
+
+Host decisions choose winners, bind reward assignments, or cancel. There is
+no `AcceptAuto` decision: automatic resolution owns its own execution path.
 
 ### C.3 ParticipationPayload (v1)
 
-```rust
-enum ParticipationPayload {
-    OptIn,
-    Choice { option_id: String },
-    FreeformRef { body_ref: String }, // content-addressed or post ref — not authority alone
-    Ballot { option_id: String },
-}
-```
+Current declarations: [`ParticipationPayload`](../reference/rust-contracts.md#participationpayload).
+
+Choice and ballot values use typed option IDs; freeform references use
+`ContentRef`. A content reference alone grants no authority.
 
 Payload variant must match event’s `ParticipationMode` or reject `ParticipationPayloadMismatch`.
 

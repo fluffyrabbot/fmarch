@@ -7,12 +7,44 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const OUTPUT = 'docs/reference/rust-contracts.md';
 export const SOURCES = [
-  ['crates/domain/src/ir.rs', ['IrAbility', 'InvestigateMode', 'Modifier']],
-  ['crates/domain/src/phase.rs', ['PhaseKind']],
-  ['crates/domain/src/state.rs', ['SlotLifecycle']],
-  ['crates/eventstore/src/lib.rs', ['ActorId', 'EventInput', 'StoredEvent']],
-  ['crates/domain/src/events.rs', ['InnerEvent', 'ResolutionApplied', 'ResolutionTrace']],
-  ['crates/game_platform/src/lib.rs', ['DayEventState', 'DayEventResolutionMode', 'ConcreteEffect', 'DayProgram', 'DayEventEvent']],
+  ['crates/domain/src/ir.rs', [
+    'IrAbility', 'InvestigateMode', 'Modifier',
+  ]],
+  ['crates/domain/src/phase.rs', [
+    'PhaseKind',
+  ]],
+  ['crates/domain/src/state.rs', [
+    'SlotLifecycle', 'Submission', 'StateSnapshot', 'ActionUseRecord',
+    'ActionCounterRecord', 'ActionGrantRecord', 'LinkRecord', 'RetaliationRecord',
+    'ConversionOriginRecord', 'EffectRecord', 'SlotState', 'Seed',
+    'LogicalTime',
+  ]],
+  ['crates/eventstore/src/lib.rs', [
+    'ActorId', 'EventInput', 'StoredEvent',
+  ]],
+  ['crates/domain/src/events.rs', [
+    'InnerEvent', 'ResolutionApplied', 'ResolutionTrace', 'DayVoteOutcome',
+    'VoteStatus', 'DayAnnouncement', 'LastWordsRecorded', 'LastWordsVoteSummary',
+    'PhaseAnnouncement', 'Death',
+  ]],
+  ['crates/game_platform/src/lib.rs', [
+    'DayEventState', 'DayEventResolutionMode', 'ConcreteEffect', 'DayProgram',
+    'DayEventEvent', 'DayEvent', 'NarrativeTemplate', 'EventChannelPolicy',
+    'UnixSeconds', 'DurationSeconds', 'DayEventSchedule', 'ParticipationSpec',
+    'RewardBinding', 'RewardEffectTemplate', 'EffectPlan', 'DayEventDecision',
+    'ParticipationPayload',
+  ]],
+  ['crates/domain/src/pack/model.rs', [
+    'Pack', 'Role', 'ActionTemplate', 'Constraints',
+    'PrecedenceRule', 'VisibilityRule', 'ResultOverride', 'RedirectPolicy',
+    'RedirectKind', 'TriggerRule', 'TriggerOn', 'TriggerEvent',
+    'ActorRef', 'TargetRef', 'VotePolicy', 'DynamicVoteWeightPolicy',
+    'DynamicVoteWeightRule', 'DynamicVoteWeightGrantRule', 'HostPromptResolutionEffectPolicy', 'PhasePolicy',
+    'WinPolicy', 'WinRule', 'WinCondition',
+  ]],
+  ['crates/domain/src/resolver.rs', [
+    'ResolutionInput', 'ResolutionOutput',
+  ]],
 ];
 
 export function rustTokens(source) {
@@ -104,11 +136,28 @@ function field(tokens, named) {
 export function readDeclaration(source, name) {
   const tokens = rustTokens(source); const candidates = [];
   for (let i = 0; i < tokens.length - 2; i++) {
-    if (tokens[i].text === 'pub' && ['enum', 'struct'].includes(tokens[i + 1].text) && tokens[i + 2].text === name) candidates.push(i);
+    if (tokens[i].text === 'pub' && ['enum', 'struct', 'type'].includes(tokens[i + 1].text) && tokens[i + 2].text === name) candidates.push(i);
   }
   if (candidates.length !== 1) throw new Error(`expected exactly one public declaration for ${name}, got ${candidates.length}`);
   const i = candidates[0]; const kind = tokens[i + 1].text; const open = i + 3;
-  if (tokens[open]?.text !== '{') throw new Error(`${name}: only named structs and enums are supported`);
+  const line = source.slice(0, tokens[i].start).split('\n').length;
+  if (kind === 'type') {
+    if (tokens[open]?.text !== '=') throw new Error(`${name}: only nongeneric type aliases are supported`);
+    const end = tokens.findIndex((token, index) => index > open && token.text === ';');
+    if (end < 0 || end === open + 1) throw new Error(`${name}: missing alias target`);
+    const target = tokens.slice(open + 1, end);
+    // Validate nested delimiters using the same bounded syntax as field types.
+    entries(target);
+    return { name, kind, line, members: [{ name: 'Target', declaration: renderTokens(target) }] };
+  }
+  if (kind === 'struct' && tokens[open]?.text === '(') {
+    const end = group(tokens, open);
+    if (tokens[end + 1]?.text !== ';') throw new Error(`${name}: unsupported tuple struct suffix`);
+    const members = entries(tokens.slice(open + 1, end)).map((entry, index) => ({ name: String(index), declaration: field(entry, false) }));
+    if (!members.length) throw new Error(`${name}: empty declaration`);
+    return { name, kind, line, members };
+  }
+  if (tokens[open]?.text !== '{') throw new Error(`${name}: unsupported declaration shape`);
   const end = group(tokens, open);
   const members = entries(tokens.slice(open + 1, end)).map(entry => {
     const t = attributes(entry);
@@ -133,7 +182,8 @@ export async function renderReference(root = ROOT) {
     'Regenerate with `npm run generate:rust-reference`; verify with `npm run check:rust-reference`.', '',
     'These tables are source declarations, not JSON/CBOR schemas. They include tuple',
     'payload type names without recursively expanding them. Follow the source links',
-    'for serde attributes, conditional type derives, docs, and runtime validation.',
+    'for serde attributes, visibility, conditional type derives, docs, and runtime validation.',
+    'Tuple-field rows describe representation; they do not imply public constructors.',
     'The bounded reader rejects unsupported selected declaration/member shapes;',
     'it does not expand macros, evaluate cfg, or resolve Rust types.', ''];
   for (const [file, names] of SOURCES) {

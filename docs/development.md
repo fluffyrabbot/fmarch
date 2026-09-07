@@ -66,7 +66,7 @@ fetched. Command validation covers literal `npm run` examples, including
 `--prefix frontend`; it does not execute examples or interpret shell variables.
 
 The [Rust contract reference](reference/rust-contracts.md) owns the selected
-engine, event-envelope, and platform declaration tables. After changing those
+engine, pack-policy, state, event-envelope, and platform declaration tables. After changing those
 Rust declarations, run `npm run generate:rust-reference` and commit the output.
 The generator intentionally reads a bounded subset of Rust syntax and fails
 when selected shapes exceed it; extend its tests before adding new syntax.
