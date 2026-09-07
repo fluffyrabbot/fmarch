@@ -13,6 +13,8 @@ pub const RELEASE_AUTHORITY_SCHEMA: &str = "fmarch_release_authority";
 pub const DATABASE_ENVIRONMENT_IDENTITY_TABLE: &str = "database_environment_identity";
 pub const SCHEMA_EPOCH_RESET_COMPLETION_TABLE: &str = "schema_epoch_reset_completion";
 pub const DATABASE_IDENTITY_ADVISORY_LOCK: i64 = 2_542_974_982_456_656_081;
+const DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX: &str =
+    "fmarch-database-environment-identity:v1:";
 
 const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "action_counter",
@@ -724,6 +726,62 @@ pub enum DatabaseAuthorityError {
     Configuration(String),
     #[error("database authority storage error: {0}")]
     Storage(#[from] sqlx::Error),
+}
+
+/// Repository-owned identity of one physical release database. The private
+/// release ledger is authoritative to the database owner; the matching global
+/// database comment is its least-privilege attestation surface for the
+/// application principal and external readiness checks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatabaseEnvironmentIdentity {
+    pub project_id: String,
+    pub environment_id: String,
+    pub environment: String,
+}
+
+impl DatabaseEnvironmentIdentity {
+    pub fn new(
+        environment: impl Into<String>,
+        project_id: impl Into<String>,
+        environment_id: impl Into<String>,
+    ) -> Result<Self, DatabaseAuthorityError> {
+        let identity = Self {
+            project_id: project_id.into(),
+            environment_id: environment_id.into(),
+            environment: environment.into(),
+        };
+        validate_release_identity(
+            &identity.environment,
+            &identity.project_id,
+            &identity.environment_id,
+        )?;
+        Ok(identity)
+    }
+
+    fn marker(&self) -> String {
+        format!(
+            "{DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX}{}:{}:{}",
+            self.project_id, self.environment_id, self.environment
+        )
+    }
+
+    fn from_marker(marker: &str) -> Result<Self, DatabaseAuthorityError> {
+        let fields = marker
+            .strip_prefix(DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX)
+            .ok_or_else(|| {
+                DatabaseAuthorityError::Configuration(
+                    "database environment identity marker has an unknown format".to_string(),
+                )
+            })?
+            .split(':')
+            .collect::<Vec<_>>();
+        let [project_id, environment_id, environment] = fields.as_slice() else {
+            return Err(DatabaseAuthorityError::Configuration(
+                "database environment identity marker has an unknown format".to_string(),
+            ));
+        };
+        Self::new(*environment, *project_id, *environment_id)
+    }
 }
 
 /// Reconcile the complete database ACL manifest after every migration or
@@ -1779,7 +1837,7 @@ pub async fn bind_database_environment_identity(
     expected_project_id: &str,
     expected_environment_id: &str,
 ) -> Result<(), DatabaseAuthorityError> {
-    validate_release_identity(
+    let expected_identity = DatabaseEnvironmentIdentity::new(
         expected_environment,
         expected_project_id,
         expected_environment_id,
@@ -1863,8 +1921,86 @@ pub async fn bind_database_environment_identity(
             ));
         }
     }
+    bind_database_environment_identity_marker(&mut tx, &expected_identity).await?;
     tx.commit().await?;
     Ok(())
+}
+
+async fn bind_database_environment_identity_marker(
+    connection: &mut PgConnection,
+    expected: &DatabaseEnvironmentIdentity,
+) -> Result<(), DatabaseAuthorityError> {
+    let current: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT shobj_description(database.oid, 'pg_database')
+        FROM pg_database database
+        WHERE database.datname = current_database()
+        "#,
+    )
+    .fetch_one(&mut *connection)
+    .await?;
+    let expected_marker = expected.marker();
+    match current {
+        None => {
+            let statement: String = sqlx::query_scalar(
+                "SELECT format('COMMENT ON DATABASE %I IS %L', current_database(), $1)",
+            )
+            .bind(&expected_marker)
+            .fetch_one(&mut *connection)
+            .await?;
+            sqlx::query(sqlx::AssertSqlSafe(statement))
+                .execute(&mut *connection)
+                .await?;
+        }
+        Some(marker) if marker == expected_marker => {}
+        Some(_) => {
+            return Err(DatabaseAuthorityError::Configuration(
+                "database environment identity marker is already bound to another target"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Read the database-owner-bound, globally visible identity attestation without
+/// granting the application principal access to the private release ledger.
+pub async fn read_database_environment_identity_marker(
+    connection: &mut PgConnection,
+) -> Result<DatabaseEnvironmentIdentity, DatabaseAuthorityError> {
+    let marker: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT shobj_description(database.oid, 'pg_database')
+        FROM pg_database database
+        WHERE database.datname = current_database()
+        "#,
+    )
+    .fetch_one(&mut *connection)
+    .await?;
+    DatabaseEnvironmentIdentity::from_marker(marker.as_deref().ok_or_else(|| {
+        DatabaseAuthorityError::Configuration(
+            "database environment identity marker is not provisioned".to_string(),
+        )
+    })?)
+}
+
+pub async fn verify_database_environment_identity_marker(
+    connection: &mut PgConnection,
+    expected: &DatabaseEnvironmentIdentity,
+) -> Result<DatabaseEnvironmentIdentity, DatabaseAuthorityError> {
+    let actual = read_database_environment_identity_marker(connection).await?;
+    if actual != *expected {
+        return Err(DatabaseAuthorityError::Configuration(format!(
+            "database identity is {}/{}/{}, expected {}/{}/{}",
+            actual.project_id,
+            actual.environment_id,
+            actual.environment,
+            expected.project_id,
+            expected.environment_id,
+            expected.environment,
+        )));
+    }
+    Ok(actual)
 }
 
 pub async fn verify_database_environment_identity(
@@ -1873,11 +2009,12 @@ pub async fn verify_database_environment_identity(
     expected_project_id: &str,
     expected_environment_id: &str,
 ) -> Result<(), DatabaseAuthorityError> {
-    validate_release_identity(
+    let expected_identity = DatabaseEnvironmentIdentity::new(
         expected_environment,
         expected_project_id,
         expected_environment_id,
     )?;
+    verify_database_environment_identity_marker(connection, &expected_identity).await?;
     if !verify_database_environment_identity_authority(connection).await? {
         return Err(DatabaseAuthorityError::Configuration(
             "database environment identity is not provisioned".to_string(),

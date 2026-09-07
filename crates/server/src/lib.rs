@@ -1,11 +1,38 @@
 pub use database_schema::{
     bind_database_environment_identity, ensure_schema_ready, inspect_schema_readiness,
-    reconcile_database_authority, verify_database_environment_identity, verify_database_principal,
-    verify_migration_authority, verify_schema_epoch_reset_completion_authority,
-    DatabaseAuthorityError, DatabasePrincipal, SchemaReadiness, APPLICATION_DATABASE_ROLE,
+    read_database_environment_identity_marker, reconcile_database_authority,
+    verify_database_environment_identity, verify_database_environment_identity_marker,
+    verify_database_principal, verify_migration_authority,
+    verify_schema_epoch_reset_completion_authority, DatabaseAuthorityError,
+    DatabaseEnvironmentIdentity, DatabasePrincipal, SchemaReadiness, APPLICATION_DATABASE_ROLE,
     DATABASE_ENVIRONMENT_IDENTITY_TABLE, DATABASE_IDENTITY_ADVISORY_LOCK, KEY_ADMIN_DATABASE_ROLE,
     MIGRATOR, RELEASE_AUTHORITY_SCHEMA, SCHEMA_EPOCH_RESET_COMPLETION_TABLE,
 };
+
+pub fn configured_database_environment_identity(
+    process_name: &str,
+) -> Result<Option<DatabaseEnvironmentIdentity>, String> {
+    let values = (
+        std::env::var("FMARCH_DATABASE_ENVIRONMENT"),
+        std::env::var("FMARCH_DATABASE_PROJECT_ID"),
+        std::env::var("FMARCH_DATABASE_ENVIRONMENT_ID"),
+    );
+    match values {
+        (Ok(environment), Ok(project_id), Ok(environment_id)) => {
+            DatabaseEnvironmentIdentity::new(environment, project_id, environment_id)
+                .map(Some)
+                .map_err(|error| error.to_string())
+        }
+        (
+            Err(std::env::VarError::NotPresent),
+            Err(std::env::VarError::NotPresent),
+            Err(std::env::VarError::NotPresent),
+        ) if api::release_commit() == "development" => Ok(None),
+        _ => Err(format!(
+            "exact release {process_name} requires the complete durable database project/environment identity"
+        )),
+    }
+}
 
 pub mod staging_search_corpus;
 

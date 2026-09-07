@@ -13,8 +13,10 @@ import {
   buildReleaseReceipt,
   canonicalJson,
   receiptDigest,
+  canonicalReleaseTopology,
   validateDeploymentArtifact,
   validateFleetProofReceipt,
+  validateHealth,
   validateProductionReleaseReadiness,
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
@@ -202,6 +204,11 @@ function stagingReleaseReceiptFixture() {
         ok: true,
         release_commit: commit,
         database_schema: true,
+        database_identity: {
+          project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+          environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+          environment: "staging",
+        },
         event_encryption: true,
         object_storage: true,
         subject_authority: true,
@@ -287,6 +294,7 @@ test("production mutations revalidate fresh signed evidence and reserve the coor
   const events = [];
   const verification = {
     now: () => clock,
+    revalidateHostedVariables: async () => events.push("hosted-variables"),
     readStagingReceipt: async () => {
       events.push("staging-receipt");
       return structuredClone(stagingReceipt);
@@ -303,6 +311,7 @@ test("production mutations revalidate fresh signed evidence and reserve the coor
     verification,
   );
   assert.deepEqual(events, [
+    "hosted-variables",
     "staging-receipt",
     "signed-fleet-proof",
     "remote-lease",
@@ -346,6 +355,7 @@ test("production mutations reject replaced staging and fleet evidence between wr
   let currentFleetReceipt = fleetReceipt;
   const verification = {
     now: () => releaseNow,
+    revalidateHostedVariables: async () => {},
     readStagingReceipt: async () => structuredClone(currentStagingReceipt),
     reloadFleetProof: async (options) => verifyFleetEnvelope(currentFleetReceipt, options),
     assertLease: async () => {},
@@ -1076,12 +1086,22 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       ok: true,
       release_commit: commit,
       database_schema: true,
+      database_identity: {
+        project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+        environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+        environment: "staging",
+      },
       event_encryption: true,
       object_storage: true,
       subject_authority: true,
     },
     frontend: { status: "ok", release_commit: commit },
   };
+  assert.throws(
+    () => validateHealth(health.api, commit, "api", canonicalReleaseTopology("production")),
+    /database identity does not match the canonical Railway target/,
+    "a coherent production variable swap to the staging database must fail live acceptance",
+  );
   const hostedAcceptance = {
     status: "passed",
     generatedAt: "2026-09-07T12:45:00.000Z",
@@ -1219,7 +1239,17 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       api: deployment("production-api", runtimeDigest),
       frontend: deployment("production-frontend", frontendDigest),
     },
-    health,
+    health: {
+      ...health,
+      api: {
+        ...health.api,
+        database_identity: {
+          project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+          environment_id: "c1378737-84cc-45ba-8474-9c868baf7cfb",
+          environment: "production",
+        },
+      },
+    },
     schemaHead: "0002_profile_mute_durable_target.sql",
     fleetProof,
     attemptReceipt: productionAttempt,

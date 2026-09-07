@@ -7,9 +7,11 @@ mod authority;
 mod schema;
 
 pub use authority::{
-    bind_database_environment_identity, reconcile_database_authority,
-    verify_database_environment_identity, verify_database_principal, verify_migration_authority,
-    verify_schema_epoch_reset_completion_authority, DatabaseAuthorityError, DatabasePrincipal,
+    bind_database_environment_identity, read_database_environment_identity_marker,
+    reconcile_database_authority, verify_database_environment_identity,
+    verify_database_environment_identity_marker, verify_database_principal,
+    verify_migration_authority, verify_schema_epoch_reset_completion_authority,
+    DatabaseAuthorityError, DatabaseEnvironmentIdentity, DatabasePrincipal,
     APPLICATION_DATABASE_ROLE, DATABASE_ENVIRONMENT_IDENTITY_TABLE,
     DATABASE_IDENTITY_ADVISORY_LOCK, KEY_ADMIN_DATABASE_ROLE, RELEASE_AUTHORITY_SCHEMA,
     SCHEMA_EPOCH_RESET_COMPLETION_TABLE,

@@ -2,7 +2,7 @@ import {assertAuthenticatedReceipt, stagingOrigins} from './hosted_authenticated
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-export const RELEASE_RECEIPT_VERSION = 6;
+export const RELEASE_RECEIPT_VERSION = 7;
 export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 export const CANONICAL_RELEASE_TOPOLOGY = Object.freeze({
@@ -399,7 +399,7 @@ export function validateDeploymentArtifact(deployment, expectedDigest, label) {
   return deployment;
 }
 
-export function validateHealth(body, expectedCommit, kind) {
+export function validateHealth(body, expectedCommit, kind, topology = null) {
   assert.equal(body?.release_commit, expectedCommit, `${kind} health commit does not match release`);
   if (kind === "api") {
     for (const field of [
@@ -410,6 +410,17 @@ export function validateHealth(body, expectedCommit, kind) {
       "subject_authority",
     ]) {
       assert.equal(body?.[field], true, `API readiness field ${field} is not true`);
+    }
+    if (topology !== null) {
+      assert.deepEqual(
+        body?.database_identity,
+        {
+          project_id: topology.project_id,
+          environment_id: topology.environment.id,
+          environment: topology.environment.name,
+        },
+        "API readiness database identity does not match the canonical Railway target",
+      );
     }
   } else if (kind === "frontend") {
     assert.equal(body?.status, "ok", "frontend health status is not ok");
@@ -508,7 +519,7 @@ export function buildReleaseReceipt({
   validateDeploymentArtifact(deployments.migrator, runtimeDigest, "migrator");
   validateDeploymentArtifact(deployments.api, runtimeDigest, "API");
   validateDeploymentArtifact(deployments.frontend, frontendDigest, "frontend");
-  validateHealth(health.api, commit, "api");
+  validateHealth(health.api, commit, "api", topology);
   validateHealth(health.frontend, commit, "frontend");
   assertFleetProofAttestation(fleetProof, commit);
   assertCanonicalReleaseTopology(topology, environment);
@@ -610,7 +621,7 @@ export function assertReleaseReceipt(receipt) {
     receipt.generated_at,
     "release generation time is not canonical ISO-8601",
   );
-  validateHealth(receipt.health?.api, receipt.commit, "api");
+  validateHealth(receipt.health?.api, receipt.commit, "api", receipt.topology);
   validateHealth(receipt.health?.frontend, receipt.commit, "frontend");
   assertSchemaEpochReset(receipt.schema_epoch_reset, receipt);
   const { receipt_sha256: actual, ...base } = receipt;

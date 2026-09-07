@@ -47,11 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(2)
         .connect(&database_url)
         .await?;
-    let database_identity = (
-        env::var("FMARCH_DATABASE_ENVIRONMENT"),
-        env::var("FMARCH_DATABASE_PROJECT_ID"),
-        env::var("FMARCH_DATABASE_ENVIRONMENT_ID"),
-    );
+    let database_identity = server::configured_database_environment_identity("migration")?;
     let mut operation_lock = pool.acquire().await?;
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(server::DATABASE_IDENTITY_ADVISORY_LOCK)
@@ -65,24 +61,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .execute(&pool)
             .await?;
         server::verify_migration_authority(&pool).await?;
-        match database_identity {
-            (Ok(environment), Ok(project_id), Ok(environment_id)) => {
+        match database_identity.as_ref() {
+            Some(identity) => {
                 server::verify_database_environment_identity(
                     &mut operation_lock,
-                    &environment,
-                    &project_id,
-                    &environment_id,
+                    &identity.environment,
+                    &identity.project_id,
+                    &identity.environment_id,
                 )
                 .await?;
             }
-            (
-                Err(env::VarError::NotPresent),
-                Err(env::VarError::NotPresent),
-                Err(env::VarError::NotPresent),
-            ) if api::release_commit() == "development" => {}
-            _ => {
-                return Err("exact release migration requires the complete durable database project/environment identity".into())
-            }
+            None => {}
         }
         server::MIGRATOR.run(&pool).await?;
         server::ensure_schema_ready(&pool).await?;

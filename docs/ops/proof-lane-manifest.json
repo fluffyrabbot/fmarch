@@ -813,6 +813,7 @@
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
         "tools/release_coordinator_contract.test.mjs",
+        "tools/release_hosted_variable_authority.mjs",
         "tools/release_git_authority.mjs",
         "tools/release_git_authority.test.mjs",
         "tools/fleet_release_proof.mjs",

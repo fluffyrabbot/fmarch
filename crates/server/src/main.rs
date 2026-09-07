@@ -20,6 +20,7 @@ const MIN_DATABASE_POOL_CONNECTIONS: u64 = 5;
 #[derive(Clone)]
 struct RuntimeConfig {
     database_url: String,
+    database_identity: Option<server::DatabaseEnvironmentIdentity>,
     bind: SocketAddr,
     media: MediaConfig,
     database: DatabaseCapacity,
@@ -166,6 +167,8 @@ struct WorkerBudget {
 impl RuntimeConfig {
     fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let database_url = env::var("DATABASE_URL")?;
+        let database_identity = server::configured_database_environment_identity("fmarch-server")
+            .map_err(invalid_runtime_config)?;
         let configured_bind = optional_env("FMARCH_BIND")?;
         let platform_port = optional_env("PORT")?;
         let bind = bind_from_values(configured_bind.as_deref(), platform_port.as_deref())?;
@@ -446,6 +449,7 @@ impl RuntimeConfig {
         };
         let config = RuntimeConfig {
             database_url,
+            database_identity,
             bind,
             media,
             database,
@@ -1242,6 +1246,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     server::ensure_schema_ready(&pool).await?;
     server::verify_database_principal(&pool, server::DatabasePrincipal::Application).await?;
+    let database_identity = match config.database_identity.as_ref() {
+        Some(expected) => {
+            let mut connection = pool.acquire().await?;
+            Some(
+                server::verify_database_environment_identity_marker(&mut connection, expected)
+                    .await?,
+            )
+        }
+        None => None,
+    };
     let local_proof_revocation =
         identity::revoke_local_proof_sessions_for_startup(&pool, unix_now_seconds()).await?;
     if local_proof_revocation.sessions > 0 || local_proof_revocation.websocket_tickets > 0 {
@@ -1328,6 +1342,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_subject_key_store(subject_authority.key_store.clone())
         .with_identity_delivery_gateway(gateway.clone())
         .with_worker_health(worker_health.clone());
+    if let Some(identity) = database_identity {
+        api_state = api_state.with_database_environment_identity(identity);
+    }
     if let Some(verifier) = local_proof_auth {
         api_state = api_state.with_local_proof_auth(verifier);
     }

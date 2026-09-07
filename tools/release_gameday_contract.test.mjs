@@ -80,6 +80,11 @@ function releaseReceipt(commit, runtime, frontend, id) {
         ok: true,
         release_commit: commit,
         database_schema: true,
+        database_identity: {
+          project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+          environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+          environment: "staging",
+        },
         event_encryption: true,
         object_storage: true,
         subject_authority: true,

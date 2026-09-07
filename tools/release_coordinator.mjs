@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
+import { revalidateCanonicalHostedVariables } from "./release_hosted_variable_authority.mjs";
 import {
   TERMINAL_DEPLOYMENT_STATES,
   CANONICAL_RELEASE_TOPOLOGY,
@@ -447,6 +448,29 @@ function railwayText(config, args) {
   ], { env: scrubHostedEnvironment(process.env) });
 }
 
+async function revalidateHostedVariableAuthority(config) {
+  return await revalidateCanonicalHostedVariables(config, {
+    load: async (_config, environmentId, serviceId) =>
+      JSON.parse(
+        commandText(
+          "railway",
+          [
+            "variable",
+            "list",
+            "--project",
+            config.projectId,
+            "--environment",
+            environmentId,
+            "--service",
+            serviceId,
+            "--json",
+          ],
+          { env: scrubHostedEnvironment(process.env) },
+        ),
+      ),
+  });
+}
+
 function railwayApi(query, variables) {
   const response = JSON.parse(commandText("railway", [
     "api",
@@ -513,6 +537,7 @@ export async function assertProductionMutationAuthority(
     readStagingReceipt = async (receiptPath) =>
       JSON.parse(await readFile(receiptPath, "utf8")),
     reloadFleetProof = loadFleetReleaseProof,
+    revalidateHostedVariables = revalidateHostedVariableAuthority,
     assertLease = assertProductionPromotionLease,
     now = () => new Date(),
     minimumFreshnessReserveMilliseconds = 0,
@@ -538,6 +563,7 @@ export async function assertProductionMutationAuthority(
       minimumFreshnessReserveMilliseconds < RELEASE_EVIDENCE_MAX_AGE_MS,
     "production mutation freshness reserve is invalid",
   );
+  await revalidateHostedVariables(config);
   const referenceTime = typeof now === "function" ? now() : now;
   const maxAgeMilliseconds =
     RELEASE_EVIDENCE_MAX_AGE_MS - minimumFreshnessReserveMilliseconds;
@@ -1345,7 +1371,7 @@ async function coordinateEpochReset(config, digest, commit, epoch) {
   });
 }
 
-async function fetchHealth(url, commit, kind) {
+async function fetchHealth(url, commit, kind, topology = null) {
   const expected = new URL(url);
   const response = await fetch(expected, {
     redirect: "error",
@@ -1355,7 +1381,7 @@ async function fetchHealth(url, commit, kind) {
   assert.equal(response.url, expected.href, `${kind} health response URL drifted`);
   assert.equal(new URL(response.url).origin, expected.origin, `${kind} health response origin drifted`);
   const body = await response.json();
-  validateHealth(body, commit, kind);
+  validateHealth(body, commit, kind, topology);
   return body;
 }
 
@@ -1597,11 +1623,20 @@ export async function main(argv = process.argv.slice(2)) {
     commit,
   );
   const [api, frontend] = await Promise.all([
-    deployImage(config, config.apiServiceId, config.runtimeImage, runtimeDigest, "fmarch-server", `${args.environment} API`, "api"),
+    deployImage(
+      config,
+      config.apiServiceId,
+      config.runtimeImage,
+      runtimeDigest,
+      "fmarch-server",
+      `${args.environment} API`,
+      "api",
+      databaseIdentityVariables(config),
+    ),
     deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, "node build", `${args.environment} frontend`, "frontend"),
   ]);
   const [apiHealth, frontendHealth] = await Promise.all([
-    fetchHealth(`${config.apiUrl}/readyz`, commit, "api"),
+    fetchHealth(`${config.apiUrl}/readyz`, commit, "api", config.topology),
     fetchHealth(`${config.frontendUrl}/healthz`, commit, "frontend"),
   ]);
   const sentinel = args.environment === "staging"

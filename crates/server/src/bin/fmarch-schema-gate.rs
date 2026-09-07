@@ -2,7 +2,7 @@ use std::{env, process, time::Duration};
 
 use database_schema::{DatabaseAuthorityError, DatabasePrincipal, SchemaReadiness};
 use serde_json::json;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgPool, PgPoolOptions};
 
 const DEFAULT_TIMEOUT_MS: u64 = 180_000;
 const DEFAULT_INTERVAL_MS: u64 = 1_000;
@@ -31,6 +31,7 @@ async fn run() -> Result<(), String> {
     let database_url = env::var("DATABASE_URL")
         .map_err(|_| "DATABASE_URL is required by fmarch-schema-gate".to_string())?;
     server::validate_database_transport(&database_url, "DATABASE_URL")?;
+    let database_identity = server::configured_database_environment_identity("fmarch-schema-gate")?;
     let timeout_ms = bounded_env_ms(
         "FMARCH_SCHEMA_GATE_TIMEOUT_MS",
         DEFAULT_TIMEOUT_MS,
@@ -54,12 +55,7 @@ async fn run() -> Result<(), String> {
     loop {
         match database_schema::inspect_schema_readiness(&pool).await {
             Ok(SchemaReadiness::Ready) => {
-                match database_schema::verify_database_principal(
-                    &pool,
-                    DatabasePrincipal::Application,
-                )
-                .await
-                {
+                match verify_release_database_authority(&pool, database_identity.as_ref()).await {
                     Ok(()) => return Ok(()),
                     Err(DatabaseAuthorityError::Configuration(message)) => {
                         last_pending =
@@ -81,6 +77,19 @@ async fn run() -> Result<(), String> {
         }
         tokio::time::sleep(Duration::from_millis(interval_ms)).await;
     }
+}
+
+async fn verify_release_database_authority(
+    pool: &PgPool,
+    database_identity: Option<&database_schema::DatabaseEnvironmentIdentity>,
+) -> Result<(), DatabaseAuthorityError> {
+    database_schema::verify_database_principal(pool, DatabasePrincipal::Application).await?;
+    if let Some(expected) = database_identity {
+        let mut connection = pool.acquire().await?;
+        database_schema::verify_database_environment_identity_marker(&mut connection, expected)
+            .await?;
+    }
+    Ok(())
 }
 
 fn bounded_env_ms(name: &str, default: u64, minimum: u64, maximum: u64) -> Result<u64, String> {

@@ -1,9 +1,11 @@
 use std::{str::FromStr, time::Duration};
 
 use database_schema::{
-    bind_database_environment_identity, reconcile_database_authority,
-    verify_database_environment_identity, verify_database_principal, DatabasePrincipal,
-    APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
+    bind_database_environment_identity, read_database_environment_identity_marker,
+    reconcile_database_authority, verify_database_environment_identity,
+    verify_database_environment_identity_marker, verify_database_principal,
+    DatabaseEnvironmentIdentity, DatabasePrincipal, APPLICATION_DATABASE_ROLE,
+    KEY_ADMIN_DATABASE_ROLE,
 };
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -80,6 +82,29 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     .unwrap();
     let application = role_pool(&owner, APPLICATION_DATABASE_ROLE, APPLICATION_PASSWORD).await;
     let key_admin = role_pool(&owner, KEY_ADMIN_DATABASE_ROLE, KEY_ADMIN_PASSWORD).await;
+    let expected_identity = DatabaseEnvironmentIdentity::new(
+        "staging",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .unwrap();
+    let mut application_connection = application.acquire().await.unwrap();
+    assert_eq!(
+        read_database_environment_identity_marker(&mut application_connection)
+            .await
+            .expect("application can read only the database-global identity attestation"),
+        expected_identity,
+    );
+    let wrong_environment = DatabaseEnvironmentIdentity::new(
+        "production",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "c1378737-84cc-45ba-8474-9c868baf7cfb",
+    )
+    .unwrap();
+    verify_database_environment_identity_marker(&mut application_connection, &wrong_environment)
+        .await
+        .expect_err("runtime must reject a coherently configured wrong physical database");
+    drop(application_connection);
     verify_database_principal(&application, DatabasePrincipal::Application)
         .await
         .expect("application authority should match exact manifest");
@@ -93,6 +118,13 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         .unwrap();
     assert_eq!(identity.0, APPLICATION_DATABASE_ROLE);
     assert_eq!(identity.1, APPLICATION_DATABASE_ROLE);
+    let marker_mutation: String = sqlx::query_scalar(
+        "SELECT format('COMMENT ON DATABASE %I IS %L', current_database(), 'attacker-controlled')",
+    )
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    assert_denied(&application, &marker_mutation).await;
 
     sqlx::query("INSERT INTO platform_principal (principal_id, created_at) VALUES ($1, 1)")
         .bind(Uuid::new_v4())

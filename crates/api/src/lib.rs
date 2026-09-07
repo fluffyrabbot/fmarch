@@ -75,6 +75,7 @@ use wire::{ProjectionAdapterError, RejectCode, RejectMsg};
 #[derive(Clone)]
 pub struct ApiState {
     pool: PgPool,
+    database_identity: Option<database_schema::DatabaseEnvironmentIdentity>,
     auth: AuthHttpState,
     media_store: MediaRepository,
     subject_key_store: Option<Arc<dyn SubjectKeyStore>>,
@@ -137,6 +138,7 @@ impl ApiState {
         }
         Ok(ApiState {
             pool,
+            database_identity: None,
             auth,
             media_store,
             subject_key_store: if cfg!(debug_assertions) {
@@ -187,6 +189,14 @@ impl ApiState {
 
     pub fn with_server_name(mut self, name: impl Into<String>) -> Self {
         self.server_name = name.into();
+        self
+    }
+
+    pub fn with_database_environment_identity(
+        mut self,
+        identity: database_schema::DatabaseEnvironmentIdentity,
+    ) -> Self {
+        self.database_identity = Some(identity);
         self
     }
 
@@ -459,11 +469,29 @@ pub struct Readiness {
     pub ok: bool,
     pub release_commit: String,
     pub database_schema: bool,
+    pub database_identity: Option<DatabaseIdentityAttestation>,
     pub event_encryption: bool,
     pub object_storage: bool,
     pub subject_authority: bool,
     pub required_workers: bool,
     pub workers: Vec<WorkerHealthView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DatabaseIdentityAttestation {
+    pub project_id: String,
+    pub environment_id: String,
+    pub environment: String,
+}
+
+impl From<database_schema::DatabaseEnvironmentIdentity> for DatabaseIdentityAttestation {
+    fn from(identity: database_schema::DatabaseEnvironmentIdentity) -> Self {
+        Self {
+            project_id: identity.project_id,
+            environment_id: identity.environment_id,
+            environment: identity.environment,
+        }
+    }
 }
 
 async fn healthz() -> Json<Health> {
@@ -474,8 +502,18 @@ async fn healthz() -> Json<Health> {
 }
 
 async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) {
-    let (database_schema, event_encryption, object_storage, subject_authority) = tokio::join!(
+    let database_identity = async {
+        let Some(expected) = state.database_identity.as_ref() else {
+            return Ok::<_, database_schema::DatabaseAuthorityError>(None);
+        };
+        let mut connection = state.pool.acquire().await?;
+        database_schema::verify_database_environment_identity_marker(&mut connection, expected)
+            .await
+            .map(|actual| Some(actual.into()))
+    };
+    let (database_schema, database_identity, event_encryption, object_storage, subject_authority) = tokio::join!(
         database_schema::ensure_schema_ready(&state.pool),
+        database_identity,
         eventstore::ensure_event_encryption_key_readiness(&state.pool),
         state.media_store.check_readiness(),
         async {
@@ -493,12 +531,14 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
         .all(|worker| !worker.required || worker.healthy);
     let readiness = Readiness {
         ok: database_schema.is_ok()
+            && database_identity.is_ok()
             && event_encryption.is_ok()
             && object_storage.is_ok()
             && subject_authority.is_ok()
             && required_workers,
         release_commit: release_commit().to_string(),
         database_schema: database_schema.is_ok(),
+        database_identity: database_identity.ok().flatten(),
         event_encryption: event_encryption.is_ok(),
         object_storage: object_storage.is_ok(),
         subject_authority: subject_authority.is_ok(),
@@ -509,6 +549,8 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
         tracing::warn!(
             event = "readiness_failed",
             database_schema_ready = readiness.database_schema,
+            database_identity_ready =
+                readiness.database_identity.is_some() || state.database_identity.is_none(),
             event_encryption_ready = readiness.event_encryption,
             object_storage_ready = readiness.object_storage,
             subject_authority_ready = readiness.subject_authority,

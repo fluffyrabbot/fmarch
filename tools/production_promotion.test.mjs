@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   finalizeProductionPointer,
+  revalidateCanonicalHostedVariables,
   parseArguments,
   productionPointerPushArguments,
   productionReceiptPathForLease,
@@ -282,10 +283,13 @@ test("production source validation accepts safe mixed and interrupted cutover st
   assert.throws(() => validateProductionSourceCutover(config, serviceIds), /safely detachable/);
 });
 
-test("hosted variables require isolated production identity credentials", () => {
+test("hosted variables require isolated production identity credentials", async () => {
   const stagingApi = {
     DATABASE_URL:
       "postgres://fmarch_application:staging-application-password-32-bytes@staging-db/fmarch?sslmode=require",
+    FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    FMARCH_DATABASE_ENVIRONMENT: "staging",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
     FMARCH_EVENT_WRAP_KEY: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
@@ -344,6 +348,9 @@ test("hosted variables require isolated production identity credentials", () => 
   const productionApi = {
     DATABASE_URL:
       "postgres://fmarch_application:production-application-password-32-bytes@production-db/fmarch?sslmode=require",
+    FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: "c1378737-84cc-45ba-8474-9c868baf7cfb",
+    FMARCH_DATABASE_ENVIRONMENT: "production",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
     FMARCH_EVENT_WRAP_KEY: "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
@@ -409,6 +416,30 @@ test("hosted variables require isolated production identity credentials", () => 
     productionFrontend,
   };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  const config = runtimeConfig();
+  let current = ready;
+  const load = async (_config, environmentId, serviceId) => {
+    const environment = environmentId === config.stagingEnvironmentId ? "staging" : "production";
+    const process = serviceId === config.apiServiceId
+      ? "Api"
+      : serviceId === config.migratorServiceId
+        ? "Migrator"
+        : "Frontend";
+    return current[`${environment}${process}`];
+  };
+  await assert.doesNotReject(revalidateCanonicalHostedVariables(config, { load }));
+  current = {
+    ...ready,
+    productionApi: {
+      ...productionApi,
+      DATABASE_URL:
+        "postgres://fmarch_application:production-application-password-32-bytes@staging-db/fmarch?sslmode=require",
+    },
+  };
+  await assert.rejects(
+    revalidateCanonicalHostedVariables(config, { load }),
+    /application and migration URLs must target the same database/,
+  );
   assert.throws(
     () => validateHostedVariables({
       ...ready,
@@ -417,7 +448,7 @@ test("hosted variables require isolated production identity credentials", () => 
         FMARCH_DATABASE_ENVIRONMENT_ID: stagingMigrator.FMARCH_DATABASE_ENVIRONMENT_ID,
       },
     }),
-    /production database environment UUID drifted/,
+    /production migrator database environment UUID drifted/,
   );
   for (const frontend of ["stagingFrontend", "productionFrontend"]) {
     assert.throws(

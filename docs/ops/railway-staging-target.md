@@ -219,8 +219,10 @@ business integrity or plaintext confidentiality after API compromise.
    `FMARCH_DATABASE_IDENTITY_BIND_CONFIRM` to
    `<project-uuid>:<environment-uuid>:<environment-name>:<release-commit>`.
    This is the sole create-only bootstrap: remove the confirmation afterward.
-   Normal migrator/reset runs verify the immutable database-owner-only identity
-   and refuse an absent, swapped, relabeled, or additionally granted ledger.
+   Bootstrap binds both an immutable database-owner-only private ledger and a
+   matching database-global comment marker. Normal migrator/reset runs verify
+   both and refuse an absent, swapped, relabeled, or additionally granted
+   identity authority.
 3. Run the coordinator. Its migrator phase must create/reconcile the fixed
    `fmarch_application` and `fmarch_key_admin` login roles, apply migrations
    through the schema-owner connection, reconcile exact privileges/default
@@ -232,6 +234,13 @@ business integrity or plaintext confidentiality after API compromise.
    password held by the migrator; percent-encode the password when composing
    the URL and include exactly one secure `sslmode`. Do not copy the owner URL
    or either standalone password onto API.
+   Set the same canonical `FMARCH_DATABASE_PROJECT_ID`,
+   `FMARCH_DATABASE_ENVIRONMENT_ID`, and `FMARCH_DATABASE_ENVIRONMENT` values
+   on API. The pre-deploy schema gate and server read the owner-controlled
+   global marker through the application connection, while `/readyz` rechecks
+   and publishes the actual nonsecret identity. Release acceptance compares
+   that attestation to repository topology, so a coherent URL-and-variable swap
+   to the other environment still fails before promotion.
    Generate a distinct opaque `FMARCH_PROFILE_HANDLE_INDEX_KEY` of at least 32
    bytes and a public `FMARCH_PROFILE_HANDLE_INDEX_KID`; add both to this API
    service only. Release startup fails before readiness if either is missing or

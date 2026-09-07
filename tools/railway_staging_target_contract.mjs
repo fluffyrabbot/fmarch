@@ -41,6 +41,7 @@ async function contract() {
         "tools/production_promotion.mjs",
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
+        "tools/release_hosted_variable_authority.mjs",
         "tools/release_git_authority.mjs",
         "tools/workos_oidc_preflight.mjs",
         "package.json",
@@ -195,6 +196,18 @@ async function contract() {
   assert.match(
     source["deploy/railway/api.env.example"],
     /^DATABASE_URL=<required-postgresql-url-for-fmarch_application-with-sslmode=require>$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_DATABASE_PROJECT_ID=9d285d67-c11b-4508-9efb-fad042787b4c$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_DATABASE_ENVIRONMENT_ID=e109e500-2a4c-48a3-96f2-e92a9edb63e4$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_DATABASE_ENVIRONMENT=staging$/m,
   );
   for (const forbidden of [
     "DATABASE_MIGRATION_URL",
@@ -643,6 +656,16 @@ async function contract() {
   );
   assert.match(
     source["crates/api/src/lib.rs"],
+    /verify_database_environment_identity_marker/,
+  );
+  assert.match(source["crates/api/src/lib.rs"], /database_identity: database_identity\.ok/);
+  assert.match(source["crates/database_schema/src/authority.rs"], /COMMENT ON DATABASE/);
+  assert.match(
+    source["crates/database_schema/src/authority.rs"],
+    /shobj_description\(database\.oid, 'pg_database'\)/,
+  );
+  assert.match(
+    source["crates/api/src/lib.rs"],
     /state\.media_store\.check_readiness\(\)/,
   );
   assert.match(
@@ -655,21 +678,18 @@ async function contract() {
   );
   assert.match(source["crates/database_schema/src/schema.rs"], /pub static MIGRATOR/);
   assert.match(source["tools/production_promotion.mjs"], /\$\{urls\.apiUrl\}\/readyz/);
-  assert.match(
-    source["tools/production_promotion.mjs"],
-    /CANONICAL_RELEASE_TOPOLOGY\.services\.migrator/,
-  );
+  assert.match(source["tools/production_promotion.mjs"], /revalidateCanonicalHostedVariables/);
   assert.match(source["tools/production_promotion.mjs"], /cannot override the canonical release topology/);
   assert.match(source["tools/production_promotion.mjs"], /migratorDeployment/);
-  assert.match(source["tools/production_promotion.mjs"], /DATABASE_MIGRATION_URL/);
-  assert.match(source["tools/production_promotion.mjs"], /DATABASE_KEY_ADMIN_URL/);
-  assert.match(source["tools/production_promotion.mjs"], /fmarch_application/);
+  assert.match(source["tools/release_hosted_variable_authority.mjs"], /DATABASE_MIGRATION_URL/);
+  assert.match(source["tools/release_hosted_variable_authority.mjs"], /DATABASE_KEY_ADMIN_URL/);
+  assert.match(source["tools/release_hosted_variable_authority.mjs"], /fmarch_application/);
   assert.match(
-    source["tools/production_promotion.mjs"],
+    source["tools/release_hosted_variable_authority.mjs"],
     /separate PostgreSQL server endpoints because fixed database roles are cluster-global/,
   );
   assert.match(
-    source["tools/production_promotion.mjs"],
+    source["tools/release_hosted_variable_authority.mjs"],
     /sslmode must be require, verify-ca, or verify-full/,
   );
   assert.match(
@@ -686,11 +706,11 @@ async function contract() {
   );
   assert.match(source["tools/production_promotion.mjs"], /preflightWorkosOidc/);
   assert.match(
-    source["tools/production_promotion.mjs"],
+    source["tools/release_hosted_variable_authority.mjs"],
     /frontend must use the canonical private API URL/,
   );
   assert.match(
-    source["tools/production_promotion.mjs"],
+    source["tools/release_hosted_variable_authority.mjs"],
     /API and frontend must use the same WorkOS client/,
   );
   assert.match(
