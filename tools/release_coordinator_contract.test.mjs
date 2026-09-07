@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  RELEASE_EVIDENCE_MAX_AGE_MS,
   assertReleaseReceipt,
   assertFreshStagingReleaseReceipt,
   bindReleaseAttempt,
@@ -20,6 +21,8 @@ import {
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import { validateReusableProductionReceipt } from "./production_promotion.mjs";
 import {
+  PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS,
+  bindProductionMutationEvidence,
   canonicalDeploymentPolicy,
   publishFreshImage,
   recoverOneShotDeployment,
@@ -31,6 +34,7 @@ import {
   runtimeConfig,
   validateEpochResetAudit,
   validateRequestedSchemaEpoch,
+  withProductionMutationAuthority,
   waitForNewDeployment,
   waitForMigrationCompletion,
   waitForResetLogRows,
@@ -181,6 +185,204 @@ function redigestReleaseReceipt(receipt) {
   const { receipt_sha256: _digest, ...base } = structuredClone(receipt);
   return { ...base, receipt_sha256: receiptDigest(base) };
 }
+
+function stagingReleaseReceiptFixture() {
+  return buildReleaseReceipt({
+    environment: "staging",
+    commit,
+    runtimeDigest,
+    frontendDigest,
+    deployments: {
+      migrator: deployment("migrator", runtimeDigest),
+      api: deployment("api", runtimeDigest),
+      frontend: deployment("frontend", frontendDigest),
+    },
+    health: {
+      api: {
+        ok: true,
+        release_commit: commit,
+        database_schema: true,
+        event_encryption: true,
+        object_storage: true,
+        subject_authority: true,
+      },
+      frontend: { status: "ok", release_commit: commit },
+    },
+    schemaHead: "0002_profile_mute_durable_target.sql",
+    fleetProof,
+    attemptReceipt,
+    runtimeValidation,
+    hostedAcceptance: {
+      status: "passed",
+      generatedAt: "2026-09-07T12:45:00.000Z",
+      checkerCommit: commit,
+      target: {
+        commit,
+        api: "https://fmarch-staging.up.railway.app",
+        frontend: "https://fmarch-frontend-staging.up.railway.app",
+      },
+      authenticatedJourneys: {
+        status: "passed",
+        scope: "live-authenticated-staging",
+        commandAcknowledged: true,
+        socketReconnected: true,
+        missedUpdateRecovered: true,
+        durableFreshContext: true,
+        authenticatedPrivateDenial: true,
+      },
+    },
+    sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
+    generatedAt: new Date("2026-09-07T12:50:00.000Z"),
+  });
+}
+
+function productionMutationConfig(stagingReceipt) {
+  const productionLease = {
+    token: promotionLeaseCommit,
+    releaseCommit: commit,
+    expectedProductionCommit: "e".repeat(40),
+    fleetJobId,
+    fleetReceiptSha256: fleetProof.receipt_sha256,
+    stagingReceiptSha256: stagingReceipt.receipt_sha256,
+    schemaEpochReset: stagingReceipt.schema_epoch_reset?.epoch ?? null,
+  };
+  return {
+    environment: "production",
+    productionLease,
+    productionMutationEvidence: bindProductionMutationEvidence({
+      promotionLeaseCommit,
+      commit,
+      stagingReceiptPath: "/release-evidence/staging.json",
+      stagingReceipt,
+      fleetReceiptPath: "/release-evidence/fleet.json",
+      fleetPublicKeyPath: "/release-evidence/cachy.pem",
+      expectedFleetJob: fleetJobId,
+      fleetProof,
+      now: releaseNow,
+    }),
+  };
+}
+
+function verifyFleetEnvelope(receipt, options) {
+  return validateFleetProofReceipt(receipt, {
+    expectedCommit: options.commit,
+    expectedJobId: options.expectedJobId,
+    now: options.now,
+    maxAgeMilliseconds: options.maxAgeMilliseconds,
+    publicKeyPem: fleetPublicKeyPem,
+    expectedTrustRootSha256: fleetTrustRootSha256,
+    expectedWorkflow: fleetWorkflow,
+  });
+}
+
+test("production mutations revalidate fresh signed evidence and reserve the coordinator horizon", async () => {
+  const stagingReceipt = stagingReleaseReceiptFixture();
+  const config = productionMutationConfig(stagingReceipt);
+  let clock = new Date(
+    new Date(fleetCompletedAt).getTime() +
+      RELEASE_EVIDENCE_MAX_AGE_MS -
+      PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS -
+      1_000,
+  );
+  const events = [];
+  const verification = {
+    now: () => clock,
+    readStagingReceipt: async () => {
+      events.push("staging-receipt");
+      return structuredClone(stagingReceipt);
+    },
+    reloadFleetProof: async (options) => {
+      events.push("signed-fleet-proof");
+      return verifyFleetEnvelope(fleetReceipt, options);
+    },
+    assertLease: async () => events.push("remote-lease"),
+  };
+  await withProductionMutationAuthority(
+    config,
+    async () => events.push("migrator-mutation"),
+    verification,
+  );
+  assert.deepEqual(events, [
+    "staging-receipt",
+    "signed-fleet-proof",
+    "remote-lease",
+    "migrator-mutation",
+  ]);
+
+  clock = new Date(new Date(fleetCompletedAt).getTime() + RELEASE_EVIDENCE_MAX_AGE_MS + 1);
+  let apiMutations = 0;
+  await assert.rejects(
+    withProductionMutationAuthority(
+      config,
+      async () => { apiMutations += 1; },
+      verification,
+    ),
+    /staging fleet proof completion time is older than the release freshness window/,
+  );
+  assert.equal(apiMutations, 0, "expired evidence must block API mutation");
+
+  const nearExpiryConfig = productionMutationConfig(stagingReceipt);
+  clock = new Date(
+    new Date(fleetCompletedAt).getTime() +
+      RELEASE_EVIDENCE_MAX_AGE_MS -
+      PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS +
+      1,
+  );
+  let firstMutations = 0;
+  await assert.rejects(
+    withProductionMutationAuthority(
+      nearExpiryConfig,
+      async () => { firstMutations += 1; },
+      verification,
+    ),
+    /older than the release freshness window/,
+  );
+  assert.equal(firstMutations, 0, "near-expiry evidence must not begin production mutation");
+});
+
+test("production mutations reject replaced staging and fleet evidence between writes", async () => {
+  const stagingReceipt = stagingReleaseReceiptFixture();
+  let currentStagingReceipt = stagingReceipt;
+  let currentFleetReceipt = fleetReceipt;
+  const verification = {
+    now: () => releaseNow,
+    readStagingReceipt: async () => structuredClone(currentStagingReceipt),
+    reloadFleetProof: async (options) => verifyFleetEnvelope(currentFleetReceipt, options),
+    assertLease: async () => {},
+  };
+
+  const stagingReplacementConfig = productionMutationConfig(stagingReceipt);
+  await withProductionMutationAuthority(stagingReplacementConfig, async () => {}, verification);
+  currentStagingReceipt = redigestReleaseReceipt({
+    ...stagingReceipt,
+    generated_at: "2026-09-07T12:51:00.000Z",
+  });
+  let stagingReplacementMutations = 0;
+  await assert.rejects(
+    withProductionMutationAuthority(
+      stagingReplacementConfig,
+      async () => { stagingReplacementMutations += 1; },
+      verification,
+    ),
+    /production mutation staging receipt changed/,
+  );
+  assert.equal(stagingReplacementMutations, 0);
+
+  currentStagingReceipt = stagingReceipt;
+  const fleetReplacementConfig = productionMutationConfig(stagingReceipt);
+  await withProductionMutationAuthority(fleetReplacementConfig, async () => {}, verification);
+  currentFleetReceipt = signedFleetReceipt({ completedAt: "2026-09-07T12:31:00.000Z" });
+  let fleetReplacementMutations = 0;
+  await assert.rejects(
+    withProductionMutationAuthority(
+      fleetReplacementConfig,
+      async () => { fleetReplacementMutations += 1; },
+      verification,
+    ),
+    /signed fleet proof changed from staging/,
+  );
+  assert.equal(fleetReplacementMutations, 0);
+});
 
 test("repository validation rejects dirty, stale, or unpointed releases", () => {
   const valid = {

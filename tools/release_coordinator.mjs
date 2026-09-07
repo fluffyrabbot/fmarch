@@ -14,6 +14,8 @@ import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import {
   TERMINAL_DEPLOYMENT_STATES,
   CANONICAL_RELEASE_TOPOLOGY,
+  RELEASE_CLOCK_SKEW_MS,
+  RELEASE_EVIDENCE_MAX_AGE_MS,
   assertFullCommit,
   assertImageDigest,
   assertRuntimeValidationAttestation,
@@ -45,6 +47,8 @@ const SUBPROCESS_TIMEOUT_MS = Object.freeze({
   podman: 45 * 60 * 1_000,
   node: 5 * 60 * 1_000,
 });
+export const PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS = 60 * 60 * 1_000 + RELEASE_CLOCK_SKEW_MS;
+const productionMutationsStarted = new WeakSet();
 
 export function parseArguments(argv) {
   const result = { environment: "staging", check: false };
@@ -455,10 +459,155 @@ function railwayApi(query, variables) {
   return response.data;
 }
 
-function assertProductionMutationAuthority(config) {
-  if (config.environment !== "production") return;
+export function bindProductionMutationEvidence({
+  promotionLeaseCommit,
+  commit,
+  stagingReceiptPath,
+  stagingReceipt,
+  fleetReceiptPath,
+  fleetPublicKeyPath,
+  expectedFleetJob,
+  fleetProof,
+  now = new Date(),
+}) {
+  assertFullCommit(promotionLeaseCommit, "production promotion lock token");
+  assertFullCommit(commit);
+  assert.ok(stagingReceiptPath, "production mutation authority requires a staging receipt path");
+  assert.ok(fleetReceiptPath, "production mutation authority requires a fleet receipt path");
+  assert.ok(fleetPublicKeyPath, "production mutation authority requires a fleet public key path");
+  const receipt = assertFreshStagingReleaseReceipt(stagingReceipt, { now });
+  assert.equal(receipt.commit, commit, "production mutation staging commit drifted");
+  assert.deepEqual(
+    receipt.fleet_proof,
+    fleetProof,
+    "production mutation fleet proof drifted from staging",
+  );
+  assert.equal(fleetProof.job_id, expectedFleetJob, "production mutation fleet job drifted");
+  const base = {
+    version: 1,
+    kind: "fmarch-production-mutation-evidence",
+    promotion_lease_commit: promotionLeaseCommit,
+    commit,
+    staging_receipt_path: path.resolve(stagingReceiptPath),
+    staging_receipt_sha256: receipt.receipt_sha256,
+    staging_generated_at: receipt.generated_at,
+    staging_attempt_created_at: receipt.attempt.created_at,
+    staging_fleet_completed_at: receipt.fleet_proof.completed_at,
+    staging_hosted_acceptance_generated_at: receipt.hosted_acceptance.generatedAt,
+    staging_topology: structuredClone(receipt.topology),
+    staging_images: structuredClone(receipt.images),
+    schema_epoch_reset: receipt.schema_epoch_reset?.epoch ?? null,
+    fleet_receipt_path: path.resolve(fleetReceiptPath),
+    fleet_public_key_path: path.resolve(fleetPublicKeyPath),
+    fleet_job_id: fleetProof.job_id,
+    fleet_receipt_sha256: fleetProof.receipt_sha256,
+    fleet_completed_at: fleetProof.completed_at,
+    fleet_trust_root_sha256: fleetProof.trust_root_sha256,
+  };
+  return { ...base, authority_sha256: receiptDigest(base) };
+}
+
+export async function assertProductionMutationAuthority(
+  config,
+  {
+    readStagingReceipt = async (receiptPath) =>
+      JSON.parse(await readFile(receiptPath, "utf8")),
+    reloadFleetProof = loadFleetReleaseProof,
+    assertLease = assertProductionPromotionLease,
+    now = () => new Date(),
+    minimumFreshnessReserveMilliseconds = 0,
+  } = {},
+) {
+  if (config.environment !== "production") return true;
   assert.ok(config.productionLease, "production Railway mutation requires a promotion lease");
-  assertProductionPromotionLease(config.productionLease);
+  const authority = config.productionMutationEvidence;
+  assert.equal(
+    authority?.kind,
+    "fmarch-production-mutation-evidence",
+    "production Railway mutation requires fresh evidence authority",
+  );
+  const { authority_sha256: authoritySha256, ...authorityBase } = authority;
+  assert.equal(
+    authoritySha256,
+    receiptDigest(authorityBase),
+    "production mutation evidence authority was tampered with",
+  );
+  assert.ok(
+    Number.isSafeInteger(minimumFreshnessReserveMilliseconds) &&
+      minimumFreshnessReserveMilliseconds >= 0 &&
+      minimumFreshnessReserveMilliseconds < RELEASE_EVIDENCE_MAX_AGE_MS,
+    "production mutation freshness reserve is invalid",
+  );
+  const referenceTime = typeof now === "function" ? now() : now;
+  const maxAgeMilliseconds =
+    RELEASE_EVIDENCE_MAX_AGE_MS - minimumFreshnessReserveMilliseconds;
+  const receipt = assertFreshStagingReleaseReceipt(
+    await readStagingReceipt(authority.staging_receipt_path),
+    { now: referenceTime, maxAgeMilliseconds },
+  );
+  assert.equal(receipt.commit, authority.commit, "production mutation staging commit changed");
+  assert.equal(
+    receipt.receipt_sha256,
+    authority.staging_receipt_sha256,
+    "production mutation staging receipt changed",
+  );
+  assert.equal(receipt.generated_at, authority.staging_generated_at);
+  assert.equal(receipt.attempt.created_at, authority.staging_attempt_created_at);
+  assert.equal(receipt.fleet_proof.completed_at, authority.staging_fleet_completed_at);
+  assert.equal(
+    receipt.hosted_acceptance.generatedAt,
+    authority.staging_hosted_acceptance_generated_at,
+  );
+  assert.deepEqual(receipt.topology, authority.staging_topology);
+  assert.deepEqual(receipt.images, authority.staging_images);
+  assert.equal(receipt.schema_epoch_reset?.epoch ?? null, authority.schema_epoch_reset);
+
+  const currentFleetProof = await reloadFleetProof({
+    repoRoot,
+    commit: authority.commit,
+    receiptPath: authority.fleet_receipt_path,
+    publicKeyPath: authority.fleet_public_key_path,
+    expectedJobId: authority.fleet_job_id,
+    now: referenceTime,
+    maxAgeMilliseconds,
+  });
+  assert.deepEqual(
+    currentFleetProof,
+    receipt.fleet_proof,
+    "production mutation signed fleet proof changed from staging",
+  );
+  assert.equal(currentFleetProof.receipt_sha256, authority.fleet_receipt_sha256);
+  assert.equal(currentFleetProof.completed_at, authority.fleet_completed_at);
+  assert.equal(currentFleetProof.trust_root_sha256, authority.fleet_trust_root_sha256);
+
+  assert.equal(config.productionLease.token, authority.promotion_lease_commit);
+  assert.equal(config.productionLease.releaseCommit, authority.commit);
+  assert.equal(config.productionLease.fleetJobId, authority.fleet_job_id);
+  assert.equal(config.productionLease.fleetReceiptSha256, authority.fleet_receipt_sha256);
+  assert.equal(config.productionLease.stagingReceiptSha256, authority.staging_receipt_sha256);
+  assert.equal(config.productionLease.schemaEpochReset, authority.schema_epoch_reset);
+  await assertLease(config.productionLease);
+  return true;
+}
+
+export async function withProductionMutationAuthority(
+  config,
+  mutation,
+  verification = {},
+) {
+  assert.equal(typeof mutation, "function", "production mutation must be callable");
+  const production = config.environment === "production";
+  const minimumFreshnessReserveMilliseconds =
+    production && !productionMutationsStarted.has(config)
+      ? PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS
+      : 0;
+  await assertProductionMutationAuthority(config, {
+    ...verification,
+    minimumFreshnessReserveMilliseconds,
+  });
+  const result = await mutation();
+  if (production) productionMutationsStarted.add(config);
+  return result;
 }
 
 function latestDeployment(config, serviceId) {
@@ -485,8 +634,9 @@ async function detachGitSource(config, serviceId, imageReference) {
   let service = railwayService(config, serviceId);
   let action = serviceSourceCutoverAction(service.source, imageReference);
   if (action === "disconnect") {
-    assertProductionMutationAuthority(config);
-    railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]);
+    await withProductionMutationAuthority(config, () =>
+      railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]),
+    );
     service = railwayService(config, serviceId);
     assert.equal(service.source, null, `Railway service ${serviceId} retained its Git source`);
     action = "connect";
@@ -510,42 +660,46 @@ async function deployConfiguredImage(
   const imageReference = `${image}@${digest}`;
   await detachGitSource(config, serviceId, imageReference);
   if (variables && Object.keys(variables).length > 0) {
-    assertProductionMutationAuthority(config);
-    const variablesData = railwayApi(
-      "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
-      {
-        input: {
-          projectId: config.projectId,
-          environmentId: config.environmentId,
-          serviceId,
-          variables,
-          replace: false,
-          skipDeploys: true,
+    const variablesData = await withProductionMutationAuthority(config, () =>
+      railwayApi(
+        "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
+        {
+          input: {
+            projectId: config.projectId,
+            environmentId: config.environmentId,
+            serviceId,
+            variables,
+            replace: false,
+            skipDeploys: true,
+          },
         },
-      },
+      ),
     );
     assert.equal(variablesData.variableCollectionUpsert, true, `${label} variables were not updated`);
   }
   const previousId = latestDeployment(config, serviceId)?.id ?? null;
-  assertProductionMutationAuthority(config);
-  const updateData = railwayApi(
-    "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
-    {
-      serviceId,
-      environmentId: config.environmentId,
-      input: {
-        source: { image: imageReference },
-        startCommand,
-        railwayConfigFile: null,
-        ...deploymentPolicy,
+  const updateData = await withProductionMutationAuthority(config, () =>
+    railwayApi(
+      "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+      {
+        serviceId,
+        environmentId: config.environmentId,
+        input: {
+          source: { image: imageReference },
+          startCommand,
+          railwayConfigFile: null,
+          ...deploymentPolicy,
+        },
       },
-    },
+    ),
   );
   assert.equal(updateData.serviceInstanceUpdate, true, `${label} service configuration was not updated`);
-  assertProductionMutationAuthority(config);
-  const deployData = railwayApi(
-    "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
-    { serviceId, environmentId: config.environmentId },
+  const deployData = await withProductionMutationAuthority(
+    config,
+    () => railwayApi(
+      "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
+      { serviceId, environmentId: config.environmentId },
+    ),
   );
   assert.equal(deployData.serviceInstanceDeploy, true, `${label} deployment was not started`);
   return await waitForNewDeployment(config, serviceId, previousId, digest, label, {
@@ -1329,14 +1483,16 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const expectedFleetJob = args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID;
   assert.ok(expectedFleetJob, "release requires --fleet-job or FMARCH_FLEET_JOB_ID");
+  const fleetReceiptPath = args.fleetReceipt ?? process.env.FMARCH_FLEET_RECEIPT;
+  const fleetPublicKeyPath =
+    args.fleetPublicKey ??
+    process.env.FMARCH_FLEET_PUBLIC_KEY ??
+    defaultFleetPublicKeyPath();
   const fleetProof = await loadFleetReleaseProof({
     repoRoot,
     commit,
-    receiptPath: args.fleetReceipt ?? process.env.FMARCH_FLEET_RECEIPT,
-    publicKeyPath:
-      args.fleetPublicKey ??
-      process.env.FMARCH_FLEET_PUBLIC_KEY ??
-      defaultFleetPublicKeyPath(),
+    receiptPath: fleetReceiptPath,
+    publicKeyPath: fleetPublicKeyPath,
     expectedJobId: expectedFleetJob,
   });
   let releaseReadiness = null;
@@ -1378,6 +1534,16 @@ export async function main(argv = process.argv.slice(2)) {
       stagingReceiptSha256: reusableStagingReceipt.receipt_sha256,
       schemaEpochReset: args.schemaEpochReset ?? null,
     };
+    config.productionMutationEvidence = bindProductionMutationEvidence({
+      promotionLeaseCommit,
+      commit,
+      stagingReceiptPath: args.reuseStagingReceipt,
+      stagingReceipt: reusableStagingReceipt,
+      fleetReceiptPath,
+      fleetPublicKeyPath,
+      expectedFleetJob,
+      fleetProof,
+    });
     assertProductionPromotionLease(config.productionLease);
   } else {
     await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
@@ -1459,11 +1625,10 @@ export async function main(argv = process.argv.slice(2)) {
     schemaEpochReset,
     topology: config.topology,
   });
-  if (args.environment === "production") assertProductionMutationAuthority(config);
   const output = path.resolve(
     args.output ?? path.join(repoRoot, "target", "releases", args.environment, `${commit}.json`),
   );
-  await publishImmutableJson(output, receipt);
+  await withProductionMutationAuthority(config, () => publishImmutableJson(output, receipt));
   console.log(JSON.stringify({ status: "passed", environment: args.environment, commit, runtimeDigest, frontendDigest, receipt: output }, null, 2));
 }
 

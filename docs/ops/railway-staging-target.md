@@ -82,7 +82,13 @@ URL, and complete Railway topology. The promoter passes that exact lease
 commit to the production coordinator. Direct production coordination without
 it is forbidden, and the coordinator re-fetches and proves the lease before
 each production-side Railway mutation and once more before publishing its
-immutable receipt. `FAILED` or `CRASHED` one-shot reset/migrator deployments
+immutable receipt. That same boundary re-reads the exact staging receipt and
+signed fleet envelope from their bound paths, verifies their digests, commit,
+topology, images, reset decision, trust root, and all freshness clocks, and only
+then checks the remote lease as the last pre-mutation step. The first production
+mutation additionally requires a 65-minute freshness reserve (the promoter's
+one-hour coordinator deadline plus clock-skew allowance); later mutations still
+require strictly live evidence. `FAILED` or `CRASHED` one-shot reset/migrator deployments
 may be re-dispatched with the same digest; approval and other ambiguous
 terminal states remain operator-visible and fail closed. All release Git,
 Railway, and Podman subprocesses have bounded timeouts; a timeout unwinds the

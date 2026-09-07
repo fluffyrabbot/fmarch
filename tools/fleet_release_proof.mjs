@@ -38,6 +38,8 @@ export async function loadFleetReleaseProof({
   receiptPath,
   publicKeyPath = defaultFleetPublicKeyPath(),
   expectedJobId,
+  now = new Date(),
+  maxAgeMilliseconds,
 }) {
   assert.ok(receiptPath, "release requires --fleet-receipt or FMARCH_FLEET_RECEIPT");
   assert.ok(expectedJobId, "release requires --fleet-job or FMARCH_FLEET_JOB_ID");
@@ -61,5 +63,7 @@ export async function loadFleetReleaseProof({
       authority.verificationMode,
       authority.platform,
     ),
+    now,
+    ...(maxAgeMilliseconds === undefined ? {} : { maxAgeMilliseconds }),
   });
 }
