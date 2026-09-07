@@ -340,6 +340,7 @@ pub struct PreparedMediaUpload {
     pub(crate) handle: MediaHandle,
     pub(crate) canonical_bytes: Vec<u8>,
     pub(crate) variants: PreparedVariantSet,
+    stored_footprint_bytes: u64,
 }
 
 impl fmt::Debug for PreparedMediaUpload {
@@ -348,6 +349,7 @@ impl fmt::Debug for PreparedMediaUpload {
             .debug_struct("PreparedMediaUpload")
             .field("handle", &self.handle)
             .field("variant_set", &self.variants.set)
+            .field("stored_footprint_bytes", &self.stored_footprint_bytes)
             .finish_non_exhaustive()
     }
 }
@@ -359,6 +361,13 @@ impl PreparedMediaUpload {
 
     pub fn variant_set(&self) -> &VariantSet {
         &self.variants.set
+    }
+
+    /// Exact deterministic bytes installed for this content identity: the canonical raster,
+    /// every fixed-recipe member, and the completeness manifest. This deliberately excludes the
+    /// caller's transport encoding so equivalent source encodings receive the same storage charge.
+    pub fn stored_footprint_bytes(&self) -> u64 {
+        self.stored_footprint_bytes
     }
 }
 
@@ -452,6 +461,7 @@ impl MediaStore {
             handle,
             canonical_bytes,
             variants,
+            stored_footprint_bytes: _,
         } = prepared;
         let ingest_status = self.persist(&handle, &canonical_bytes)?;
         let ingest = IngestResult {
@@ -521,6 +531,67 @@ impl MediaStore {
         let verified =
             self.lookup_variant_snapshot_with_hook(id, limits, Some((format, kind)), |_| Ok(()))?;
         Ok(verified.and_then(|snapshot| snapshot.requested))
+    }
+
+    /// Inspect and validate only the installed-last manifest. Member payloads and the canonical
+    /// raster are deliberately not decoded; a reconciler can use this as a cheap completion probe.
+    pub(crate) fn probe_installed_manifest(
+        &self,
+        id: ContentId,
+        limits: VariantLimits,
+    ) -> Result<Option<VariantSet>, MediaError> {
+        limits.validate()?;
+        let Some(snapshot) = self.open_variant_snapshot(id)? else {
+            return Ok(None);
+        };
+        validate_manifest_policy(self.limits, id, &snapshot.set, limits)?;
+        self.verify_variant_snapshot_attached(id, &snapshot)?;
+        Ok(Some(snapshot.set))
+    }
+
+    /// Delete only fixed-layout objects from an installation that has no completeness manifest.
+    /// The caller must hold the repository's exclusive installation/recovery lease for `id`.
+    pub(crate) fn reclaim_incomplete_upload(&self, id: ContentId) -> Result<(), MediaError> {
+        let Some(id_directory) = self.open_id_directory(id, false)? else {
+            return Ok(());
+        };
+        if let Some(recipe_directory) = self.open_recipe_directory(id, &id_directory, false)? {
+            self.ensure_manifest_absent(id, &recipe_directory)?;
+            for format in VariantFormat::ALL {
+                let Some(format_directory) =
+                    self.open_format_directory(id, &recipe_directory, format, false)?
+                else {
+                    continue;
+                };
+                for kind in VariantKind::ALL {
+                    self.ensure_manifest_absent(id, &recipe_directory)?;
+                    let path = self
+                        .recipe_path(id)
+                        .join(format.component())
+                        .join(kind.component());
+                    if let Some(file) =
+                        open_regular_file(&format_directory, kind.component(), &path)?
+                    {
+                        verify_attached_entry(&format_directory, kind.component(), &file, &path)?;
+                        format_directory.remove_file(kind.component())?;
+                        sync_dir(&format_directory)?;
+                    }
+                }
+                self.verify_format_attached(id, &recipe_directory, format, &format_directory)?;
+            }
+            self.ensure_manifest_absent(id, &recipe_directory)?;
+            self.verify_recipe_attached(id, &id_directory, &recipe_directory)?;
+        }
+
+        let original_path = self.id_path(id).join("orig");
+        if let Some(file) = open_regular_file(&id_directory, "orig", &original_path)? {
+            verify_attached_entry(&id_directory, "orig", &file, &original_path)?;
+            id_directory.remove_file("orig")?;
+            sync_dir(&id_directory)?;
+        }
+        self.verify_id_attached(id, &id_directory)?;
+        self.verify_store_attached()?;
+        Ok(())
     }
 
     fn lookup_variant_snapshot_with_hook<F>(
@@ -821,6 +892,18 @@ impl MediaStore {
         self.verify_recipe_attached(id, &id_directory, &recipe_directory)
     }
 
+    fn ensure_manifest_absent(
+        &self,
+        id: ContentId,
+        recipe_directory: &Dir,
+    ) -> Result<(), MediaError> {
+        let path = self.recipe_path(id).join(MANIFEST_NAME);
+        if open_regular_file(recipe_directory, MANIFEST_NAME, &path)?.is_some() {
+            return Err(MediaError::InstalledMediaCannotBeReclaimed { id });
+        }
+        Ok(())
+    }
+
     fn recipe_path(&self, id: ContentId) -> PathBuf {
         self.id_path(id).join(VARIANT_RECIPE_REVISION)
     }
@@ -908,11 +991,43 @@ pub(crate) fn prepare_upload(
         &canonical_bytes[CANONICAL_HEADER_BYTES..],
         variant_limits,
     )?;
+    let mut stored_footprint_bytes = 0_u64;
+    stored_footprint_bytes = checked_add_stored_footprint_bytes(
+        id,
+        stored_footprint_bytes,
+        u64::try_from(canonical_bytes.len())
+            .map_err(|_| MediaError::StoredFootprintOverflow { id })?,
+    )?;
+    for member in &variants.members {
+        stored_footprint_bytes = checked_add_stored_footprint_bytes(
+            id,
+            stored_footprint_bytes,
+            u64::try_from(member.encoded_bytes.len())
+                .map_err(|_| MediaError::StoredFootprintOverflow { id })?,
+        )?;
+    }
+    stored_footprint_bytes = checked_add_stored_footprint_bytes(
+        id,
+        stored_footprint_bytes,
+        u64::try_from(variants.manifest.len())
+            .map_err(|_| MediaError::StoredFootprintOverflow { id })?,
+    )?;
     Ok(PreparedMediaUpload {
         handle,
         canonical_bytes,
         variants,
+        stored_footprint_bytes,
     })
+}
+
+fn checked_add_stored_footprint_bytes(
+    id: ContentId,
+    total: u64,
+    length: u64,
+) -> Result<u64, MediaError> {
+    total
+        .checked_add(length)
+        .ok_or(MediaError::StoredFootprintOverflow { id })
 }
 
 fn prepare_variant_set(
@@ -1022,6 +1137,68 @@ pub(crate) fn check_variant_dimensions(
         });
     }
     Ok(())
+}
+
+pub(crate) fn validate_manifest_policy(
+    media_limits: MediaLimits,
+    id: ContentId,
+    set: &VariantSet,
+    limits: VariantLimits,
+) -> Result<(), MediaError> {
+    limits.validate()?;
+    check_dimensions(media_limits, set.source_width, set.source_height).map_err(|error| {
+        corrupt_set(
+            id,
+            &format!("manifest source dimensions violate policy: {error}"),
+        )
+    })?;
+    let mut aggregate = 0_u64;
+    for record in &set.variants {
+        let expected = fitted_dimensions(
+            set.source_width,
+            set.source_height,
+            record.key.kind().maximum_dimensions(),
+        )?;
+        if (record.width, record.height) != expected {
+            return Err(corrupt_set(
+                id,
+                &format!("{} dimensions do not match the fixed policy", record.key),
+            ));
+        }
+        check_variant_dimensions(record.key, record.width, record.height, limits)?;
+        if record.encoded_len == 0 {
+            return Err(corrupt_set(id, &format!("{} is empty", record.key)));
+        }
+        if record.encoded_len > limits.max_member_encoded_bytes() as u64 {
+            return Err(MediaError::VariantEncodedBytesExceeded {
+                key: record.key,
+                max: limits.max_member_encoded_bytes(),
+            });
+        }
+        aggregate = aggregate
+            .checked_add(record.encoded_len)
+            .ok_or_else(|| corrupt_set(id, "variant aggregate encoded length overflow"))?;
+        if aggregate > limits.max_total_encoded_bytes() {
+            return Err(MediaError::VariantAggregateBytesExceeded {
+                id,
+                max: limits.max_total_encoded_bytes(),
+            });
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn fixed_variant_keys(id: ContentId) -> Vec<VariantKey> {
+    VariantFormat::ALL
+        .into_iter()
+        .flat_map(|format| {
+            VariantKind::ALL.into_iter().map(move |kind| VariantKey {
+                source: id,
+                format,
+                kind,
+            })
+        })
+        .collect()
 }
 
 fn resize_premultiplied(
@@ -1493,6 +1670,21 @@ mod tests {
             let mut encoder = png::Encoder::new(&mut encoded, width, height);
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(pixels).unwrap();
+        }
+        encoded
+    }
+
+    fn png_rgba_with_comment(width: u32, height: u32, pixels: &[u8], comment: &str) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut encoded, width, height);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .add_text_chunk("Comment".to_owned(), comment.to_owned())
+                .unwrap();
             let mut writer = encoder.write_header().unwrap();
             writer.write_image_data(pixels).unwrap();
         }
@@ -2126,6 +2318,58 @@ mod tests {
             MediaError::VariantEncodedBytesExceeded { .. }
         ));
         assert_eq!(fs::read_dir(store.root.join("blobs")).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn prepared_upload_footprint_is_exact_and_independent_of_transport_encoding() {
+        let pixels: Vec<u8> = (0..9_u8)
+            .flat_map(|value| [value, value.wrapping_mul(7), 255 - value, 255])
+            .collect();
+        let plain = png_rgba(3, 3, &pixels);
+        let commented = png_rgba_with_comment(3, 3, &pixels, "transport metadata is discarded");
+        assert_ne!(plain.len(), commented.len());
+
+        let first =
+            prepare_upload(&plain, MediaLimits::default(), VariantLimits::default()).unwrap();
+        let second =
+            prepare_upload(&commented, MediaLimits::default(), VariantLimits::default()).unwrap();
+        let expected = first.canonical_bytes.len() as u64
+            + first
+                .variants
+                .members
+                .iter()
+                .map(|member| member.encoded_bytes.len() as u64)
+                .sum::<u64>()
+            + first.variants.manifest.len() as u64;
+
+        assert_eq!(first.handle(), second.handle());
+        assert_eq!(first.stored_footprint_bytes(), expected);
+        assert_eq!(
+            first.stored_footprint_bytes(),
+            second.stored_footprint_bytes()
+        );
+    }
+
+    #[test]
+    fn prepared_upload_footprint_fails_closed_on_overflow() {
+        let id = ContentId::from_bytes([7; CONTENT_ID_BYTES]);
+        assert!(matches!(
+            checked_add_stored_footprint_bytes(id, u64::MAX, 1),
+            Err(MediaError::StoredFootprintOverflow { id: actual }) if actual == id
+        ));
+    }
+
+    #[test]
+    fn maximum_stored_footprint_covers_canonical_variants_and_manifest() {
+        let media = MediaLimits::default();
+        let variants = VariantLimits::default();
+        assert_eq!(
+            media.maximum_stored_footprint_bytes(variants).unwrap(),
+            media.max_decoded_bytes()
+                + CANONICAL_HEADER_BYTES as u64
+                + variants.max_total_encoded_bytes()
+                + MANIFEST_MAX_BYTES
+        );
     }
 
     #[test]

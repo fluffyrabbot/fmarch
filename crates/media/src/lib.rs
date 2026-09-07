@@ -28,7 +28,7 @@ use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 mod repository;
 mod variants;
 
-pub use repository::{MediaReadLimits, MediaRepository, S3MediaConfig};
+pub use repository::{GuardedPreparedMediaUpload, MediaReadLimits, MediaRepository, S3MediaConfig};
 pub use variants::{
     MediaUploadCommitResult, PreparedMediaUpload, StoredVariant, VariantFormat,
     VariantGenerationResult, VariantGenerationStatus, VariantKey, VariantKind, VariantLimits,
@@ -100,6 +100,24 @@ impl MediaLimits {
 
     pub fn max_decoded_bytes(self) -> u64 {
         self.max_decoded_bytes
+    }
+
+    /// Conservative upper bound for the complete retained object set produced under these
+    /// policies: canonical RGBA8 bytes including its header, all variant members, and the maximum
+    /// manifest. Composition roots use this to ensure account quota can hold at least one asset.
+    pub fn maximum_stored_footprint_bytes(
+        self,
+        variant_limits: VariantLimits,
+    ) -> Result<u64, MediaError> {
+        self.validate()?;
+        variant_limits.validate()?;
+        self.max_decoded_bytes
+            .checked_add(CANONICAL_HEADER_BYTES as u64)
+            .and_then(|total| total.checked_add(variant_limits.max_total_encoded_bytes()))
+            .and_then(|total| total.checked_add(variants::MANIFEST_MAX_BYTES))
+            .ok_or(MediaError::InvalidLimits(
+                "maximum stored footprint overflows byte accounting",
+            ))
     }
 
     fn validate(self) -> Result<(), MediaError> {
@@ -324,6 +342,10 @@ pub enum MediaError {
     VariantEncodedBytesExceeded { key: VariantKey, max: usize },
     #[error("variant set for {id} exceeded its aggregate encoded-byte limit of {max} bytes")]
     VariantAggregateBytesExceeded { id: ContentId, max: u64 },
+    #[error("prepared media {id} stored-footprint byte count overflowed")]
+    StoredFootprintOverflow { id: ContentId },
+    #[error("installed media {id} has a manifest and cannot be reclaimed as incomplete")]
+    InstalledMediaCannotBeReclaimed { id: ContentId },
     #[error("variant encoding failed for {key}: {reason}")]
     VariantEncoding { key: VariantKey, reason: String },
     #[error("variant set for {id} is corrupt: {reason}")]

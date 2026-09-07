@@ -10,7 +10,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use url::Url;
 
 use super::variants::{
-    check_variant_dimensions, corrupt_set, fitted_dimensions, parse_manifest, prepare_upload,
+    corrupt_set, fixed_variant_keys, parse_manifest, prepare_upload, validate_manifest_policy,
     verify_member_bytes, MANIFEST_MAX_BYTES, MANIFEST_NAME,
 };
 use super::*;
@@ -49,8 +49,11 @@ enum RepositoryBackend {
     Object(Arc<dyn ObjectStore>),
 }
 
-/// Process-local admission for private object reads. Request slots bound remote operation fan-out,
-/// while byte permits bound payloads concurrently materialized for integrity verification.
+/// Process-local admission for private repository reads. Request slots bound operation fan-out,
+/// while byte permits bound object-fetch payloads and leased response bodies. The local test
+/// adapter applies the same admission contract, but its `MediaStore` can additionally retain a
+/// canonical backing allocation governed by [`MediaLimits`]; this is not a total-process memory
+/// budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MediaReadLimits {
     max_in_flight: usize,
@@ -83,6 +86,31 @@ impl MediaReadLimits {
 
     pub fn max_in_flight_bytes(self) -> usize {
         self.max_in_flight_bytes
+    }
+
+    /// Minimum capacity for one manifest plus one maximum-sized fetched/response member. Both
+    /// adapters use this admission invariant; it does not include the local test store's canonical
+    /// backing allocation.
+    pub fn required_in_flight_bytes(variant_limits: VariantLimits) -> Result<usize, MediaError> {
+        variant_limits.validate()?;
+        let manifest_bytes = usize::try_from(MANIFEST_MAX_BYTES).map_err(|_| {
+            MediaError::InvalidReadLimits("manifest size does not fit process byte capacity")
+        })?;
+        manifest_bytes
+            .checked_add(variant_limits.max_member_encoded_bytes())
+            .ok_or(MediaError::InvalidReadLimits(
+                "manifest and member read capacity overflowed",
+            ))
+    }
+
+    pub fn validate_for_variants(self, variant_limits: VariantLimits) -> Result<(), MediaError> {
+        let required = Self::required_in_flight_bytes(variant_limits)?;
+        if self.max_in_flight_bytes < required {
+            return Err(MediaError::InvalidReadLimits(
+                "max_in_flight_bytes must hold one manifest and one maximum-sized member",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -135,6 +163,68 @@ impl MediaReadAdmission {
             .clone()
             .try_acquire_many_owned(bytes)
             .map_err(|_| MediaError::ReadCapacityExhausted { resource: "byte" })
+    }
+}
+
+struct LeasedBytesOwner {
+    bytes: Bytes,
+    _request_permit: OwnedSemaphorePermit,
+    _byte_permit: OwnedSemaphorePermit,
+}
+
+impl AsRef<[u8]> for LeasedBytesOwner {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes.as_ref()
+    }
+}
+
+fn lease_stored_variant(
+    stored: StoredVariant,
+    request_permit: OwnedSemaphorePermit,
+    byte_permit: OwnedSemaphorePermit,
+) -> StoredVariant {
+    let (record, bytes) = stored.into_parts();
+    StoredVariant {
+        record,
+        encoded_bytes: Bytes::from_owner(LeasedBytesOwner {
+            bytes,
+            _request_permit: request_permit,
+            _byte_permit: byte_permit,
+        }),
+    }
+}
+
+/// A prepared upload that still owns the caller's admission guard.
+///
+/// The guard is intentionally opaque and cannot be separated from the prepared buffers. Passing
+/// this value to [`MediaRepository::commit_guarded_prepared_upload`] keeps the same capacity lease
+/// alive across local blocking persistence or every awaited object-store write.
+pub struct GuardedPreparedMediaUpload<G> {
+    prepared: PreparedMediaUpload,
+    guard: G,
+}
+
+impl<G> fmt::Debug for GuardedPreparedMediaUpload<G> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GuardedPreparedMediaUpload")
+            .field("prepared", &self.prepared)
+            .field("guard", &"<owned>")
+            .finish()
+    }
+}
+
+impl<G> GuardedPreparedMediaUpload<G> {
+    pub fn handle(&self) -> MediaHandle {
+        self.prepared.handle()
+    }
+
+    pub fn variant_set(&self) -> &VariantSet {
+        self.prepared.variant_set()
+    }
+
+    pub fn stored_footprint_bytes(&self) -> u64 {
+        self.prepared.stored_footprint_bytes()
     }
 }
 
@@ -276,7 +366,7 @@ impl MediaRepository {
         let prepared = self
             .prepare_upload_with_guard(encoded, variant_limits, cpu_guard)
             .await?;
-        self.commit_prepared_upload(prepared).await
+        self.commit_guarded_prepared_upload(prepared).await
     }
 
     /// Complete all attacker-controlled decode/resize/encode work before storage side effects.
@@ -285,15 +375,20 @@ impl MediaRepository {
         encoded: Vec<u8>,
         variant_limits: VariantLimits,
         cpu_guard: G,
-    ) -> Result<PreparedMediaUpload, MediaError>
+    ) -> Result<GuardedPreparedMediaUpload<G>, MediaError>
     where
         G: Send + 'static,
     {
         let media_limits = self.limits;
-        run_blocking_with_guard(cpu_guard, move || {
-            prepare_upload(&encoded, media_limits, variant_limits)
+        tokio::task::spawn_blocking(move || {
+            let prepared = prepare_upload(&encoded, media_limits, variant_limits)?;
+            Ok(GuardedPreparedMediaUpload {
+                prepared,
+                guard: cpu_guard,
+            })
         })
         .await
+        .map_err(join_error)?
     }
 
     /// Commit a fully prepared upload. The immutable manifest remains the last installed object.
@@ -314,23 +409,58 @@ impl MediaRepository {
         }
     }
 
+    /// Commit prepared buffers without releasing the capacity guard acquired before decoding.
+    pub async fn commit_guarded_prepared_upload<G>(
+        &self,
+        guarded: GuardedPreparedMediaUpload<G>,
+    ) -> Result<MediaUploadCommitResult, MediaError>
+    where
+        G: Send + 'static,
+    {
+        let GuardedPreparedMediaUpload { prepared, guard } = guarded;
+        match &self.backend {
+            RepositoryBackend::Local(store) => {
+                let store = store.clone();
+                tokio::task::spawn_blocking(move || {
+                    let _guard = guard;
+                    store.commit_prepared_upload(prepared)
+                })
+                .await
+                .map_err(join_error)?
+            }
+            RepositoryBackend::Object(store) => {
+                let _guard = guard;
+                commit_object_upload(store.as_ref(), prepared).await
+            }
+        }
+    }
+
     pub async fn lookup_variant_set(
         &self,
         id: ContentId,
         limits: VariantLimits,
     ) -> Result<Option<VariantSet>, MediaError> {
+        self.read_limits.validate_for_variants(limits)?;
+        let request_permit = self.read_admission.acquire_request()?;
         match &self.backend {
             RepositoryBackend::Local(store) => {
                 let store = store.clone();
-                tokio::task::spawn_blocking(move || store.lookup_variant_set(id, limits))
-                    .await
-                    .map_err(join_error)?
+                let byte_permit = self
+                    .read_admission
+                    .acquire_bytes(MediaReadLimits::required_in_flight_bytes(limits)? as u64)?;
+                tokio::task::spawn_blocking(move || {
+                    let _request_permit = request_permit;
+                    let _byte_permit = byte_permit;
+                    store.lookup_variant_set(id, limits)
+                })
+                .await
+                .map_err(join_error)?
             }
             RepositoryBackend::Object(store) => {
-                let _request = self.read_admission.acquire_request()?;
                 lookup_object_set(
                     store.as_ref(),
                     &self.read_admission,
+                    request_permit,
                     self.limits,
                     id,
                     limits,
@@ -347,18 +477,40 @@ impl MediaRepository {
         kind: VariantKind,
         limits: VariantLimits,
     ) -> Result<Option<StoredVariant>, MediaError> {
+        self.read_limits.validate_for_variants(limits)?;
+        let request_permit = self.read_admission.acquire_request()?;
         match &self.backend {
             RepositoryBackend::Local(store) => {
                 let store = store.clone();
-                tokio::task::spawn_blocking(move || store.lookup_variant(id, format, kind, limits))
+                let byte_permit = self
+                    .read_admission
+                    .acquire_bytes(MediaReadLimits::required_in_flight_bytes(limits)? as u64)?;
+                let (stored, request_permit, mut byte_permit) =
+                    tokio::task::spawn_blocking(move || {
+                        let stored = store.lookup_variant(id, format, kind, limits);
+                        (stored, request_permit, byte_permit)
+                    })
                     .await
-                    .map_err(join_error)?
+                    .map_err(join_error)?;
+                let Some(stored) = stored? else {
+                    return Ok(None);
+                };
+                let encoded_len = stored.encoded_bytes().len();
+                let response_permit = byte_permit.split(encoded_len).ok_or_else(|| {
+                    corrupt_set(id, "verified member exceeded its reserved read capacity")
+                })?;
+                drop(byte_permit);
+                Ok(Some(lease_stored_variant(
+                    stored,
+                    request_permit,
+                    response_permit,
+                )))
             }
             RepositoryBackend::Object(store) => {
-                let _request = self.read_admission.acquire_request()?;
                 lookup_object_variant(
                     store.as_ref(),
                     &self.read_admission,
+                    request_permit,
                     self.limits,
                     id,
                     format,
@@ -366,6 +518,64 @@ impl MediaRepository {
                     limits,
                 )
                 .await
+            }
+        }
+    }
+
+    /// Probe only the installed-last manifest and its declared policy metadata. This does not
+    /// fetch or decode the canonical raster or any variant member.
+    pub async fn probe_installed_manifest(
+        &self,
+        id: ContentId,
+        limits: VariantLimits,
+    ) -> Result<Option<VariantSet>, MediaError> {
+        self.read_limits.validate_for_variants(limits)?;
+        let request_permit = self.read_admission.acquire_request()?;
+        let manifest_permit = self.read_admission.acquire_bytes(MANIFEST_MAX_BYTES)?;
+        match &self.backend {
+            RepositoryBackend::Local(store) => {
+                let store = store.clone();
+                tokio::task::spawn_blocking(move || {
+                    let _request_permit = request_permit;
+                    let _manifest_permit = manifest_permit;
+                    store.probe_installed_manifest(id, limits)
+                })
+                .await
+                .map_err(join_error)?
+            }
+            RepositoryBackend::Object(store) => {
+                let result = probe_object_manifest(store.as_ref(), self.limits, id, limits).await;
+                drop(manifest_permit);
+                drop(request_permit);
+                result
+            }
+        }
+    }
+
+    /// Reclaim canonical/member objects only when no installed-last manifest exists. A corrupt or
+    /// valid manifest fails closed. The caller must hold the global installation/recovery lease for
+    /// this content identity so an upload cannot race the proof-of-absence and deletion sequence.
+    pub async fn reclaim_incomplete_upload(
+        &self,
+        id: ContentId,
+        limits: VariantLimits,
+    ) -> Result<(), MediaError> {
+        if self.probe_installed_manifest(id, limits).await?.is_some() {
+            return Err(MediaError::InstalledMediaCannotBeReclaimed { id });
+        }
+        match &self.backend {
+            RepositoryBackend::Local(store) => {
+                let store = store.clone();
+                tokio::task::spawn_blocking(move || store.reclaim_incomplete_upload(id))
+                    .await
+                    .map_err(join_error)?
+            }
+            RepositoryBackend::Object(store) => {
+                for key in fixed_variant_keys(id) {
+                    delete_idempotently(store.as_ref(), &variant_object_path(key)?).await?;
+                }
+                delete_idempotently(store.as_ref(), &object_path(&format!("blobs/{id}/orig"))?)
+                    .await
             }
         }
     }
@@ -487,13 +697,13 @@ async fn put_immutable(
 async fn lookup_object_variant(
     store: &dyn ObjectStore,
     admission: &MediaReadAdmission,
+    request_permit: OwnedSemaphorePermit,
     media_limits: MediaLimits,
     id: ContentId,
     format: VariantFormat,
     kind: VariantKind,
     limits: VariantLimits,
 ) -> Result<Option<StoredVariant>, MediaError> {
-    limits.validate()?;
     let _manifest_bytes = admission.acquire_bytes(MANIFEST_MAX_BYTES)?;
     let manifest_path = object_path(&format!(
         "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
@@ -504,74 +714,46 @@ async fn lookup_object_variant(
         return Ok(None);
     };
     let set = parse_manifest(id, &manifest)?;
-    check_dimensions(media_limits, set.source_width, set.source_height).map_err(|error| {
-        corrupt_set(
-            id,
-            &format!("manifest source dimensions violate policy: {error}"),
-        )
-    })?;
+    validate_manifest_policy(media_limits, id, &set, limits)?;
 
-    // The installed-last immutable manifest is the complete-set commitment. Validate all of its
-    // policy metadata, but read only the requested member and verify those bytes against its digest.
-    let mut declared_aggregate = 0_u64;
-    let mut requested = None;
-    for record in &set.variants {
-        let expected = fitted_dimensions(
-            set.source_width,
-            set.source_height,
-            record.key.kind().maximum_dimensions(),
-        )?;
-        if (record.width, record.height) != expected {
-            return Err(corrupt_set(
-                id,
-                &format!("{} dimensions do not match the fixed policy", record.key),
-            ));
-        }
-        check_variant_dimensions(record.key, record.width, record.height, limits)?;
-        if record.encoded_len == 0 {
-            return Err(corrupt_set(id, &format!("{} is empty", record.key)));
-        }
-        if record.encoded_len > limits.max_member_encoded_bytes() as u64 {
-            return Err(MediaError::VariantEncodedBytesExceeded {
-                key: record.key,
-                max: limits.max_member_encoded_bytes(),
-            });
-        }
-        declared_aggregate = declared_aggregate
-            .checked_add(record.encoded_len)
-            .ok_or_else(|| corrupt_set(id, "variant aggregate encoded length overflow"))?;
-        if declared_aggregate > limits.max_total_encoded_bytes() {
-            return Err(MediaError::VariantAggregateBytesExceeded {
-                id,
-                max: limits.max_total_encoded_bytes(),
-            });
-        }
-        if (record.key.format(), record.key.kind()) == (format, kind) {
-            requested = Some(record.clone());
-        }
-    }
-    let record = requested
+    // The installed-last immutable manifest is the complete-set commitment. Read only the
+    // requested member and verify its payload against the declared digest on a blocking worker.
+    let record = set
+        .variants
+        .iter()
+        .find(|record| (record.key.format(), record.key.kind()) == (format, kind))
+        .cloned()
         .ok_or_else(|| corrupt_set(id, "requested role is absent from the fixed manifest"))?;
-    let _member_bytes = admission.acquire_bytes(record.encoded_len)?;
+    let member_bytes = admission.acquire_bytes(record.encoded_len)?;
     let path = variant_object_path(record.key)?;
     let bytes = get_bounded(store, &path, record.encoded_len, "get-variant")
         .await?
         .ok_or_else(|| corrupt_set(id, &format!("{} member is missing", record.key)))?;
-    verify_member_bytes(id, &record, &bytes)?;
-    Ok(Some(StoredVariant {
-        record,
-        encoded_bytes: bytes,
-    }))
+    let (request_permit, member_bytes) = verify_member_bytes_blocking_with_guard(
+        id,
+        record.clone(),
+        bytes.clone(),
+        (request_permit, member_bytes),
+    )
+    .await?;
+    Ok(Some(lease_stored_variant(
+        StoredVariant {
+            record,
+            encoded_bytes: bytes,
+        },
+        request_permit,
+        member_bytes,
+    )))
 }
 
 async fn lookup_object_set(
     store: &dyn ObjectStore,
     admission: &MediaReadAdmission,
+    mut request_permit: OwnedSemaphorePermit,
     media_limits: MediaLimits,
     id: ContentId,
     limits: VariantLimits,
 ) -> Result<Option<VariantSet>, MediaError> {
-    limits.validate()?;
     let _manifest_bytes = admission.acquire_bytes(MANIFEST_MAX_BYTES)?;
     let manifest_path = object_path(&format!(
         "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
@@ -582,53 +764,68 @@ async fn lookup_object_set(
         return Ok(None);
     };
     let set = parse_manifest(id, &manifest)?;
-    check_dimensions(media_limits, set.source_width, set.source_height).map_err(|error| {
-        corrupt_set(
-            id,
-            &format!("manifest source dimensions violate policy: {error}"),
-        )
-    })?;
-
-    let mut aggregate = 0_u64;
+    validate_manifest_policy(media_limits, id, &set, limits)?;
     for record in &set.variants {
-        let expected = fitted_dimensions(
-            set.source_width,
-            set.source_height,
-            record.key.kind().maximum_dimensions(),
-        )?;
-        if (record.width, record.height) != expected {
-            return Err(corrupt_set(
-                id,
-                &format!("{} dimensions do not match the fixed policy", record.key),
-            ));
-        }
-        check_variant_dimensions(record.key, record.width, record.height, limits)?;
-        if record.encoded_len == 0 {
-            return Err(corrupt_set(id, &format!("{} is empty", record.key)));
-        }
-        if record.encoded_len > limits.max_member_encoded_bytes() as u64 {
-            return Err(MediaError::VariantEncodedBytesExceeded {
-                key: record.key,
-                max: limits.max_member_encoded_bytes(),
-            });
-        }
-        aggregate = aggregate
-            .checked_add(record.encoded_len)
-            .ok_or_else(|| corrupt_set(id, "variant aggregate encoded length overflow"))?;
-        if aggregate > limits.max_total_encoded_bytes() {
-            return Err(MediaError::VariantAggregateBytesExceeded {
-                id,
-                max: limits.max_total_encoded_bytes(),
-            });
-        }
-        let _member_bytes = admission.acquire_bytes(record.encoded_len)?;
+        let member_bytes = admission.acquire_bytes(record.encoded_len)?;
         let path = variant_object_path(record.key)?;
         let bytes = get_bounded(store, &path, record.encoded_len, "get-variant")
             .await?
             .ok_or_else(|| corrupt_set(id, &format!("{} member is missing", record.key)))?;
-        verify_member_bytes(id, record, &bytes)?;
+        let (returned_request_permit, returned_member_permit) =
+            verify_member_bytes_blocking_with_guard(
+                id,
+                record.clone(),
+                bytes,
+                (request_permit, member_bytes),
+            )
+            .await?;
+        request_permit = returned_request_permit;
+        drop(returned_member_permit);
     }
     Ok(Some(set))
+}
+
+async fn probe_object_manifest(
+    store: &dyn ObjectStore,
+    media_limits: MediaLimits,
+    id: ContentId,
+    limits: VariantLimits,
+) -> Result<Option<VariantSet>, MediaError> {
+    let manifest_path = object_path(&format!(
+        "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
+    ))?;
+    let Some(manifest) =
+        get_bounded(store, &manifest_path, MANIFEST_MAX_BYTES, "probe-manifest").await?
+    else {
+        return Ok(None);
+    };
+    let set = parse_manifest(id, &manifest)?;
+    validate_manifest_policy(media_limits, id, &set, limits)?;
+    Ok(Some(set))
+}
+
+async fn verify_member_bytes_blocking_with_guard<G>(
+    id: ContentId,
+    record: VariantRecord,
+    bytes: Bytes,
+    guard: G,
+) -> Result<G, MediaError>
+where
+    G: Send + 'static,
+{
+    tokio::task::spawn_blocking(move || {
+        verify_member_bytes(id, &record, &bytes)?;
+        Ok(guard)
+    })
+    .await
+    .map_err(join_error)?
+}
+
+async fn delete_idempotently(store: &dyn ObjectStore, path: &ObjectPath) -> Result<(), MediaError> {
+    match store.delete(path).await {
+        Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
+        Err(error) => Err(object_error("reclaim-delete", error)),
+    }
 }
 
 async fn get_bounded(
@@ -689,6 +886,7 @@ fn join_error(error: tokio::task::JoinError) -> MediaError {
     }
 }
 
+#[cfg(test)]
 async fn run_blocking_with_guard<G, T, F>(guard: G, work: F) -> Result<T, MediaError>
 where
     G: Send + 'static,
@@ -710,17 +908,33 @@ mod tests {
     use futures_util::stream::BoxStream;
     use image::{ImageBuffer, ImageFormat, Rgba};
     use std::io::Cursor;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Mutex as StdMutex;
+    use tokio::sync::Notify;
 
     use object_store::{
         CopyOptions, GetOptions, GetResult, ListResult, MultipartUpload, ObjectMeta,
         PutMultipartOptions, PutOptions, PutPayload, PutResult, Result as ObjectStoreResult,
     };
 
-    #[derive(Debug, Default)]
+    #[derive(Default)]
     struct CountingObjectStore {
         inner: InMemory,
         reads: StdMutex<Vec<String>>,
+        block_next_put: AtomicBool,
+        put_blocked: AtomicBool,
+        put_started: Notify,
+        put_release: Notify,
+    }
+
+    impl fmt::Debug for CountingObjectStore {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("CountingObjectStore")
+                .field("reads", &self.reads())
+                .field("put_blocked", &self.put_blocked.load(Ordering::SeqCst))
+                .finish_non_exhaustive()
+        }
     }
 
     impl fmt::Display for CountingObjectStore {
@@ -737,6 +951,28 @@ mod tests {
         fn reads(&self) -> Vec<String> {
             self.reads.lock().unwrap().clone()
         }
+
+        fn block_next_put(&self) {
+            self.put_blocked.store(false, Ordering::SeqCst);
+            self.block_next_put.store(true, Ordering::SeqCst);
+        }
+
+        async fn wait_for_blocked_put(&self) {
+            loop {
+                if self.put_blocked.load(Ordering::SeqCst) {
+                    return;
+                }
+                let notified = self.put_started.notified();
+                if self.put_blocked.load(Ordering::SeqCst) {
+                    return;
+                }
+                notified.await;
+            }
+        }
+
+        fn release_put(&self) {
+            self.put_release.notify_one();
+        }
     }
 
     #[async_trait]
@@ -747,6 +983,12 @@ mod tests {
             payload: PutPayload,
             options: PutOptions,
         ) -> ObjectStoreResult<PutResult> {
+            if self.block_next_put.swap(false, Ordering::SeqCst) {
+                self.put_blocked.store(true, Ordering::SeqCst);
+                self.put_started.notify_waiters();
+                self.put_release.notified().await;
+                self.put_blocked.store(false, Ordering::SeqCst);
+            }
             self.inner.put_opts(location, payload, options).await
         }
 
@@ -867,6 +1109,22 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn read_limits_are_validated_against_manifest_and_member_policy() {
+        let variants = VariantLimits::default();
+        let required = MediaReadLimits::required_in_flight_bytes(variants).unwrap();
+        assert!(MediaReadLimits::new(1, required)
+            .unwrap()
+            .validate_for_variants(variants)
+            .is_ok());
+        assert!(matches!(
+            MediaReadLimits::new(1, required - 1)
+                .unwrap()
+                .validate_for_variants(variants),
+            Err(MediaError::InvalidReadLimits(_))
+        ));
+    }
+
     #[tokio::test]
     async fn shared_object_repository_cross_replica_round_trip_is_idempotent() {
         let first =
@@ -941,7 +1199,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn object_variant_lookup_fails_before_member_read_when_byte_budget_is_exhausted() {
+    async fn object_variant_lookup_rejects_incoherent_read_policy_before_io() {
         let object_store = Arc::new(CountingObjectStore::default());
         let repository = MediaRepository::object(
             object_store.clone(),
@@ -964,11 +1222,192 @@ mod tests {
                     VariantLimits::default(),
                 )
                 .await,
-            Err(MediaError::ReadCapacityExhausted { resource: "byte" })
+            Err(MediaError::InvalidReadLimits(_))
         ));
         let reads = object_store.reads();
-        assert_eq!(reads.len(), 1, "only the manifest GET is admitted");
-        assert!(reads.iter().all(|path| path.ends_with(MANIFEST_NAME)));
+        assert!(reads.is_empty(), "invalid read policy must fail before I/O");
+    }
+
+    async fn assert_variant_bytes_retain_read_admission(repository: MediaRepository) {
+        let limits = VariantLimits::default();
+        let committed = repository
+            .prepare_and_commit_upload(png(), limits)
+            .await
+            .unwrap();
+        let id = committed.ingest().handle().id();
+        let total_bytes = repository.read_limits.max_in_flight_bytes();
+        let variant = repository
+            .lookup_variant(id, VariantFormat::Webp, VariantKind::Thumb, limits)
+            .await
+            .unwrap()
+            .unwrap();
+        let retained_bytes = variant.record().encoded_len() as usize;
+        assert_eq!(repository.read_admission.requests.available_permits(), 0);
+        assert_eq!(
+            repository.read_admission.bytes.available_permits(),
+            total_bytes - retained_bytes
+        );
+
+        let clone = variant.clone();
+        drop(variant);
+        assert_eq!(repository.read_admission.requests.available_permits(), 0);
+        assert!(matches!(
+            repository
+                .lookup_variant(id, VariantFormat::Webp, VariantKind::Thumb, limits)
+                .await,
+            Err(MediaError::ReadCapacityExhausted {
+                resource: "request"
+            })
+        ));
+        drop(clone);
+        assert_eq!(repository.read_admission.requests.available_permits(), 1);
+        assert_eq!(
+            repository.read_admission.bytes.available_permits(),
+            total_bytes
+        );
+    }
+
+    #[tokio::test]
+    async fn object_variant_bytes_retain_read_admission_across_clones() {
+        let limits = VariantLimits::default();
+        let read_limits = MediaReadLimits::new(
+            1,
+            MediaReadLimits::required_in_flight_bytes(limits).unwrap(),
+        )
+        .unwrap();
+        let repository = MediaRepository::in_memory(MediaLimits::default(), read_limits).unwrap();
+        assert_variant_bytes_retain_read_admission(repository).await;
+    }
+
+    #[tokio::test]
+    async fn local_variant_bytes_retain_read_admission_across_clones() {
+        let directory = tempfile::tempdir().unwrap();
+        let limits = VariantLimits::default();
+        let read_limits = MediaReadLimits::new(
+            1,
+            MediaReadLimits::required_in_flight_bytes(limits).unwrap(),
+        )
+        .unwrap();
+        let store = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
+        let repository = MediaRepository::local(store, read_limits);
+        assert_variant_bytes_retain_read_admission(repository).await;
+    }
+
+    #[tokio::test]
+    async fn guarded_upload_holds_capacity_through_object_store_awaits() {
+        let object_store = Arc::new(CountingObjectStore::default());
+        let repository = MediaRepository::object(
+            object_store.clone(),
+            MediaLimits::default(),
+            MediaReadLimits::default(),
+        );
+        let capacity = Arc::new(Semaphore::new(1));
+        let permit = capacity.clone().try_acquire_owned().unwrap();
+        let prepared = repository
+            .prepare_upload_with_guard(png(), VariantLimits::default(), permit)
+            .await
+            .unwrap();
+        assert_eq!(capacity.available_permits(), 0);
+
+        object_store.block_next_put();
+        let commit_repository = repository.clone();
+        let commit = tokio::spawn(async move {
+            commit_repository
+                .commit_guarded_prepared_upload(prepared)
+                .await
+        });
+        object_store.wait_for_blocked_put().await;
+        assert_eq!(capacity.available_permits(), 0);
+        object_store.release_put();
+        commit.await.unwrap().unwrap();
+        assert_eq!(capacity.available_permits(), 1);
+    }
+
+    #[tokio::test]
+    async fn manifest_probe_is_shallow_and_completed_installation_cannot_be_reclaimed() {
+        let object_store = Arc::new(CountingObjectStore::default());
+        let repository = MediaRepository::object(
+            object_store.clone(),
+            MediaLimits::default(),
+            MediaReadLimits::default(),
+        );
+        let limits = VariantLimits::default();
+        let committed = repository
+            .prepare_and_commit_upload(png(), limits)
+            .await
+            .unwrap();
+        let id = committed.ingest().handle().id();
+        object_store.clear_reads();
+
+        let manifest = repository
+            .probe_installed_manifest(id, limits)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(manifest.source(), id);
+        assert_eq!(
+            object_store.reads(),
+            vec![format!(
+                "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
+            )]
+        );
+        assert!(matches!(
+            repository.reclaim_incomplete_upload(id, limits).await,
+            Err(MediaError::InstalledMediaCannotBeReclaimed { id: actual }) if actual == id
+        ));
+    }
+
+    #[tokio::test]
+    async fn incomplete_object_and_local_installations_are_reclaimed_idempotently() {
+        let object_store = Arc::new(CountingObjectStore::default());
+        let repository = MediaRepository::object(
+            object_store.clone(),
+            MediaLimits::default(),
+            MediaReadLimits::default(),
+        );
+        let id = ContentId::from_bytes([5; CONTENT_ID_BYTES]);
+        let member_path = variant_object_path(fixed_variant_keys(id)[0]).unwrap();
+        let original_path = object_path(&format!("blobs/{id}/orig")).unwrap();
+        object_store
+            .put(&member_path, Bytes::from_static(b"partial-member").into())
+            .await
+            .unwrap();
+        object_store
+            .put(&original_path, Bytes::from_static(b"partial-orig").into())
+            .await
+            .unwrap();
+
+        repository
+            .reclaim_incomplete_upload(id, VariantLimits::default())
+            .await
+            .unwrap();
+        repository
+            .reclaim_incomplete_upload(id, VariantLimits::default())
+            .await
+            .unwrap();
+        assert!(
+            get_bounded(object_store.as_ref(), &member_path, u64::MAX, "test-member")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            get_bounded(object_store.as_ref(), &original_path, u64::MAX, "test-orig")
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let directory = tempfile::tempdir().unwrap();
+        let store = MediaStore::open(directory.path(), MediaLimits::default()).unwrap();
+        let ingested = store.ingest(&png()).unwrap();
+        let local_id = ingested.handle().id();
+        let local_repository = MediaRepository::local(store.clone(), MediaReadLimits::default());
+        local_repository
+            .reclaim_incomplete_upload(local_id, VariantLimits::default())
+            .await
+            .unwrap();
+        assert!(store.lookup(local_id).unwrap().is_none());
     }
 
     #[tokio::test]
