@@ -137,7 +137,7 @@ export function buildGameRouteData({
   const authoritativeColdLoad = pendingReplacement
     ? pendingReplacementColdLoad(gameId, playerSlotId)
     : fixtureMode
-      ? playerFixtureColdLoadForContext({ gameId, spectator })
+      ? playerFixtureColdLoadForContext({ gameId, spectator, actorSlot: playerSlotId })
       : requirePlayerColdLoad(coldLoad);
   coldLoad = authoritativeColdLoad;
   const dayEventRooms = coldLoad.commandState.dayEventRooms;
@@ -389,8 +389,9 @@ function requirePlayerColdLoad(coldLoad) {
   return coldLoad;
 }
 
-function playerFixtureColdLoadForContext({ gameId, spectator }) {
+function playerFixtureColdLoadForContext({ gameId, spectator, actorSlot }) {
   const fixture = spectator ? spectatorColdLoad(gameId) : playerFixtureColdLoad(gameId);
+  const ownFixture = spectator || actorSlot === fixture.commandState.actorSlot;
   return Object.freeze({
     thread: normalizeThreadPage(fixture.thread, fixture.thread),
     votecount: normalizeVotecount(fixture.votecount, fixture.votecount),
@@ -402,11 +403,11 @@ function playerFixtureColdLoadForContext({ gameId, spectator }) {
       fixture.endgameSummary,
       fixture.endgameSummary,
     ),
-    notifications: fixture.notifications,
-    investigationResults: fixture.investigationResults,
-    slotMentions: fixture.slotMentions ?? Object.freeze([]),
+    notifications: ownFixture ? fixture.notifications : [],
+    investigationResults: ownFixture ? fixture.investigationResults : [],
+    slotMentions: ownFixture ? fixture.slotMentions ?? Object.freeze([]) : [],
     commandState: normalizePlayerCommandState(
-      fixture.commandState,
+      { ...fixture.commandState, actorSlot: spectator ? null : actorSlot },
       fixture.commandState,
     ),
   });

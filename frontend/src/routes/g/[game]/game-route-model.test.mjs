@@ -1176,3 +1176,15 @@ test("live projection endpoint always uses the same-origin authenticated ticket 
     "/live/tickets?game=midsummer&slot_id=slot-7",
   );
 });
+
+
+test("normal-player preview starts with its own authoritative fixture actor", () => {
+  const data = buildGameRouteData({ game: "midsummer", principalId: "normal-player",
+    capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-4" }] });
+  assert.equal(data.commandState.actorSlot, "slot-4");
+  assert.equal(data.commandsEnabled, true);
+  assert.equal(data.player.readOnly, false);
+  assert.deepEqual(data.notifications, []);
+  assert.deepEqual(data.investigationResults, []);
+  assert.equal(data.shell.phaseId, "D02");
+});
