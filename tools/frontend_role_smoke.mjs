@@ -536,6 +536,7 @@ try {
       screenshotPixels: privateChannelScreenshotPixels,
     });
     await proveReloadReadingReturn(privateChannelPage, baseUrl, privateChannelPath, "private:role_pm:slot-7");
+    await proveSavedResumeDenial(privateChannelPage, baseUrl, privateChannelPath);
     await privateChannelContext.close();
 
     for (const forbidden of forbiddenRoutes) {
@@ -4233,6 +4234,24 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     for (let i = 0; peerReads === initialReads && i < 50; i++) await new Promise(resolve => setTimeout(resolve, 50));
     assert.ok(peerReads > initialReads, "peer refreshes after an invalidation");
     assert.ok(Math.abs(await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top) - peerTop) < 2, "peer stays in place");
+    const resume = peer.getByTestId("resume-saved-position");
+    await resume.waitFor();
+    const box = await resume.boundingBox();
+    assert.ok(box.width >= 44 && box.height >= 44);
+    const verified = peer.waitForRequest(request => new URL(request.url()).searchParams.get("around_seq") === String(saved.position.source_seq));
+    await resume.focus(); await peer.keyboard.press("Enter");
+    await verified;
+    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
+    assert.equal(await resume.count(), 0); assert.equal(writes, 1);
+    unavailable = true;
+    saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
+    await peer.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await peer.getByTestId("resume-saved-position").click();
+    await peer.getByTestId("reader-recovery-retry").waitFor();
+    assert.equal(await peer.locator("#thread-post-20").count(), 0);
+    unavailable = false;
+    await peer.getByTestId("reader-recovery-retry").click();
+    await peer.waitForFunction(() => document.activeElement?.id === "thread-post-20");
     await peer.reload({ waitUntil: "networkidle" });
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
     for (const outcome of ["hidden", "deleted"]) {
@@ -4246,4 +4265,28 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await peer.close(); await page.unroute(checkpointEndpoint, checkpoint); await page.unroute(threadEndpoint, thread);
     await page.goto(`${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   }
+}
+
+
+async function proveSavedResumeDenial(page, baseUrl, routePath) {
+  let saved = { revision: 0, position: null, available: false };
+  const endpoint = "**/api/gameplay/games/*/channels/*/reading-checkpoint";
+  const checkpoint = route => route.fulfill({ json: saved });
+  const threadEndpoint = "**/games/midsummer/channels/*/thread?**";
+  const denied = route => new URL(route.request().url()).searchParams.has("around_seq") ? route.fulfill({ status: 403 }) : route.fallback();
+  await page.route(endpoint, checkpoint);
+  try {
+    await page.goto(`${baseUrl}${routePath}?saved-resume=denied`, { waitUntil: "networkidle" });
+    const post = page.locator('article[id^="thread-post-"]').first();
+    const id = await post.getAttribute("id");
+    saved = { revision: 1, position: { source_seq: Number(id.slice("thread-post-".length)), offset_px: 110 }, available: true };
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByTestId("resume-saved-position").waitFor();
+    await page.route(threadEndpoint, denied);
+    await page.getByTestId("resume-saved-position").focus(); await page.keyboard.press("Enter");
+    await page.getByTestId("reader-recovery-retry").waitFor();
+    assert.equal(await page.locator('article[id^="thread-post-"]').count(), 0);
+    assert.equal(await page.getByTestId("resume-saved-position").count(), 0);
+    await page.waitForFunction(() => document.activeElement?.id === "player-thread");
+  } finally { await page.unroute(endpoint, checkpoint); await page.unroute(threadEndpoint, denied); }
 }

@@ -60,3 +60,29 @@ test("a queued gesture cannot inherit a newer peer revision from an in-flight sa
   finish(response({ revision: 3, position: position(40), available: true })); await settle();
   assert.equal(calls, 1); controller.dispose();
 });
+
+test("remote checkpoints are offered explicitly, consumed once, and cleared on denial", async () => {
+  let server = { revision: 1, position: position(10), available: true }, status = 200;
+  const offers = [], resumed = [];
+  const controller = createReadingCheckpoint({ ...options, onRemote: value => offers.push(value), onInitial: value => resumed.push(value),
+    fetchImpl: async () => response(server, status) });
+  await controller.refresh(); assert.equal(offers.length, 0);
+  server = { revision: 2, position: position(30), available: true };
+  await controller.refresh(); assert.equal(offers.at(-1).position.source_seq, 30); assert.equal(resumed.length, 1);
+  assert.equal(controller.takeRemote().revision, 2); assert.equal(controller.takeRemote(), null);
+  await controller.refresh(); assert.equal(offers.at(-1), null);
+  server = { revision: 3, position: position(40), available: false };
+  await controller.refresh(); assert.equal(offers.at(-1).available, false);
+  status = 403; await controller.refresh(); assert.equal(offers.at(-1), null); assert.equal(controller.takeRemote(), null);
+  controller.dispose();
+});
+
+test("conflicts offer the authoritative destination instead of retrying stale intent", async () => {
+  const offers = [];
+  const controller = createReadingCheckpoint({ ...options, onRemote: value => offers.push(value),
+    fetchImpl: async (_, init) => init.method === "POST"
+      ? response({ revision: 2, position: position(40), available: true }, 409)
+      : response({ revision: 1, position: position(10), available: true }) });
+  await controller.refresh(); controller.save(position(20)); await settle();
+  assert.equal(controller.takeRemote().position.source_seq, 40); controller.dispose();
+});

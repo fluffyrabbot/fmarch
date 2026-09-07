@@ -132,9 +132,9 @@ test("deliberate checkpoints replace stale origins without restoring; initial re
   const restores = [];
   controller = createReaderNavigation({ getPage: () => page,
     replace: (_, state) => { page = { ...page, state }; controller.observe(page); },
-    onChange() {}, afterRender: () => Promise.resolve(), restore: origin => restores.push(origin) });
-  controller.checkpoint({ id: "thread-post-10", top: 100 }, { resume: true }); await settle();
+    onChange() {}, afterRender: () => Promise.resolve(), restore: (origin, context) => restores.push({ origin, verify: context.forceReload }) });
+  controller.checkpoint({ id: "thread-post-10", top: 100 }, { resume: true, verify: true }); await settle();
   controller.checkpoint({ id: "thread-post-20", top: 90 }); await settle();
-  assert.equal(restores.length, 1); assert.equal(page.state.readerNavigation.origin.id, "thread-post-20");
+  assert.equal(restores.length, 1); assert.equal(restores[0].verify, true); assert.equal(page.state.readerNavigation.origin.id, "thread-post-20");
   assert.equal(page.state.other, 1); controller.dispose();
 });

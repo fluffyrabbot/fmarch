@@ -13,20 +13,24 @@ export function checkpointView(value) {
 // Broadcasts carry invalidations only. Every position comes from authenticated HTTP.
 // A conflict consumes the stale intent; only a later gesture may write again.
 export function createReadingCheckpoint({ game, channel, principal, fetchImpl = fetch,
-  onInitial = () => {}, onDenied = () => {}, onStatus = () => {},
+  onInitial = () => {}, onRemote = () => {}, onDenied = () => {}, onStatus = () => {},
   windowRef = globalThis.window, documentRef = globalThis.document,
   BroadcastChannelImpl = globalThis.BroadcastChannel }) {
   const url = `/api/gameplay/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/reading-checkpoint`;
   const bus = BroadcastChannelImpl ? new BroadcastChannelImpl(`fmarch-reading:${principal}:${game}:${channel}`) : null;
   let current = null, disposed = false, initial = true, pending = null, writing = false;
   let refreshEpoch = 0, authorityEpoch = 0;
+  let offered = null, localAttempt = null;
+  const offer = value => { offered = value; onRemote(value); };
+  const isLocal = value => localAttempt && value.revision === localAttempt.expected_revision + 1
+    && value.position?.source_seq === localAttempt.position.source_seq && value.position?.offset_px === localAttempt.position.offset_px;
   const requests = new AbortController();
   const adopt = value => {
     const next = checkpointView(value);
     if (!current || next.revision >= current.revision) current = next;
     return current;
   };
-  const denied = () => { ++authorityEpoch; ++refreshEpoch; current = null; pending = null; initial = false; onDenied(); onStatus("denied"); };
+  const denied = () => { ++authorityEpoch; ++refreshEpoch; current = null; pending = null; initial = false; offer(null); onDenied(); onStatus("denied"); };
   async function refresh() {
     const epoch = ++refreshEpoch;
     try {
@@ -36,8 +40,10 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
       if (!response.ok) throw new Error("Checkpoint unavailable");
       const value = await response.json();
       if (disposed || epoch !== refreshEpoch) return;
+      const previous = current;
       adopt(value);
       if (initial) { initial = false; onInitial(current); }
+      else if (current.position && !isLocal(current) && (!previous || current.revision > previous.revision || offered)) offer(current);
       onStatus("ready");
     } catch { if (!disposed && epoch === refreshEpoch) onStatus("error"); }
   }
@@ -48,6 +54,7 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
       while (pending && !disposed) {
         const authority = authorityEpoch;
         const intent = pending;
+        localAttempt = intent;
         pending = null;
         const response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify(intent), keepalive: true });
@@ -57,6 +64,7 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
         const value = await response.json();
         if (disposed || authority !== authorityEpoch) return;
         adopt(value);
+        if (response.status === 409 || current.revision > intent.expected_revision + 1) offer(current);
         if (response.status === 409) pending = null;
         else if (pending?.expected_revision === intent.expected_revision) {
           if (value.revision === intent.expected_revision + 1 && current.revision === value.revision) pending.expected_revision = value.revision;
@@ -66,7 +74,7 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
         onStatus("ready");
       }
     } catch { pending = null; if (!disposed) onStatus("error"); }
-    finally { writing = false; }
+    finally { writing = false; localAttempt = null; }
   }
   const onMessage = event => { if (event.data?.type === "invalidate") void refresh(); };
   const onVisible = () => { if (documentRef?.visibilityState === "visible") void refresh(); };
@@ -76,10 +84,12 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
   documentRef?.addEventListener("visibilitychange", onVisible);
   return {
     refresh,
+    takeRemote() { const value = offered; offer(null); return value; },
     save(position) {
       initial = false;
       if (disposed || !current || !readingPosition(position)) return;
       if (current.position?.source_seq === position.source_seq && current.position?.offset_px === position.offset_px) return;
+      offer(null);
       pending = { expected_revision: current.revision, position: { ...position } };
       void drain();
     },

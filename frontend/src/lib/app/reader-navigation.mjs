@@ -70,16 +70,16 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       if (next) void afterRender().then(() => {
         if (disposed || generation !== epoch) return;
         if (next.destination === null) {
-          restoration = { origin: next.origin, intent, signal, isCurrent: () => !disposed && generation === epoch };
+          restoration = { origin: next.origin, intent, forceReload: next.verify === true, signal, isCurrent: () => !disposed && generation === epoch };
           restore(next.origin, restoration);
         } else focusDestination(next.destination);
       });
     },
-    checkpoint(origin, { resume = false } = {}) {
+    checkpoint(origin, { resume = false, verify = false } = {}) {
       const page = getPage();
       if (disposed || readerNavigationState(page)?.destination) return;
       this.release();
-      const trip = { scope: readerScope(page.url), origin, destination: null };
+      const trip = { scope: readerScope(page.url), origin, destination: null, verify };
       if (!resume) { observed = trip; onChange(trip); }
       replace("", { ...page.state, readerNavigation: trip });
     },

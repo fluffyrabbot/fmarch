@@ -1400,6 +1400,7 @@ function fakeProjectionStore(overrides = {}) {
       return snapshot;
     },
     async refresh() {},
+    invalidate() {},
     applySnapshot(patch) {
       snapshot = { ...snapshot, ...patch };
       return snapshot;
@@ -1491,7 +1492,7 @@ test("origin recovery loads an old authorized window with live edits, removals, 
 test("hidden and deleted origins remain unavailable; denied private channels clear loaded content", async () => {
   for (const status of [404, 403]) {
     const store = fakeProjectionStore();
-    store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 443, body: "private" }] } });
+    store.applySnapshot({ thread: { nextBeforeSeq: 400, posts: [{ seq: 10, body: "stale destination" }, { seq: 443, body: "private" }] } });
     const args = recoveryArgs(store);
     args.data.threadPager = { channel: "private:mafia", pageSize: 50 };
     assert.equal(await recoverPlayerThreadWindow({ ...args, fetchImpl: async url => {
@@ -1499,6 +1500,11 @@ test("hidden and deleted origins remain unavailable; denied private channels cle
       return { status, ok: false };
     } }), status === 403 ? "denied" : "unavailable");
     if (status === 403) assert.deepEqual(store.getSnapshot().thread.posts, []);
+    else {
+      assert.deepEqual(store.getSnapshot().thread.posts.map(post => post.seq), [443]);
+      assert.equal(await recoverPlayerThreadWindow({ ...args, fetchImpl: async () => jsonResponse({ next_before_seq: null, posts: [recoveryPost(10, "restored", "private:mafia")] }) }), "ready");
+      assert.equal(store.getSnapshot().thread.posts[0].body, "restored");
+    }
   }
   const store = fakeProjectionStore();
   assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>

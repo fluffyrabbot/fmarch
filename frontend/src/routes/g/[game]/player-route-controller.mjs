@@ -998,10 +998,20 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   }), { headers: { accept: "application/json" }, signal });
   if (!isCurrent()) return "cancelled";
   if (response.status === 403) {
+    projectionStore.invalidate(["thread"], { reason: "reader_destination_access_denied" });
     projectionStore.applySnapshot({ thread: { posts: [], nextBeforeSeq: null } });
     return "denied";
   }
-  if (response.status === 404) return "unavailable";
+  if (response.status === 404) {
+    const current = projectionStore.getSnapshot().thread;
+    if (current && seq) {
+      projectionStore.invalidate(["thread"], { reason: "reader_destination_unavailable" });
+      projectionStore.applySnapshot({ thread: { ...current,
+        posts: current.posts.filter(post => String(post.seq) !== seq),
+      } });
+    }
+    return "unavailable";
+  }
   if (!response.ok) throw new Error(`Thread destination rejected: ${response.status}`);
   const payload = await response.json();
   if (!isCurrent()) return "cancelled";

@@ -154,6 +154,8 @@
   });
   let readerNavigation;
   let checkpointStatus = "ready";
+  let remoteCheckpoint = null;
+  let resumeSavedPosition = () => {};
   let readerThreadWindow = null;
   let readerTrip = null;
   let readerRecovery = { state: "idle", intent: "origin" };
@@ -170,7 +172,7 @@
       back: () => history.back(), capture: () => captureReaderOrigin(document, focusedReaderPost), afterRender: tick,
       restore: async (origin, context) => {
         let result = "ready";
-        if (context.intent === "newest" || !document.getElementById(origin.id)) {
+        if (context.forceReload || context.intent === "newest" || !document.getElementById(origin.id)) {
           readerRecovery = { state: "pending", intent: context.intent };
           try {
             result = await recoverPlayerThreadWindow({ data, fetchImpl: fetch, projectionStore, origin,
@@ -190,11 +192,11 @@
           readerNavigation.completeNewest();
           return;
         }
-        const available = context.intent === "origin" && document.getElementById(origin.id);
+        const available = result === "ready" && context.intent === "origin" && document.getElementById(origin.id);
         readerRecovery = { state: available ? "idle" : result === "ready" ? "unavailable" : result, intent: context.intent };
         await tick();
         if (context.isCurrent()) {
-          if (context.intent === "origin") restoreReaderOrigin(origin);
+          if (available) restoreReaderOrigin(origin);
           else focusReaderThread();
         }
       },
@@ -231,6 +233,11 @@
           readerNavigation.checkpoint({ id: `thread-post-${value.position.source_seq}`, top: value.position.offset_px }, { resume: true });
         }
       },
+      onRemote: value => {
+        const hadFocus = document.activeElement?.dataset.testid === "resume-saved-position";
+        remoteCheckpoint = value;
+        if (!value && hadFocus) document.getElementById("player-thread")?.focus({ preventScroll: true });
+      },
       onStatus: async status => {
         if (status === checkpointStatus) return;
         const origin = captureReadingPosition();
@@ -246,6 +253,12 @@
         }
       },
     }) : null;
+    resumeSavedPosition = () => {
+      const saved = checkpoints?.takeRemote();
+      if (!saved?.position) return;
+      readerThreadWindow = { aroundSeq: String(saved.position.source_seq) };
+      readerNavigation.checkpoint({ id: `thread-post-${saved.position.source_seq}`, top: saved.position.offset_px }, { resume: true, verify: true });
+    };
     void checkpoints?.refresh();
     const sample = () => {
       clearTimeout(sampleTimer);
@@ -1012,6 +1025,9 @@
       </section>
     {/if}
 
+    {#if remoteCheckpoint && !readerTrip?.destination && readerRecovery.state !== "pending"}
+      <button class="fm-touch-button reader-saved-position" data-testid="resume-saved-position" on:click={resumeSavedPosition}>Resume saved position</button>
+    {/if}
     <PlayerThread
       {thread}
       {liveOfficialPost}
@@ -1154,6 +1170,7 @@
 {/if}
 
 <style>
+  .reader-saved-position { position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .player-command-feedback {
     bottom: calc(82px + env(safe-area-inset-bottom));
