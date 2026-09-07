@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "linux": {
+      "environment": {
+        "FMARCH_EXTERNAL_BUILD_ROOT": "${FLEET_CACHE_ROOT}/fmarch/${FLEET_TASK_ID}"
+      },
+      "writableDirectories": [
+        "${FLEET_CACHE_ROOT}/fmarch/${FLEET_TASK_ID}"
+      ],
+      "fingerprint": [
+        "node --version",
+        "npm --version",
+        "python3 --version"
+      ],
+      "setup": [
+        "bash scripts/check-build-posture.sh --apply",
+        "npm ci --no-audit --no-fund",
+        "npm ci --prefix frontend --no-audit --no-fund"
+      ],
+      "verify": [
+        "npm run test:proof-lane-contract",
+        "npm run test:frontend-contract",
+        "npm run test:database-schema:static"
+      ]
+    }
+  }
+}

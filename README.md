@@ -26,3 +26,7 @@ The truth is an event log. "What was the votecount as of post #847?" has to be a
 - [Agent workflow / local proof](AGENTS.md)
 
 There was no root README before 2026-08-15; this file is a pointer into the architecture corpus, not a substitute for it.
+
+## Fleet verification
+
+The Linux fleet profile is a bounded contract gate: proof-harness, architecture, frontend, and static database-schema checks. It does not run Cargo, live databases, browser screenshots, or the canonical full proof sweep. Canonical proof remains governed by AGENTS.md pending a separately validated host migration.
