@@ -7,8 +7,8 @@ must still load in a current client). We get both with a schema-first, generated
 ## Principles
 
 1. **One source of truth: Rust.** Wire types are defined once, in the `wire` crate
-   ([03](03-backend.md)), and TypeScript types are *generated* from them. The client never
-   hand-writes a type that must match the server — drift is impossible by construction.
+   ([03](03-backend.md)), and TypeScript types are *generated* from them. The exporter and contract checks detect drift between Rust and the checked-in
+   browser contract; runtime validators still enforce incoming data.
 2. **Wire types ≠ domain types.** The wire is a *projection* of the domain for transport.
    Keeping them separate lets the domain evolve freely while the wire stays a stable,
    deliberately-versioned contract.
@@ -24,7 +24,7 @@ must still load in a current client). We get both with a schema-first, generated
 
 ## Format: REST/JSON commands and CBOR WebSocket deltas
 
-- **CBOR** (via `ciborium` on Rust, a small CBOR lib on TS) — compact binary, schema-light,
+- **CBOR** (via `ciborium` on Rust and `cbor-x` in the browser) — compact binary, schema-light,
   excellent serde support, far fewer bytes than JSON for the high-frequency live frames
   (votecount ticks, deadline countdown, new posts).
 - **REST/JSON** carries authenticated commands, uploads, and cold loads
@@ -154,20 +154,22 @@ not become browser-authored WebSocket query claims.
 
 ## Type generation workflow
 
-```
-   wire crate (Rust, serde + ts-rs/specta derive)
-        │  cargo test / build step
-        ▼
-   generated .ts type definitions  ──▶  committed into the SPA's types/ dir
-        │
-        ▼
-   SvelteKit client imports them; tsc fails the build if client usage drifts
+`wire::typescript::render` combines `ts-rs` declarations with explicit transport
+definitions. The exporter writes both `crates/wire/generated/types.ts` and
+`frontend/src/lib/wire/types.ts`; neither copy is hand-edited.
+
+From the repository root, under the shared heavy-build lock:
+
+```sh
+python3 scripts/with-heavy-build-lock.py -- cargo run -p wire --bin export_types -- --write
+python3 scripts/with-heavy-build-lock.py -- cargo run -p wire --bin export_types -- --check
 ```
 
-- The generation step runs in CI; a mismatch between the Rust types and the committed TS is
-  a build failure. The contract cannot silently rot.
-- Encoding/decoding helpers (CBOR ↔ typed object) are thin and shared; application code
-  deals in typed objects, never raw bytes.
+The proof manifest includes the exporter check. Frontend modules are primarily
+JavaScript/Svelte and consume generated contracts alongside runtime shape
+validators; `frontend`'s `check` script is a toolchain probe, not a TypeScript
+semantic check. CBOR helpers own byte decoding and validation so application
+models operate on admitted projection values.
 
 ## Why not the alternatives (recorded, so we don't relitigate)
 

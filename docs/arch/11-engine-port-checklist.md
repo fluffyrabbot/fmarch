@@ -1,7 +1,9 @@
 # 11 - Day/night engine port checklist
 
-This is the source-derived checklist for eventually porting the full day and night
-action-resolution engine from `apps/im-human` into fmarch.
+This is the machine-audited completion record for the day/night engine port
+from `apps/im-human`. The port baseline is complete; the checked rows and build
+phases retain source anchors and proof boundaries, not a queue of future work.
+Current capability status lives in the [completion registry](../ops/completion-registry.json).
 
 The goal is behavioral parity with im-human's Engine V4 result surface, not a literal
 module-by-module Rust translation. fmarch keeps its better greenfield shape:
@@ -44,29 +46,13 @@ Use these fmarch surfaces as the target shape:
 
 ## Current fmarch state
 
-Already present:
-
-- Closed v1 IR: Kill, Protect, Block, Redirect, Investigate, Convert, Mark, Clear.
-- Pack tables for roles, precedence, visibility, redirects, triggers, vote, phases,
-  investigation overrides, and win policy.
-- Pure slot-only resolver with day vote outcome, basic night action ordering, roleblock,
-  two-target bus-driver redirect, protect/strongman kill, parity and track investigations,
-  mark/clear, convert, bomb-style kill trigger, phase announcement, win check, and pure
-  state fold.
-- Golden harness for `mafiascum` and `epicmafia` packs.
-- Event-store/projection spine for platform events, running votecount, slot state, slot
-  occupancy, phase state, thread view, replacement authority transfer, and unwrapping
-  `ResolutionApplied`.
-- `Command::ResolvePhase` loads the declared pack, builds a slot-only snapshot, converts
-  vote/action events into submissions, runs `resolve`, validates `ResolutionApplied` and
-  `ResolutionTrace`, and appends both envelopes plus the post-resolution `ThreadLocked`
-  close-state atomically.
-- Result and trace validators reject unknown or malformed payloads at the domain and
-  projection/command boundaries.
-- The v1 pack linter enforces pack/IR version compatibility, including a derived additive
-  `ir_version` floor for declared action/policy features, role/alignment/effect references,
-  action-local template ids, `mode`/`effect`/`reads_effect` legality, target cardinality,
-  window/cadence compatibility, vote weight references, and win-condition references.
+The pure resolver, strict pack validator, culture packs, result/trace contracts,
+command seam, projections, and golden harness are implemented. Exact abilities
+and modifiers live in `crates/domain/src/ir.rs`; the initial eight-ability v1 is
+historical. [09-engine-and-packs](09-engine-and-packs.md) explains semantics and
+[10-event-schema](10-event-schema.md) explains persistence. The checked items
+below retain the detailed implementation evidence rather than duplicating that
+inventory here.
 
 Current proof boundaries:
 

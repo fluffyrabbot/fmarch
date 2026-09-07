@@ -13,6 +13,12 @@
 
 ## Summary
 
+This accepted decision record retains its original cutover rationale and rollout
+sequence. Current implementation status is in the
+[completion registry](../ops/completion-registry.json); all physical schema work
+follows [database schema evolution](../ops/database-schema-evolution.md), including
+append-only migrations and explicit epoch-reset requirements.
+
 Replace the persistence-centered application architecture with explicit bounded
 contexts over a small typed event-journal and projector platform. HTTP and
 WebSocket code become adapters. Context application services own decisions.

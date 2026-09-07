@@ -52,26 +52,24 @@ events
 
 ## Physical database ownership
 
-`crates/database_schema` is the sole owner of the PostgreSQL catalog. Its one
-greenfield migration creates the current event store, projections, identity,
-media-reference, scheduler, and platform tables directly; persistence crates
-own queries and behavior, not private migration histories. The same crate owns
-schema readiness, database-role reconciliation, and exact privilege audits so
-creation and admission cannot drift into competing definitions.
+`crates/database_schema` owns the PostgreSQL catalog, migration history, schema
+readiness, role reconciliation, and privilege audits. Persistence crates own
+queries and behavior, not private migration directories.
 
-Because this workspace has no compatibility obligation, catalog changes are
-made by editing and intentionally re-hashing that current-state baseline. A
-second compatibility migration is a contract failure. Disposable local and
-staging databases are recreated when the baseline changes; production
-migration history begins only when a durable-user compatibility promise is
-explicitly adopted.
+Migrations are immutable and append-only. The epoch manifest binds their order
+and checksums; generated catalog and authority snapshots verify fresh creation
+and previous-to-current upgrades. Greenfield status permits direct forward DDL,
+but does not permit rewriting applied migrations. Recreating a persistent
+environment belongs to an explicit epoch reset. The sole normal schema writer
+is `fmarch-migrate`; API startup only verifies admission. Follow
+[database schema evolution](../ops/database-schema-evolution.md).
 
 ## Projection replay audits
 
 Projection rebuilds are also exposed as an operator audit command:
 
 ```bash
-DATABASE_URL=postgres://... cargo run -p projections --bin audit_rebuild -- <game_uuid>
+DATABASE_URL=postgres://... python3 scripts/with-heavy-build-lock.py -- cargo run -p projections --bin audit_rebuild -- <game_uuid>
 ```
 
 The command snapshots each rebuildable projection table for the game, replays the event stream
@@ -82,7 +80,7 @@ row determinism.
 Stored resolution envelopes have a narrower command-side audit:
 
 ```bash
-DATABASE_URL=postgres://... cargo run -p operator_proof --bin audit_resolution -- <game_uuid>
+DATABASE_URL=postgres://... python3 scripts/with-heavy-build-lock.py -- cargo run -p operator_proof --bin audit_resolution -- <game_uuid>
 ```
 
 That command scans stored `ResolutionApplied` / `ResolutionTrace` pairs, reruns ordinary
@@ -95,7 +93,7 @@ the host phase-control projection audit.
 Stored traces can also be inspected without rerunning the resolver:
 
 ```bash
-DATABASE_URL=postgres://... cargo run -p operator_proof --bin inspect_trace -- <game_uuid> [run_id]
+DATABASE_URL=postgres://... python3 scripts/with-heavy-build-lock.py -- cargo run -p operator_proof --bin inspect_trace -- <game_uuid> [run_id]
 ```
 
 `inspect_trace` and the host/cohost-only REST trace endpoint flatten `ResolutionTrace` decisions,
@@ -108,11 +106,11 @@ exploration remains future operator UX.
 
 Grouped by aggregate concern. Names are stable contracts once shipped.
 
-**Game lifecycle:** `GameCreated`, `HostAssigned`, `CohostAdded`, `SignupsOpened`,
-`SlotAdded`, `GamePersonaRegistered`, `SlotOccupancyStarted`, `GameStarted`, `GameCompleted`, `GameArchived`
+**Game lifecycle:** `GameCreated`, `CohostAdded`,
+`SlotAdded`, `GamePersonaRegistered`, `SlotOccupancyStarted`, `GameStarted`, `GameCompleted`
 
 **Persona / occupancy:** `GamePersonaRegistered`, `GamePersonaRenamed`,
-`SlotOccupancyStarted`, `SlotOccupancyEnded`, `ReplacementRequested`, `SlotModkilled`.
+`SlotOccupancyStarted`, `SlotOccupancyEnded`, `ReplacementRequested`, `SlotStatusChanged`.
 Replacement is a shared-transition pair of immutable occupancy facts; principals remain
 in the private persona projection and never become slot-authorship facts.
 
@@ -330,8 +328,9 @@ and secondary read models scale independently.
 
 ### Rebuild
 
-A projection is `(events) → state`. Rebuilding = truncate the projection table, replay the
-log through its folding function. This is how we:
+A rebuild replays the selected stream through its projectors under the owned
+transaction boundary. Use the rebuild/audit tooling rather than manually
+truncating shared tables. Replay supports:
 - change a read model's shape without migrating derived data,
 - recover from a projection bug,
 - bring a brand-new projection online over historical games.
@@ -346,17 +345,19 @@ from `now()` during replay).
 Replaying a long game from event #1 on every load is wasteful. When it matters, add
 **snapshots**: a periodic serialized projection state at `seq = N`, so replay starts from
 the snapshot and applies only events after it. Snapshots are an optimization — they are
-always discardable and re-derivable. Not needed for v1.
+always discardable and re-derivable. Add them only after a representative replay
+benchmark exceeds a declared latency or resource SLO.
 
 ## What this buys the rest of the system
 
 - The **running votecount** ([01](01-domain-model.md)) is a fold over
   `VoteSubmitted`/`VoteWithdrawn` within a phase — trivially as-of any point; the
   **official** outcome is the engine-resolved `DayVoteOutcome` ([09](09-engine-and-packs.md)).
-- **Replacement** is one event that preserves all slot-attached history.
+- **Replacement** appends paired occupancy-end/start facts while preserving
+  slot-attached history.
 - **End-game reveal** flips a flag in `slot_state`; a rebuild proves it was always correct.
 - The **wire protocol** ([04](04-wire-protocol.md)) ships projection *deltas*, which are
-  just the events the client is allowed to see, framed compactly.
+  typed read-model changes filtered for the client; they are not raw event bodies.
 - Network retries use durable command receipts keyed by `(principal, command_id)`: if a
   command committed but its ack was lost, retry returns the original ack instead of
   appending duplicate events.

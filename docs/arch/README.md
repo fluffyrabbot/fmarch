@@ -6,9 +6,25 @@ wire and in storage, server-trusted with strong authorization.
 
 > **Product name:** fmarch.
 
-These are *design intent* documents, not API references. They describe the substrate
-we are converging on and the reasoning behind each choice, so that implementation can
-proceed without relitigating settled decisions.
+These documents explain implemented ownership and behavior, plus explicitly
+marked design directions. Source types and executable contracts define exact
+shapes; historical decision records do not override them. Start with the
+[developer quickstart](../development.md) to operate the repository.
+
+## Documentation ownership
+
+- Architecture documents own rationale and cross-layer invariants. Link to the
+  owning document instead of repeating its procedure or proof inventory.
+- [Database schema evolution](../ops/database-schema-evolution.md) owns migration
+  procedure; [Railway releases](../ops/railway-staging-target.md) owns deployment.
+- [AGENTS.md](../../AGENTS.md) owns local proof, host resource constraints, and
+  commit workflow; [frontend proof](../ops/frontend-proof.md) explains UI evidence.
+- [Completion registry](../ops/completion-registry.json) owns current capability
+  status; [the scorecard](../ops/completeness-scorecard.md) is generated from it.
+  Saved receipts establish a particular run's result, not timeless readiness.
+- RFCs and the engine-port checklist retain decision history and proof anchors.
+  Historical plans and optional extensions are labeled separately from current
+  contracts. Do not change audited checklist rows merely to shorten prose.
 
 ## Settled decisions (the ones that fork the design)
 
@@ -19,8 +35,8 @@ proceed without relitigating settled decisions.
 | Security posture | **Server-trusted** + strong authz (no E2EE) | [06-security](06-security.md) |
 | Authorization | **Capability-based**, per-game scoped | [06-security](06-security.md) |
 | Rust↔TS contract | **Schema-first**, types generated from Rust | [04-wire-protocol](04-wire-protocol.md) |
-| Wire format | **CBOR over WebSocket**, explicitly versioned | [04-wire-protocol](04-wire-protocol.md) |
-| Frontend | **SvelteKit**, tablet-first SPA | [05-frontend](05-frontend.md) |
+| Transport | **HTTP/JSON commands and reads; CBOR WebSocket deltas**, explicitly versioned | [04-wire-protocol](04-wire-protocol.md) |
+| Frontend | **SvelteKit**, server-rendered and hydrated, tablet-first | [05-frontend](05-frontend.md) |
 | Media | **Content-addressed** (BLAKE3), transcoded, EXIF-stripped | [07-images](07-images.md) |
 | Rulesets | **Declarative packs** over a closed IR, deterministic resolver | [09-engine-and-packs](09-engine-and-packs.md) |
 | Layering | **User-agnostic engine** vs **forum platform** (two layers) | [09-engine-and-packs](09-engine-and-packs.md) |
@@ -38,13 +54,13 @@ proceed without relitigating settled decisions.
 2. [02-event-sourcing](02-event-sourcing.md) — event store, projections, replay
 3. [03-backend](03-backend.md) — Rust service: axum, tokio, sqlx, command handling
 4. [04-wire-protocol](04-wire-protocol.md) — the Rust↔TS seam, CBOR framing, schema evolution
-5. [05-frontend](05-frontend.md) — SvelteKit SPA, tablet-first, the moderator console
+5. [05-frontend](05-frontend.md) — SvelteKit routes, live recovery, tablet-first interaction
 6. [06-security](06-security.md) — authentication, capabilities, encryption at rest
 7. [07-images](07-images.md) — content-addressed media pipeline
-8. [08-roadmap](08-roadmap.md) — the first vertical slice and build order
+8. [08-roadmap](08-roadmap.md) — current sequencing and release boundaries
 9. [09-engine-and-packs](09-engine-and-packs.md) — the multi-ruleset resolution engine, IR, and packs
 10. [10-event-schema](10-event-schema.md) — concrete event taxonomy & result contract
-11. [11-engine-port-checklist](11-engine-port-checklist.md) — source-derived checklist and build order for porting im-human day/night resolution
+11. [11-engine-port-checklist](11-engine-port-checklist.md) — audited completion checklist and historical build order for the im-human port
 12. [12-capacity-and-overload](12-capacity-and-overload.md) — resource budgets, load shedding, and reproducible capacity proof
 13. [13-interaction-architecture](13-interaction-architecture.md) — player workspace, host exception queue, setup workflow
 14. [14-mash-and-manual-frontier](14-mash-and-manual-frontier.md) — mash culture (30+, day events, rewards) and permanent manual frontier
@@ -57,6 +73,9 @@ proceed without relitigating settled decisions.
 - **Accepted:** [RFC 0001 — First-class replay and history explorer](../rfcs/0001-first-class-replay-and-history-explorer.md) — public as-of state, named occupancy history, meaningful-moment navigation, and durable share links
 - **Accepted:** [RFC 0002 — First-class quotations and citation provenance](../rfcs/0002-first-class-quotations.md) — quotations as directed edges over the thread log; “quoted by” is a rebuildable projection, not a mutation of the quoted post
 - **Accepted:** [RFC 0003 — Community Platform v2](../rfcs/0003-community-platform-v2.md) — separate game/forum writes, explicit content references, and one public-publication index for engagement features
+- **Accepted:** [RFC 0004 — Principal/profile privacy boundary](../rfcs/0004-principal-profile-privacy-boundary.md) — private principal authority, public profiles, and slot-stable game personas
+- **Accepted:** [RFC 0005 — Closed-community admission](../rfcs/0005-closed-community-admission.md) — invitation and membership authority
+- **Accepted:** [RFC 0006 — Executable bounded-context architecture](../rfcs/0006-executable-bounded-context-architecture.md) — enforced domain ownership and dependency direction
 - **Accepted:** [RFC 0007 — First-class mentions and addressed delivery](../rfcs/0007-first-class-mentions-and-addressed-delivery.md) — mentions as typed write-time facts (profile-addressed in community, slot-addressed in game) with reason-derived inbox and slot-notification delivery
 
 ## The one idea everything hangs on
@@ -64,5 +83,8 @@ proceed without relitigating settled decisions.
 Forum mafia is **not** a generic forum with a game bolted on. Its defining primitives —
 **phases**, **automated votecounts**, **scoped private channels**, **slots that outlive
 the humans occupying them** — are the things legacy software gets wrong and can never
-fix. We model the *game* as the source of truth (an event log) and treat the forum
-"board" as one projection over it. Read [01-domain-model](01-domain-model.md) first.
+fix. Game history is an event stream. Community discussions have their own write
+model; shared discovery and engagement consume explicit content references
+rather than treating every discussion as a game. Read
+[01-domain-model](01-domain-model.md) and
+[RFC 0003](../rfcs/0003-community-platform-v2.md) for those boundaries.

@@ -51,10 +51,11 @@ blobs/
   <id>/<recipe-revision>/webp/...     fallbacks
 ```
 
-- Keys are derived from the content id; immutable, so a CDN / browser can cache with a far-
-  future expiry and never revalidate.
+- Keys identify immutable bytes. Cache policy still follows authorization:
+  account-gated responses use `private, no-cache` and revalidate on reuse.
+  Immutable content identity is not permission to serve private bytes publicly.
 - Keeping a stripped `orig` lets us add new variant sizes/formats later by re-transcoding
-  from local source, without asking users to re-upload.
+  from the canonical store, without asking users to re-upload.
 - A recipe directory is immutable. Its name includes the policy, codec, resize, alpha, geometry,
   and storage-layout revision, so changing any input mints new keys rather than silently changing
   bytes behind an existing key.

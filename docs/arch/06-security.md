@@ -10,7 +10,7 @@ This is a deliberate, recorded decision ([00](00-vision.md)).
 
 - **Account takeover** — credential theft, session hijacking, brute force.
 - **Authorization bypass** — a player reading scumchat, a spectator seeing roles, a host of
-  game A acting in game B, a dead slot posting, voting out of turn.
+  game A acting in game B, a dead slot posting to the main thread, voting out of turn.
 - **Data-at-rest exposure** — DB/backup leak revealing private channel contents or roles.
 - **Confused deputy** — a component acting with more authority than the caller actually has.
 - **Information leak via deltas** — a client receiving frames it shouldn't see.

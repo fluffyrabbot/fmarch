@@ -14,8 +14,8 @@ The 1.0 staging and production topology is:
 - at least two interchangeable API replicas;
 - one separately executed, fail-fast migration command per deployment;
 - shared S3-compatible object storage for canonical media and variants;
-- one isolated Postgres database and one isolated object-storage bucket per
-  environment;
+- separate Postgres instances and purpose-separated media and subject-authority
+  buckets for each environment;
 - one frontend service that can reach either API replica through the platform
   service endpoint;
 - deployment metadata that attributes every application service to the same
@@ -23,7 +23,7 @@ The 1.0 staging and production topology is:
 
 API startup verifies the schema and storage configuration but does not race to
 apply migrations. Local development may keep the filesystem media backend and
-the combined migrate-and-run convenience command. Neither local convenience is
+the local harness that sequences `runFmarchMigrations` before API startup. Neither local convenience is
 the hosted 1.0 topology.
 
 This is the smallest topology that can truthfully close the existing
@@ -52,61 +52,30 @@ The event log remains append-only. Erasure is represented by typed lifecycle
 facts plus projection redaction/pseudonymization; it is never an ad-hoc delete
 that makes replay diverge.
 
-### Wave 3 pure substrate (D10)
+### Implemented ownership and policy boundary
 
-Typed ownership lives in `crates/identity/src/data_lifecycle.rs` as a pure
-decide surface (no HTTP, SQL, or migrations in this wave). Statuses are
-`Active`, `Deactivated`, `ErasureInProgress`, and `Erased`. Commands are
-`Deactivate { reason }` and `RequestErasure`. Deactivation is the required
-gate before erasure; re-deactivating an already-deactivated member is an
-idempotent no-op.
+`identity::data_lifecycle` owns pure statuses, decisions, and disposition of
+retained/erased data. `identity::member_lifecycle` owns the durable stream,
+transaction-fenced handlers, personal export, and projection effects. The
+account-security route exposes the controls. Erasure orchestration captures
+initiating authority before revoking it; it does not require a second request
+using the just-revoked session.
 
-#### Fact kinds
+`MemberDeactivated`, `MemberErasureRequested`, `MemberCredentialsErased`,
+`MemberAuthorshipPseudonymized`, and `MemberPersonalExportRecorded` preserve
+lifecycle history. Credential removal and retained authorship pseudonymization
+are distinct from deleting the game log. Subject-key custody, revocation, and
+private-data boundaries are specified in [06-security](06-security.md).
 
-| Kind | When |
-|---|---|
-| `MemberDeactivated` | Active member deactivates (methods/sessions revoked by later handlers) |
-| `MemberErasureRequested` | Deactivated member requests erasure; status → `ErasureInProgress` |
-| `MemberCredentialsErased` | Credential/recovery/delivery secrets wiped (co-emitted on clean deactivation path) |
-| `MemberAuthorshipPseudonymized` | Projection rebuild replaced durable public authorship identifiers |
-| `MemberPersonalExportRecorded` | A personal/account export package was produced for the subject |
+Personal export is subject-scoped account data; host completed-game export has
+a separate capability and does not satisfy that obligation. The
+[completion registry](../ops/completion-registry.json) records local lifecycle
+closure. Hosted evidence and approved retention policy remain separate gates.
 
-`MemberPersonalExportRecorded` is **not** a host completed-game export. Personal
-export is subject-scoped account data under `ExportableToSubject`; completed-game
-export remains a host/game capability and does not satisfy the member export
-obligation.
-
-#### Ownership matrix (`disposition(DataClass)`)
-
-| Data class | Disposition |
-|---|---|
-| `Credentials` | `Erase` |
-| `RecoveryMaterial` | `Erase` |
-| `DeliveryDestination` | `Erase` |
-| `NonessentialProfileIdentifier` | `Erase` |
-| `PublicAuthorship` | `RetainPseudonymize` |
-| `PrivateContent` | `RetainRestricted` |
-| `ModerationEvidence` | `RetainRestricted` |
-| `PersonalExportBundle` | `ExportableToSubject` |
-| `AuditFacts` | `OperatorOnly` |
-| `BackupCopy` | `OperatorOnly` |
-
-Decide transitions (Wave 3):
-
-- `Active` + `Deactivate` → `MemberDeactivated`
-- `Deactivated` + `Deactivate` → empty ok (idempotent)
-- `Active` + `RequestErasure` → reject (`MustDeactivateFirst`)
-- `Deactivated` + `RequestErasure` → `MemberErasureRequested` + `MemberCredentialsErased`
-- `ErasureInProgress` / `Erased` + any command → reject
-
-Later waves own HTTP controls, migrations, projection rebuild/pseudonymization,
-personal-export assembly, and browser proof. This section does not mark
-`product.identity.data-lifecycle` complete.
-
-The implementation-aligned, deliberately unapproved policy draft lives in
-[`../policy-drafts/member-data-lifecycle.md`](../policy-drafts/member-data-lifecycle.md).
-It must not be published or used as approval evidence until the operator fills
-the named ownership and retention decisions.
+The [member data-lifecycle policy draft](../policy-drafts/member-data-lifecycle.md)
+is implementation-aligned but unapproved. It must not be published or used as
+approval evidence until the operator supplies the ownership and retention
+decisions.
 
 ## Accessibility release boundary
 

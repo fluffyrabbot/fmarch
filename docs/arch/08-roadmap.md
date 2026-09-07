@@ -3,7 +3,6 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Updated** | 2026-08-28 |
 | **Scope authority** | `docs/ops/completion-registry.json` |
 | **Generated view** | `docs/ops/completeness-scorecard.md` |
 
@@ -56,48 +55,29 @@ It does not mean hosted, production, or human release evidence exists.
 
 ## Transport boundary
 
-The authoritative browser transport is deliberately asymmetric:
+[04-wire-protocol](04-wire-protocol.md) owns HTTP commands and the binary-CBOR
+live generation contract. Broadcast lag is terminal for the old socket:
+recovery remints a ticket and refreshes after a fresh Hello. There is no JSON
+WebSocket compatibility mode.
 
-- **REST/JSON** carries commands, authentication, uploads, and cold projection
-  reads.
-- **WebSocket/binary CBOR** carries versioned server-to-client `Hello` and
-  `ProjectionDelta` envelopes.
-- A live connection is acquired through a short-lived, audience-bound ticket.
-- Broadcast lag emits `ResyncRequired`; the client refreshes authoritative REST
-  projections and continues on the same or a reconnected socket.
+## Selecting the next coding slice
 
-There is no JSON WebSocket compatibility mode. Pre-1.0 greenfield status lets
-the binary boundary remain singular and testable.
+Read `recommended_slice` and dependencies in the
+[completion registry](../ops/completion-registry.json) before starting work.
+[16-maintainable-core](16-maintainable-core.md) owns the module inventory. The
+resolver's action, outcome, and trace families are extracted; broad stage
+coordination, other projection families, physical command-test families, and
+proof-runner orchestration remain distinct ownership work. Do not confuse an
+extracted action helper with closure of the entire phase coordinator.
 
-## Next buildable coding slice
+Prefer the next independently changing responsibility over a speculative
+rewrite. Re-declare proof tiers at frontier checkpoints and use the sprint/full
+policy in [AGENTS.md](../../AGENTS.md).
 
-The next dependency-satisfied coding item is
-`foundation.maintainable-core`. Pack validation now exclusively owns policy
-admission, the resolver no longer revalidates an unforgeable `ValidatedPack`,
-and action/trigger policy accessors live with their consumers. The active slice
-now extracts the night protection/kill stage orchestration from
-`crates/domain/src/resolver.rs` behind typed stage contexts, preserving event
-order, trace payloads, public resolver APIs, deterministic seeds, and golden
-behavior without reopening validation, intake, suppression, redirect, or
-trigger ownership.
-
-After that extraction, maintainable-core closure proceeds in this order:
-
-1. split the broad remaining resolver phase coordinator along the typed
-   protection/kill stage boundary;
-2. split the next independently changing projection family and the remaining
-   physical command-test family;
-3. split proof-runner scenario/runtime orchestration only when the next change
-   exposes a coherent owner, while retiring redundant proof wrappers instead of
-   preserving compatibility aliases;
-4. re-declare proof tiers at each frontier checkpoint, run sprint proof during
-   the active slice, and run full proof before landing the completed sprint.
-
-The public history explorer is accepted product direction but is explicitly
-deferred beyond 1.0. The persona/occupancy and member data-lifecycle substrate
-it depends on is already locally complete; hosted erasure and release evidence
-remain separate gates. Projection snapshots remain deferred until a
-representative replay benchmark exceeds a declared latency or resource SLO.
+The public history explorer is accepted direction deferred beyond 1.0.
+Persona/occupancy and member data-lifecycle substrate are locally complete;
+hosted erasure and release evidence are separate. Projection snapshots await a
+representative replay benchmark that exceeds a declared latency or resource SLO.
 
 ## 1.0 substrate after local product closure
 
@@ -110,22 +90,12 @@ concentrated core/proof modules without compatibility scaffolding.
 
 ## Hosted release sequence
 
-Local product closure does not authorize release. Hosted work proceeds in this
-order:
-
-1. deploy the exact clean `main` commit to isolated Railway staging API,
-   frontend, Postgres, object storage, variables, domains, and WorkOS environment;
-2. verify staging API dependency readiness, frontend health, and same-commit attribution;
-3. capture non-fixture hosted identity and deployed gameplay evidence;
-4. run the real hosted concurrent-race matrix;
-5. retain logs, metrics, traces, alerts/SLO, and incident-response evidence;
-6. run production-like backup/PITR, key escrow, and secret-rotation drills;
-7. obtain explicit human rollback, support, and release approval;
-8. advance the `production` release pointer to that already-pushed `main`
-   commit.
-
-No local, fixture, generated, or hosted-like artifact may stand in for those
-external observations.
+The [release runbook](../ops/railway-staging-target.md) owns exact-commit image
+builds, migrator-first deployment, health/digest attribution, and production
+pointer advancement. [15-one-zero-governance](15-one-zero-governance.md) and the
+completion registry separately track hosted identity/gameplay, multi-node
+races, observability, recovery drills, and human approval. A mechanically
+successful deployment does not manufacture those observations.
 
 ## Product name
 

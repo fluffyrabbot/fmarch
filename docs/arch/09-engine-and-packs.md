@@ -18,7 +18,7 @@ the whole game:
 ```
 ┌─ PLATFORM LAYER (docs 01–07) ──────────────────────────────────────┐
 │  users, slot↔user occupancy & replacement, channels, posts,        │
-│  capabilities, wire, images. Parses posts → submissions.           │
+│  capabilities, wire, images. Typed commands → submissions.         │
 │  Persists engine output into the same event log.                   │
 └───────────────▲──────────────────────────────────────┬────────────┘
    submissions  │                                       │ resolution events
@@ -40,69 +40,23 @@ the whole game:
 
 ## The IR: a closed set of primitive abilities
 
-Every role action compiles to one **IR ability**. The set is **closed and versioned**
-(`ir_version`), so the vocabulary evolves additively without breaking existing packs.
+Roles compile to a closed, versioned vocabulary in
+[`crates/domain/src/ir.rs`](../../crates/domain/src/ir.rs). The current ability
+families include kill/protect/block/redirect, investigation and information,
+conversion, marks and grants, links and retaliation, and day mechanics such as
+badge, duel, ITA shot, self-destruction, town reveal, vote duel, and veto.
+`Visit` records a source-aware visit without another effect.
 
-### Current vocabulary (structure-complete, versioned additions)
+Investigation mode is an `ActionTemplate` field alongside the flat `Investigate`
+ability tag. `InvestigateMode`, `Modifier`, and the pack model are the exact
+vocabulary; do not infer an exhaustive enum from examples in this document.
 
-We ship the full pack *structure* but a deliberately small *vocabulary*, then grow it:
-
-```rust
-/// IR ability vocabulary. Closed set, versioned by `ir_version`.
-/// v1 shipped the first 8; additions (poison, delay, busdrive, grant, remove,
-/// retaliate, …) are additive and gated behind a higher ir_version.
-enum IrAbility {
-    Kill,         // remove a slot from play (subject to precedence)
-    Protect,      // guard a slot against kill (doctor/bodyguard family)
-    Block,        // prevent a slot's action from resolving (roleblock)
-    Redirect,     // change a slot action's target (bus driver / redirect)
-    Investigate,  // produce an information result; see InvestigateMode
-    Convert,      // change a slot's role/alignment (recruit/cult)
-    Mark,         // attach a persistent effect to a slot
-    Clear,        // remove a persistent effect from a slot
-    Grant,        // v2: create a generated capability/item grant
-    Link,         // v3: create a foldable cross-slot link fact
-    Retaliate,    // v4: arm a chosen death-triggered retaliation target
-    Visit,        // v24: record a source-aware visit fact with no other effect
-}
-
-/// Investigate is parameterized rather than split into many primitives.
-enum InvestigateMode {
-    Parity, Vanilla, Neapolitan, Gunsmith, Role, FullRole, Track, Watch, Motion, PriorMotion
-}
-```
-
-> Why this subset: it covers the common roles across all four target cultures (cop, doctor,
-> roleblocker, bus driver, tracker/watcher, recruiter, and persistent-effect roles like
-> poisoner via `Mark`+a delayed trigger). `retaliate`, `poison`, `delay`, `busdrive` as a
-> distinct primitive, etc. arrive via **triggers** (below) and later `ir_version` bumps —
-> never a breaking change. (im-human's full set is ~16: `kill, protect, block, redirect,
-> busdrive, investigate, track, watch, convert, poison, delay, mark, clear, grant, remove,
-> retaliate`. `Grant` was the first v2 addition; `Link` is the first v3 addition for
-> Cupid/lovers-style cross-slot state; `Retaliate` is the first v4 addition for
-> Hunter-style chosen death retaliation. `Modifier::Babysitter` is the first v5 modifier
-> addition for protect-plus-death-trigger guard dependencies. `Modifier::Hider` is the first
-> v6 modifier addition for same-night hide links. The rest grow in as packs demand.)
-
-### Modifiers
-
-Capability flags that adjust how an ability interacts with the precedence/visibility tables:
-
-```rust
-enum Modifier {
-    Strongman,    // kill bypasses protect
-    Ninja,        // action hidden from track/watch/investigate
-    Loyal,        // immune to conversion
-    Bodyguard,    // protect intercepts a saved kill and kills the protector
-    Martyr,       // protect intercepts with martyr_intercept attribution
-    Cpr,          // protect saves only if needed; otherwise kills its target
-    Babysitter,   // protected ward dies if the protecting actor dies
-    Hider,        // hide link: actor becomes untargetable behind non-mafia host
-    Roleblockable,// action can be stopped by Block (default true for most)
-    Reflexive,    // self-targeting variant
-    // x_shots is a *constraint* (a count), not a flag — see Constraints
-}
-```
+The initial eight-ability v1 was the port's starting point, not the current
+implementation. Pack validation derives the minimum `ir_version` required by
+all declared features. New behavior must define admission, deterministic
+resolution, events/folds, and proof together; a role name alone never adds a
+resolver branch. The sections below explain policy semantics and representative
+shapes. Rust types, pack validation, and the checked-in packs own exact fields.
 
 ## The pack: declarative tables over the IR
 
@@ -1623,7 +1577,8 @@ rebuilds reproduce that row from the log, and the phase cursor remains owned onl
 
 ## Submissions: the platform → engine seam
 
-The platform parses human activity (vote posts, night-action forms) into **submissions**.
+The platform converts accepted typed vote/action commands into **submissions**.
+Post bodies are not parsed for votes or actions.
 The engine consumes a window's submissions and resolves them. Submissions are the only
 player/action input crossing into the engine; host/culture phase inputs such as pending
 day announcements are carried separately in `ResolutionInput.day_phase_inputs`.

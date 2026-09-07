@@ -22,12 +22,14 @@ profile from inside a game thread — is an anonymity break and must be
 *unrepresentable*, not merely rejected.
 
 Delivery generalises the member inbox from watch-derived to **reason-derived**.
-Today every `public_inbox_item` row requires a `public_watch` row. A mention has
-no subscription behind it, so the inbox becomes principal-keyed with an explicit
-reason, and watch fan-out becomes one reason among several.
+The previous `public_inbox_item` required a `public_watch` row. The implemented
+inbox is principal-keyed with an explicit reason, so a mention does not require
+a subscription and watch fan-out is one reason among several.
 
-This is a greenfield cutover. The inbox projection family is rebaselined in one
-atomic change rather than shadowed by a second parallel inbox.
+This greenfield cutover replaces the old inbox model. Its physical changes
+land through append-only migrations under
+[database schema evolution](../ops/database-schema-evolution.md); “rebaseline”
+below refers to the projection model, not permission to rewrite applied SQL.
 
 ## Why now
 
@@ -38,9 +40,8 @@ machinery is landed and proven — `content_reference::decide_quotations`,
 `public_citation`, `game_private_citation`, the composer chip UI, and the
 `cargo:projections --test quotation_citation` lane.
 
-Mentions are the same family and are currently absent everywhere: no Rust, SQL,
-wire, or frontend surface has any notion of addressing a person. The two things
-a forum-mafia community needs from a mention are:
+Mentions use the same relation pattern and are implemented across the Rust, SQL,
+wire, and frontend boundaries. The original design addressed two needs:
 
 - **directed address** — "this paragraph is answering *you*," distinct from
   quoting a post;
