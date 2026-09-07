@@ -9,10 +9,10 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-pub const SUBJECT_ERASURE_WORKER: &str = "subject-erasure";
-pub const DAY_EVENT_WORKER: &str = "day-event-scheduler";
-pub const IDENTITY_DELIVERY_WORKER: &str = "identity-delivery";
-pub const LIVE_EVENT_LISTENER: &str = "live-event-listener";
+const SUBJECT_ERASURE_WORKER: &str = "subject-erasure";
+const DAY_EVENT_WORKER: &str = "day-event-scheduler";
+const IDENTITY_DELIVERY_WORKER: &str = "identity-delivery";
+const LIVE_EVENT_LISTENER: &str = "live-event-listener";
 
 type WorkerFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'static>>;
 type WorkerFactory =
@@ -33,12 +33,12 @@ struct WorkerSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SupervisorFailure {
-    pub worker: &'static str,
-    pub reason: String,
+pub(super) struct SupervisorFailure {
+    pub(super) worker: &'static str,
+    pub(super) reason: String,
 }
 
-pub struct RuntimeSupervisor {
+pub(super) struct RuntimeSupervisor {
     shutdown: watch::Sender<bool>,
     fatal: mpsc::UnboundedReceiver<SupervisorFailure>,
     tasks: Vec<JoinHandle<()>>,
@@ -48,7 +48,7 @@ pub struct RuntimeSupervisor {
 }
 
 impl RuntimeSupervisor {
-    pub fn start(
+    pub(super) fn start(
         pool: PgPool,
         api_state: ApiState,
         identity_gateway: Arc<dyn IdentityDeliveryGateway>,
@@ -88,19 +88,19 @@ impl RuntimeSupervisor {
         }
     }
 
-    pub fn shutdown_receiver(&self) -> watch::Receiver<bool> {
+    pub(super) fn shutdown_receiver(&self) -> watch::Receiver<bool> {
         self.shutdown.subscribe()
     }
 
-    pub fn request_shutdown(&self) {
+    pub(super) fn request_shutdown(&self) {
         let _ = self.shutdown.send(true);
     }
 
-    pub async fn wait_for_fatal(&mut self) -> Option<SupervisorFailure> {
+    pub(super) async fn wait_for_fatal(&mut self) -> Option<SupervisorFailure> {
         self.fatal.recv().await
     }
 
-    pub async fn wait_until_ready(&mut self) -> Result<(), String> {
+    pub(super) async fn wait_until_ready(&mut self) -> Result<(), String> {
         let deadline = Instant::now() + self.readiness_grace;
         loop {
             if self.health.required_workers_ready() {
@@ -135,7 +135,7 @@ impl RuntimeSupervisor {
         }
     }
 
-    pub async fn shutdown(mut self) -> Result<(), String> {
+    pub(super) async fn shutdown(mut self) -> Result<(), String> {
         self.request_shutdown();
         let deadline = tokio::time::Instant::now() + self.drain_timeout;
         let mut failures = Vec::new();
