@@ -1,5 +1,5 @@
 use super::{unix_now_seconds, WorkerBudget};
-use api::identity_delivery::IdentityDeliveryGateway;
+use api::identity_delivery::{IdentityDeliveryGateway, IdentityDeliveryWorkerConfig};
 use api::{ApiState, RuntimeWorkerHealth};
 use sqlx::PgPool;
 use std::future::Future;
@@ -53,6 +53,7 @@ impl RuntimeSupervisor {
         api_state: ApiState,
         identity_gateway: Arc<dyn IdentityDeliveryGateway>,
         classic_enabled: bool,
+        identity_delivery_config: IdentityDeliveryWorkerConfig,
         scheduler: commands::day_scheduler::DayEventSchedulerConfig,
         budget: WorkerBudget,
         health: RuntimeWorkerHealth,
@@ -65,7 +66,11 @@ impl RuntimeSupervisor {
             live_listener_spec(api_state, &budget),
         ];
         if classic_enabled {
-            specs.push(identity_delivery_spec(pool, identity_gateway, &budget));
+            specs.push(identity_delivery_spec(
+                pool,
+                identity_gateway,
+                identity_delivery_config,
+            ));
         }
         let mut tasks = Vec::with_capacity(specs.len());
         for spec in specs {
@@ -263,10 +268,8 @@ fn day_event_spec(
 fn identity_delivery_spec(
     pool: PgPool,
     gateway: Arc<dyn IdentityDeliveryGateway>,
-    budget: &WorkerBudget,
+    config: IdentityDeliveryWorkerConfig,
 ) -> WorkerSpec {
-    let idle = budget.identity_delivery_idle_interval;
-    let error_backoff = budget.identity_delivery_error_backoff;
     WorkerSpec {
         name: IDENTITY_DELIVERY_WORKER,
         required: true,
@@ -274,14 +277,20 @@ fn identity_delivery_spec(
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             let gateway = gateway.clone();
-            Box::pin(run_identity_delivery_worker(
-                pool,
-                gateway,
-                idle,
-                error_backoff,
-                shutdown,
-                health,
-            ))
+            Box::pin(async move {
+                let heartbeat_health = health.clone();
+                api::identity_delivery::run_identity_delivery_worker_observed(
+                    pool,
+                    gateway,
+                    config,
+                    shutdown,
+                    move |progress| {
+                        heartbeat_health.heartbeat(IDENTITY_DELIVERY_WORKER, progress, None);
+                    },
+                )
+                .await
+                .map_err(|error| format!("identity delivery worker failed: {error}"))
+            })
         }),
     }
 }
@@ -391,53 +400,6 @@ async fn run_day_event_worker(
     }
 }
 
-async fn run_identity_delivery_worker(
-    pool: PgPool,
-    gateway: Arc<dyn IdentityDeliveryGateway>,
-    idle_interval: Duration,
-    error_backoff: Duration,
-    shutdown: watch::Receiver<bool>,
-    health: RuntimeWorkerHealth,
-) -> Result<(), String> {
-    let mut backlog = None;
-    let mut next_backlog_sample = Instant::now();
-    loop {
-        if *shutdown.borrow() {
-            return Ok(());
-        }
-        match api::identity_delivery::process_next_identity_delivery(
-            &pool,
-            gateway.as_ref(),
-            unix_now_seconds(),
-        )
-        .await
-        {
-            Ok(receipt) => {
-                let progress = if receipt.is_some() { 1 } else { 0 };
-                if Instant::now() >= next_backlog_sample {
-                    backlog = identity_delivery_backlog(&pool).await.ok();
-                    next_backlog_sample = Instant::now() + Duration::from_secs(1);
-                }
-                health.heartbeat(IDENTITY_DELIVERY_WORKER, progress, backlog);
-                if receipt.is_none() && wait_or_shutdown(idle_interval, shutdown.clone()).await {
-                    return Ok(());
-                }
-            }
-            Err(error) => {
-                tracing::error!(
-                    event = "identity_delivery_worker_failed",
-                    error = %error,
-                    "identity delivery worker iteration failed"
-                );
-                health.iteration_failed(IDENTITY_DELIVERY_WORKER);
-                if wait_or_shutdown(error_backoff, shutdown.clone()).await {
-                    return Ok(());
-                }
-            }
-        }
-    }
-}
-
 async fn subject_erasure_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM subject_erasure WHERE state = 'pending'")
         .fetch_one(pool)
@@ -448,15 +410,6 @@ async fn subject_erasure_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
 async fn day_event_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM day_event_schedule_work WHERE auto_resolve_pending OR narrative_pending",
-    )
-    .fetch_one(pool)
-    .await
-    .map(|count| count.max(0) as u64)
-}
-
-async fn identity_delivery_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM auth_delivery_intent WHERE status IN ('pending', 'retryable_failed')",
     )
     .fetch_one(pool)
     .await

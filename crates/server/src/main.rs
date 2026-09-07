@@ -104,8 +104,6 @@ struct HttpCapacity {
 struct WorkerBudget {
     subject_erasure_idle_interval: Duration,
     subject_erasure_error_backoff: Duration,
-    identity_delivery_idle_interval: Duration,
-    identity_delivery_error_backoff: Duration,
     live_listener_restart_backoff: Duration,
     restart_limit: u32,
     readiness_grace: Duration,
@@ -248,6 +246,7 @@ impl RuntimeConfig {
                 )? as i64,
             },
             auth: api::AuthBudget {
+                identity_delivery_worker_config: identity_delivery_worker_config_from_env()?,
                 password_max_in_flight: bounded_env("FMARCH_PASSWORD_MAX_IN_FLIGHT", 4, 1, 64)?
                     as usize,
                 workos_verification_max_in_flight: bounded_env(
@@ -315,18 +314,6 @@ impl RuntimeConfig {
             )?),
             subject_erasure_error_backoff: Duration::from_millis(bounded_env(
                 "FMARCH_SUBJECT_ERASURE_ERROR_BACKOFF_MS",
-                1_000,
-                100,
-                60_000,
-            )?),
-            identity_delivery_idle_interval: Duration::from_millis(bounded_env(
-                "FMARCH_IDENTITY_DELIVERY_IDLE_INTERVAL_MS",
-                100,
-                10,
-                60_000,
-            )?),
-            identity_delivery_error_backoff: Duration::from_millis(bounded_env(
-                "FMARCH_IDENTITY_DELIVERY_ERROR_BACKOFF_MS",
                 1_000,
                 100,
                 60_000,
@@ -582,6 +569,53 @@ fn bounded_env(
         ));
     }
     Ok(parsed)
+}
+
+fn identity_delivery_worker_config_from_env(
+) -> Result<api::identity_delivery::IdentityDeliveryWorkerConfig, std::io::Error> {
+    let retry = api::identity_delivery::IdentityDeliveryRetryPolicy::new(
+        Duration::from_secs(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_RETRY_BASE_SECONDS",
+            2,
+            1,
+            86_400,
+        )?),
+        Duration::from_secs(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS",
+            300,
+            1,
+            86_400,
+        )?),
+        bounded_env("FMARCH_IDENTITY_DELIVERY_MAX_ATTEMPTS", 8, 1, 100)? as i32,
+    )
+    .map_err(invalid_runtime_config)?;
+    api::identity_delivery::IdentityDeliveryWorkerConfig::new(
+        bounded_env("FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY", 4, 1, 64)? as usize,
+        Duration::from_millis(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS",
+            100,
+            1,
+            60_000,
+        )?),
+        Duration::from_millis(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS",
+            30_000,
+            2_000,
+            300_000,
+        )?),
+        Duration::from_millis(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_ATTEMPT_TIMEOUT_MS",
+            10_000,
+            1,
+            120_000,
+        )?),
+        retry,
+    )
+    .map_err(invalid_runtime_config)
+}
+
+fn invalid_runtime_config(message: String) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
 }
 
 fn strict_bool_env(name: &str, default: bool) -> Result<bool, std::io::Error> {
@@ -883,6 +917,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dev_auth_enabled,
         cfg!(debug_assertions),
     )?;
+    if http_gateway.as_ref().is_some_and(|gateway| {
+        gateway.total_timeout()
+            > config
+                .api
+                .auth
+                .identity_delivery_worker_config
+                .attempt_timeout()
+    }) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "identity delivery HTTP total timeout must not exceed the worker attempt timeout",
+        )
+        .into());
+    }
     let gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway> =
         match delivery_mode {
             IdentityDeliveryMode::HttpJson => std::sync::Arc::new(
@@ -925,6 +973,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         api_state.clone(),
         gateway,
         classic_enabled,
+        config.api.auth.identity_delivery_worker_config,
         config.scheduler.clone(),
         config.workers.clone(),
         worker_health,

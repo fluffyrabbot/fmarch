@@ -586,6 +586,10 @@ impl HttpJsonIdentityDeliveryGateway {
         self
     }
 
+    pub fn total_timeout(&self) -> Duration {
+        self.timeouts.total()
+    }
+
     async fn deliver_http(&self, attempt: &IdentityDeliveryAttempt) -> IdentityDeliveryOutcome {
         match tokio::time::timeout(
             self.timeouts.total,
@@ -913,8 +917,21 @@ pub async fn run_identity_delivery_worker(
     pool: PgPool,
     gateway: Arc<dyn IdentityDeliveryGateway>,
     config: IdentityDeliveryWorkerConfig,
-    mut shutdown: tokio::sync::watch::Receiver<bool>,
+    shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> Result<(), IdentityDeliveryError> {
+    run_identity_delivery_worker_observed(pool, gateway, config, shutdown, |_| {}).await
+}
+
+pub async fn run_identity_delivery_worker_observed<F>(
+    pool: PgPool,
+    gateway: Arc<dyn IdentityDeliveryGateway>,
+    config: IdentityDeliveryWorkerConfig,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+    mut observe_progress: F,
+) -> Result<(), IdentityDeliveryError>
+where
+    F: FnMut(u64) + Send,
+{
     let mut attempts = JoinSet::new();
     loop {
         if *shutdown.borrow() {
@@ -948,6 +965,7 @@ pub async fn run_identity_delivery_worker(
         }
 
         if attempts.is_empty() {
+            observe_progress(0);
             tokio::select! {
                 changed = shutdown.changed() => {
                     if changed.is_err() || *shutdown.borrow() {
@@ -967,23 +985,24 @@ pub async fn run_identity_delivery_worker(
                     }
                 }
                 joined = attempts.join_next() => {
-                    finish_delivery_task(joined)?;
+                    observe_progress(finish_delivery_task(joined)?);
                 }
             }
         }
     }
 
     while let Some(joined) = attempts.join_next().await {
-        finish_delivery_task(Some(joined))?;
+        observe_progress(finish_delivery_task(Some(joined))?);
     }
     Ok(())
 }
 
 fn finish_delivery_task(
     joined: Option<JoinedIdentityDeliveryTask>,
-) -> Result<(), IdentityDeliveryError> {
+) -> Result<u64, IdentityDeliveryError> {
     match joined {
-        Some(Ok(Ok(_))) | None => Ok(()),
+        Some(Ok(Ok(Some(_)))) => Ok(1),
+        Some(Ok(Ok(None))) | None => Ok(0),
         Some(Ok(Err(error))) => Err(error),
         Some(Err(error)) => Err(IdentityDeliveryError::Worker(error.to_string())),
     }
