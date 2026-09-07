@@ -262,9 +262,10 @@ The underlying sequence is:
    external-evidence, and human gates are all fail-closed.
 4. Verify the staging receipt, digest-pinned service sources, API dependency
    readiness, frontend health, and embedded release commit.
-5. Disconnect any remaining canonical production Git sources while the prior
-   deployments continue serving.
-6. Invoke the coordinator with the staging runtime/frontend digests, wait for
+5. Invoke the coordinator, which alone owns each service's Git-to-image source
+   cutover. A null source left by an interrupted prior cutover is a resumable
+   intermediate state, while any foreign Git source remains rejected.
+6. Reuse the staging runtime/frontend digests, wait for
    migrator success, deploy API/frontend, and verify digest plus health commit
    attribution before publishing the immutable release receipt.
 7. Advance `production` last with `--force-with-lease` bound to the pointer SHA
@@ -273,6 +274,12 @@ The underlying sequence is:
 If any service fails, leave the release pointer unchanged, diagnose the failed deployment,
 and do not move the release pointer until the trio
 can be proven together. Do not deploy a dirty local directory to production.
+If coordination and immutable receipt publication succeed but the final Git
+pointer update fails, rerun the same promotion command. It accepts only the
+byte-identical receipt and revalidates its commit, signed proof, staging image
+digests, current Railway source configuration, exact deployment ids, domains,
+and live health before retrying only the expected-value pointer update. It does
+not redeploy services or replace release evidence on that replay path.
 
 After a database restore, run the exact-commit migrator before exposing the
 restored API. The restore path omits archived ownership/ACL state, so an existing

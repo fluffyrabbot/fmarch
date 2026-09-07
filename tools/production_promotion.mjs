@@ -96,11 +96,11 @@ export function validateCoordinatedServiceSources(config, serviceIds = DEFAULTS,
     );
     assert.ok(
       services[serviceIds.apiServiceId].source.image.endsWith(`@${receipt.images.runtime}`),
-      "staging API image does not match the release receipt",
+      `${receipt.environment} API image does not match the release receipt`,
     );
     assert.ok(
       services[serviceIds.frontendServiceId].source.image.endsWith(`@${receipt.images.frontend}`),
-      "staging frontend image does not match the release receipt",
+      `${receipt.environment} frontend image does not match the release receipt`,
     );
   }
 }
@@ -112,36 +112,17 @@ export function validateProductionSourceCutover(config, serviceIds = DEFAULTS) {
     ["API", serviceIds.apiServiceId],
     ["frontend", serviceIds.frontendServiceId],
   ]) {
+    assert.ok(services[serviceId], `Railway production ${label} service is missing`);
     const source = services[serviceId]?.source ?? {};
     const coordinated = /^ghcr\.io\/fluffyrabbot\/fmarch-(?:runtime|frontend)@sha256:[0-9a-f]{64}$/u
       .test(source.image ?? "");
     const detachable = source.repo === "fluffyrabbot/fmarch" && source.image == null;
+    const interruptedCutover = source.repo == null && source.image == null;
     assert.equal(
-      coordinated || detachable,
+      coordinated || detachable || interruptedCutover,
       true,
-      `Railway production ${label} source is neither coordinated nor safely detachable`,
+      `Railway production ${label} source is neither coordinated, safely detachable, nor an interrupted cutover`,
     );
-  }
-}
-
-function disconnectProductionGitSources(config, productionConfig) {
-  const services = productionConfig.services ?? productionConfig;
-  for (const serviceId of [config.migratorServiceId, config.apiServiceId, config.frontendServiceId]) {
-    if (services[serviceId]?.source?.repo == null) continue;
-    run("railway", [
-      "service",
-      "source",
-      "disconnect",
-      "--project",
-      config.projectId,
-      "--environment",
-      config.productionEnvironment,
-      "--service",
-      serviceId,
-      "--json",
-    ], {
-      env: scrubPrivilegedDatabaseEnvironment(process.env),
-    });
   }
 }
 
@@ -950,6 +931,55 @@ export function productionPointerPushArguments(commit, expectedProductionCommit)
   ];
 }
 
+export function validateReusableProductionReceipt(
+  receipt,
+  { commit, stagingReceipt, fleetProof, releaseReadiness },
+) {
+  const validated = assertReleaseReceipt(receipt);
+  assert.equal(validated.environment, "production", "only a production receipt can resume promotion");
+  assert.equal(validated.commit, commit, "existing production receipt commit drifted");
+  assert.equal(
+    validated.images.runtime,
+    stagingReceipt.images.runtime,
+    "existing production runtime image drifted from staging",
+  );
+  assert.equal(
+    validated.images.frontend,
+    stagingReceipt.images.frontend,
+    "existing production frontend image drifted from staging",
+  );
+  assert.deepEqual(
+    validated.runtime_validation,
+    stagingReceipt.runtime_validation,
+    "existing production runtime validation drifted from staging",
+  );
+  assert.deepEqual(
+    validated.fleet_proof,
+    fleetProof,
+    "existing production fleet proof drifted",
+  );
+  assert.deepEqual(
+    validated.release_readiness,
+    releaseReadiness,
+    "existing production readiness drifted",
+  );
+  assert.equal(
+    validated.schema_epoch_reset?.epoch ?? null,
+    stagingReceipt.schema_epoch_reset?.epoch ?? null,
+    "existing production schema epoch reset drifted from staging",
+  );
+  return validated;
+}
+
+function optionalReceipt(receiptPath) {
+  try {
+    return JSON.parse(readFileSync(receiptPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 async function main() {
   const args = parseArguments(process.argv.slice(2));
   const { checkOnly } = args;
@@ -1002,7 +1032,7 @@ async function main() {
   );
   const completionRegistry = await loadCompletionRegistry();
   await validateRegistry(completionRegistry);
-  validateProductionReleaseReadiness(completionRegistry);
+  const releaseReadiness = validateProductionReleaseReadiness(completionRegistry);
 
   run(
     "railway",
@@ -1086,7 +1116,30 @@ async function main() {
     return;
   }
 
-  disconnectProductionGitSources(config, productionConfig);
+  const productionReceiptPath = path.resolve(
+    process.env.FMARCH_PRODUCTION_RELEASE_RECEIPT ??
+      path.join(repoRoot, "target", "releases", "production", `${head}.json`),
+  );
+  const existingProductionReceipt = optionalReceipt(productionReceiptPath);
+  if (existingProductionReceipt) {
+    const reusable = validateReusableProductionReceipt(existingProductionReceipt, {
+      commit: head,
+      stagingReceipt,
+      fleetProof,
+      releaseReadiness,
+    });
+    validateCoordinatedServiceSources(productionConfig, config, reusable);
+    await validateCoordinatedEnvironment(config, config.productionEnvironment, reusable, {
+      apiUrl: config.productionApiUrl,
+      frontendUrl: config.productionFrontendUrl,
+    });
+    run("git", ["push", ...productionPointerPushArguments(head, originProduction)], {
+      stdio: "inherit",
+    });
+    console.log(`production promotion resumed from durable receipt for ${head}`);
+    return;
+  }
+
   const coordinatorArguments = [
     "tools/release_coordinator.mjs",
     "--environment",
@@ -1099,6 +1152,8 @@ async function main() {
     fleetReceiptPath,
     "--fleet-public-key",
     fleetPublicKeyPath,
+    "--output",
+    productionReceiptPath,
   ];
   if (args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID) {
     coordinatorArguments.push("--fleet-job", args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID);
@@ -1149,9 +1204,17 @@ async function validateCoordinatedEnvironment(config, environment, receipt, urls
   validateDeploymentArtifact(migratorDeployment, receipt.images.runtime, `${environment} migrator`);
   validateDeploymentArtifact(apiDeployment, receipt.images.runtime, `${environment} API`);
   validateDeploymentArtifact(frontendDeployment, receipt.images.frontend, `${environment} frontend`);
-  assert.equal(migratorDeployment.id, receipt.deployments.migrator, "staging migrator receipt is stale");
-  assert.equal(apiDeployment.id, receipt.deployments.api, "staging API receipt is stale");
-  assert.equal(frontendDeployment.id, receipt.deployments.frontend, "staging frontend receipt is stale");
+  assert.equal(
+    migratorDeployment.id,
+    receipt.deployments.migrator,
+    `${environment} migrator receipt is stale`,
+  );
+  assert.equal(apiDeployment.id, receipt.deployments.api, `${environment} API receipt is stale`);
+  assert.equal(
+    frontendDeployment.id,
+    receipt.deployments.frontend,
+    `${environment} frontend receipt is stale`,
+  );
   validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environment} API`);
   validateDomainList(frontendDomains, new URL(urls.frontendUrl).host, `${environment} frontend`);
   const [apiBody, frontendBody] = await Promise.all([

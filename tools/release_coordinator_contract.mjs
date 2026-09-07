@@ -159,7 +159,7 @@ export function validateFleetProofReceipt(
 
   assert.equal(evidence?.schemaVersion, 1, "fleet evidence schema drifted");
   assert.equal(evidence?.verifyOnly, true, "release proof must be verification-only");
-  assert.equal(evidence?.outcome, "passed", "fleet evidence did not pass");
+  assert.equal(evidence?.outcome, "finished", "fleet evidence did not finish");
   assert.equal(evidence?.error, null, "fleet evidence records an error");
   assert.equal(evidence?.taskId, task.id, "fleet evidence task id drifted");
   assert.equal(evidence?.repository, expectedRepository, "fleet evidence repository drifted");
@@ -188,6 +188,13 @@ export function validateFleetProofReceipt(
     evidence.steps.every((step) => step.ok === true && step.status === 0 && step.timedOut === false),
     true,
     "fleet receipt contains an unsuccessful step",
+  );
+  assert.deepEqual(
+    evidence.steps
+      .filter((step) => step.label?.startsWith("setup: "))
+      .map((step) => step.label.slice("setup: ".length)),
+    expectedWorkflow?.setup ?? [],
+    "fleet setup commands are missing or differ",
   );
   assert.deepEqual(
     evidence.steps
@@ -415,6 +422,7 @@ export function buildReleaseReceipt({
     schema_epoch_reset: schemaEpochReset,
     fleet_proof: fleetProof,
     release_readiness: releaseReadiness,
+    attempt: attemptReceipt,
     attempt_receipt_sha256: attemptReceipt.receipt_sha256,
     health,
     sentinel,
@@ -426,27 +434,75 @@ export function buildReleaseReceipt({
 export function assertReleaseReceipt(receipt) {
   assert.equal(receipt?.version, RELEASE_RECEIPT_VERSION, "release receipt version drifted");
   assert.equal(receipt.kind, "fmarch-exact-commit-release", "release receipt kind drifted");
+  assert.ok(["staging", "production"].includes(receipt.environment), "unsupported release environment");
   assertFullCommit(receipt.commit);
   assertImageDigest(receipt.images?.runtime, "runtime digest");
   assertImageDigest(receipt.images?.frontend, "frontend digest");
   assertRuntimeValidationAttestation(receipt.runtime_validation, receipt.images?.runtime);
   assertFleetProofAttestation(receipt.fleet_proof, receipt.commit);
   assert.equal(receipt.images?.migrator_api_digest_equal, true);
+  for (const service of ["migrator", "api", "frontend"]) {
+    assertNonemptyString(receipt.deployments?.[service], `${service} deployment id`);
+  }
+  assert.match(receipt.schema_head ?? "", /^\d{4}_[a-z0-9_]+\.sql$/u, "schema head is invalid");
+  assert.ok(receipt.attempt, "release attempt receipt is missing");
+  const attempt = bindReleaseAttempt({
+    environment: receipt.environment,
+    commit: receipt.commit,
+    runtimeDigest: receipt.images.runtime,
+    frontendDigest: receipt.images.frontend,
+    existing: receipt.attempt,
+  });
+  assert.equal(
+    receipt.attempt_receipt_sha256,
+    attempt.receipt_sha256,
+    "release attempt receipt binding is invalid",
+  );
+  assertNonemptyString(receipt.generated_at, "release generation time");
+  assert.equal(
+    new Date(receipt.generated_at).toISOString(),
+    receipt.generated_at,
+    "release generation time is not canonical ISO-8601",
+  );
+  validateHealth(receipt.health?.api, receipt.commit, "api");
+  validateHealth(receipt.health?.frontend, receipt.commit, "frontend");
+  assertSchemaEpochReset(receipt.schema_epoch_reset, receipt);
   const { receipt_sha256: actual, ...base } = receipt;
   assert.equal(actual, receiptDigest(base), "release receipt digest does not match its contents");
   if (receipt.environment === "staging") {
     assert.equal(receipt.release_readiness, null);
+    assert.equal(receipt.sentinel?.status, "passed", "staging release requires a passed search sentinel");
     assertHostedReleaseAcceptance(receipt.hosted_acceptance, receipt.commit);
   } else if (receipt.environment === "production") {
     assertProductionReleaseReadiness(receipt.release_readiness);
-  } else {
-    assert.fail(`unsupported release environment ${receipt.environment}`);
+    assert.equal(receipt.sentinel, null, "production release must not contain a staging sentinel");
+    assert.equal(receipt.hosted_acceptance, null, "production release must not contain staging acceptance");
   }
   const serialized = JSON.stringify(receipt).toUpperCase();
   for (const forbidden of ["DATABASE_URL", "PASSWORD", "TOKEN", "SECRET", "PRIVATE_KEY"]) {
     assert.equal(serialized.includes(forbidden), false, `release receipt contains forbidden ${forbidden}`);
   }
   return receipt;
+}
+
+function assertSchemaEpochReset(reset, receipt) {
+  if (reset === null) return;
+  assert.equal(reset?.version, 1, "schema epoch reset version drifted");
+  assert.equal(reset?.kind, "fmarch-schema-epoch-reset", "schema epoch reset kind drifted");
+  assert.equal(reset.environment, receipt.environment, "schema epoch reset environment drifted");
+  assert.equal(reset.commit, receipt.commit, "schema epoch reset commit drifted");
+  assert.equal(reset.runtime_digest, receipt.images.runtime, "schema epoch reset image drifted");
+  assert.ok(Number.isSafeInteger(reset.epoch) && reset.epoch > 0, "schema epoch reset epoch is invalid");
+  assertNonemptyString(reset.audit_deployment_id, "schema epoch reset audit deployment id");
+  assertNonemptyString(reset.deployment_id, "schema epoch reset deployment id");
+  assert.ok(
+    reset.prior_counts !== null &&
+      typeof reset.prior_counts === "object" &&
+      !Array.isArray(reset.prior_counts),
+    "schema epoch reset prior counts are missing",
+  );
+  const { receipt_sha256: actual, ...base } = reset;
+  assert.equal(actual, receiptDigest(base), "schema epoch reset receipt was tampered with");
 }
 
 export function assertHostedReleaseAcceptance(receipt, commit) {
