@@ -119,7 +119,8 @@ pub struct IdentityDeliveryWorkerConfig {
     max_database_in_flight: usize,
     poll_interval: Duration,
     claim_lease: Duration,
-    attempt_timeout: Duration,
+    provider_timeout: Duration,
+    database_timeout: Duration,
     retry_base: Duration,
     retry_max: Duration,
     max_attempts: i32,
@@ -131,7 +132,8 @@ impl IdentityDeliveryWorkerConfig {
         max_database_in_flight: usize,
         poll_interval: Duration,
         claim_lease: Duration,
-        attempt_timeout: Duration,
+        provider_timeout: Duration,
+        database_timeout: Duration,
         retry: IdentityDeliveryRetryPolicy,
     ) -> Result<Self, String> {
         if !(1..=64).contains(&max_concurrency) {
@@ -146,16 +148,22 @@ impl IdentityDeliveryWorkerConfig {
         if poll_interval.is_zero() || poll_interval > Duration::from_secs(60) {
             return Err("identity delivery poll interval must be in (0ms, 60s]".to_string());
         }
-        if attempt_timeout.is_zero() || attempt_timeout > Duration::from_secs(120) {
-            return Err("identity delivery attempt timeout must be in (0ms, 120s]".to_string());
+        if provider_timeout.is_zero() || provider_timeout > Duration::from_secs(120) {
+            return Err("identity delivery provider timeout must be in (0ms, 120s]".to_string());
         }
+        if database_timeout.is_zero() || database_timeout > Duration::from_secs(120) {
+            return Err("identity delivery database timeout must be in (0ms, 120s]".to_string());
+        }
+        let total_timeout = provider_timeout
+            .saturating_add(database_timeout)
+            .saturating_add(database_timeout);
         if claim_lease.subsec_nanos() != 0
             || claim_lease.as_secs() < 2
             || claim_lease > Duration::from_secs(300)
-            || claim_lease <= attempt_timeout.saturating_add(Duration::from_secs(1))
+            || claim_lease <= total_timeout.saturating_add(Duration::from_secs(1))
         {
             return Err(
-                "identity delivery claim lease must use 2..=300 whole seconds and exceed the attempt timeout by more than one second"
+                "identity delivery claim lease must use 2..=300 whole seconds and exceed the bounded preparation, provider, and finalization lifetime by more than one second"
                     .to_string(),
             );
         }
@@ -164,7 +172,8 @@ impl IdentityDeliveryWorkerConfig {
             max_database_in_flight,
             poll_interval,
             claim_lease,
-            attempt_timeout,
+            provider_timeout,
+            database_timeout,
             retry_base: retry.base,
             retry_max: retry.max,
             max_attempts: retry.max_attempts,
@@ -187,8 +196,18 @@ impl IdentityDeliveryWorkerConfig {
         self.claim_lease
     }
 
-    pub fn attempt_timeout(self) -> Duration {
-        self.attempt_timeout
+    pub fn provider_timeout(self) -> Duration {
+        self.provider_timeout
+    }
+
+    pub fn database_timeout(self) -> Duration {
+        self.database_timeout
+    }
+
+    pub fn total_timeout(self) -> Duration {
+        self.provider_timeout
+            .saturating_add(self.database_timeout)
+            .saturating_add(self.database_timeout)
     }
 
     pub fn retry_base(self) -> Duration {
@@ -236,7 +255,8 @@ impl Default for IdentityDeliveryWorkerConfig {
             max_database_in_flight: 2,
             poll_interval: Duration::from_millis(100),
             claim_lease: Duration::from_secs(30),
-            attempt_timeout: Duration::from_secs(10),
+            provider_timeout: Duration::from_secs(10),
+            database_timeout: Duration::from_secs(5),
             retry_base: Duration::from_secs(2),
             retry_max: Duration::from_secs(300),
             max_attempts: 8,
@@ -751,7 +771,9 @@ type JoinedIdentityDeliveryTask = Result<IdentityDeliveryTaskOutput, tokio::task
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IdentityDeliveryWorkerObservation {
     pub completed: u64,
+    pub attempt_errors: u64,
     pub in_flight: usize,
+    pub attempt_finished: bool,
 }
 
 #[derive(Debug, Error)]
@@ -779,6 +801,7 @@ struct ClaimedIdentityDelivery {
     credential_envelope: Option<Value>,
     provider_id: String,
     claim_token: Uuid,
+    claimed_at: i64,
     provider_attempt_permitted: bool,
 }
 
@@ -815,21 +838,22 @@ pub(super) async fn process_identity_delivery_intent_with_config(
     delivery_id: Uuid,
     actor_principal_id: &PrincipalId,
     event_kind: &str,
-    now: i64,
+    _caller_now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
     let Some(claim) =
-        claim_delivery(pool, gateway.provider_id(), Some(delivery_id), now, config).await?
+        claim_delivery(pool, gateway.provider_id(), Some(delivery_id), config).await?
     else {
         return Ok(None);
     };
+    let claimed_at = claim.claimed_at;
     deliver_and_finalize(
         pool,
         claim,
         gateway,
         actor_principal_id,
         Some(event_kind),
-        now,
+        claimed_at,
         config,
         None,
     )
@@ -839,20 +863,21 @@ pub(super) async fn process_identity_delivery_intent_with_config(
 pub async fn process_next_identity_delivery_with_config(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    now: i64,
+    _caller_now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now, config).await? else {
+    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, config).await? else {
         return Ok(None);
     };
     let actor_principal_id = claim.attempt.principal_id;
+    let claimed_at = claim.claimed_at;
     deliver_and_finalize(
         pool,
         claim,
         gateway,
         &actor_principal_id,
         None,
-        now,
+        claimed_at,
         config,
         None,
     )
@@ -878,7 +903,6 @@ where
 
         let mut found_work = false;
         while attempts.len() < config.max_concurrency() {
-            let now = unix_now_seconds();
             let claim = tokio::select! {
                 biased;
                 changed = shutdown.changed() => {
@@ -887,12 +911,14 @@ where
                     }
                     continue;
                 }
-                claim = claim_delivery(&pool, gateway.provider_id(), None, now, config) => claim?,
+                claim = claim_delivery(&pool, gateway.provider_id(), None, config) => claim?,
             };
             let Some(claim) = claim else {
                 observe_progress(IdentityDeliveryWorkerObservation {
                     completed: 0,
+                    attempt_errors: 0,
                     in_flight: attempts.len(),
+                    attempt_finished: false,
                 });
                 break;
             };
@@ -907,37 +933,34 @@ where
             let attempt_gateway = gateway.clone();
             let attempt_database_slots = database_slots.clone();
             let actor_principal_id = claim.attempt.principal_id;
+            let claimed_at = claim.claimed_at;
             attempts.spawn(async move {
-                tokio::time::timeout(
-                    config.attempt_timeout(),
-                    deliver_and_finalize(
-                        &attempt_pool,
-                        claim,
-                        attempt_gateway.as_ref(),
-                        &actor_principal_id,
-                        None,
-                        now,
-                        config,
-                        Some(&attempt_database_slots),
-                    ),
+                deliver_and_finalize(
+                    &attempt_pool,
+                    claim,
+                    attempt_gateway.as_ref(),
+                    &actor_principal_id,
+                    None,
+                    claimed_at,
+                    config,
+                    Some(&attempt_database_slots),
                 )
                 .await
-                .map_err(|_| {
-                    IdentityDeliveryError::Worker(
-                        "identity delivery attempt deadline elapsed".to_string(),
-                    )
-                })?
             });
             observe_progress(IdentityDeliveryWorkerObservation {
                 completed: 0,
+                attempt_errors: 0,
                 in_flight: attempts.len(),
+                attempt_finished: false,
             });
         }
 
         if attempts.is_empty() {
             observe_progress(IdentityDeliveryWorkerObservation {
                 completed: 0,
+                attempt_errors: 0,
                 in_flight: 0,
+                attempt_finished: false,
             });
             tokio::select! {
                 changed = shutdown.changed() => {
@@ -963,7 +986,9 @@ where
                 () = tokio::time::sleep(config.poll_interval()) => {
                     observe_progress(IdentityDeliveryWorkerObservation {
                         completed: 0,
+                        attempt_errors: 0,
                         in_flight: attempts.len(),
+                        attempt_finished: false,
                     });
                 }
             }
@@ -983,7 +1008,9 @@ fn finish_delivery_task(
     match joined {
         Some(Ok(Ok(receipt))) => Ok(IdentityDeliveryWorkerObservation {
             completed: u64::from(receipt.is_some()),
+            attempt_errors: 0,
             in_flight,
+            attempt_finished: true,
         }),
         Some(Ok(Err(_))) => {
             tracing::error!(
@@ -992,12 +1019,16 @@ fn finish_delivery_task(
             );
             Ok(IdentityDeliveryWorkerObservation {
                 completed: 0,
+                attempt_errors: 1,
                 in_flight,
+                attempt_finished: true,
             })
         }
         None => Ok(IdentityDeliveryWorkerObservation {
             completed: 0,
+            attempt_errors: 0,
             in_flight,
+            attempt_finished: false,
         }),
         Some(Err(error)) => Err(IdentityDeliveryError::Worker(error.to_string())),
     }
@@ -1131,10 +1162,13 @@ async fn claim_delivery(
     pool: &PgPool,
     provider_id: &str,
     delivery_id: Option<Uuid>,
-    now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
+    let database_now =
+        sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&mut *tx)
+            .await?;
     let row = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, i64, i32, Option<Value>)>(
         r#"
         SELECT delivery_id, delivery_kind, account_id, principal_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
@@ -1153,7 +1187,7 @@ async fn claim_delivery(
     )
     .bind(provider_id)
     .bind(delivery_id)
-    .bind(now)
+    .bind(database_now)
     .fetch_optional(&mut *tx)
     .await?;
     let Some((
@@ -1180,7 +1214,7 @@ async fn claim_delivery(
             principal_id: &principal_id,
             credential_hash: credential_hash.as_str(),
             provider_id,
-            cancelled_at: now,
+            cancelled_at: database_now,
         };
         cancel_claimed_delivery(&mut tx, request).await?;
         tx.commit().await?;
@@ -1207,8 +1241,8 @@ async fn claim_delivery(
     )
     .bind(delivery_id)
     .bind(claim_token)
-    .bind(now.saturating_add(config.claim_lease().as_secs() as i64))
-    .bind(now)
+    .bind(database_now.saturating_add(config.claim_lease().as_secs() as i64))
+    .bind(database_now)
     .bind(config.max_attempts())
     .execute(&mut *tx)
     .await?;
@@ -1227,6 +1261,7 @@ async fn claim_delivery(
         credential_envelope,
         provider_id: provider_id.to_string(),
         claim_token,
+        claimed_at: database_now,
         provider_attempt_permitted,
     }))
 }
@@ -1385,7 +1420,7 @@ async fn delivery_outcome(
     claim: &mut ClaimedIdentityDelivery,
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    now: i64,
+    claimed_at: i64,
     config: IdentityDeliveryWorkerConfig,
     database_slots: Option<&Arc<Semaphore>>,
 ) -> IdentityDeliveryOutcome {
@@ -1394,13 +1429,17 @@ async fn delivery_outcome(
             IdentityDeliveryFailureCode::AttemptsExhausted,
         );
     }
-    let credential_active = {
-        let _database_permit = acquire_delivery_database_slot(database_slots).await;
-        match credential_is_active_now(
-            pool,
-            claim.attempt.kind,
-            claim.attempt.credential_hash.as_str(),
-        )
+    let credential_active =
+        match bounded_delivery_database_operation(config.database_timeout(), "preparation", async {
+            let _database_permit = acquire_delivery_database_slot(database_slots).await;
+            credential_is_active_now(
+                pool,
+                claim.attempt.kind,
+                claim.attempt.credential_hash.as_str(),
+            )
+            .await
+            .map_err(IdentityDeliveryError::from)
+        })
         .await
         {
             Ok(active) => active,
@@ -1409,14 +1448,13 @@ async fn delivery_outcome(
                     IdentityDeliveryFailureCode::LocalTransient,
                 )
             }
-        }
-    };
+        };
     if !credential_active {
         return IdentityDeliveryOutcome::Cancelled(
             IdentityDeliveryCancellationCode::CredentialInactive,
         );
     }
-    if claim.attempt.credential_expires_at <= now {
+    if claim.attempt.credential_expires_at <= claimed_at {
         return IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialExpired,
         );
@@ -1438,7 +1476,14 @@ async fn delivery_outcome(
         }
     };
     claim.attempt.credential_material = Some(credential_material);
-    match tokio::time::timeout(config.attempt_timeout(), gateway.deliver(&claim.attempt)).await {
+    bounded_provider_delivery(config.provider_timeout(), gateway.deliver(&claim.attempt)).await
+}
+
+async fn bounded_provider_delivery<F>(timeout: Duration, delivery: F) -> IdentityDeliveryOutcome
+where
+    F: Future<Output = IdentityDeliveryOutcome>,
+{
+    match tokio::time::timeout(timeout, delivery).await {
         Ok(outcome) => outcome,
         Err(_) => IdentityDeliveryOutcome::RetryableFailure(
             IdentityDeliveryFailureCode::ProviderUnavailable,
@@ -1459,29 +1504,61 @@ async fn deliver_and_finalize(
     gateway: &dyn IdentityDeliveryGateway,
     actor_principal_id: &PrincipalId,
     requested_event_kind: Option<&str>,
-    now: i64,
+    claimed_at: i64,
     config: IdentityDeliveryWorkerConfig,
     database_slots: Option<&Arc<Semaphore>>,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
     // The provider is deliberately outside every database transaction. The
     // claim token and immutable credential hash fence completion; source
     // revocation/consumption wins through the conditional finalization CAS.
-    let outcome = delivery_outcome(&mut claim, pool, gateway, now, config, database_slots).await;
-    let finalized_at = unix_now_seconds().max(now);
-    let _database_permit = acquire_delivery_database_slot(database_slots).await;
-    let mut tx = pool.begin().await?;
-    let receipt = finalize_delivery(
-        &mut tx,
-        claim,
-        outcome,
-        actor_principal_id,
-        requested_event_kind,
-        finalized_at,
+    let outcome = delivery_outcome(
+        &mut claim,
+        pool,
+        gateway,
+        claimed_at,
         config,
+        database_slots,
     )
-    .await?;
-    tx.commit().await?;
-    Ok(receipt)
+    .await;
+    bounded_delivery_database_operation(config.database_timeout(), "finalization", async {
+        let _database_permit = acquire_delivery_database_slot(database_slots).await;
+        let mut tx = pool.begin().await?;
+        let finalized_at = sqlx::query_scalar::<_, i64>(
+            "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let receipt = finalize_delivery(
+            &mut tx,
+            claim,
+            outcome,
+            actor_principal_id,
+            requested_event_kind,
+            finalized_at,
+            config,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(receipt)
+    })
+    .await
+}
+
+async fn bounded_delivery_database_operation<T, F>(
+    timeout: Duration,
+    phase: &'static str,
+    operation: F,
+) -> Result<T, IdentityDeliveryError>
+where
+    F: Future<Output = Result<T, IdentityDeliveryError>>,
+{
+    tokio::time::timeout(timeout, operation)
+        .await
+        .map_err(|_| {
+            IdentityDeliveryError::Worker(format!(
+                "identity delivery {phase} database deadline elapsed"
+            ))
+        })?
 }
 
 async fn acquire_delivery_database_slot(
@@ -1746,11 +1823,13 @@ pub fn unix_now_seconds() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
+        bounded_delivery_database_operation, bounded_provider_delivery,
         DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryCancellationCode,
-        IdentityDeliveryFailureCode, IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts,
-        IdentityDeliveryKind, IdentityDeliveryOutcome, IdentityDeliveryRetryPolicy,
-        IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
-        DISABLED_PROVIDER_ID, LOCAL_DETERMINISTIC_PROVIDER_ID,
+        IdentityDeliveryError, IdentityDeliveryFailureCode, IdentityDeliveryGateway,
+        IdentityDeliveryHttpTimeouts, IdentityDeliveryKind, IdentityDeliveryOutcome,
+        IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerConfig,
+        LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
+        LOCAL_DETERMINISTIC_PROVIDER_ID,
     };
     use axum::response::IntoResponse;
     use principal::PrincipalId;
@@ -1929,6 +2008,32 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn near_deadline_provider_success_receives_a_fresh_finalization_budget() {
+        let phase_timeout = Duration::from_millis(250);
+        let started = Instant::now();
+        let outcome = bounded_provider_delivery(phase_timeout, async {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            IdentityDeliveryOutcome::Delivered {
+                provider_receipt_id: "near-deadline-receipt".to_string(),
+            }
+        })
+        .await;
+        let finalized =
+            bounded_delivery_database_operation(phase_timeout, "finalization", async move {
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                Ok::<_, IdentityDeliveryError>(outcome)
+            })
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            finalized,
+            IdentityDeliveryOutcome::Delivered { .. }
+        ));
+        assert!(started.elapsed() > phase_timeout);
+    }
+
     #[test]
     fn typed_outcomes_keep_retryability_and_terminality_distinct() {
         let retryable = IdentityDeliveryOutcome::RetryableFailure(
@@ -1965,6 +2070,7 @@ mod tests {
             Duration::from_millis(100),
             Duration::from_secs(10),
             Duration::from_secs(9),
+            Duration::from_secs(1),
             retry,
         )
         .is_err());
@@ -1981,6 +2087,7 @@ mod tests {
             Duration::from_millis(100),
             Duration::from_secs(30),
             Duration::from_secs(5),
+            Duration::from_secs(2),
             retry,
         )
         .unwrap();

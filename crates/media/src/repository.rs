@@ -147,6 +147,13 @@ impl MediaReadAdmission {
         }
     }
 
+    fn manifest_maintenance() -> Self {
+        Self {
+            requests: Arc::new(Semaphore::new(1)),
+            bytes: Arc::new(Semaphore::new(MANIFEST_MAX_BYTES as usize)),
+        }
+    }
+
     fn acquire_request(&self) -> Result<OwnedSemaphorePermit, MediaError> {
         self.requests
             .clone()
@@ -238,6 +245,7 @@ pub struct MediaRepository {
     limits: MediaLimits,
     read_limits: MediaReadLimits,
     read_admission: MediaReadAdmission,
+    maintenance_read_admission: MediaReadAdmission,
 }
 
 impl fmt::Debug for MediaRepository {
@@ -271,6 +279,7 @@ impl MediaRepository {
             limits,
             read_limits,
             read_admission: MediaReadAdmission::new(read_limits),
+            maintenance_read_admission: MediaReadAdmission::manifest_maintenance(),
         }
     }
 
@@ -313,6 +322,7 @@ impl MediaRepository {
             limits,
             read_limits,
             read_admission: MediaReadAdmission::new(read_limits),
+            maintenance_read_admission: MediaReadAdmission::manifest_maintenance(),
         }
     }
 
@@ -530,8 +540,10 @@ impl MediaRepository {
         limits: VariantLimits,
     ) -> Result<Option<VariantSet>, MediaError> {
         self.read_limits.validate_for_variants(limits)?;
-        let request_permit = self.read_admission.acquire_request()?;
-        let manifest_permit = self.read_admission.acquire_bytes(MANIFEST_MAX_BYTES)?;
+        let request_permit = self.maintenance_read_admission.acquire_request()?;
+        let manifest_permit = self
+            .maintenance_read_admission
+            .acquire_bytes(MANIFEST_MAX_BYTES)?;
         match &self.backend {
             RepositoryBackend::Local(store) => {
                 let store = store.clone();
@@ -1291,17 +1303,25 @@ mod tests {
     #[tokio::test]
     async fn manifest_probe_is_shallow() {
         let object_store = Arc::new(CountingObjectStore::default());
-        let repository = MediaRepository::object(
-            object_store.clone(),
-            MediaLimits::default(),
-            MediaReadLimits::default(),
-        );
         let limits = VariantLimits::default();
+        let read_limits = MediaReadLimits::new(
+            1,
+            MediaReadLimits::required_in_flight_bytes(limits).unwrap(),
+        )
+        .unwrap();
+        let repository =
+            MediaRepository::object(object_store.clone(), MediaLimits::default(), read_limits);
         let committed = repository
             .prepare_and_commit_upload(png(), limits)
             .await
             .unwrap();
         let id = committed.ingest().handle().id();
+        let held_response = repository
+            .lookup_variant(id, VariantFormat::Webp, VariantKind::Thumb, limits)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(repository.read_admission.requests.available_permits(), 0);
         object_store.clear_reads();
 
         let manifest = repository
@@ -1316,6 +1336,7 @@ mod tests {
                 "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"
             )]
         );
+        drop(held_response);
     }
 
     #[tokio::test]

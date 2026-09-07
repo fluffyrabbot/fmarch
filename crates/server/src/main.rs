@@ -154,6 +154,7 @@ struct WorkerBudget {
     subject_erasure_idle_interval: Duration,
     subject_erasure_error_backoff: Duration,
     media_reconciliation_interval: Duration,
+    media_reconciliation_timeout: Duration,
     media_reconciliation_batch_size: i64,
     worker_restart_backoff: Duration,
     restart_limit: u32,
@@ -384,7 +385,7 @@ impl RuntimeConfig {
             classic_enabled,
             dev_auth_requested,
             cfg!(debug_assertions),
-            api.auth.identity_delivery_worker_config.attempt_timeout(),
+            api.auth.identity_delivery_worker_config.provider_timeout(),
         )?;
         let workers = WorkerBudget {
             subject_erasure_idle_interval: Duration::from_millis(bounded_env(
@@ -404,6 +405,12 @@ impl RuntimeConfig {
                 5_000,
                 100,
                 60_000,
+            )?),
+            media_reconciliation_timeout: Duration::from_millis(bounded_env(
+                "FMARCH_MEDIA_RECONCILIATION_TIMEOUT_MS",
+                5_000,
+                100,
+                300_000,
             )?),
             media_reconciliation_batch_size: bounded_env(
                 "FMARCH_MEDIA_RECONCILIATION_BATCH_SIZE",
@@ -524,7 +531,11 @@ impl RuntimeConfig {
             .workers
             .subject_erasure_idle_interval
             .max(self.scheduler.poll_interval)
-            .max(self.workers.media_reconciliation_interval)
+            .max(
+                self.workers
+                    .media_reconciliation_interval
+                    .saturating_add(self.workers.media_reconciliation_timeout),
+            )
             .max(
                 self.api
                     .auth
@@ -549,6 +560,12 @@ impl RuntimeConfig {
                 "worker readiness grace must exceed one bounded database acquire and statement",
             ));
         }
+        if self.workers.readiness_grace <= self.workers.media_reconciliation_timeout {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker readiness grace must exceed the media reconciliation timeout",
+            ));
+        }
         if Duration::from_secs(self.api.media.upload_lease_seconds as u64)
             <= Duration::from_millis(self.http.request_timeout_ms)
         {
@@ -557,16 +574,17 @@ impl RuntimeConfig {
                 "FMARCH_MEDIA_UPLOAD_LEASE_SECONDS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS",
             ));
         }
-        if self.workers.shutdown_drain_timeout
-            < self
-                .api
-                .auth
-                .identity_delivery_worker_config
-                .attempt_timeout()
-        {
+        let identity_delivery = self.api.auth.identity_delivery_worker_config;
+        if identity_delivery.database_timeout() <= startup_database_budget {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "worker shutdown drain timeout must cover one bounded identity delivery attempt",
+                "identity delivery database timeout must cover one bounded database acquire and statement",
+            ));
+        }
+        if self.workers.shutdown_drain_timeout <= identity_delivery.total_timeout() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker shutdown drain timeout must cover one bounded identity delivery preparation, provider call, and finalization",
             ));
         }
         Ok(())
@@ -773,8 +791,14 @@ fn identity_delivery_worker_config_from_env(
             300_000,
         )?),
         Duration::from_millis(bounded_env(
-            "FMARCH_IDENTITY_DELIVERY_ATTEMPT_TIMEOUT_MS",
+            "FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS",
             10_000,
+            1,
+            120_000,
+        )?),
+        Duration::from_millis(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS",
+            6_000,
             1,
             120_000,
         )?),
@@ -865,7 +889,7 @@ fn identity_delivery_config_from_env(
     classic_enabled: bool,
     dev_auth_requested: bool,
     debug_build: bool,
-    attempt_timeout: Duration,
+    provider_timeout: Duration,
 ) -> Result<IdentityDeliveryConfig, std::io::Error> {
     let endpoint = optional_env("FMARCH_IDENTITY_DELIVERY_ENDPOINT")?;
     let provider_id = optional_env("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")?;
@@ -990,9 +1014,9 @@ fn identity_delivery_config_from_env(
                 )? as usize,
             )
             .map_err(invalid_runtime_config)?;
-            if timeouts.total() >= attempt_timeout {
+            if timeouts.total() > provider_timeout {
                 return Err(invalid_runtime_config(
-                    "identity delivery HTTP total timeout must leave time inside the whole-attempt deadline for database finalization"
+                    "identity delivery HTTP total timeout must not exceed the provider timeout"
                         .to_string(),
                 ));
             }

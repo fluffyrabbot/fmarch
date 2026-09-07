@@ -88,7 +88,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         .expect("audit boundary end");
 
     let claim = &source[claim_start..cancel_start];
+    assert!(claim.contains("EXTRACT(EPOCH FROM clock_timestamp())"));
     assert!(claim.contains("OR (status = 'retryable_failed' AND next_attempt_at <= $3)"));
+    assert!(claim.contains(".bind(database_now)"));
     assert!(
         !claim.contains("$2::UUID IS NOT NULL AND status = 'retryable_failed'"),
         "automatic workers, not only admin retries, must reclaim due retryable work"
@@ -99,8 +101,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "principal_id: &principal_id",
         "credential_hash: credential_hash.as_str()",
         "provider_id,",
-        "cancelled_at: now",
+        "cancelled_at: database_now",
         "cancel_claimed_delivery(&mut tx, request).await?",
+        ".bind(database_now.saturating_add(config.claim_lease().as_secs() as i64))",
         "tx.commit().await?",
     ] {
         assert!(
@@ -149,10 +152,11 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert_ordered(
         delivery,
         &[
-            "delivery_outcome(&mut claim, pool, gateway, now, config, database_slots).await",
-            "let finalized_at = unix_now_seconds().max(now)",
-            "let _database_permit = acquire_delivery_database_slot(database_slots).await",
-            "let mut tx = pool.begin().await?",
+            "let outcome = delivery_outcome(",
+            "bounded_delivery_database_operation(config.database_timeout(), \"finalization\"",
+            "acquire_delivery_database_slot(database_slots).await",
+            "pool.begin().await?",
+            "EXTRACT(EPOCH FROM clock_timestamp())",
             "finalize_delivery(",
             "requested_event_kind,",
             "finalized_at,",
@@ -282,8 +286,10 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
         "biased;",
         "changed = shutdown.changed()",
         "if *shutdown.borrow()",
-        "tokio::time::timeout(",
-        "config.attempt_timeout()",
+        "deliver_and_finalize(",
+        "claimed_at",
+        "attempt_errors:",
+        "attempt_finished:",
         "in_flight: attempts.len()",
         "tokio::time::sleep(config.poll_interval())",
     ] {
@@ -292,6 +298,10 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
             "worker lost contract: {contract}"
         );
     }
+    assert!(
+        !worker.contains("tokio::time::timeout("),
+        "the worker must not cancel database finalization at the provider deadline"
+    );
     assert!(
         !source.contains("spawn_identity_delivery_worker"),
         "production worker ownership must remain with the process supervisor"

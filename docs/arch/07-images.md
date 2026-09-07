@@ -183,13 +183,16 @@ Current implemented slice:
   cross-system atomicity. A commit-ambiguous storage error retains its journal evidence. Identical
   retries take over only an expired lease and idempotently verify or finish immutable objects. A
   required supervised reconciler gives an expired installer a second quarantine lease, then probes
-  the installed-last manifest: complete sets become `ready`; operations without a manifest become
-  `failed` and release quota, but their immutable fragments remain. A database lease cannot fence a
-  delayed object-store writer, so online deletion would risk publishing a manifest whose members
-  were concurrently removed. Content and principal advisory fences serialize journal and quota
-  transitions; a future garbage collector must use generation-scoped objects with an independently
-  fenced promotion before it may delete fragments. Journal rows are never blindly deleted, so
-  restart recovery remains auditable.
+  the installed-last manifest: complete sets become `ready`; operations without a manifest remain
+  quota-bearing and are probed again after that lease. A database lease cannot fence a delayed
+  object-store writer, so online deletion or charge release could race a manifest that is still in
+  flight. Content and principal advisory fences serialize journal and quota transitions; a future
+  garbage collector must use generation-scoped objects with an independently fenced promotion
+  before it may release charges or delete fragments. Journal rows are never blindly deleted, so
+  restart recovery remains auditable and abandoned storage stays bounded by account quota.
+  Reconciliation owns a reserved manifest-read lane, so saturated response bodies cannot starve
+  maintenance or drop readiness, and every iteration is deadline-bounded for prompt health and
+  shutdown behavior when object storage stalls.
 - A new upload returns `201`; an idempotent repeat returns `200`. The JSON response contains only
   the content id, intrinsic dimensions, recipe revision, and each immutable variant's typed role,
   format, MIME, dimensions, length, BLAKE3, and alpha flag—never paths or original bytes.

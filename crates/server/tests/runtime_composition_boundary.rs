@@ -20,6 +20,7 @@ fn process_root_owns_runtime_budgets_and_worker_lifecycle() {
         "FMARCH_COMMAND_MAX_IN_FLIGHT",
         "FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT",
         "FMARCH_MEDIA_MAX_IN_FLIGHT",
+        "FMARCH_MEDIA_RECONCILIATION_TIMEOUT_MS",
         "FMARCH_WORKER_HEARTBEAT_STALE_MS",
         "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS",
     ] {

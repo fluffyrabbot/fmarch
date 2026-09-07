@@ -550,9 +550,13 @@ replacement lint allowance.
 
 Identity delivery is a leased, fenced saga rather than a transaction spanning
 provider I/O. A short `FOR UPDATE SKIP LOCKED` claim commits an opaque token and
-lease, then releases every database lock before credential preflight and the
-bounded provider request. Finalization is a second short transaction whose CAS
-requires the exact token and immutable credential hash. Cancellation,
+lease using PostgreSQL `clock_timestamp()`, so replica clock skew cannot steal a
+live claim, then releases every database lock before credential preflight and
+the bounded provider request. Preparation, provider I/O, and finalization have
+separate deadlines; a provider response near its deadline therefore receives a
+fresh finalization budget rather than being cancelled after its external side
+effect. Finalization is a second short transaction whose CAS requires the exact
+token and immutable credential hash. Cancellation,
 revocation, claim expiry, and a newer worker therefore defeat stale completion
 without holding scarce connections across a network call.
 
@@ -565,8 +569,9 @@ only after the fenced finalization succeeds.
 
 The process supervisor owns the only production worker entry point. Provider
 fan-out and database admission are separate bounded budgets; claim scans and
-in-flight ticks feed readiness without waiting for a provider completion; and
-SIGTERM stops new provider starts before draining already-owned attempts.
+in-flight ticks feed readiness without waiting for a provider completion;
+attempt failures latch required-worker health until a later clean attempt
+finishes; and SIGTERM stops new provider starts before draining already-owned attempts.
 Transport configuration and its byte/deadline limits are parsed fail-closed in
 the composition root before external authority or database side effects.
 

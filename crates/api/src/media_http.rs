@@ -315,13 +315,13 @@ pub struct MediaReconciliationReport {
     pub examined: u64,
     pub quarantined: u64,
     pub restored_ready: u64,
-    pub retired: u64,
+    pub deferred: u64,
     pub failures: u64,
 }
 
 impl MediaReconciliationReport {
     pub fn completed(self) -> u64 {
-        self.restored_ready.saturating_add(self.retired)
+        self.restored_ready
     }
 }
 
@@ -334,11 +334,11 @@ enum MediaReconciliationClaim {
 /// Advance expired upload operations through a two-lease recovery fence.
 ///
 /// The first expired lease is only quarantined. A later pass probes the installed-last manifest;
-/// complete installs become ready, while operations without a manifest become failed and release
-/// quota. Immutable fragments are deliberately retained: a database lease cannot fence a delayed
-/// object-store writer, so online deletion could race that writer and corrupt a subsequently
-/// published manifest. The journal row is never deleted, keeping the ambiguous outcome auditable
-/// and allowing an identical retry to converge under a fresh fenced lease.
+/// complete installs become ready, while operations without a manifest remain quota-bearing and
+/// are probed again after the recovery lease. A database lease cannot fence a delayed object-store
+/// writer, so neither deleting fragments nor releasing their charge is safe after one negative
+/// probe. The journal row is never deleted, keeping the ambiguous outcome auditable and allowing
+/// an identical retry to converge under a fresh fenced lease.
 pub async fn reconcile_media_uploads_once(
     state: &ApiState,
     batch_size: i64,
@@ -406,11 +406,10 @@ async fn reconcile_media_uploads_with(
                         }
                     }
                     Ok(None) => {
-                        if finish_media_reconciliation(pool, &content_id, lease_token, "failed")
-                            .await?
-                        {
-                            report.retired = report.retired.saturating_add(1);
-                        }
+                        // Keep the second lease and its quota charge. The original object-store
+                        // writer may still publish the installed-last manifest after this probe;
+                        // its token cannot be fenced by PostgreSQL once the remote request exists.
+                        report.deferred = report.deferred.saturating_add(1);
                     }
                     Err(_) => {
                         report.failures = report.failures.saturating_add(1);
@@ -903,7 +902,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../database_schema/migrations")]
-    async fn reconciliation_quarantines_before_retiring_an_incomplete_install(pool: PgPool) {
+    async fn reconciliation_keeps_an_incomplete_install_quota_bearing(pool: PgPool) {
         let principal_id = PrincipalId::fixture("media-reconciliation");
         insert_principal(&pool, principal_id).await;
         let content_id = ContentId::from_bytes([11; 32]);
@@ -928,7 +927,7 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(quarantined.quarantined, 1);
-        assert_eq!(quarantined.retired, 0);
+        assert_eq!(quarantined.deferred, 0);
         assert_eq!(
             sqlx::query_scalar::<_, String>(
                 "SELECT state FROM media_upload_ledger WHERE upload_id = $1",
@@ -945,21 +944,37 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        let retired =
+        let deferred =
             reconcile_media_uploads_with(&pool, &store, media::VariantLimits::default(), 60, 10)
                 .await
                 .unwrap();
-        assert_eq!(retired.retired, 1);
-        assert_eq!(retired.failures, 0);
-        assert_eq!(
+        assert_eq!(deferred.deferred, 1);
+        assert_eq!(deferred.failures, 0);
+        let (state, lease_token, lease_expires_at) =
             sqlx::query_as::<_, (String, Option<Uuid>, Option<i64>)>(
                 "SELECT state, lease_token, lease_expires_at FROM media_upload_ledger WHERE upload_id = $1",
             )
             .bind(upload_id)
             .fetch_one(&pool)
             .await
-            .unwrap(),
-            ("failed".to_string(), None, None)
-        );
+            .unwrap();
+        assert_eq!(state, "reclaiming");
+        assert!(lease_token.is_some());
+        assert!(lease_expires_at.is_some_and(|deadline| deadline > 0));
+        assert!(matches!(
+            reserve_media_quota(
+                &pool,
+                10,
+                60,
+                principal_id,
+                1,
+                ContentId::from_bytes([12; 32]),
+            )
+            .await,
+            Err(ApiError::Reject {
+                status: StatusCode::PAYLOAD_TOO_LARGE,
+                ..
+            })
+        ));
     }
 }

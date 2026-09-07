@@ -1,5 +1,7 @@
 use super::{unix_now_seconds, WorkerBudget};
-use api::identity_delivery::{IdentityDeliveryGateway, IdentityDeliveryWorkerConfig};
+use api::identity_delivery::{
+    IdentityDeliveryGateway, IdentityDeliveryWorkerConfig, IdentityDeliveryWorkerObservation,
+};
 use api::{ApiState, RuntimeWorkerHealth};
 use sqlx::PgPool;
 use std::future::Future;
@@ -302,17 +304,17 @@ fn identity_delivery_spec(
             let gateway = gateway.clone();
             Box::pin(async move {
                 let heartbeat_health = health.clone();
+                let mut failure_latched = false;
                 api::identity_delivery::run_identity_delivery_worker_observed(
                     pool,
                     gateway,
                     config,
                     shutdown,
                     move |observation| {
-                        heartbeat_health.heartbeat_with_load(
-                            IDENTITY_DELIVERY_WORKER,
-                            observation.completed,
-                            None,
-                            Some(observation.in_flight as u64),
+                        record_identity_delivery_health(
+                            &heartbeat_health,
+                            &mut failure_latched,
+                            observation,
                         );
                     },
                 )
@@ -320,6 +322,29 @@ fn identity_delivery_spec(
                 .map_err(|error| format!("identity delivery worker failed: {error}"))
             })
         }),
+    }
+}
+
+fn record_identity_delivery_health(
+    health: &RuntimeWorkerHealth,
+    failure_latched: &mut bool,
+    observation: IdentityDeliveryWorkerObservation,
+) {
+    if observation.attempt_errors > 0 {
+        *failure_latched = true;
+        health.iteration_failed(IDENTITY_DELIVERY_WORKER);
+        return;
+    }
+    if observation.attempt_finished {
+        *failure_latched = false;
+    }
+    if !*failure_latched {
+        health.heartbeat_with_load(
+            IDENTITY_DELIVERY_WORKER,
+            observation.completed,
+            None,
+            Some(observation.in_flight as u64),
+        );
     }
 }
 
@@ -352,6 +377,7 @@ fn media_reconciliation_spec(
     budget: &WorkerBudget,
 ) -> WorkerSpec {
     let interval = budget.media_reconciliation_interval;
+    let iteration_timeout = budget.media_reconciliation_timeout;
     let batch_size = budget.media_reconciliation_batch_size;
     WorkerSpec {
         name: MEDIA_RECONCILIATION_WORKER,
@@ -361,7 +387,13 @@ fn media_reconciliation_spec(
             let pool = pool.clone();
             let state = api_state.clone();
             Box::pin(run_media_reconciliation_worker(
-                pool, state, interval, batch_size, shutdown, health,
+                pool,
+                state,
+                interval,
+                iteration_timeout,
+                batch_size,
+                shutdown,
+                health,
             ))
         }),
     }
@@ -371,6 +403,7 @@ async fn run_media_reconciliation_worker(
     pool: PgPool,
     state: ApiState,
     interval: Duration,
+    iteration_timeout: Duration,
     batch_size: i64,
     shutdown: watch::Receiver<bool>,
     health: RuntimeWorkerHealth,
@@ -379,8 +412,13 @@ async fn run_media_reconciliation_worker(
         if *shutdown.borrow() {
             return Ok(());
         }
-        match api::reconcile_media_uploads_once(&state, batch_size).await {
-            Ok(report) => {
+        match tokio::time::timeout(
+            iteration_timeout,
+            api::reconcile_media_uploads_once(&state, batch_size),
+        )
+        .await
+        {
+            Ok(Ok(report)) => {
                 let backlog = media_reconciliation_backlog(&pool).await.ok();
                 health.heartbeat_with_load(
                     MEDIA_RECONCILIATION_WORKER,
@@ -392,10 +430,18 @@ async fn run_media_reconciliation_worker(
                     health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
                 }
             }
-            Err(_) => {
+            Ok(Err(_)) => {
                 tracing::error!(
                     event = "media_reconciliation_worker_failed",
                     "media reconciliation worker iteration failed"
+                );
+                health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
+            }
+            Err(_) => {
+                tracing::error!(
+                    event = "media_reconciliation_worker_timed_out",
+                    timeout_ms = iteration_timeout.as_millis(),
+                    "media reconciliation worker iteration exceeded its deadline"
                 );
                 health.iteration_failed(MEDIA_RECONCILIATION_WORKER);
             }
@@ -532,11 +578,67 @@ async fn wait_for_shutdown(mut shutdown: watch::Receiver<bool>) {
 #[cfg(test)]
 mod tests {
     use super::{
-        supervise_worker, RuntimeWorkerHealth, SupervisorFailure, WorkerPolicy, WorkerSpec,
+        record_identity_delivery_health, supervise_worker, RuntimeWorkerHealth, SupervisorFailure,
+        WorkerPolicy, WorkerSpec, IDENTITY_DELIVERY_WORKER,
     };
+    use api::identity_delivery::IdentityDeliveryWorkerObservation;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{mpsc, watch};
+
+    #[test]
+    fn identity_delivery_failure_stays_unhealthy_until_a_clean_iteration() {
+        let health = RuntimeWorkerHealth::default();
+        health.register(IDENTITY_DELIVERY_WORKER, true);
+        let mut failure_latched = false;
+        record_identity_delivery_health(
+            &health,
+            &mut failure_latched,
+            IdentityDeliveryWorkerObservation {
+                completed: 0,
+                attempt_errors: 0,
+                in_flight: 1,
+                attempt_finished: false,
+            },
+        );
+        assert!(health.required_workers_ready());
+
+        record_identity_delivery_health(
+            &health,
+            &mut failure_latched,
+            IdentityDeliveryWorkerObservation {
+                completed: 0,
+                attempt_errors: 1,
+                in_flight: 0,
+                attempt_finished: true,
+            },
+        );
+        assert!(!health.required_workers_ready());
+
+        record_identity_delivery_health(
+            &health,
+            &mut failure_latched,
+            IdentityDeliveryWorkerObservation {
+                completed: 0,
+                attempt_errors: 0,
+                in_flight: 0,
+                attempt_finished: false,
+            },
+        );
+        assert!(!health.required_workers_ready());
+
+        record_identity_delivery_health(
+            &health,
+            &mut failure_latched,
+            IdentityDeliveryWorkerObservation {
+                completed: 1,
+                attempt_errors: 0,
+                in_flight: 0,
+                attempt_finished: true,
+            },
+        );
+        assert!(health.required_workers_ready());
+    }
 
     #[tokio::test]
     async fn fatal_policy_surfaces_early_exit() {
