@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, open, unlink } from "node:fs/promises";
+import { link, mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 async function syncDirectory(directory) {
@@ -37,6 +37,7 @@ function assertDistinctParent(directory, parent) {
 export async function publishImmutableJson(output, value, { mode = 0o600 } = {}) {
   const directory = path.dirname(output);
   await ensureDurableDirectory(directory);
+  const serialized = `${JSON.stringify(value, null, 2)}\n`;
   const stage = path.join(
     directory,
     `.${path.basename(output)}.stage-${process.pid}-${randomUUID()}`,
@@ -45,7 +46,7 @@ export async function publishImmutableJson(output, value, { mode = 0o600 } = {})
   let stagePresent = true;
   try {
     await syncDirectory(directory);
-    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`);
+    await handle.writeFile(serialized);
     await handle.sync();
     await handle.close();
     handle = null;
@@ -53,6 +54,8 @@ export async function publishImmutableJson(output, value, { mode = 0o600 } = {})
       await link(stage, output);
     } catch (error) {
       if (error?.code === "EEXIST") {
+        const existing = await readFile(output, "utf8");
+        if (existing === serialized) return output;
         throw new Error(`immutable receipt already exists: ${output}`);
       }
       throw error;

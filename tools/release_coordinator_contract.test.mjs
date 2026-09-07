@@ -10,12 +10,14 @@ import {
   bindReleaseAttempt,
   buildReleaseReceipt,
   canonicalJson,
+  receiptDigest,
   validateDeploymentArtifact,
   validateFleetProofReceipt,
   validateProductionReleaseReadiness,
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
+import { validateReusableProductionReceipt } from "./production_promotion.mjs";
 import {
   canonicalDeploymentPolicy,
   parseMigrationCompletion,
@@ -71,7 +73,8 @@ const fleetTrustRootSha256 = createHash("sha256")
 function signedFleetReceipt({
   releaseCommit = commit,
   mode = "audit",
-  outcome = "passed",
+  outcome = "finished",
+  setupCommands = fleetWorkflow.setup,
   stepOk = true,
   signingKey = fleetPrivateKey,
 } = {}) {
@@ -120,6 +123,12 @@ function signedFleetReceipt({
         verify: fleetWorkflow.verify,
       },
       steps: [
+        ...setupCommands.map((command) => ({
+          label: `setup: ${command}`,
+          ok: true,
+          status: 0,
+          timedOut: false,
+        })),
         {
           label: `verify: ${fleetWorkflow.verify[0]}`,
           ok: stepOk,
@@ -152,6 +161,11 @@ const attemptReceipt = bindReleaseAttempt({
   runtimeDigest,
   frontendDigest,
 });
+
+function redigestReleaseReceipt(receipt) {
+  const { receipt_sha256: _digest, ...base } = structuredClone(receipt);
+  return { ...base, receipt_sha256: receiptDigest(base) };
+}
 
 test("repository validation rejects dirty, stale, or unpointed releases", () => {
   const valid = {
@@ -227,7 +241,16 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
       expectedTrustRootSha256: fleetTrustRootSha256,
       expectedWorkflow: fleetWorkflow,
     }),
-    /did not pass/,
+    /did not finish/,
+  );
+  assert.throws(
+    () => validateFleetProofReceipt(signedFleetReceipt({ setupCommands: [] }), {
+      expectedCommit: commit,
+      publicKeyPem: fleetPublicKeyPem,
+      expectedTrustRootSha256: fleetTrustRootSha256,
+      expectedWorkflow: fleetWorkflow,
+    }),
+    /setup commands are missing or differ/,
   );
 });
 
@@ -257,13 +280,22 @@ test("production readiness rejects every incomplete required registry item", () 
   );
 });
 
-test("immutable release receipts publish atomically and refuse replacement", async () => {
+test("immutable release receipts publish atomically, replay identically, and refuse replacement", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "fmarch-release-receipt-"));
   try {
     const output = path.join(directory, "receipt.json");
     await publishImmutableJson(output, { status: "passed" });
     assert.deepEqual(JSON.parse(await readFile(output, "utf8")), { status: "passed" });
+    assert.equal(await publishImmutableJson(output, { status: "passed" }), output);
     await assert.rejects(publishImmutableJson(output, { status: "different" }), /already exists/);
+
+    const concurrent = path.join(directory, "concurrent.json");
+    assert.deepEqual(
+      await Promise.all(
+        Array.from({ length: 4 }, () => publishImmutableJson(concurrent, { status: "same" })),
+      ),
+      Array(4).fill(concurrent),
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -601,6 +633,35 @@ test("staging sentinel waits for telemetry propagation without rerunning its can
 });
 
 test("release receipt binds exact artifacts, health, proof, and staging sentinel", () => {
+  const health = {
+    api: {
+      ok: true,
+      release_commit: commit,
+      database_schema: true,
+      event_encryption: true,
+      object_storage: true,
+      subject_authority: true,
+    },
+    frontend: { status: "ok", release_commit: commit },
+  };
+  const hostedAcceptance = {
+    status: "passed",
+    checkerCommit: commit,
+    target: {
+      commit,
+      api: "https://fmarch-staging.up.railway.app",
+      frontend: "https://fmarch-frontend-staging.up.railway.app",
+    },
+    authenticatedJourneys: {
+      status: "passed",
+      scope: "live-authenticated-staging",
+      commandAcknowledged: true,
+      socketReconnected: true,
+      missedUpdateRecovered: true,
+      durableFreshContext: true,
+      authenticatedPrivateDenial: true,
+    },
+  };
   const receipt = buildReleaseReceipt({
     environment: "staging",
     commit,
@@ -611,22 +672,12 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       api: deployment("api", runtimeDigest),
       frontend: deployment("frontend", frontendDigest),
     },
-    health: {
-      api: {
-        ok: true,
-        release_commit: commit,
-        database_schema: true,
-        event_encryption: true,
-        object_storage: true,
-        subject_authority: true,
-      },
-      frontend: { status: "ok", release_commit: commit },
-    },
+    health,
     schemaHead: "0002_profile_mute_durable_target.sql",
     fleetProof,
     attemptReceipt,
     runtimeValidation,
-    hostedAcceptance: {status: 'passed', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
+    hostedAcceptance,
     sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
     generatedAt: new Date("2026-08-26T00:00:00.000Z"),
   });
@@ -644,5 +695,107 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       runtime_validation: { ...runtimeValidation, platform: "linux/arm64" },
     }),
     /platform drifted/,
+  );
+
+  const tamperedHealth = redigestReleaseReceipt({
+    ...receipt,
+    health: { ...receipt.health, api: { ...receipt.health.api, ok: false } },
+  });
+  assert.throws(() => assertReleaseReceipt(tamperedHealth), /readiness field ok/);
+  assert.throws(
+    () => assertReleaseReceipt(redigestReleaseReceipt({ ...receipt, deployments: { ...receipt.deployments, api: "" } })),
+    /API deployment id|api deployment id/iu,
+  );
+  assert.throws(
+    () => assertReleaseReceipt(redigestReleaseReceipt({ ...receipt, schema_head: "latest.sql" })),
+    /schema head/,
+  );
+  assert.throws(
+    () => assertReleaseReceipt(redigestReleaseReceipt({ ...receipt, sentinel: null })),
+    /passed search sentinel/,
+  );
+
+  const alteredAttemptBase = {
+    ...receipt.attempt,
+    images: { ...receipt.attempt.images, frontend: `sha256:${"f".repeat(64)}` },
+  };
+  delete alteredAttemptBase.receipt_sha256;
+  const alteredAttempt = {
+    ...alteredAttemptBase,
+    receipt_sha256: receiptDigest(alteredAttemptBase),
+  };
+  assert.throws(
+    () => assertReleaseReceipt(redigestReleaseReceipt({
+      ...receipt,
+      attempt: alteredAttempt,
+      attempt_receipt_sha256: alteredAttempt.receipt_sha256,
+    })),
+    /exact commit and image digests/,
+  );
+
+  const releaseReadiness = validateProductionReleaseReadiness({
+    version: 1,
+    sections: [{ id: "release", required_for: "release" }],
+    items: [{ id: "approval", section: "release", status: "complete" }],
+  });
+  const productionAttempt = bindReleaseAttempt({
+    environment: "production",
+    commit,
+    runtimeDigest,
+    frontendDigest,
+  });
+  const productionReceipt = buildReleaseReceipt({
+    environment: "production",
+    commit,
+    runtimeDigest,
+    frontendDigest,
+    deployments: {
+      migrator: deployment("production-migrator", runtimeDigest),
+      api: deployment("production-api", runtimeDigest),
+      frontend: deployment("production-frontend", frontendDigest),
+    },
+    health,
+    schemaHead: "0002_profile_mute_durable_target.sql",
+    fleetProof,
+    attemptReceipt: productionAttempt,
+    runtimeValidation,
+    releaseReadiness,
+    generatedAt: new Date("2026-08-27T00:00:00.000Z"),
+  });
+  assert.equal(
+    validateReusableProductionReceipt(productionReceipt, {
+      commit,
+      stagingReceipt: receipt,
+      fleetProof,
+      releaseReadiness,
+    }),
+    productionReceipt,
+  );
+  assert.throws(
+    () => assertReleaseReceipt(redigestReleaseReceipt({
+      ...productionReceipt,
+      sentinel: { status: "passed" },
+    })),
+    /must not contain a staging sentinel/,
+  );
+  const alternateProductionAttempt = bindReleaseAttempt({
+    environment: "production",
+    commit,
+    runtimeDigest,
+    frontendDigest: `sha256:${"f".repeat(64)}`,
+  });
+  assert.throws(
+    () => validateReusableProductionReceipt(redigestReleaseReceipt({
+      ...productionReceipt,
+      images: { ...productionReceipt.images, frontend: `sha256:${"f".repeat(64)}` },
+      attempt: alternateProductionAttempt,
+      attempt_receipt_sha256: alternateProductionAttempt.receipt_sha256,
+    }), {
+      commit,
+      stagingReceipt: receipt,
+      fleetProof,
+      releaseReadiness,
+    }),
+    /frontend image drifted from staging/,
   );
 });

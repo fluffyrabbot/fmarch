@@ -38,13 +38,19 @@ test("production promotion consumes the coordinated staging receipt", async () =
   const source = await readFile(new URL("./production_promotion.mjs", import.meta.url), "utf8");
   const stagingReceipt = source.indexOf("const stagingReceipt = assertReleaseReceipt");
   const stagingValidation = source.indexOf("await validateCoordinatedEnvironment");
+  const receiptReplay = source.indexOf("if (existingProductionReceipt)");
   const coordinator = source.indexOf('"tools/release_coordinator.mjs"');
-  const releasePush = source.indexOf("productionPointerPushArguments(head, originProduction)");
+  const replayPush = source.indexOf("productionPointerPushArguments(head, originProduction)");
+  const releasePush = source.lastIndexOf("productionPointerPushArguments(head, originProduction)");
   assert.equal(stagingReceipt >= 0, true);
   assert.equal(stagingValidation > stagingReceipt, true);
+  assert.equal(receiptReplay > stagingValidation, true);
+  assert.equal(replayPush > receiptReplay && replayPush < coordinator, true);
+  assert.equal(coordinator > receiptReplay, true);
   assert.equal(coordinator > stagingValidation, true);
   assert.equal(releasePush > coordinator, true);
   assert.equal(source.includes('"proof:lanes"'), false);
+  assert.equal(source.includes("disconnectProductionGitSources"), false);
 });
 
 test("production pointer advancement is an exact expected-value CAS", () => {
@@ -115,7 +121,7 @@ test("Railway services use digest-pinned images without a racing Git source", ()
   assert.throws(() => validateCoordinatedServiceSources(config, serviceIds), /must not retain/);
 });
 
-test("first coordinated production release permits only the canonical detachable Git source", () => {
+test("production source validation accepts safe mixed and interrupted cutover states", () => {
   const config = {
     services: Object.fromEntries(
       [apiServiceId, migratorServiceId, frontendServiceId].map((serviceId) => [
@@ -125,7 +131,13 @@ test("first coordinated production release permits only the canonical detachable
     ),
   };
   assert.doesNotThrow(() => validateProductionSourceCutover(config, serviceIds));
-  config.services[apiServiceId].source.repo = "attacker/fmarch";
+  config.services[apiServiceId].source = null;
+  config.services[migratorServiceId].source = {
+    repo: null,
+    image: `ghcr.io/fluffyrabbot/fmarch-runtime@sha256:${"a".repeat(64)}`,
+  };
+  assert.doesNotThrow(() => validateProductionSourceCutover(config, serviceIds));
+  config.services[apiServiceId].source = { repo: "attacker/fmarch", image: null };
   assert.throws(() => validateProductionSourceCutover(config, serviceIds), /safely detachable/);
 });
 
