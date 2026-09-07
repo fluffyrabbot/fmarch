@@ -88,6 +88,11 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         .expect("audit boundary end");
 
     let claim = &source[claim_start..cancel_start];
+    assert!(claim.contains("OR (status = 'retryable_failed' AND next_attempt_at <= $3)"));
+    assert!(
+        !claim.contains("$2::UUID IS NOT NULL AND status = 'retryable_failed'"),
+        "automatic workers, not only admin retries, must reclaim due retryable work"
+    );
     for claim_contract in [
         "let request = IdentityDeliveryCancellationRequest {",
         "account_id: account_id.as_str()",
@@ -157,6 +162,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         !delivery.contains("lock_active_credential") && !delivery.contains("lock_claimed_delivery"),
         "provider delivery must not hold credential or intent row locks"
     );
+    assert!(delivery.contains("claim token and immutable credential hash fence completion"));
     let provider_position = delivery.find("delivery_outcome(").unwrap();
     let transaction_position = delivery.find("pool.begin().await?").unwrap();
     assert!(
