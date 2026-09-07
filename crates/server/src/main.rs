@@ -7,6 +7,7 @@ use axum::middleware;
 use sqlx::postgres::PgPoolOptions;
 
 mod admission;
+mod runtime_supervisor;
 
 use admission::{enforce_http_admission, HttpAdmission};
 
@@ -17,12 +18,15 @@ const MIN_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 10_000;
 const MIN_DATABASE_POOL_CONNECTIONS: u64 = 5;
 
 #[derive(Debug, Clone)]
-struct Config {
+struct RuntimeConfig {
     database_url: String,
     bind: SocketAddr,
     media: MediaConfig,
     database: DatabaseCapacity,
     http: HttpCapacity,
+    api: api::ApiRuntimeConfig,
+    workers: WorkerBudget,
+    operator_audit_max_in_flight: usize,
     scheduler: commands::day_scheduler::DayEventSchedulerConfig,
     bootstrap_admin: Option<BootstrapAdminConfig>,
 }
@@ -45,24 +49,6 @@ fn unix_now_seconds() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system clock must be after Unix epoch")
         .as_secs() as i64
-}
-
-fn spawn_subject_erasure_worker(pool: sqlx::PgPool) -> tokio::task::JoinHandle<()> {
-    let worker_id = format!("subject-erasure-{}", uuid::Uuid::new_v4().simple());
-    tokio::spawn(async move {
-        loop {
-            match identity::process_pending_subject_erasures(&pool, &worker_id, unix_now_seconds())
-                .await
-            {
-                Ok(processed) if processed > 0 => continue,
-                Ok(_) => tokio::time::sleep(Duration::from_secs(5)).await,
-                Err(_error) => {
-                    tracing::error!("subject erasure worker failed; retrying");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        }
-    })
 }
 
 #[derive(Clone)]
@@ -114,52 +100,277 @@ struct HttpCapacity {
     retry_after_seconds: i64,
 }
 
-impl Config {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorkerBudget {
+    subject_erasure_idle_interval: Duration,
+    subject_erasure_error_backoff: Duration,
+    identity_delivery_idle_interval: Duration,
+    identity_delivery_error_backoff: Duration,
+    live_listener_restart_backoff: Duration,
+    restart_limit: u32,
+    readiness_grace: Duration,
+    heartbeat_stale_after: Duration,
+    shutdown_drain_timeout: Duration,
+}
+
+impl RuntimeConfig {
     fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let database_url = env::var("DATABASE_URL")?;
-        let bind = bind_from_values(
-            env::var("FMARCH_BIND").ok().as_deref(),
-            env::var("PORT").ok().as_deref(),
-        )?;
+        let configured_bind = optional_env("FMARCH_BIND")?;
+        let platform_port = optional_env("PORT")?;
+        let bind = bind_from_values(configured_bind.as_deref(), platform_port.as_deref())?;
         let media = media_config_from_env()?;
-        Ok(Config {
+        let database = DatabaseCapacity {
+            max_connections: bounded_env(
+                "FMARCH_DB_MAX_CONNECTIONS",
+                10,
+                MIN_DATABASE_POOL_CONNECTIONS,
+                256,
+            )? as u32,
+            acquire_timeout_ms: bounded_env("FMARCH_DB_ACQUIRE_TIMEOUT_MS", 250, 1, 60_000)?,
+            statement_timeout_ms: bounded_env(
+                "FMARCH_DB_STATEMENT_TIMEOUT_MS",
+                5_000,
+                10,
+                300_000,
+            )?,
+            lock_timeout_ms: bounded_env("FMARCH_DB_LOCK_TIMEOUT_MS", 1_000, 1, 300_000)?,
+            idle_transaction_timeout_ms: bounded_env(
+                "FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS",
+                10_000,
+                MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+                300_000,
+            )?,
+        };
+        let http = HttpCapacity {
+            max_in_flight: bounded_env("FMARCH_HTTP_MAX_IN_FLIGHT", 128, 1, 65_536)? as usize,
+            queue_timeout_ms: bounded_env("FMARCH_HTTP_QUEUE_TIMEOUT_MS", 50, 1, 60_000)?,
+            request_timeout_ms: bounded_env("FMARCH_HTTP_REQUEST_TIMEOUT_MS", 15_000, 10, 300_000)?,
+            retry_after_seconds: bounded_env("FMARCH_HTTP_RETRY_AFTER_SECONDS", 1, 1, 300)? as i64,
+        };
+        let authority_transaction_max_in_flight = bounded_env(
+            "FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT",
+            u64::from(database.max_connections - 3),
+            2,
+            u64::from(database.max_connections - 3),
+        )? as usize;
+        let auth_rate_window =
+            bounded_env("FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 1, 86_400)? as i64;
+        let auth_rate_lockout =
+            bounded_env("FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS", 900, 1, 86_400)? as i64;
+        let source_signing_key = optional_env("FMARCH_AUTH_SOURCE_SIGNING_KEY")?
+            .map(|value| {
+                if value.len() < 32 {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "FMARCH_AUTH_SOURCE_SIGNING_KEY must contain at least 32 bytes",
+                    ))
+                } else {
+                    Ok(std::sync::Arc::<[u8]>::from(value.into_bytes()))
+                }
+            })
+            .transpose()?;
+        let session_policy = identity::SessionPolicy::new(
+            bounded_env("FMARCH_SESSION_TTL_SECONDS", 2_592_000, 60, 31_536_000)? as i64,
+            bounded_env("FMARCH_WORKOS_SESSION_TTL_SECONDS", 86_400, 60, 86_400)? as i64,
+            bounded_env("FMARCH_SESSION_IDLE_TTL_SECONDS", 604_800, 60, 31_536_000)? as i64,
+        )
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+        let api = api::ApiRuntimeConfig {
+            websocket: api::WebSocketBudget {
+                projection_capacity: bounded_env("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536)?
+                    as usize,
+                projection_delivery_delay: Duration::from_millis(bounded_env(
+                    "FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS",
+                    0,
+                    0,
+                    60_000,
+                )?),
+                max_connections: bounded_env("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536)? as usize,
+                max_connections_per_principal: bounded_env(
+                    "FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL",
+                    4,
+                    1,
+                    128,
+                )? as usize,
+                delivery_max_in_flight: bounded_env(
+                    "FMARCH_WS_DELIVERY_MAX_IN_FLIGHT",
+                    authority_transaction_max_in_flight.saturating_sub(1).min(4) as u64,
+                    1,
+                    authority_transaction_max_in_flight.saturating_sub(1) as u64,
+                )? as usize,
+                poll_interval: Duration::from_millis(bounded_env(
+                    "FMARCH_WS_POLL_INTERVAL_MS",
+                    5_000,
+                    25,
+                    5_000,
+                )?),
+                heartbeat_interval: Duration::from_millis(bounded_env(
+                    "FMARCH_WS_HEARTBEAT_INTERVAL_MS",
+                    10_000,
+                    100,
+                    60_000,
+                )?),
+                audience: optional_env("FMARCH_WS_AUDIENCE")?
+                    .unwrap_or_else(|| "fmarch-live".to_string()),
+                ticket_ttl: Duration::from_secs(bounded_env(
+                    "FMARCH_WS_TICKET_TTL_SECONDS",
+                    30,
+                    5,
+                    120,
+                )?),
+                ticket_max_per_window: bounded_env(
+                    "FMARCH_WS_TICKET_MAX_PER_WINDOW",
+                    60,
+                    2,
+                    10_000,
+                )? as i32,
+            },
+            command: api::CommandBudget {
+                max_in_flight: bounded_env("FMARCH_COMMAND_MAX_IN_FLIGHT", 32, 1, 1_024)? as usize,
+                lock_timeout: Duration::from_millis(bounded_env(
+                    "FMARCH_COMMAND_LOCK_TIMEOUT_MS",
+                    5_000,
+                    100,
+                    30_000,
+                )?),
+            },
+            authority: api::AuthorityBudget {
+                transaction_max_in_flight: authority_transaction_max_in_flight,
+            },
+            media: api::MediaBudget {
+                max_in_flight: bounded_env("FMARCH_MEDIA_MAX_IN_FLIGHT", 2, 1, 32)? as usize,
+                account_quota_bytes: bounded_env(
+                    "FMARCH_MEDIA_ACCOUNT_QUOTA_BYTES",
+                    256 * 1024 * 1024,
+                    12 * 1024 * 1024,
+                    10 * 1024 * 1024 * 1024,
+                )? as i64,
+            },
+            auth: api::AuthBudget {
+                password_max_in_flight: bounded_env("FMARCH_PASSWORD_MAX_IN_FLIGHT", 4, 1, 64)?
+                    as usize,
+                workos_verification_max_in_flight: bounded_env(
+                    "FMARCH_WORKOS_VERIFY_MAX_IN_FLIGHT",
+                    8,
+                    1,
+                    128,
+                )? as usize,
+                workos_verification_max_per_source: bounded_env(
+                    "FMARCH_WORKOS_VERIFY_MAX_PER_SOURCE",
+                    120,
+                    2,
+                    10_000,
+                )? as i32,
+                rate_limit_account_max_failures: bounded_env(
+                    "FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES",
+                    5,
+                    2,
+                    100,
+                )? as i32,
+                rate_limit_source_max_failures: bounded_env(
+                    "FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES",
+                    50,
+                    2,
+                    10_000,
+                )? as i32,
+                registration_max_per_source: bounded_env(
+                    "FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT",
+                    5,
+                    2,
+                    10_000,
+                )? as i32,
+                rate_limit_window_seconds: auth_rate_window,
+                rate_limit_lockout_seconds: auth_rate_lockout,
+                rate_limit_retention_seconds: bounded_env(
+                    "FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS",
+                    auth_rate_window.max(auth_rate_lockout).saturating_mul(4) as u64,
+                    auth_rate_window.max(auth_rate_lockout) as u64,
+                    31_536_000,
+                )? as i64,
+                trust_source_header: strict_bool_env("FMARCH_TRUST_AUTH_SOURCE_HEADER", false)?,
+                source_signing_key,
+                session_policy,
+                session_rotation_max_age_seconds: bounded_env(
+                    "FMARCH_AUTH_SESSION_ROTATION_MAX_AGE_SECONDS",
+                    86_400,
+                    60,
+                    604_800,
+                )? as i64,
+                recent_authentication_max_age_seconds: bounded_env(
+                    "FMARCH_AUTH_RECENT_SECONDS",
+                    600,
+                    60,
+                    86_400,
+                )? as i64,
+            },
+        };
+        api.validate(database.max_connections as usize)?;
+        let workers = WorkerBudget {
+            subject_erasure_idle_interval: Duration::from_millis(bounded_env(
+                "FMARCH_SUBJECT_ERASURE_IDLE_INTERVAL_MS",
+                5_000,
+                100,
+                60_000,
+            )?),
+            subject_erasure_error_backoff: Duration::from_millis(bounded_env(
+                "FMARCH_SUBJECT_ERASURE_ERROR_BACKOFF_MS",
+                1_000,
+                100,
+                60_000,
+            )?),
+            identity_delivery_idle_interval: Duration::from_millis(bounded_env(
+                "FMARCH_IDENTITY_DELIVERY_IDLE_INTERVAL_MS",
+                100,
+                10,
+                60_000,
+            )?),
+            identity_delivery_error_backoff: Duration::from_millis(bounded_env(
+                "FMARCH_IDENTITY_DELIVERY_ERROR_BACKOFF_MS",
+                1_000,
+                100,
+                60_000,
+            )?),
+            live_listener_restart_backoff: Duration::from_millis(bounded_env(
+                "FMARCH_LIVE_LISTENER_RESTART_BACKOFF_MS",
+                1_000,
+                100,
+                60_000,
+            )?),
+            restart_limit: bounded_env("FMARCH_WORKER_RESTART_LIMIT", 3, 0, 100)? as u32,
+            readiness_grace: Duration::from_millis(bounded_env(
+                "FMARCH_WORKER_READINESS_GRACE_MS",
+                10_000,
+                100,
+                300_000,
+            )?),
+            heartbeat_stale_after: Duration::from_millis(bounded_env(
+                "FMARCH_WORKER_HEARTBEAT_STALE_MS",
+                30_000,
+                1_000,
+                600_000,
+            )?),
+            shutdown_drain_timeout: Duration::from_millis(bounded_env(
+                "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS",
+                30_000,
+                1_000,
+                300_000,
+            )?),
+        };
+        let config = RuntimeConfig {
             database_url,
             bind,
             media,
-            database: DatabaseCapacity {
-                max_connections: bounded_env(
-                    "FMARCH_DB_MAX_CONNECTIONS",
-                    10,
-                    MIN_DATABASE_POOL_CONNECTIONS,
-                    256,
-                )? as u32,
-                acquire_timeout_ms: bounded_env("FMARCH_DB_ACQUIRE_TIMEOUT_MS", 250, 1, 60_000)?,
-                statement_timeout_ms: bounded_env(
-                    "FMARCH_DB_STATEMENT_TIMEOUT_MS",
-                    5_000,
-                    10,
-                    300_000,
-                )?,
-                lock_timeout_ms: bounded_env("FMARCH_DB_LOCK_TIMEOUT_MS", 1_000, 1, 300_000)?,
-                idle_transaction_timeout_ms: bounded_env(
-                    "FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS",
-                    10_000,
-                    MIN_IDLE_TRANSACTION_TIMEOUT_MS,
-                    300_000,
-                )?,
-            },
-            http: HttpCapacity {
-                max_in_flight: bounded_env("FMARCH_HTTP_MAX_IN_FLIGHT", 128, 1, 65_536)? as usize,
-                queue_timeout_ms: bounded_env("FMARCH_HTTP_QUEUE_TIMEOUT_MS", 50, 1, 60_000)?,
-                request_timeout_ms: bounded_env(
-                    "FMARCH_HTTP_REQUEST_TIMEOUT_MS",
-                    15_000,
-                    10,
-                    300_000,
-                )?,
-                retry_after_seconds: bounded_env("FMARCH_HTTP_RETRY_AFTER_SECONDS", 1, 1, 300)?
-                    as i64,
-            },
+            database,
+            http,
+            api,
+            workers,
+            operator_audit_max_in_flight: bounded_env(
+                "FMARCH_OPERATOR_AUDIT_MAX_IN_FLIGHT",
+                1,
+                1,
+                8,
+            )? as usize,
             scheduler: commands::day_scheduler::DayEventSchedulerConfig {
                 poll_interval: Duration::from_millis(bounded_env(
                     "FMARCH_DAY_EVENT_SCHEDULER_POLL_MS",
@@ -189,23 +400,54 @@ impl Config {
                 )? as i64,
             },
             bootstrap_admin: bootstrap_admin_from_values(
-                env::var("FMARCH_BOOTSTRAP_ADMIN_METHOD").ok(),
-                env::var("FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID").ok(),
-                env::var("FMARCH_BOOTSTRAP_ADMIN_LOGIN_NAME").ok(),
-                env::var("FMARCH_BOOTSTRAP_ADMIN_PASSWORD").ok(),
-                env::var("FMARCH_BOOTSTRAP_ADMIN_LABEL").ok(),
+                optional_env("FMARCH_BOOTSTRAP_ADMIN_METHOD")?,
+                optional_env("FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID")?,
+                optional_env("FMARCH_BOOTSTRAP_ADMIN_LOGIN_NAME")?,
+                optional_env("FMARCH_BOOTSTRAP_ADMIN_PASSWORD")?,
+                optional_env("FMARCH_BOOTSTRAP_ADMIN_LABEL")?,
             )?,
-        })
+        };
+        config.validate_cross_budgets()?;
+        Ok(config)
+    }
+
+    fn validate_cross_budgets(&self) -> Result<(), std::io::Error> {
+        self.scheduler.validate().map_err(|error| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string())
+        })?;
+        if self.api.command.lock_timeout > Duration::from_millis(self.http.request_timeout_ms) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "FMARCH_COMMAND_LOCK_TIMEOUT_MS must not exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS",
+            ));
+        }
+        if self.workers.heartbeat_stale_after <= self.workers.readiness_grace {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker heartbeat staleness must exceed the readiness startup grace",
+            ));
+        }
+        Ok(())
     }
 }
 
 fn required_env(name: &str) -> Result<String, std::io::Error> {
-    env::var(name)
-        .ok()
+    optional_env(name)?
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::NotFound, format!("{name} is required"))
         })
+}
+
+fn optional_env(name: &str) -> Result<Option<String>, std::io::Error> {
+    match env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(error) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} is not valid UTF-8: {error}"),
+        )),
+    }
 }
 
 fn virtual_hosted_style_from_value(value: &str) -> Result<bool, std::io::Error> {
@@ -222,7 +464,7 @@ fn virtual_hosted_style_from_value(value: &str) -> Result<bool, std::io::Error> 
 }
 
 fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
-    if let Ok(root) = env::var("FMARCH_MEDIA_ROOT") {
+    if let Some(root) = optional_env("FMARCH_MEDIA_ROOT")? {
         if root.trim().is_empty() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -233,10 +475,10 @@ fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
         return Ok(MediaConfig::LocalDebug(PathBuf::from(root)));
     }
     let endpoint = required_env("AWS_ENDPOINT_URL")?;
-    let url_style = env::var("AWS_S3_URL_STYLE").unwrap_or_else(|_| "path".to_string());
+    let url_style = optional_env("AWS_S3_URL_STYLE")?.unwrap_or_else(|| "path".to_string());
     let virtual_hosted_style = virtual_hosted_style_from_value(&url_style)?;
-    let allow_http = endpoint.starts_with("http://")
-        && env::var("FMARCH_S3_ALLOW_HTTP").ok().as_deref() == Some("1");
+    let allow_http_configured = strict_bool_env("FMARCH_S3_ALLOW_HTTP", false)?;
+    let allow_http = endpoint.starts_with("http://") && allow_http_configured;
     if endpoint.starts_with("http://") && !allow_http {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -324,7 +566,7 @@ fn bounded_env(
     minimum: u64,
     maximum: u64,
 ) -> Result<u64, std::io::Error> {
-    let Some(raw) = env::var(name).ok() else {
+    let Some(raw) = optional_env(name)? else {
         return Ok(default);
     };
     let parsed = raw.parse::<u64>().map_err(|_| {
@@ -340,6 +582,24 @@ fn bounded_env(
         ));
     }
     Ok(parsed)
+}
+
+fn strict_bool_env(name: &str, default: bool) -> Result<bool, std::io::Error> {
+    match env::var(name) {
+        Err(env::VarError::NotPresent) => Ok(default),
+        Err(error) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{name} is not valid UTF-8: {error}"),
+        )),
+        Ok(value) => match value.trim() {
+            "1" => Ok(true),
+            "0" => Ok(false),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{name} must be exactly 0 or 1"),
+            )),
+        },
+    }
 }
 
 fn bind_from_values(
@@ -456,7 +716,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server::reject_ambient_postgres_environment("fmarch-server", "DATABASE_URL")
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
 
-    let config = Config::from_env()?;
+    let config = RuntimeConfig::from_env()?;
     server::validate_database_transport(&config.database_url, "DATABASE_URL")
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
     // Reject absent, malformed, or placeholder profile-index custody before
@@ -466,8 +726,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // connection. `--check-content` intentionally exits above this requirement.
     let subject_authority = identity::configured_subject_key_authority().await?;
     identity::install_subject_key_store(subject_authority.key_store.clone())?;
-    let dev_auth_requested = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
-    let local_proof_secret = env::var("FMARCH_LOCAL_PROOF_SECRET").ok();
+    let dev_auth_requested = strict_bool_env("FMARCH_DEV_AUTH", false)?;
+    let local_proof_secret = optional_env("FMARCH_LOCAL_PROOF_SECRET")?;
     let local_proof_auth = local_proof_auth_from_values(
         dev_auth_requested,
         cfg!(debug_assertions),
@@ -479,18 +739,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|verifier| verifier.instance_id().clone());
     eventstore::require_secure_event_encryption_configuration()?;
-    let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
-    if auth_source_key
-        .as_deref()
-        .is_some_and(|value| value.len() < 32)
+    if config.api.auth.source_signing_key.is_none() && !(dev_auth_enabled && cfg!(debug_assertions))
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "FMARCH_AUTH_SOURCE_SIGNING_KEY must contain at least 32 bytes",
-        )
-        .into());
-    }
-    if auth_source_key.is_none() && !(dev_auth_enabled && cfg!(debug_assertions)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "FMARCH_AUTH_SOURCE_SIGNING_KEY is required",
@@ -556,16 +806,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
     profile_application::verify_profile_handle_index_consistency(&pool).await?;
-    let _subject_erasure_worker = spawn_subject_erasure_worker(pool.clone());
-    let _day_event_scheduler =
-        commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;
-
     let workos_verifier = identity::WorkosAccessTokenVerifier::from_env()
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
     // Classic is a first-class method, enabled by default; WorkOS is additive.
     // Startup requires at least one enabled sign-in method. FMARCH_DEV_AUTH
     // unlocks only the loopback, secret-authenticated local-proof control.
-    let classic_enabled = env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0");
+    let classic_enabled = strict_bool_env("FMARCH_CLASSIC_AUTH", true)?;
     if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -649,22 +895,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::sync::Arc::new(api::identity_delivery::DisabledIdentityDeliveryGateway)
             }
         };
-    if classic_enabled {
-        api::identity_delivery::spawn_identity_delivery_worker(pool.clone(), gateway.clone());
-    }
-    let mut api_state = api::ApiState::new(pool.clone(), media_store)
+    let worker_health = api::RuntimeWorkerHealth::new(config.workers.heartbeat_stale_after)
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+    let mut api_state = api::ApiState::new(pool.clone(), media_store, config.api.clone())?
         .with_classic_auth(classic_enabled)
         .with_subject_key_store(subject_authority.key_store.clone())
-        .with_identity_delivery_gateway(gateway);
+        .with_identity_delivery_gateway(gateway.clone())
+        .with_worker_health(worker_health.clone());
     if let Some(verifier) = local_proof_auth {
         api_state = api_state.with_local_proof_auth(verifier);
     }
     if let Some(verifier) = workos_verifier {
         api_state = api_state.with_access_token_verifier(std::sync::Arc::new(verifier));
     }
-    let mut operator_state = operator_api::OperatorApiState::new(pool);
+    let mut operator_state = operator_api::OperatorApiState::new(
+        pool.clone(),
+        config.api.auth.session_policy.clone(),
+        config.operator_audit_max_in_flight,
+    )
+    .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
     if let Some(instance_id) = local_proof_instance_id {
         operator_state = operator_state.with_local_proof_instance(instance_id);
+    }
+    // Claim the listener before starting managed workers so a bind failure
+    // cannot detach background work from the process lifecycle.
+    let listener = tokio::net::TcpListener::bind(config.bind).await?;
+    let mut supervisor = runtime_supervisor::RuntimeSupervisor::start(
+        pool.clone(),
+        api_state.clone(),
+        gateway,
+        classic_enabled,
+        config.scheduler.clone(),
+        config.workers.clone(),
+        worker_health,
+    );
+    if let Err(message) = supervisor.wait_until_ready().await {
+        supervisor.request_shutdown();
+        let shutdown_result = supervisor.shutdown().await;
+        pool.close().await;
+        if let Err(shutdown_error) = shutdown_result {
+            tracing::error!(error = %shutdown_error, "runtime workers failed while aborting startup");
+        }
+        return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, message).into());
     }
     let app = api::router_with_state(api_state)
         .merge(operator_api::router_with_state(operator_state))
@@ -677,19 +949,102 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
             enforce_http_admission,
         ));
-    let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(addr = %config.bind, "fmarch server listening");
-    axum::serve(listener, app).await?;
+    let shutdown_receiver = supervisor.shutdown_receiver();
+    let mut server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(wait_for_shutdown_request(shutdown_receiver))
+            .await
+    });
 
-    Ok(())
+    enum StopReason {
+        Signal(&'static str),
+        Fatal(runtime_supervisor::SupervisorFailure),
+        ServerExited,
+    }
+
+    let stop_reason = tokio::select! {
+        result = &mut server => {
+            result.map_err(std::io::Error::other)??;
+            StopReason::ServerExited
+        }
+        signal = process_shutdown_signal() => StopReason::Signal(signal?),
+        failure = supervisor.wait_for_fatal() => match failure {
+            Some(failure) => StopReason::Fatal(failure),
+            None => StopReason::ServerExited,
+        },
+    };
+    supervisor.request_shutdown();
+    if !matches!(&stop_reason, StopReason::ServerExited) {
+        match tokio::time::timeout(config.workers.shutdown_drain_timeout, &mut server).await {
+            Ok(result) => result.map_err(std::io::Error::other)??,
+            Err(_) => {
+                tracing::error!(
+                    event = "http_graceful_shutdown_timed_out",
+                    timeout_ms = config.workers.shutdown_drain_timeout.as_millis(),
+                    "HTTP graceful-shutdown deadline elapsed; aborting remaining connections"
+                );
+                server.abort();
+                let _ = server.await;
+            }
+        }
+    }
+    let worker_shutdown = supervisor.shutdown().await;
+    pool.close().await;
+    worker_shutdown.map_err(std::io::Error::other)?;
+    match stop_reason {
+        StopReason::Signal(signal) => {
+            tracing::info!(signal, "fmarch server stopped gracefully");
+            Ok(())
+        }
+        StopReason::Fatal(failure) => Err(std::io::Error::other(format!(
+            "required runtime worker {} failed: {}",
+            failure.worker, failure.reason
+        ))
+        .into()),
+        StopReason::ServerExited => Err(std::io::Error::other(
+            "HTTP server exited without an explicit shutdown request",
+        )
+        .into()),
+    }
+}
+
+async fn wait_for_shutdown_request(mut shutdown: tokio::sync::watch::Receiver<bool>) {
+    if *shutdown.borrow() {
+        return;
+    }
+    while shutdown.changed().await.is_ok() {
+        if *shutdown.borrow() {
+            return;
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn process_shutdown_signal() -> Result<&'static str, std::io::Error> {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => {
+            result?;
+            Ok("SIGINT")
+        }
+        _ = terminate.recv() => Ok("SIGTERM"),
+    }
+}
+
+#[cfg(not(unix))]
+async fn process_shutdown_signal() -> Result<&'static str, std::io::Error> {
+    tokio::signal::ctrl_c().await?;
+    Ok("CTRL_C")
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
-        local_proof_auth_from_values, virtual_hosted_style_from_value, IdentityDeliveryMode,
-        MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+        local_proof_auth_from_values, strict_bool_env, virtual_hosted_style_from_value,
+        wait_for_shutdown_request, IdentityDeliveryMode, MIN_DATABASE_POOL_CONNECTIONS,
+        MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
 
     const TEST_LOCAL_PROOF_SECRET: &str =
@@ -829,6 +1184,25 @@ mod tests {
         let error = bounded_env("FMARCH_TEST_CAPACITY_VALUE", 10, 1, 100).unwrap_err();
         std::env::remove_var("FMARCH_TEST_CAPACITY_VALUE");
         assert!(error.to_string().contains("between 1 and 100"));
+    }
+
+    #[test]
+    fn ambiguous_boolean_configuration_is_rejected() {
+        std::env::set_var("FMARCH_TEST_STRICT_BOOL", "true");
+        let error = strict_bool_env("FMARCH_TEST_STRICT_BOOL", false).unwrap_err();
+        std::env::remove_var("FMARCH_TEST_STRICT_BOOL");
+        assert!(error.to_string().contains("exactly 0 or 1"));
+    }
+
+    #[tokio::test]
+    async fn graceful_shutdown_watch_wakes_server_owner() {
+        let (shutdown, receiver) = tokio::sync::watch::channel(false);
+        let waiter = tokio::spawn(wait_for_shutdown_request(receiver));
+        shutdown.send(true).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[test]

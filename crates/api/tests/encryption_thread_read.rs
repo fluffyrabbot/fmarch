@@ -178,7 +178,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     let media_root = tempfile::tempdir().unwrap();
     let media_store = MediaStore::open(media_root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
-        api::ApiState::new(pool.clone(), media_store)
+        api::ApiState::new(pool.clone(), media_store, api::ApiRuntimeConfig::default())
+            .unwrap()
             .with_local_proof_auth(test_local_proof_verifier()),
     );
     let game = Uuid::new_v4();

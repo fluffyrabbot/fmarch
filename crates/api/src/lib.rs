@@ -18,6 +18,8 @@ mod media_http;
 mod membership_http;
 pub mod program_library;
 mod public_platform_http;
+mod runtime_config;
+mod runtime_health;
 
 pub use auth_http::{
     bootstrap_classic_global_admin, bootstrap_workos_global_admin, LocalProofAuthVerifier,
@@ -37,10 +39,13 @@ pub use game_http::{
 };
 pub use live_delivery::WebsocketTicketResponse;
 pub use media_http::{MediaUploadResponse, MediaUploadVariant};
-
-use auth_http::{
-    env_i64, internal_auth_error, unauthorized_session, unix_now_seconds, AuthHttpState,
+pub use runtime_config::{
+    ApiRuntimeConfig, ApiRuntimeConfigError, AuthBudget, AuthorityBudget, CommandBudget,
+    MediaBudget, WebSocketBudget,
 };
+pub use runtime_health::{RuntimeWorkerHealth, WorkerHealthView};
+
+use auth_http::{internal_auth_error, unauthorized_session, unix_now_seconds, AuthHttpState};
 
 use live_delivery::GameEventWakeHub;
 use live_projection::LiveProjectionPublisher;
@@ -90,6 +95,7 @@ pub struct ApiState {
     websocket_heartbeat_interval: Duration,
     live_event_wake: GameEventWakeHub,
     embed_lookup: embed_http::YoutubeSnapshotLookup,
+    worker_health: RuntimeWorkerHealth,
 }
 
 impl FromRef<ApiState> for AuthHttpState {
@@ -99,43 +105,18 @@ impl FromRef<ApiState> for AuthHttpState {
 }
 
 impl ApiState {
-    pub fn new(pool: PgPool, media_store: impl Into<MediaRepository>) -> Self {
-        let live_projection_capacity =
-            env_i64("FMARCH_LIVE_PROJECTION_CAPACITY", 256, 1, 65_536) as usize;
-        let live_projection_delivery_delay =
-            Duration::from_millis(
-                env_i64("FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS", 0, 0, 60_000) as u64,
-            );
-        let live_connection_limit = env_i64("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536) as usize;
-        let live_principal_limit =
-            env_i64("FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL", 4, 1, 128) as usize;
+    pub fn new(
+        pool: PgPool,
+        media_store: impl Into<MediaRepository>,
+        runtime: ApiRuntimeConfig,
+    ) -> Result<Self, ApiRuntimeConfigError> {
         let pool_capacity = pool.options().get_max_connections() as usize;
-        assert!(
-            pool_capacity >= 5,
-            "ApiState requires at least five database connections: one listener, two authority transactions, and two general-operation connections"
-        );
-        // The durable LISTEN loop owns one pool connection. Keep authority-
-        // fenced work below the remaining pool by two connections, while the
-        // delivery sub-limit leaves one authority permit for cutoffs/commands.
-        // Other pool users remain independently admission-bounded; this is a
-        // capacity ceiling, not a priority reservation.
-        let authority_transaction_ceiling = pool_capacity - 3;
-        let authority_transaction_limit = env_i64(
-            "FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT",
-            authority_transaction_ceiling as i64,
-            2,
-            authority_transaction_ceiling as i64,
-        ) as usize;
-        let live_delivery_transaction_limit = env_i64(
-            "FMARCH_WS_DELIVERY_MAX_IN_FLIGHT",
-            authority_transaction_limit.saturating_sub(1).min(4) as i64,
-            1,
-            authority_transaction_limit.saturating_sub(1) as i64,
-        ) as usize;
-        let auth = AuthHttpState::new(pool.clone());
+        runtime.validate(pool_capacity)?;
+        let authority_transaction_limit = runtime.authority.transaction_max_in_flight;
+        let live_delivery_transaction_limit = runtime.websocket.delivery_max_in_flight;
+        let auth = AuthHttpState::new(pool.clone(), &runtime.auth, &runtime.websocket);
         let live_event_wake = GameEventWakeHub::new();
-        live_event_wake.spawn_listener(pool.clone());
-        ApiState {
+        Ok(ApiState {
             pool,
             auth,
             media_store: media_store.into(),
@@ -148,54 +129,28 @@ impl ApiState {
             },
             variant_limits: VariantLimits::default(),
             server_name: "fmarch-dev".to_string(),
-            live_projection: LiveProjectionPublisher::new(live_projection_capacity),
-            live_projection_delivery_delay,
-            live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
+            live_projection: LiveProjectionPublisher::new(runtime.websocket.projection_capacity),
+            live_projection_delivery_delay: runtime.websocket.projection_delivery_delay,
+            live_connection_slots: Arc::new(Semaphore::new(runtime.websocket.max_connections)),
             live_principal_slots: Arc::new(Mutex::new(HashMap::new())),
-            live_principal_limit,
+            live_principal_limit: runtime.websocket.max_connections_per_principal,
             live_delivery_transaction_slots: Arc::new(Semaphore::new(
                 live_delivery_transaction_limit,
             )),
             live_delivery_transaction_limit,
-            command_slots: Arc::new(Semaphore::new(env_i64(
-                "FMARCH_COMMAND_MAX_IN_FLIGHT",
-                32,
-                1,
-                1_024,
-            ) as usize)),
+            command_slots: Arc::new(Semaphore::new(runtime.command.max_in_flight)),
             command_principal_slots: Arc::new(Mutex::new(HashMap::new())),
-            command_lock_timeout: Duration::from_millis(env_i64(
-                "FMARCH_COMMAND_LOCK_TIMEOUT_MS",
-                5_000,
-                100,
-                30_000,
-            ) as u64),
+            command_lock_timeout: runtime.command.lock_timeout,
             authority_transaction_slots: Arc::new(Semaphore::new(authority_transaction_limit)),
             authority_transaction_limit,
-            media_slots: Arc::new(Semaphore::new(
-                env_i64("FMARCH_MEDIA_MAX_IN_FLIGHT", 2, 1, 32) as usize,
-            )),
-            media_account_quota_bytes: env_i64(
-                "FMARCH_MEDIA_ACCOUNT_QUOTA_BYTES",
-                256 * 1024 * 1024,
-                12 * 1024 * 1024,
-                10 * 1024 * 1024 * 1024,
-            ),
-            websocket_poll_interval: Duration::from_millis(env_i64(
-                "FMARCH_WS_POLL_INTERVAL_MS",
-                5_000,
-                25,
-                5_000,
-            ) as u64),
-            websocket_heartbeat_interval: Duration::from_millis(env_i64(
-                "FMARCH_WS_HEARTBEAT_INTERVAL_MS",
-                10_000,
-                100,
-                60_000,
-            ) as u64),
+            media_slots: Arc::new(Semaphore::new(runtime.media.max_in_flight)),
+            media_account_quota_bytes: runtime.media.account_quota_bytes,
+            websocket_poll_interval: runtime.websocket.poll_interval,
+            websocket_heartbeat_interval: runtime.websocket.heartbeat_interval,
             live_event_wake,
             embed_lookup: embed_http::YoutubeSnapshotLookup::http().expect("youtube oembed client"),
-        }
+            worker_health: RuntimeWorkerHealth::default(),
+        })
     }
 
     pub fn with_embed_lookup(mut self, lookup: embed_http::YoutubeSnapshotLookup) -> Self {
@@ -252,17 +207,17 @@ impl ApiState {
         lockout_seconds: i64,
         retention_seconds: i64,
     ) -> Self {
-        self.auth.auth_attempt_policy.account_max_failures = account_max_failures.clamp(2, 100);
-        self.auth.auth_attempt_policy.source_max_failures = source_max_failures.clamp(2, 10_000);
-        self.auth.auth_attempt_policy.window_seconds = window_seconds.clamp(1, 86_400);
-        self.auth.auth_attempt_policy.lockout_seconds = lockout_seconds.clamp(1, 86_400);
-        self.auth.auth_attempt_policy.retention_seconds = retention_seconds.clamp(
-            self.auth
-                .auth_attempt_policy
-                .window_seconds
-                .max(self.auth.auth_attempt_policy.lockout_seconds),
-            31_536_000,
-        );
+        assert!((2..=100).contains(&account_max_failures));
+        assert!((2..=10_000).contains(&source_max_failures));
+        assert!((1..=86_400).contains(&window_seconds));
+        assert!((1..=86_400).contains(&lockout_seconds));
+        assert!(retention_seconds >= window_seconds.max(lockout_seconds));
+        assert!(retention_seconds <= 31_536_000);
+        self.auth.auth_attempt_policy.account_max_failures = account_max_failures;
+        self.auth.auth_attempt_policy.source_max_failures = source_max_failures;
+        self.auth.auth_attempt_policy.window_seconds = window_seconds;
+        self.auth.auth_attempt_policy.lockout_seconds = lockout_seconds;
+        self.auth.auth_attempt_policy.retention_seconds = retention_seconds;
         self
     }
 
@@ -280,47 +235,52 @@ impl ApiState {
     }
 
     pub fn with_registration_source_limit(mut self, max_registrations: i32) -> Self {
-        self.auth.auth_attempt_policy.registration_max_per_source =
-            max_registrations.clamp(2, 10_000);
+        assert!((2..=10_000).contains(&max_registrations));
+        self.auth.auth_attempt_policy.registration_max_per_source = max_registrations;
         self
     }
 
     pub fn with_live_projection_capacity(mut self, capacity: usize) -> Self {
+        assert!((1..=65_536).contains(&capacity));
         self.live_projection = LiveProjectionPublisher::new(capacity);
         self
     }
 
     pub fn with_live_projection_delivery_delay(mut self, delay: Duration) -> Self {
-        self.live_projection_delivery_delay = delay.min(Duration::from_secs(60));
+        assert!(delay <= Duration::from_secs(60));
+        self.live_projection_delivery_delay = delay;
         self
     }
 
     pub fn with_live_connection_limit(mut self, limit: usize) -> Self {
-        self.live_connection_slots = Arc::new(Semaphore::new(limit.clamp(1, 65_536)));
+        assert!((1..=65_536).contains(&limit));
+        self.live_connection_slots = Arc::new(Semaphore::new(limit));
         self
     }
 
     pub fn with_live_principal_connection_limit(mut self, limit: usize) -> Self {
-        self.live_principal_limit = limit.clamp(1, 1_024);
+        assert!((1..=1_024).contains(&limit));
+        self.live_principal_limit = limit;
         self
     }
 
     pub fn with_live_delivery_transaction_limit(mut self, limit: usize) -> Self {
-        self.live_delivery_transaction_limit =
-            limit.clamp(1, self.authority_transaction_limit.saturating_sub(1));
+        assert!((1..self.authority_transaction_limit).contains(&limit));
+        self.live_delivery_transaction_limit = limit;
         self.live_delivery_transaction_slots =
             Arc::new(Semaphore::new(self.live_delivery_transaction_limit));
         self
     }
 
     pub fn with_command_limit(mut self, limit: usize) -> Self {
-        self.command_slots = Arc::new(Semaphore::new(limit.clamp(1, 1_024)));
+        assert!((1..=1_024).contains(&limit));
+        self.command_slots = Arc::new(Semaphore::new(limit));
         self
     }
 
     pub fn with_command_lock_timeout(mut self, timeout: Duration) -> Self {
-        self.command_lock_timeout =
-            timeout.clamp(Duration::from_millis(100), Duration::from_secs(30));
+        assert!((Duration::from_millis(100)..=Duration::from_secs(30)).contains(&timeout));
+        self.command_lock_timeout = timeout;
         self
     }
 
@@ -329,7 +289,8 @@ impl ApiState {
         let ceiling = pool_capacity
             .checked_sub(3)
             .expect("ApiState database pool reserve was validated at construction");
-        self.authority_transaction_limit = limit.clamp(2, ceiling);
+        assert!((2..=ceiling).contains(&limit));
+        self.authority_transaction_limit = limit;
         self.authority_transaction_slots =
             Arc::new(Semaphore::new(self.authority_transaction_limit));
         self.live_delivery_transaction_limit = self
@@ -341,22 +302,26 @@ impl ApiState {
     }
 
     pub fn with_password_limit(mut self, limit: usize) -> Self {
-        self.auth.password_slots = Arc::new(Semaphore::new(limit.clamp(1, 64)));
+        assert!((1..=64).contains(&limit));
+        self.auth.password_slots = Arc::new(Semaphore::new(limit));
         self
     }
 
     pub fn with_workos_verification_limit(mut self, limit: usize) -> Self {
-        self.auth.workos_verification_slots = Arc::new(Semaphore::new(limit.clamp(1, 128)));
+        assert!((1..=128).contains(&limit));
+        self.auth.workos_verification_slots = Arc::new(Semaphore::new(limit));
         self
     }
 
     pub fn with_workos_verification_source_limit(mut self, limit: i32) -> Self {
-        self.auth.workos_verification_max_per_source = limit.clamp(2, 10_000);
+        assert!((2..=10_000).contains(&limit));
+        self.auth.workos_verification_max_per_source = limit;
         self
     }
 
     pub fn with_media_limit(mut self, limit: usize) -> Self {
-        self.media_slots = Arc::new(Semaphore::new(limit.clamp(1, 32)));
+        assert!((1..=32).contains(&limit));
+        self.media_slots = Arc::new(Semaphore::new(limit));
         self
     }
 
@@ -366,20 +331,20 @@ impl ApiState {
     }
 
     pub fn with_websocket_ticket_ttl(mut self, ttl: Duration) -> Self {
-        self.auth.websocket_ticket_ttl =
-            ttl.clamp(Duration::from_secs(1), Duration::from_secs(120));
+        assert!((Duration::from_secs(1)..=Duration::from_secs(120)).contains(&ttl));
+        self.auth.websocket_ticket_ttl = ttl;
         self
     }
 
     pub fn with_websocket_poll_interval(mut self, interval: Duration) -> Self {
-        self.websocket_poll_interval =
-            interval.clamp(Duration::from_millis(10), Duration::from_secs(5));
+        assert!((Duration::from_millis(10)..=Duration::from_secs(5)).contains(&interval));
+        self.websocket_poll_interval = interval;
         self
     }
 
     pub fn with_websocket_heartbeat_interval(mut self, interval: Duration) -> Self {
-        self.websocket_heartbeat_interval =
-            interval.clamp(Duration::from_millis(10), Duration::from_secs(60));
+        assert!((Duration::from_millis(10)..=Duration::from_secs(60)).contains(&interval));
+        self.websocket_heartbeat_interval = interval;
         self
     }
 
@@ -396,10 +361,38 @@ impl ApiState {
         self.subject_key_store = Some(store);
         self
     }
+
+    pub fn with_worker_health(mut self, worker_health: RuntimeWorkerHealth) -> Self {
+        self.worker_health = worker_health;
+        self
+    }
+
+    /// Runs the process-wide durable live-event wake listener. The process
+    /// composition root owns this future and its restart/shutdown policy.
+    pub async fn run_live_event_listener<F>(
+        &self,
+        shutdown: tokio::sync::watch::Receiver<bool>,
+        heartbeat: F,
+    ) -> Result<(), sqlx::Error>
+    where
+        F: Fn(u64) + Send + Sync,
+    {
+        self.live_event_wake
+            .run_listener(self.pool.clone(), shutdown, heartbeat)
+            .await
+    }
 }
 
-pub fn router(pool: PgPool, media_store: impl Into<MediaRepository>) -> Router {
-    router_with_state(ApiState::new(pool, media_store))
+pub fn router(
+    pool: PgPool,
+    media_store: impl Into<MediaRepository>,
+    runtime: ApiRuntimeConfig,
+) -> Result<Router, ApiRuntimeConfigError> {
+    Ok(router_with_state(ApiState::new(
+        pool,
+        media_store,
+        runtime,
+    )?))
 }
 
 pub fn router_with_state(state: ApiState) -> Router {
@@ -440,6 +433,8 @@ pub struct Readiness {
     pub event_encryption: bool,
     pub object_storage: bool,
     pub subject_authority: bool,
+    pub required_workers: bool,
+    pub workers: Vec<WorkerHealthView>,
 }
 
 async fn healthz() -> Json<Health> {
@@ -463,16 +458,23 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
             }
         },
     );
+    let workers = state.worker_health.snapshot();
+    let required_workers = workers
+        .iter()
+        .all(|worker| !worker.required || worker.healthy);
     let readiness = Readiness {
         ok: database_schema.is_ok()
             && event_encryption.is_ok()
             && object_storage.is_ok()
-            && subject_authority.is_ok(),
+            && subject_authority.is_ok()
+            && required_workers,
         release_commit: release_commit().to_string(),
         database_schema: database_schema.is_ok(),
         event_encryption: event_encryption.is_ok(),
         object_storage: object_storage.is_ok(),
         subject_authority: subject_authority.is_ok(),
+        required_workers,
+        workers,
     };
     if !readiness.ok {
         tracing::warn!(
@@ -481,6 +483,7 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
             event_encryption_ready = readiness.event_encryption,
             object_storage_ready = readiness.object_storage,
             subject_authority_ready = readiness.subject_authority,
+            required_workers_ready = readiness.required_workers,
             "API dependency readiness failed"
         );
     }

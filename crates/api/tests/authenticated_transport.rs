@@ -36,7 +36,8 @@ fn decode_server_envelope(message: Message) -> ServerEnvelope {
 
 fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    ApiState::new(pool, store)
+    ApiState::new(pool, store, api::ApiRuntimeConfig::default())
+        .unwrap()
         .with_websocket_audience("transport-proof")
         .with_websocket_poll_interval(Duration::from_millis(20))
 }
@@ -650,7 +651,7 @@ async fn logout_waits_out_the_bounded_delivery_fence_despite_the_general_lock_ti
         identity::session::validate_session_reference_for_delivery(
             &mut guard,
             session_reference.as_str(),
-            &identity::SessionPolicy::from_env(),
+            &identity::SessionPolicy::default(),
             1,
         )
         .await
@@ -686,7 +687,7 @@ async fn logout_waits_out_the_bounded_delivery_fence_despite_the_general_lock_ti
                 identity::session::validate_session_reference_for_delivery(
                     &mut guard,
                     session_reference.as_str(),
-                    &identity::SessionPolicy::from_env(),
+                    &identity::SessionPolicy::default(),
                     1,
                 )
                 .await
@@ -1941,12 +1942,18 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
 ) {
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
     let app_a = api::router_with_state(
-        ApiState::new(pool.clone(), media.clone())
-            .with_websocket_audience("transport-proof")
-            .with_websocket_poll_interval(Duration::from_secs(5)),
+        ApiState::new(
+            pool.clone(),
+            media.clone(),
+            api::ApiRuntimeConfig::default(),
+        )
+        .unwrap()
+        .with_websocket_audience("transport-proof")
+        .with_websocket_poll_interval(Duration::from_secs(5)),
     );
     let app_b = api::router_with_state(
-        ApiState::new(pool.clone(), media)
+        ApiState::new(pool.clone(), media, api::ApiRuntimeConfig::default())
+            .unwrap()
             .with_websocket_audience("transport-proof")
             .with_websocket_poll_interval(Duration::from_secs(5)),
     );

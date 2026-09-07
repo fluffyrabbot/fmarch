@@ -32,7 +32,7 @@ fn test_local_proof_verifier() -> api::LocalProofAuthVerifier {
 
 fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    ApiState::new(pool, store)
+    ApiState::new(pool, store, api::ApiRuntimeConfig::default()).unwrap()
 }
 
 async fn json_body(response: axum::response::Response) -> serde_json::Value {
@@ -2258,7 +2258,7 @@ async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_i
         identity::session::rotate_session(
             &rotation_pool,
             rotation_token.as_str(),
-            &identity::SessionPolicy::from_env(),
+            &identity::SessionPolicy::default(),
         )
         .await
     });

@@ -4,6 +4,16 @@ use std::path::PathBuf;
 fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let composition_root = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();
+    let runtime_config = std::fs::read_to_string(source_root.join("runtime_config.rs")).unwrap();
+    let process_root = std::fs::read_to_string(
+        source_root
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("server/src/main.rs"),
+    )
+    .unwrap();
     let live_delivery = std::fs::read_to_string(source_root.join("live_delivery.rs")).unwrap();
     let live_projection = std::fs::read_to_string(source_root.join("live_projection.rs")).unwrap();
 
@@ -21,7 +31,8 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     assert!(live_delivery.contains("event_wake.wait()"));
     assert!(live_delivery.contains("websocket_heartbeat_interval"));
     assert!(live_delivery.contains("heartbeat.tick()"));
-    assert!(composition_root.contains("FMARCH_WS_HEARTBEAT_INTERVAL_MS"));
+    assert!(process_root.contains("FMARCH_WS_HEARTBEAT_INTERVAL_MS"));
+    assert!(!composition_root.contains("std::env"));
     assert!(composition_root.contains("with_websocket_heartbeat_interval"));
     assert!(live_delivery.contains("live_projection::receive"));
     assert!(live_delivery.contains("live_projection::try_receive"));
@@ -133,8 +144,9 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     assert!(live_delivery.contains("if inner.strong_count() == 0"));
     assert!(live_delivery.contains("inner: &std::sync::Weak<GameEventWakeInner>"));
     assert!(!live_delivery.contains("listen_live_events(&pool, &hub)"));
-    assert!(composition_root.contains("let authority_transaction_ceiling = pool_capacity - 3;"));
-    assert!(composition_root.contains("authority_transaction_limit.saturating_sub(1)"));
+    assert!(runtime_config.contains("let authority_ceiling = database_pool_connections - 3;"));
+    assert!(runtime_config
+        .contains("WebSocket delivery transactions must leave at least one authority permit"));
 
     let delivery_guard_start = live_delivery
         .find("impl SessionDeliveryGuard")

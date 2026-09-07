@@ -555,44 +555,6 @@ async fn record_auth_attempt_rate_limited(
     Ok(())
 }
 
-pub(super) fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
-    let window_seconds = super::env_i64("FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 1, 86_400);
-    let lockout_seconds = super::env_i64("FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS", 900, 1, 86_400);
-    let minimum_retention = window_seconds.max(lockout_seconds);
-    AuthAttemptPolicy {
-        account_max_failures: super::env_i64("FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES", 5, 2, 100)
-            as i32,
-        source_max_failures: super::env_i64(
-            "FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES",
-            50,
-            2,
-            10_000,
-        ) as i32,
-        registration_max_per_source: super::env_i64(
-            "FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT",
-            5,
-            2,
-            10_000,
-        ) as i32,
-        window_seconds,
-        lockout_seconds,
-        retention_seconds: super::env_i64(
-            "FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS",
-            minimum_retention.saturating_mul(4),
-            minimum_retention,
-            31_536_000,
-        ),
-        trust_source_header: std::env::var("FMARCH_TRUST_AUTH_SOURCE_HEADER")
-            .ok()
-            .as_deref()
-            == Some("1"),
-        source_signing_key: std::env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY")
-            .ok()
-            .filter(|value| value.len() >= 32)
-            .map(|value| Arc::<[u8]>::from(value.into_bytes())),
-    }
-}
-
 pub(super) async fn deliver_auth_credential(
     state: &AuthHttpState,
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,

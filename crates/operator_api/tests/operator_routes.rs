@@ -27,7 +27,8 @@ fn local_proof_instance_id() -> identity::LocalProofInstanceId {
 
 fn app(pool: sqlx::PgPool) -> axum::Router {
     operator_api::router_with_state(
-        operator_api::OperatorApiState::new(pool)
+        operator_api::OperatorApiState::new(pool, identity::SessionPolicy::default(), 1)
+            .unwrap()
             .with_local_proof_instance(local_proof_instance_id()),
     )
 }
@@ -89,7 +90,8 @@ async fn grant_game_authority(pool: &sqlx::PgPool, game: Uuid, user: &str, role:
 async fn default_operator_composition_rejects_methodless_local_proof_sessions(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     create_session(&pool, ADMIN_TOKEN, "admin", &["GlobalAdmin"]).await;
-    let response = operator_api::router(pool.clone())
+    let response = operator_api::router(pool.clone(), identity::SessionPolicy::default(), 1)
+        .unwrap()
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -115,7 +117,8 @@ async fn default_operator_composition_rejects_methodless_local_proof_sessions(po
         .execute(&pool)
         .await
         .unwrap();
-    let corrupt_response = operator_api::router(pool)
+    let corrupt_response = operator_api::router(pool, identity::SessionPolicy::default(), 1)
+        .unwrap()
         .oneshot(
             Request::builder()
                 .method("GET")

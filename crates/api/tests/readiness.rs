@@ -22,7 +22,8 @@ async fn readiness(app: axum::Router) -> (StatusCode, Readiness) {
 async fn readyz_proves_schema_and_object_storage(pool: sqlx::PgPool) {
     eventstore::attest_active_runtime_kek(&pool).await.unwrap();
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
-    let (status, body) = readiness(api::router(pool, media)).await;
+    let (status, body) =
+        readiness(api::router(pool, media, api::ApiRuntimeConfig::default()).unwrap()).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -34,6 +35,8 @@ async fn readyz_proves_schema_and_object_storage(pool: sqlx::PgPool) {
             event_encryption: true,
             object_storage: true,
             subject_authority: true,
+            required_workers: true,
+            workers: Vec::new(),
         }
     );
 }
@@ -41,7 +44,8 @@ async fn readyz_proves_schema_and_object_storage(pool: sqlx::PgPool) {
 #[sqlx::test]
 async fn readyz_rejects_a_database_without_the_required_schema(pool: sqlx::PgPool) {
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
-    let (status, body) = readiness(api::router(pool, media)).await;
+    let (status, body) =
+        readiness(api::router(pool, media, api::ApiRuntimeConfig::default()).unwrap()).await;
 
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
@@ -53,6 +57,8 @@ async fn readyz_rejects_a_database_without_the_required_schema(pool: sqlx::PgPoo
             event_encryption: false,
             object_storage: true,
             subject_authority: true,
+            required_workers: true,
+            workers: Vec::new(),
         }
     );
 }
@@ -73,7 +79,9 @@ async fn readyz_revalidates_subject_authority_after_startup(pool: sqlx::PgPool) 
     );
     authority.bootstrap().await.unwrap();
     let app = api::router_with_state(
-        api::ApiState::new(pool, media).with_subject_key_store(Arc::new(authority)),
+        api::ApiState::new(pool, media, api::ApiRuntimeConfig::default())
+            .unwrap()
+            .with_subject_key_store(Arc::new(authority)),
     );
     assert_eq!(readiness(app.clone()).await.0, StatusCode::OK);
 
@@ -107,7 +115,8 @@ async fn readyz_rejects_a_direct_envelope_kid_missing_from_the_configured_ring(p
     .await
     .unwrap();
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
-    let (status, body) = readiness(api::router(pool, media)).await;
+    let (status, body) =
+        readiness(api::router(pool, media, api::ApiRuntimeConfig::default()).unwrap()).await;
 
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert!(!body.ok);

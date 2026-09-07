@@ -1,15 +1,15 @@
 //! Authentication, account, session, invite, and credential-delivery HTTP boundary.
 
-use super::{acquire_workload_slot, ApiError, ApiState};
+use super::{acquire_workload_slot, ApiError, ApiState, AuthBudget, WebSocketBudget};
 use crate::authentication::{
-    auth_attempt_policy_from_env, cancel_auth_delivery_intent, clear_auth_attempt_failures,
-    deliver_auth_credential, enforce_auth_attempt_limit, enforce_recovery_request_limit,
-    enforce_registration_source_limit, enforce_workos_verification_source_limit,
-    record_failed_auth_attempt, AuthAttemptPolicy, AuthCredentialDeliveryRequest,
+    cancel_auth_delivery_intent, clear_auth_attempt_failures, deliver_auth_credential,
+    enforce_auth_attempt_limit, enforce_recovery_request_limit, enforce_registration_source_limit,
+    enforce_workos_verification_source_limit, record_failed_auth_attempt, AuthAttemptPolicy,
+    AuthCredentialDeliveryRequest,
 };
 use crate::identity_delivery::{
-    process_identity_delivery_intent, IdentityDeliveryGateway, IdentityDeliveryKind,
-    LocalDeterministicIdentityDeliveryGateway,
+    process_identity_delivery_intent, DisabledIdentityDeliveryGateway, IdentityDeliveryGateway,
+    IdentityDeliveryKind,
 };
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
@@ -93,6 +93,8 @@ pub(super) struct AuthHttpState {
     pub(super) websocket_audience: String,
     pub(super) websocket_ticket_ttl: Duration,
     pub(super) websocket_ticket_max_per_window: i32,
+    pub(super) session_rotation_max_age_seconds: i64,
+    pub(super) recent_authentication_max_age_seconds: i64,
     pub(super) access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
     pub(super) session_policy: identity::SessionPolicy,
     pub(super) classic_enabled: bool,
@@ -100,52 +102,35 @@ pub(super) struct AuthHttpState {
 }
 
 impl AuthHttpState {
-    pub(super) fn new(pool: PgPool) -> Self {
+    pub(super) fn new(pool: PgPool, budget: &AuthBudget, websocket: &WebSocketBudget) -> Self {
         let _ = dummy_account_password_hash();
         Self {
             pool,
             local_proof_auth: None,
-            auth_attempt_policy: auth_attempt_policy_from_env(),
-            identity_delivery_gateway: Arc::new(
-                LocalDeterministicIdentityDeliveryGateway::from_env(),
-            ),
-            password_slots: Arc::new(Semaphore::new(env_i64(
-                "FMARCH_PASSWORD_MAX_IN_FLIGHT",
-                4,
-                1,
-                64,
-            ) as usize)),
-            workos_verification_slots: Arc::new(Semaphore::new(env_i64(
-                "FMARCH_WORKOS_VERIFY_MAX_IN_FLIGHT",
-                8,
-                1,
-                128,
-            ) as usize)),
-            workos_verification_max_per_source: env_i64(
-                "FMARCH_WORKOS_VERIFY_MAX_PER_SOURCE",
-                120,
-                2,
-                10_000,
-            ) as i32,
-            websocket_audience: std::env::var("FMARCH_WS_AUDIENCE")
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| "fmarch-live".to_string()),
-            websocket_ticket_ttl: Duration::from_secs(env_i64(
-                "FMARCH_WS_TICKET_TTL_SECONDS",
-                30,
-                5,
-                120,
-            ) as u64),
-            websocket_ticket_max_per_window: env_i64(
-                "FMARCH_WS_TICKET_MAX_PER_WINDOW",
-                60,
-                2,
-                10_000,
-            ) as i32,
+            auth_attempt_policy: AuthAttemptPolicy {
+                account_max_failures: budget.rate_limit_account_max_failures,
+                source_max_failures: budget.rate_limit_source_max_failures,
+                registration_max_per_source: budget.registration_max_per_source,
+                window_seconds: budget.rate_limit_window_seconds,
+                lockout_seconds: budget.rate_limit_lockout_seconds,
+                retention_seconds: budget.rate_limit_retention_seconds,
+                trust_source_header: budget.trust_source_header,
+                source_signing_key: budget.source_signing_key.clone(),
+            },
+            identity_delivery_gateway: Arc::new(DisabledIdentityDeliveryGateway),
+            password_slots: Arc::new(Semaphore::new(budget.password_max_in_flight)),
+            workos_verification_slots: Arc::new(Semaphore::new(
+                budget.workos_verification_max_in_flight,
+            )),
+            workos_verification_max_per_source: budget.workos_verification_max_per_source,
+            websocket_audience: websocket.audience.clone(),
+            websocket_ticket_ttl: websocket.ticket_ttl,
+            websocket_ticket_max_per_window: websocket.ticket_max_per_window,
+            session_rotation_max_age_seconds: budget.session_rotation_max_age_seconds,
+            recent_authentication_max_age_seconds: budget.recent_authentication_max_age_seconds,
             access_token_verifier: None,
-            session_policy: identity::SessionPolicy::from_env(),
-            classic_enabled: std::env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0"),
+            session_policy: budget.session_policy.clone(),
+            classic_enabled: true,
             invitation_target_index: Arc::new(
                 membership_application::InvitationTargetIndex::from_env_or_local()
                     .expect("invitation target-index configuration must be valid"),
@@ -963,7 +948,7 @@ async fn auth_session(
     response.idle_expires_at = Some(identity.idle_expires_at);
     response.created_at = Some(identity.created_at);
     response.rotation_required =
-        Some(now.saturating_sub(identity.created_at) >= auth_session_rotation_max_age_seconds());
+        Some(now.saturating_sub(identity.created_at) >= state.session_rotation_max_age_seconds);
     Ok(Json(response))
 }
 
@@ -1820,14 +1805,14 @@ async fn create_member_personal_export(
     let initiating_session = request.context.initiating_session();
     let identity = request.context;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    require_recent_authentication(&identity, now, state.recent_authentication_max_age_seconds)?;
     let export = identity::create_personal_export_authenticated(
         &state.pool,
         &identity.principal_id,
         &initiating_session,
         &state.session_policy,
         now,
-        auth_recent_max_age_seconds(),
+        state.recent_authentication_max_age_seconds,
     )
     .await?;
     Ok(Json(MemberPersonalExportResponse {
@@ -1879,7 +1864,7 @@ async fn deactivate_member_account(
     let initiating_session = auth.context.initiating_session();
     let identity = auth.context;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    require_recent_authentication(&identity, now, state.recent_authentication_max_age_seconds)?;
     let reason = request.reason.trim();
     if reason.is_empty() || reason.len() > 280 {
         return Err(ApiError::Reject {
@@ -1897,7 +1882,7 @@ async fn deactivate_member_account(
             reason: reason.to_string(),
         },
         now,
-        auth_recent_max_age_seconds(),
+        state.recent_authentication_max_age_seconds,
     )
     .await?;
     Ok(Json(MemberLifecycleResponse {
@@ -1914,14 +1899,14 @@ async fn erase_member_account(
     let initiating_session = request.context.initiating_session();
     let identity = request.context;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    require_recent_authentication(&identity, now, state.recent_authentication_max_age_seconds)?;
     let pending = identity::request_member_erasure_authenticated(
         &state.pool,
         &identity.principal_id,
         &initiating_session,
         &state.session_policy,
         now,
-        auth_recent_max_age_seconds(),
+        state.recent_authentication_max_age_seconds,
     )
     .await?;
     Ok((
@@ -1988,7 +1973,7 @@ async fn add_classic_method(
     require_classic_enabled(&state)?;
     let identity = auth.context;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    require_recent_authentication(&identity, now, state.recent_authentication_max_age_seconds)?;
     let login_name = normalize_registration_account_id(request.login_name.as_str())?;
     validate_new_account_password(request.password.as_str())?;
     let _password_permit = acquire_workload_slot(
@@ -2004,7 +1989,11 @@ async fn add_classic_method(
         &state.session_policy,
     )
     .await?;
-    require_recent_authentication(&locked_identity, now)?;
+    require_recent_authentication(
+        &locked_identity,
+        now,
+        state.recent_authentication_max_age_seconds,
+    )?;
     if locked_identity.principal_id != identity.principal_id {
         return Err(unauthorized_session());
     }
@@ -2150,7 +2139,11 @@ async fn add_workos_method(
         })?;
     let identity = auth.context;
     let verification_now = unix_now_seconds();
-    require_recent_authentication(&identity, verification_now)?;
+    require_recent_authentication(
+        &identity,
+        verification_now,
+        state.recent_authentication_max_age_seconds,
+    )?;
     let provider_assertion = request.provider_assertion.trim();
     if provider_assertion.is_empty() {
         return Err(ApiError::Reject {
@@ -2182,7 +2175,11 @@ async fn add_workos_method(
     )
     .await?;
     let now = unix_now_seconds();
-    require_recent_authentication(&locked_identity, now)?;
+    require_recent_authentication(
+        &locked_identity,
+        now,
+        state.recent_authentication_max_age_seconds,
+    )?;
     if locked_identity.principal_id != identity.principal_id {
         return Err(unauthorized_session());
     }
@@ -2294,7 +2291,7 @@ async fn disable_account_method(
         identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
             .await?;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    require_recent_authentication(&identity, now, state.recent_authentication_max_age_seconds)?;
     let disabled =
         identity::methods::disable_method(&mut tx, &identity.principal_id, method_id, now).await?;
     sqlx::query(
@@ -4056,7 +4053,11 @@ async fn retire_workos_signing_key(
 ) -> Result<Json<RetireWorkosSigningKeyResponse>, ApiError> {
     let signing_key_id = identity::WorkosSigningKeyId::parse(request.signing_key_id)?;
     let now = unix_now_seconds();
-    require_recent_authentication(&auth.context, now)?;
+    require_recent_authentication(
+        &auth.context,
+        now,
+        state.recent_authentication_max_age_seconds,
+    )?;
     require_global_admin_context(&auth.context, "WorkOS signing-key retirement")?;
     let mut tx = identity::session::begin_authority_transaction(&state.pool).await?;
     identity::session::lock_workos_retirement_command(&mut tx).await?;
@@ -4070,7 +4071,11 @@ async fn retire_workos_signing_key(
         return Err(unauthorized_session());
     }
     let locked_now = unix_now_seconds();
-    require_recent_authentication(&locked, locked_now)?;
+    require_recent_authentication(
+        &locked,
+        locked_now,
+        state.recent_authentication_max_age_seconds,
+    )?;
     let actor_principal_id =
         require_global_admin_context(&locked, "WorkOS signing-key retirement")?;
     let retirement = identity::retire_workos_signing_key(
@@ -4208,19 +4213,6 @@ pub(super) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .filter(|token| !token.is_empty())
 }
 
-fn auth_session_rotation_max_age_seconds() -> i64 {
-    env_i64(
-        "FMARCH_AUTH_SESSION_ROTATION_MAX_AGE_SECONDS",
-        86_400,
-        60,
-        604_800,
-    )
-}
-
-fn auth_recent_max_age_seconds() -> i64 {
-    env_i64("FMARCH_AUTH_RECENT_SECONDS", 600, 60, 86_400)
-}
-
 fn require_classic_enabled(state: &AuthHttpState) -> Result<(), ApiError> {
     if state.classic_enabled {
         Ok(())
@@ -4236,21 +4228,14 @@ fn require_classic_enabled(state: &AuthHttpState) -> Result<(), ApiError> {
 fn require_recent_authentication(
     identity: &AuthorizationContext,
     now: i64,
+    max_age_seconds: i64,
 ) -> Result<(), ApiError> {
     identity::methods::require_recent_authentication(
         identity.authenticated_at,
         now,
-        auth_recent_max_age_seconds(),
+        max_age_seconds,
     )?;
     Ok(())
-}
-
-pub(super) fn env_i64(name: &str, default: i64, minimum: i64, maximum: i64) -> i64 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(default)
-        .clamp(minimum, maximum)
 }
 
 async fn authenticated_account_principal_for_update(

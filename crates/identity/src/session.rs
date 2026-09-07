@@ -277,28 +277,31 @@ pub struct WorkosSigningKeyRetirement {
 }
 
 impl SessionPolicy {
-    pub fn from_env() -> Self {
-        SessionPolicy {
-            absolute_ttl_seconds: bounded_env_i64(
-                "FMARCH_SESSION_TTL_SECONDS",
-                60 * 60 * 24 * 30,
-                60,
-                60 * 60 * 24 * 365,
-            ),
-            workos_absolute_ttl_seconds: bounded_env_i64(
-                "FMARCH_WORKOS_SESSION_TTL_SECONDS",
-                60 * 60 * 24,
-                60,
-                60 * 60 * 24,
-            ),
-            idle_ttl_seconds: bounded_env_i64(
-                "FMARCH_SESSION_IDLE_TTL_SECONDS",
-                60 * 60 * 24 * 7,
-                60,
-                60 * 60 * 24 * 365,
-            ),
-            local_proof_instance_id: None,
+    /// Constructs a policy from values validated by the process composition
+    /// root. Libraries do not read or repair ambient configuration.
+    pub fn new(
+        absolute_ttl_seconds: i64,
+        workos_absolute_ttl_seconds: i64,
+        idle_ttl_seconds: i64,
+    ) -> Result<Self, &'static str> {
+        if !(60..=31_536_000).contains(&absolute_ttl_seconds) {
+            return Err("classic session TTL must be between 60 and 31536000 seconds");
         }
+        if !(60..=86_400).contains(&workos_absolute_ttl_seconds) {
+            return Err("WorkOS session TTL must be between 60 and 86400 seconds");
+        }
+        if !(60..=31_536_000).contains(&idle_ttl_seconds) {
+            return Err("session idle TTL must be between 60 and 31536000 seconds");
+        }
+        if idle_ttl_seconds > absolute_ttl_seconds {
+            return Err("session idle TTL must not exceed classic session TTL");
+        }
+        Ok(Self {
+            absolute_ttl_seconds,
+            workos_absolute_ttl_seconds,
+            idle_ttl_seconds,
+            local_proof_instance_id: None,
+        })
     }
 
     /// Bind debug-only, methodless session eligibility to one exact process.
@@ -335,12 +338,11 @@ impl SessionPolicy {
     }
 }
 
-fn bounded_env_i64(name: &str, default: i64, min: i64, max: i64) -> i64 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.trim().parse::<i64>().ok())
-        .unwrap_or(default)
-        .clamp(min, max)
+impl Default for SessionPolicy {
+    fn default() -> Self {
+        Self::new(60 * 60 * 24 * 30, 60 * 60 * 24, 60 * 60 * 24 * 7)
+            .expect("built-in session policy is valid")
+    }
 }
 
 #[derive(Debug, Clone)]
