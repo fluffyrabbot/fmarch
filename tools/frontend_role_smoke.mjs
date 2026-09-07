@@ -455,7 +455,7 @@ try {
       commandRequests: privateChannelCommandRequests,
     });
     const privateChannelPath = "/g/midsummer/c/private%3Arole_pm%3Aslot-7";
-    const privateChannelResponse = await navigateBrowserPage(privateChannelPage, 
+    const privateChannelResponse = await navigateBrowserPage(privateChannelPage,
       `${baseUrl}${privateChannelPath}`,
       {
         waitUntil: "networkidle",
@@ -925,7 +925,7 @@ async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
   const publicationContext = await newContextForViewport(viewport, contract.publication.token);
   const publicationPage = await publicationContext.newPage();
   await publicationPage.emulateMedia(contract.media);
-  const publicationResponse = await navigateBrowserPage(publicationPage, 
+  const publicationResponse = await navigateBrowserPage(publicationPage,
     `${baseUrl}${contract.publication.path}`,
     { waitUntil: "networkidle" },
   );
