@@ -7,6 +7,7 @@ import { test } from "node:test";
 
 import {
   assertReleaseReceipt,
+  assertFreshStagingReleaseReceipt,
   bindReleaseAttempt,
   buildReleaseReceipt,
   canonicalJson,
@@ -24,6 +25,8 @@ import {
   serviceSourceCutoverAction,
   parseResetLogRows,
   releaseRuntimeValidation,
+  runEpochResetJournal,
+  runtimeConfig,
   validateEpochResetAudit,
   waitForNewDeployment,
   waitForMigrationCompletion,
@@ -34,6 +37,9 @@ import {
 const commit = "a".repeat(40);
 const runtimeDigest = `sha256:${"b".repeat(64)}`;
 const frontendDigest = `sha256:${"c".repeat(64)}`;
+const fleetJobId = "20260907T120000Z-release";
+const fleetCompletedAt = "2026-09-07T12:30:00.000Z";
+const releaseNow = new Date("2026-09-07T13:00:00.000Z");
 const runtimeValidation = {
   status: "passed",
   policy: "immutable-linux-amd64-runtime-v1",
@@ -77,6 +83,7 @@ function signedFleetReceipt({
   setupCommands = fleetWorkflow.setup,
   stepOk = true,
   signingKey = fleetPrivateKey,
+  completedAt = fleetCompletedAt,
 } = {}) {
   const comparisonCommit = "9".repeat(40);
   const jobId = "20260907T120000Z-release";
@@ -87,7 +94,7 @@ function signedFleetReceipt({
     host: "cachy",
     state: "finished",
     error: null,
-    completedAt: "2026-09-07T12:30:00.000Z",
+    completedAt,
     task: {
       schemaVersion: 1,
       id: jobId,
@@ -151,6 +158,8 @@ function signedFleetReceipt({
 const fleetReceipt = signedFleetReceipt();
 const fleetProof = validateFleetProofReceipt(fleetReceipt, {
   expectedCommit: commit,
+  expectedJobId: fleetJobId,
+  now: releaseNow,
   publicKeyPem: fleetPublicKeyPem,
   expectedTrustRootSha256: fleetTrustRootSha256,
   expectedWorkflow: fleetWorkflow,
@@ -160,6 +169,8 @@ const attemptReceipt = bindReleaseAttempt({
   commit,
   runtimeDigest,
   frontendDigest,
+  fleetProof,
+  createdAt: new Date("2026-09-07T12:35:00.000Z"),
 });
 
 function redigestReleaseReceipt(receipt) {
@@ -198,6 +209,18 @@ test("repository validation rejects dirty, stale, or unpointed releases", () => 
   );
 });
 
+test("release coordination pins project, environment, services, images, and origins", () => {
+  const staging = runtimeConfig("staging", {});
+  assert.equal(staging.projectId, "9d285d67-c11b-4508-9efb-fad042787b4c");
+  assert.equal(staging.environmentId, "e109e500-2a4c-48a3-96f2-e92a9edb63e4");
+  assert.equal(staging.migratorServiceId, "7c2c2665-2be2-4938-84e5-7580a964d610");
+  assert.equal(staging.apiUrl, "https://fmarch-staging.up.railway.app");
+  assert.throws(
+    () => runtimeConfig("production", { FMARCH_PRODUCTION_API_URL: "https://attacker.test" }),
+    /cannot override the canonical release topology/,
+  );
+});
+
 test("release proof requires an exact-commit signed Cachy audit envelope", () => {
   assert.equal(fleetProof.commit, commit);
   assert.equal(fleetProof.verification_mode, "audit");
@@ -207,6 +230,8 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
       signedFleetReceipt({ signingKey: substitutedAuthority.privateKey }),
       {
         expectedCommit: commit,
+        expectedJobId: fleetJobId,
+        now: releaseNow,
         publicKeyPem: substitutedAuthority.publicKey.export({ type: "spki", format: "pem" }),
         expectedTrustRootSha256: fleetTrustRootSha256,
         expectedWorkflow: fleetWorkflow,
@@ -219,6 +244,8 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
   assert.throws(
     () => validateFleetProofReceipt(tampered, {
       expectedCommit: commit,
+      expectedJobId: fleetJobId,
+      now: releaseNow,
       publicKeyPem: fleetPublicKeyPem,
       expectedTrustRootSha256: fleetTrustRootSha256,
       expectedWorkflow: fleetWorkflow,
@@ -228,6 +255,8 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
   assert.throws(
     () => validateFleetProofReceipt(signedFleetReceipt({ mode: "push" }), {
       expectedCommit: commit,
+      expectedJobId: fleetJobId,
+      now: releaseNow,
       publicKeyPem: fleetPublicKeyPem,
       expectedTrustRootSha256: fleetTrustRootSha256,
       expectedWorkflow: fleetWorkflow,
@@ -237,6 +266,8 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
   assert.throws(
     () => validateFleetProofReceipt(signedFleetReceipt({ stepOk: false, outcome: "failed" }), {
       expectedCommit: commit,
+      expectedJobId: fleetJobId,
+      now: releaseNow,
       publicKeyPem: fleetPublicKeyPem,
       expectedTrustRootSha256: fleetTrustRootSha256,
       expectedWorkflow: fleetWorkflow,
@@ -246,11 +277,39 @@ test("release proof requires an exact-commit signed Cachy audit envelope", () =>
   assert.throws(
     () => validateFleetProofReceipt(signedFleetReceipt({ setupCommands: [] }), {
       expectedCommit: commit,
+      expectedJobId: fleetJobId,
+      now: releaseNow,
       publicKeyPem: fleetPublicKeyPem,
       expectedTrustRootSha256: fleetTrustRootSha256,
       expectedWorkflow: fleetWorkflow,
     }),
     /setup commands are missing or differ/,
+  );
+  assert.throws(
+    () =>
+      validateFleetProofReceipt(fleetReceipt, {
+        expectedCommit: commit,
+        publicKeyPem: fleetPublicKeyPem,
+        expectedTrustRootSha256: fleetTrustRootSha256,
+        expectedWorkflow: fleetWorkflow,
+        now: releaseNow,
+      }),
+    /expected fleet job id/,
+  );
+  assert.throws(
+    () =>
+      validateFleetProofReceipt(
+        signedFleetReceipt({ completedAt: "2026-09-05T12:30:00.000Z" }),
+        {
+          expectedCommit: commit,
+          expectedJobId: fleetJobId,
+          publicKeyPem: fleetPublicKeyPem,
+          expectedTrustRootSha256: fleetTrustRootSha256,
+          expectedWorkflow: fleetWorkflow,
+          now: releaseNow,
+        },
+      ),
+    /older than the release freshness window/,
   );
 });
 
@@ -445,6 +504,7 @@ test("release retries are bound to the original commit and exact image digests",
       commit,
       runtimeDigest,
       frontendDigest,
+      fleetProof,
       existing: attemptReceipt,
     }),
     attemptReceipt,
@@ -455,9 +515,10 @@ test("release retries are bound to the original commit and exact image digests",
       commit,
       runtimeDigest,
       frontendDigest: `sha256:${"e".repeat(64)}`,
+      fleetProof,
       existing: attemptReceipt,
     }),
-    /exact commit and image digests/,
+    /exact commit, proof, topology, and image digests/,
   );
   assert.throws(
     () => bindReleaseAttempt({
@@ -465,6 +526,7 @@ test("release retries are bound to the original commit and exact image digests",
       commit,
       runtimeDigest,
       frontendDigest,
+      fleetProof,
       existing: { ...attemptReceipt, receipt_sha256: "0".repeat(64) },
     }),
     /tampered/,
@@ -605,6 +667,77 @@ test("epoch reset evidence waits for Railway log propagation and stays bounded",
   );
 });
 
+test("schema epoch reset resumes from the durable destructive-phase fence", async () => {
+  const operationBase = {
+    version: 1,
+    kind: "fmarch-schema-epoch-reset-operation",
+    key: `staging:1:${commit}`,
+    environment: "staging",
+    epoch: 1,
+    commit,
+    runtime_digest: runtimeDigest,
+    topology: runtimeConfig("staging", {}).topology,
+  };
+  const operation = {
+    ...operationBase,
+    receipt_sha256: receiptDigest(operationBase),
+  };
+  const phases = new Map();
+  let destructiveExecutions = 0;
+  let recoveries = 0;
+  let remoteResetComplete = false;
+  let migrations = 0;
+  const dependencies = {
+    operation,
+    loadPhase: async (phase) => phases.get(phase) ?? null,
+    publishPhase: async (phase, receipt) => {
+      assert.equal(phases.has(phase), false, `phase ${phase} was replaced`);
+      phases.set(phase, structuredClone(receipt));
+    },
+    audit: async () => ({ audit_deployment_id: "audit", prior_counts: {} }),
+    planReset: async () => ({ previous_deployment_id: "before-reset" }),
+    executeOrRecoverReset: async () => {
+      if (!remoteResetComplete) {
+        destructiveExecutions += 1;
+        remoteResetComplete = true;
+        throw new Error("injected crash after destructive reset");
+      }
+      recoveries += 1;
+      return {
+        schema_epoch_reset: {
+          deployment_id: "reset",
+          audit_deployment_id: "audit",
+        },
+      };
+    },
+    planMigration: async () => ({ previous_deployment_id: "reset" }),
+    executeOrRecoverMigration: async () => {
+      migrations += 1;
+      return {
+        deployment: {
+          id: "migrator",
+          status: "SUCCESS",
+          meta: { imageDigest: runtimeDigest },
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    runEpochResetJournal(dependencies),
+    /injected crash after destructive reset/,
+  );
+  assert.equal(phases.has("reset-started"), true);
+  assert.equal(phases.has("reset-complete"), false);
+
+  const resumed = await runEpochResetJournal(dependencies);
+  assert.equal(destructiveExecutions, 1, "resume repeated the destructive reset");
+  assert.equal(recoveries, 1);
+  assert.equal(migrations, 1);
+  assert.equal(resumed.schemaEpochReset.deployment_id, "reset");
+  assert.equal(resumed.migrator.id, "migrator");
+});
+
 test("staging sentinel waits for telemetry propagation without rerunning its canary", async () => {
   let clock = 0;
   let loads = 0;
@@ -646,6 +779,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
   };
   const hostedAcceptance = {
     status: "passed",
+    generatedAt: "2026-09-07T12:45:00.000Z",
     checkerCommit: commit,
     target: {
       commit,
@@ -667,6 +801,8 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     commit,
     runtimeDigest,
     frontendDigest,
+    fleetProof,
+    createdAt: new Date("2026-09-07T12:40:00.000Z"),
     deployments: {
       migrator: deployment("migrator", runtimeDigest),
       api: deployment("api", runtimeDigest),
@@ -679,9 +815,30 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     runtimeValidation,
     hostedAcceptance,
     sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
-    generatedAt: new Date("2026-08-26T00:00:00.000Z"),
+    generatedAt: new Date("2026-09-07T12:50:00.000Z"),
   });
   assert.equal(assertReleaseReceipt(receipt), receipt);
+  assert.equal(assertFreshStagingReleaseReceipt(receipt, { now: releaseNow }), receipt);
+  assert.throws(
+    () =>
+      assertFreshStagingReleaseReceipt(receipt, {
+        now: new Date("2026-09-09T13:00:00.000Z"),
+      }),
+    /older than the release freshness window/,
+  );
+  assert.throws(
+    () =>
+      assertReleaseReceipt(
+        redigestReleaseReceipt({
+          ...receipt,
+          topology: {
+            ...receipt.topology,
+            project_id: "00000000-0000-0000-0000-000000000000",
+          },
+        }),
+      ),
+    /canonical Railway authority/,
+  );
   assert.equal(receipt.images.runtime, runtimeDigest);
   assert.equal(receipt.runtime_validation, runtimeValidation);
   assert.equal(receipt.images.migrator_api_digest_equal, true);
@@ -730,7 +887,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
       attempt: alteredAttempt,
       attempt_receipt_sha256: alteredAttempt.receipt_sha256,
     })),
-    /exact commit and image digests/,
+    /exact commit, proof, topology, and image digests/,
   );
 
   const releaseReadiness = validateProductionReleaseReadiness({
@@ -743,6 +900,8 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     commit,
     runtimeDigest,
     frontendDigest,
+    fleetProof,
+    createdAt: new Date("2026-09-07T12:40:00.000Z"),
   });
   const productionReceipt = buildReleaseReceipt({
     environment: "production",
@@ -760,7 +919,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     attemptReceipt: productionAttempt,
     runtimeValidation,
     releaseReadiness,
-    generatedAt: new Date("2026-08-27T00:00:00.000Z"),
+    generatedAt: new Date("2026-09-07T12:55:00.000Z"),
   });
   assert.equal(
     validateReusableProductionReceipt(productionReceipt, {
@@ -783,6 +942,8 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     commit,
     runtimeDigest,
     frontendDigest: `sha256:${"f".repeat(64)}`,
+    fleetProof,
+    createdAt: new Date("2026-09-07T12:45:00.000Z"),
   });
   assert.throws(
     () => validateReusableProductionReceipt(redigestReleaseReceipt({

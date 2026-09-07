@@ -37,9 +37,10 @@ export async function loadFleetReleaseProof({
   commit,
   receiptPath,
   publicKeyPath = defaultFleetPublicKeyPath(),
-  expectedJobId = null,
+  expectedJobId,
 }) {
   assert.ok(receiptPath, "release requires --fleet-receipt or FMARCH_FLEET_RECEIPT");
+  assert.ok(expectedJobId, "release requires --fleet-job or FMARCH_FLEET_JOB_ID");
   const [receiptBytes, publicKeyPem, manifestBytes] = await Promise.all([
     readFile(path.resolve(receiptPath), "utf8"),
     readFile(path.resolve(publicKeyPath), "utf8"),

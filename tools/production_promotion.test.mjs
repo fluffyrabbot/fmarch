@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  finalizeProductionPointer,
   parseArguments,
   productionPointerPushArguments,
   railwayArguments,
@@ -15,7 +16,11 @@ import {
   validateProductionSourceCutover,
   validateRepositoryState,
   validateSecretCustodyPolicy,
+  withProductionPromotionLock,
 } from "./production_promotion.mjs";
+
+const canonicalProjectId = "9d285d67-c11b-4508-9efb-fad042787b4c";
+const canonicalMigratorServiceId = "7c2c2665-2be2-4938-84e5-7580a964d610";
 
 const apiServiceId = "api";
 const migratorServiceId = "migrator";
@@ -36,19 +41,26 @@ test("promotion arguments are fail closed", () => {
 
 test("production promotion consumes the coordinated staging receipt", async () => {
   const source = await readFile(new URL("./production_promotion.mjs", import.meta.url), "utf8");
-  const stagingReceipt = source.indexOf("const stagingReceipt = assertReleaseReceipt");
-  const stagingValidation = source.indexOf("await validateCoordinatedEnvironment");
+  const stagingReceipt = source.indexOf("const stagingReceipt = assertFreshStagingReleaseReceipt");
+  const lock = source.indexOf("await withProductionPromotionLock");
+  const stagingValidation = source.lastIndexOf("await validateCoordinatedEnvironment", lock);
   const receiptReplay = source.indexOf("if (existingProductionReceipt)");
   const coordinator = source.indexOf('"tools/release_coordinator.mjs"');
-  const replayPush = source.indexOf("productionPointerPushArguments(head, originProduction)");
-  const releasePush = source.lastIndexOf("productionPointerPushArguments(head, originProduction)");
+  const firstFreshValidation = source.indexOf(
+    "await finalizeCanonicalProductionPointer",
+  );
+  const finalFreshValidation = source.lastIndexOf(
+    "await finalizeCanonicalProductionPointer",
+  );
   assert.equal(stagingReceipt >= 0, true);
   assert.equal(stagingValidation > stagingReceipt, true);
+  assert.equal(lock > stagingValidation, true);
   assert.equal(receiptReplay > stagingValidation, true);
-  assert.equal(replayPush > receiptReplay && replayPush < coordinator, true);
+  assert.equal(receiptReplay > lock, true);
+  assert.equal(firstFreshValidation > receiptReplay && firstFreshValidation < coordinator, true);
   assert.equal(coordinator > receiptReplay, true);
   assert.equal(coordinator > stagingValidation, true);
-  assert.equal(releasePush > coordinator, true);
+  assert.equal(finalFreshValidation > coordinator, true);
   assert.equal(source.includes('"proof:lanes"'), false);
   assert.equal(source.includes("disconnectProductionGitSources"), false);
 });
@@ -64,29 +76,88 @@ test("production pointer advancement is an exact expected-value CAS", () => {
   assert.throws(() => productionPointerPushArguments("main", prior), /full Git SHA/);
 });
 
-test("Railway commands use explicit project flags except after an explicit link", () => {
-  assert.deepEqual(railwayArguments("project-id", ["environment", "config", "--json"]), [
+test("production pointer refresh and CAS occur only after fresh live revalidation", async () => {
+  const commit = "a".repeat(40);
+  const prior = "b".repeat(40);
+  const events = [];
+  await finalizeProductionPointer({
+    commit,
+    expectedProductionCommit: prior,
+    revalidate: async () => events.push("live"),
+    refreshProductionPointer: async () => {
+      events.push("fetch");
+      return prior;
+    },
+    pushPointer: async (arguments_) => {
+      events.push("cas");
+      assert.deepEqual(arguments_, productionPointerPushArguments(commit, prior));
+    },
+  });
+  assert.deepEqual(events, ["live", "fetch", "cas"]);
+  await assert.rejects(
+    finalizeProductionPointer({
+      commit,
+      expectedProductionCommit: prior,
+      revalidate: async () => {},
+      refreshProductionPointer: async () => "c".repeat(40),
+      pushPointer: async () => assert.fail("CAS must not run after pointer drift"),
+    }),
+    /moved after promotion preflight/,
+  );
+});
+
+test("Railway commands always use the canonical explicit project", () => {
+  assert.deepEqual(railwayArguments(canonicalProjectId, ["environment", "config", "--json"]), [
     "environment",
     "config",
     "--json",
     "--project",
-    "project-id",
+    canonicalProjectId,
   ]);
-  assert.deepEqual(
-    railwayArguments("project-id", ["environment", "config", "--json"], { linked: true }),
-    ["environment", "config", "--json"],
+  assert.throws(
+    () => railwayArguments("attacker-project", ["environment", "config", "--json"]),
+    /canonical release topology/,
   );
 });
 
-test("promotion requires the live migrator service UUID explicitly", () => {
-  assert.throws(() => runtimeConfig({}), /FMARCH_RAILWAY_MIGRATOR_SERVICE_ID/);
-  const configured = runtimeConfig({
-    FMARCH_RAILWAY_MIGRATOR_SERVICE_ID: "11111111-2222-4333-8444-555555555555",
-  });
-  assert.equal(
-    configured.migratorServiceId,
-    "11111111-2222-4333-8444-555555555555",
+test("promotion pins the complete canonical Railway topology", () => {
+  const configured = runtimeConfig({});
+  assert.equal(configured.projectId, canonicalProjectId);
+  assert.equal(configured.migratorServiceId, canonicalMigratorServiceId);
+  assert.equal(configured.productionEnvironmentId, "c1378737-84cc-45ba-8474-9c868baf7cfb");
+  assert.throws(
+    () => runtimeConfig({ FMARCH_RAILWAY_MIGRATOR_SERVICE_ID: "11111111-2222-4333-8444-555555555555" }),
+    /cannot override the canonical release topology/,
   );
+});
+
+test("production promotion lock rejects contention and permits a released replay", async () => {
+  let owner = null;
+  let releaseFirst;
+  const acquire = async () => {
+    assert.equal(owner, null, "promotion lock is held");
+    owner = "token";
+    return owner;
+  };
+  const release = async (token) => {
+    assert.equal(token, owner);
+    owner = null;
+  };
+  const first = withProductionPromotionLock(
+    { acquire, release },
+    async () => await new Promise((resolve) => {
+      releaseFirst = resolve;
+    }),
+  );
+  await Promise.resolve();
+  await assert.rejects(
+    withProductionPromotionLock({ acquire, release }, async () => {}),
+    /promotion lock is held/,
+  );
+  releaseFirst();
+  await first;
+  await withProductionPromotionLock({ acquire, release }, async () => {});
+  assert.equal(owner, null);
 });
 
 test("repository state requires clean synchronized main and an ancestor release pointer", () => {

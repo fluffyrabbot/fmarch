@@ -335,6 +335,18 @@ async function contract() {
     source["deploy/railway/api.env.example"],
     /^FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES=67108864$/m,
   );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_MEDIA_RECONCILIATION_INTERVAL_MS=5000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_MEDIA_RECONCILIATION_TIMEOUT_MS=2000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_MEDIA_RECONCILIATION_BATCH_SIZE=1$/m,
+  );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_SUBJECT_KEY_DIR=/m);
   for (const variable of [
     "ENDPOINT",
@@ -621,8 +633,9 @@ async function contract() {
   assert.match(source["tools/production_promotion.mjs"], /\$\{urls\.apiUrl\}\/readyz/);
   assert.match(
     source["tools/production_promotion.mjs"],
-    /FMARCH_RAILWAY_MIGRATOR_SERVICE_ID/,
+    /CANONICAL_RELEASE_TOPOLOGY\.services\.migrator/,
   );
+  assert.match(source["tools/production_promotion.mjs"], /cannot override the canonical release topology/);
   assert.match(source["tools/production_promotion.mjs"], /migratorDeployment/);
   assert.match(source["tools/production_promotion.mjs"], /DATABASE_MIGRATION_URL/);
   assert.match(source["tools/production_promotion.mjs"], /DATABASE_KEY_ADMIN_URL/);
@@ -691,7 +704,7 @@ async function contract() {
     "DATABASE_MIGRATION_URL",
     "DATABASE_KEY_ADMIN_URL",
     "fmarch-schema-gate",
-    "FMARCH_RAILWAY_MIGRATOR_SERVICE_ID",
+    "7c2c2665-2be2-4938-84e5-7580a964d610",
     "migrator, API, and frontend",
     "--bootstrap-subject-authority",
     "npm run promote:production -- --check",

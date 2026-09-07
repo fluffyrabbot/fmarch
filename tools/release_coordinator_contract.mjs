@@ -2,7 +2,42 @@ import {assertAuthenticatedReceipt, stagingOrigins} from './hosted_authenticated
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-export const RELEASE_RECEIPT_VERSION = 4;
+export const RELEASE_RECEIPT_VERSION = 5;
+export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
+export const CANONICAL_RELEASE_TOPOLOGY = Object.freeze({
+  version: 1,
+  project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+  services: Object.freeze({
+    migrator: "7c2c2665-2be2-4938-84e5-7580a964d610",
+    api: "18b6f450-3739-4f21-8e01-f58c63cec834",
+    frontend: "23787c98-db56-4ccc-869a-42dca74d7bc7",
+  }),
+  images: Object.freeze({
+    runtime: "ghcr.io/fluffyrabbot/fmarch-runtime",
+    frontend: "ghcr.io/fluffyrabbot/fmarch-frontend",
+  }),
+  environments: Object.freeze({
+    staging: Object.freeze({
+      id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+      name: "staging",
+      origins: Object.freeze({
+        api: "https://fmarch-staging.up.railway.app",
+        frontend: "https://fmarch-frontend-staging.up.railway.app",
+        internal_api: "http://fmarch.railway.internal:8080",
+      }),
+    }),
+    production: Object.freeze({
+      id: "c1378737-84cc-45ba-8474-9c868baf7cfb",
+      name: "production",
+      origins: Object.freeze({
+        api: "https://fmarch-production.up.railway.app",
+        frontend: "https://fmarch-frontend-production.up.railway.app",
+        internal_api: "http://fmarch.railway.internal:8080",
+      }),
+    }),
+  }),
+});
 export const TERMINAL_DEPLOYMENT_STATES = new Set([
   "SUCCESS",
   "FAILED",
@@ -99,6 +134,61 @@ function assertNonemptyString(value, label) {
   return value;
 }
 
+function canonicalInstant(value, label) {
+  assertNonemptyString(value, label);
+  const instant = new Date(value);
+  assert.equal(Number.isNaN(instant.getTime()), false, `${label} must be a valid timestamp`);
+  assert.equal(instant.toISOString(), value, `${label} must be canonical ISO-8601`);
+  return instant.getTime();
+}
+
+export function canonicalReleaseTopology(environment) {
+  const environmentTopology = CANONICAL_RELEASE_TOPOLOGY.environments[environment];
+  assert.ok(environmentTopology, `unsupported release environment ${environment}`);
+  return {
+    version: CANONICAL_RELEASE_TOPOLOGY.version,
+    project_id: CANONICAL_RELEASE_TOPOLOGY.project_id,
+    environment: {
+      id: environmentTopology.id,
+      name: environmentTopology.name,
+    },
+    services: { ...CANONICAL_RELEASE_TOPOLOGY.services },
+    origins: { ...environmentTopology.origins },
+  };
+}
+
+export function assertCanonicalReleaseTopology(topology, environment) {
+  assert.deepEqual(
+    topology,
+    canonicalReleaseTopology(environment),
+    `${environment} release topology drifted from the canonical Railway authority`,
+  );
+  return topology;
+}
+
+export function assertFreshReleaseEvidence(
+  value,
+  label,
+  {
+    now = new Date(),
+    maxAgeMilliseconds = RELEASE_EVIDENCE_MAX_AGE_MS,
+    clockSkewMilliseconds = RELEASE_CLOCK_SKEW_MS,
+  } = {},
+) {
+  const nowMilliseconds = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  assert.equal(Number.isNaN(nowMilliseconds), false, "release evidence reference time is invalid");
+  const evidenceMilliseconds = canonicalInstant(value, label);
+  assert.ok(
+    evidenceMilliseconds <= nowMilliseconds + clockSkewMilliseconds,
+    `${label} is unreasonably in the future`,
+  );
+  assert.ok(
+    nowMilliseconds - evidenceMilliseconds <= maxAgeMilliseconds,
+    `${label} is older than the release freshness window`,
+  );
+  return evidenceMilliseconds;
+}
+
 export function validateFleetProofReceipt(
   receipt,
   {
@@ -106,14 +196,17 @@ export function validateFleetProofReceipt(
     publicKeyPem,
     expectedWorkflow,
     expectedTrustRootSha256,
-    expectedJobId = null,
+    expectedJobId,
     expectedHost = "cachy",
     expectedRepository = "fmarch",
     expectedPlatform = "linux",
     expectedVerificationMode = "audit",
+    now = new Date(),
+    maxAgeMilliseconds = RELEASE_EVIDENCE_MAX_AGE_MS,
   },
 ) {
   assertFullCommit(expectedCommit);
+  assertNonemptyString(expectedJobId, "expected fleet job id");
   assert.equal(receipt?.queueState, "finished", "fleet proof job is not finished");
   const document = receipt?.document;
   assert.equal(document?.schemaVersion, 1, "fleet receipt schema drifted");
@@ -136,9 +229,12 @@ export function validateFleetProofReceipt(
   assert.equal(document.error, null, "fleet receipt records an error");
   assert.equal(document.host, expectedHost, "fleet receipt came from the wrong host");
   assertNonemptyString(document.jobId, "fleet job id");
-  if (expectedJobId !== null) assert.equal(document.jobId, expectedJobId, "fleet job id drifted");
+  assert.equal(document.jobId, expectedJobId, "fleet job id drifted");
   assert.equal(document.taskId, document.jobId, "fleet receipt task/job identity drifted");
-  assertNonemptyString(document.completedAt, "fleet receipt completion time");
+  assertFreshReleaseEvidence(document.completedAt, "fleet receipt completion time", {
+    now,
+    maxAgeMilliseconds,
+  });
 
   const task = document.task;
   const evidence = document.evidence;
@@ -336,23 +432,44 @@ export function receiptDigest(receiptWithoutDigest) {
   return createHash("sha256").update(canonicalJson(receiptWithoutDigest)).digest("hex");
 }
 
-export function bindReleaseAttempt({ environment, commit, runtimeDigest, frontendDigest, existing = null }) {
+export function bindReleaseAttempt({
+  environment,
+  commit,
+  runtimeDigest,
+  frontendDigest,
+  fleetProof,
+  topology = canonicalReleaseTopology(environment),
+  createdAt = new Date(),
+  existing = null,
+}) {
   assert.ok(["staging", "production"].includes(environment), "unsupported release environment");
   assertFullCommit(commit);
   assertImageDigest(runtimeDigest, "runtime digest");
   assertImageDigest(frontendDigest, "frontend digest");
+  assertFleetProofAttestation(fleetProof, commit);
+  assertCanonicalReleaseTopology(topology, environment);
+  const createdAtValue = existing?.created_at ?? createdAt.toISOString();
+  canonicalInstant(createdAtValue, "release attempt creation time");
   const base = {
-    version: 1,
+    version: 2,
     kind: "fmarch-release-attempt",
     environment,
     commit,
+    created_at: createdAtValue,
     images: { runtime: runtimeDigest, frontend: frontendDigest },
+    topology,
+    fleet_job_id: fleetProof.job_id,
+    fleet_receipt_sha256: fleetProof.receipt_sha256,
   };
   const attempt = { ...base, receipt_sha256: receiptDigest(base) };
   if (existing) {
     const { receipt_sha256: existingDigest, ...existingBase } = existing;
     assert.equal(existingDigest, receiptDigest(existingBase), "release attempt receipt was tampered with");
-    assert.deepEqual(existing, attempt, "release retry must reuse the exact commit and image digests");
+    assert.deepEqual(
+      existing,
+      attempt,
+      "release retry must reuse the exact commit, proof, topology, and image digests",
+    );
     return existing;
   }
   return attempt;
@@ -373,6 +490,7 @@ export function buildReleaseReceipt({
   sentinel = null,
   hostedAcceptance = null,
   schemaEpochReset = null,
+  topology = canonicalReleaseTopology(environment),
   generatedAt = new Date(),
 }) {
   assertFullCommit(commit);
@@ -386,9 +504,18 @@ export function buildReleaseReceipt({
   validateHealth(health.api, commit, "api");
   validateHealth(health.frontend, commit, "frontend");
   assertFleetProofAttestation(fleetProof, commit);
+  assertCanonicalReleaseTopology(topology, environment);
   assert.equal(
     attemptReceipt?.receipt_sha256,
-    bindReleaseAttempt({ environment, commit, runtimeDigest, frontendDigest, existing: attemptReceipt }).receipt_sha256,
+    bindReleaseAttempt({
+      environment,
+      commit,
+      runtimeDigest,
+      frontendDigest,
+      fleetProof,
+      topology,
+      existing: attemptReceipt,
+    }).receipt_sha256,
     "release receipt requires its exact artifact attempt binding",
   );
   assert.match(schemaHead ?? "", /^\d{4}_[a-z0-9_]+\.sql$/u, "schema head is invalid");
@@ -407,6 +534,7 @@ export function buildReleaseReceipt({
     environment,
     commit,
     generated_at: generatedAt.toISOString(),
+    topology,
     images: {
       runtime: runtimeDigest,
       frontend: frontendDigest,
@@ -436,6 +564,7 @@ export function assertReleaseReceipt(receipt) {
   assert.equal(receipt.kind, "fmarch-exact-commit-release", "release receipt kind drifted");
   assert.ok(["staging", "production"].includes(receipt.environment), "unsupported release environment");
   assertFullCommit(receipt.commit);
+  assertCanonicalReleaseTopology(receipt.topology, receipt.environment);
   assertImageDigest(receipt.images?.runtime, "runtime digest");
   assertImageDigest(receipt.images?.frontend, "frontend digest");
   assertRuntimeValidationAttestation(receipt.runtime_validation, receipt.images?.runtime);
@@ -451,6 +580,8 @@ export function assertReleaseReceipt(receipt) {
     commit: receipt.commit,
     runtimeDigest: receipt.images.runtime,
     frontendDigest: receipt.images.frontend,
+    fleetProof: receipt.fleet_proof,
+    topology: receipt.topology,
     existing: receipt.attempt,
   });
   assert.equal(
@@ -485,6 +616,48 @@ export function assertReleaseReceipt(receipt) {
   return receipt;
 }
 
+export function assertFreshStagingReleaseReceipt(
+  receipt,
+  {
+    now = new Date(),
+    maxAgeMilliseconds = RELEASE_EVIDENCE_MAX_AGE_MS,
+  } = {},
+) {
+  const validated = assertReleaseReceipt(receipt);
+  assert.equal(validated.environment, "staging", "production requires a staging release receipt");
+  const generatedAt = assertFreshReleaseEvidence(
+    validated.generated_at,
+    "staging release generation time",
+    { now, maxAgeMilliseconds },
+  );
+  const attemptAt = assertFreshReleaseEvidence(
+    validated.attempt.created_at,
+    "staging release intent time",
+    { now, maxAgeMilliseconds },
+  );
+  const fleetAt = assertFreshReleaseEvidence(
+    validated.fleet_proof.completed_at,
+    "staging fleet proof completion time",
+    { now, maxAgeMilliseconds },
+  );
+  const hostedAt = assertFreshReleaseEvidence(
+    validated.hosted_acceptance.generatedAt,
+    "staging hosted acceptance time",
+    { now, maxAgeMilliseconds },
+  );
+  for (const [label, evidenceAt] of [
+    ["release intent", attemptAt],
+    ["fleet proof", fleetAt],
+    ["hosted acceptance", hostedAt],
+  ]) {
+    assert.ok(
+      evidenceAt <= generatedAt + RELEASE_CLOCK_SKEW_MS,
+      `staging ${label} cannot postdate its release receipt`,
+    );
+  }
+  return validated;
+}
+
 function assertSchemaEpochReset(reset, receipt) {
   if (reset === null) return;
   assert.equal(reset?.version, 1, "schema epoch reset version drifted");
@@ -511,6 +684,7 @@ export function assertHostedReleaseAcceptance(receipt, commit) {
   assert.equal(receipt.target?.commit, commit, 'Hosted target must match release commit');
   assert.equal(receipt.target?.api, stagingOrigins.api);
   assert.equal(receipt.target?.frontend, stagingOrigins.frontend);
+  canonicalInstant(receipt.generatedAt, "hosted acceptance generation time");
   assertAuthenticatedReceipt(receipt.authenticatedJourneys);
   return receipt;
 }

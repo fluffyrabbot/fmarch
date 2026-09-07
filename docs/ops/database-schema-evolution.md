@@ -47,6 +47,16 @@ and environment-specific bootstrap/sentinel last. Record the new migration
 checksums and the coordinator release receipt. Staging must be proven before
 the production release pointer advances.
 
+The coordinator journals epoch reset intent and every phase as immutable files
+under `target/releases/<environment>/schema-epoch-reset/`, keyed by exact
+environment, epoch, commit, runtime digest, and canonical Railway topology. It
+records the prior migrator deployment before dispatching the destructive reset.
+After interruption it inspects the succeeding Railway deployment and requires
+matching signed-in-image reset logs before recording reset completion or
+starting the migrator; it never guesses by rerunning the destructive command.
+Migration completion is likewise recovered only from the exact deployment and
+exact-commit completion record.
+
 Epoch one has one exceptional cutover: staging briefly applied a rewritten
 `0001` checksum before append-only history existed. Freeze the pre-rewrite
 `0001`, apply the durable mute FK as `0002`, and recreate staging once. Recreate

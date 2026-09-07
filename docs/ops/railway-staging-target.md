@@ -42,7 +42,7 @@ own the release boundary:
 
 | Railway environment | Release pointer | Deployment rule |
 | --- | --- | --- |
-| `staging` | `main` | Run `npm run release:staging -- --commit <full-sha> --fleet-receipt <signed-envelope.json>` after a Cachy `audit` proof. |
+| `staging` | `main` | Run `npm run release:staging -- --commit <full-sha> --fleet-receipt <signed-envelope.json> --fleet-job <job-id>` after a Cachy `audit` proof. |
 | `production` | `production` | Reuse the exact staging-proven digests, complete production coordination, then advance the pointer with an expected-value lease. |
 
 The canonical Railway domains are:
@@ -51,6 +51,15 @@ The canonical Railway domains are:
 | --- | --- | --- |
 | `staging` | `https://fmarch-staging.up.railway.app` | `https://fmarch-frontend-staging.up.railway.app` |
 | `production` | `https://fmarch-production.up.railway.app` | `https://fmarch-frontend-production.up.railway.app` |
+
+Release authority also pins project `9d285d67-c11b-4508-9efb-fad042787b4c`,
+staging environment `e109e500-2a4c-48a3-96f2-e92a9edb63e4`, production
+environment `c1378737-84cc-45ba-8474-9c868baf7cfb`, migrator service
+`7c2c2665-2be2-4938-84e5-7580a964d610`, API service
+`18b6f450-3739-4f21-8e01-f58c63cec834`, and frontend service
+`23787c98-db56-4ccc-869a-42dca74d7bc7`. These IDs and the canonical origins
+are receipt data, not ambient operator overrides. A conflicting legacy
+`FMARCH_RAILWAY_*` or URL override stops the coordinator before any mutation.
 
 The `production` branch is a release pointer, not a place to work. It may only
 identify a commit already reachable from `origin/main`. Production promotion
@@ -198,10 +207,11 @@ business integrity or plaintext confidentiality after API compromise.
 9. Add a `frontend` service using `deploy/railway/frontend.railway.toml`; the
    coordinator owns its independently digest-pinned frontend image source.
 10. Generate the frontend public domain. Copy the canonical environment URLs from `deploy/railway/frontend.env.example`, including the exact environment-scoped private API authority `http://fmarch.railway.internal:8080`; it receives app-session and one-time WorkOS bearers and must never be replaced with a public or third-party URL. Use the same WorkOS client id as the API, add an environment-isolated WorkOS API key, preserve the exact callback URI, and generate an opaque random cookie password of at least 32 characters. Promotion rejects short values and documented, example, variable-reference, or placeholder-shaped values without printing the secret. Add them as Railway Variables for `frontend`.
-11. Record the new migrator service UUID as
-    `FMARCH_RAILWAY_MIGRATOR_SERVICE_ID` in the protected release-operator
-    environment. It is intentionally not guessed or checked into source until
-    the live service exists; promotion fails closed when it is absent.
+11. Verify that the migrator service UUID is the canonical
+    `7c2c2665-2be2-4938-84e5-7580a964d610`. Release tooling binds this UUID,
+    both environment UUIDs, the API/frontend service UUIDs, and all public
+    origins into the immutable attempt and terminal receipts; it does not
+    accept an operator-selected replacement target.
 12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Log out and require the browser to traverse the constrained WorkOS session-logout endpoint before returning to the canonical frontend root; then complete a fresh WorkOS sign-in. If classic-plus-WorkOS is enabled, also attach WorkOS to a recently authenticated Classic principal, require the link flow to traverse the same provider logout, and prove a fresh WorkOS sign-in succeeds afterward. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
 ## Canonical Release Proof
@@ -213,12 +223,14 @@ npm run proof:remote -- --mode audit
 node "$FLUFFYFLEET_ROOT/scripts/fleet.mjs" job <job-id> --host cachy --evidence > <signed-envelope.json>
 ```
 
-Inspect the signed envelope, then land that same job through the fleet `land`
+Inspect the signed envelope, record its exact `<job-id>`, then land that same job through the fleet `land`
 command. The coordinator verifies the envelope again against Cachy's configured
 receipt public key and binds its digest, job, task branch, comparison commit,
 workflow, and trust-root fingerprint into the staging release receipt. Pass the
 same envelope to production promotion; a different valid job is not a substitute
-for the proof staging actually consumed.
+for the proof staging actually consumed. `--fleet-job <job-id>` is mandatory,
+and the signed completion time must be canonical, no more than five minutes in
+the future, and no more than 24 hours old when consumed.
 
 ## Production Promotion
 
@@ -226,7 +238,7 @@ After a `main` commit has deployed successfully to staging, run the fail-closed
 preflight:
 
 ```sh
-npm run promote:production -- --check --fleet-receipt <signed-envelope.json>
+npm run promote:production -- --check --fleet-receipt <signed-envelope.json> --fleet-job <job-id>
 ```
 
 The preflight requires a clean synchronized `main`, a fast-forwardable
@@ -241,11 +253,13 @@ no deployed service contains `DATABASE_KEY_ADMIN_URL`, and every database
 credential and identity secret is isolated from staging. The supplied envelope must be an
 Ed25519-signed, verification-only Cachy receipt for the exact commit and the repository's
 `audit` workflow (`full --force`). Local proof-lane cache output is never release authority.
+The staging release intent, fleet completion, hosted acceptance, and terminal
+staging receipt must all be within the same 24-hour promotion window.
 
 Promote the verified commit with:
 
 ```sh
-npm run promote:production -- --fleet-receipt <signed-envelope.json>
+npm run promote:production -- --fleet-receipt <signed-envelope.json> --fleet-job <job-id>
 ```
 
 The command reuses the staging-proven digests, sequences migrator before API/frontend,
@@ -268,8 +282,13 @@ The underlying sequence is:
 6. Reuse the staging runtime/frontend digests, wait for
    migrator success, deploy API/frontend, and verify digest plus health commit
    attribution before publishing the immutable release receipt.
-7. Advance `production` last with `--force-with-lease` bound to the pointer SHA
-   observed at preflight. Concurrent pointer movement rejects the promotion.
+7. Serialize production mutation through the remote
+   `refs/heads/release-locks/production` compare-and-swap lock. Immediately
+   before advancing the pointer, fetch production configuration and deployment
+   state again by the pinned project/environment/service UUIDs, recheck exact
+   deployment IDs, digests, domains, and live health, fetch `origin/production`,
+   then advance it with `--force-with-lease` bound to the observed SHA.
+   Contending promoters and concurrent pointer movement are both rejected.
 
 If any service fails, leave the release pointer unchanged, diagnose the failed deployment,
 and do not move the release pointer until the trio
@@ -280,6 +299,10 @@ byte-identical receipt and revalidates its commit, signed proof, staging image
 digests, current Railway source configuration, exact deployment ids, domains,
 and live health before retrying only the expected-value pointer update. It does
 not redeploy services or replace release evidence on that replay path.
+The promotion lock is removed with an exact lease in a `finally` path. If the
+operator process is killed and leaves the remote lock ref behind, inspect the
+lock commit and the exact production receipt/live state before deleting that
+ref with a lease; never replace or blindly steal it.
 
 After a database restore, run the exact-commit migrator before exposing the
 restored API. The restore path omits archived ownership/ACL state, so an existing
@@ -441,10 +464,8 @@ The exact hosted-matrix packet schema and its no-secret boundary remain in `tool
 ## Boundary
 
 Passing the local Railway configuration contract proves that this repository
-carries a repeatable Railway staging bootstrap. This round does not mutate live
-Railway state. In particular, the migrator service has not yet been provisioned,
-so its unknown live UUID must be supplied later as
-`FMARCH_RAILWAY_MIGRATOR_SERVICE_ID`; promotion intentionally refuses to guess
-it. The contract does not prove a Railway account exists, that a deployment
+carries a repeatable Railway staging bootstrap and a single pinned topology. It
+does not mutate or by itself prove that topology exists in live Railway state.
+The contract does not prove a Railway account exists, that a deployment
 succeeded, that either URL is externally reachable, or that any hosted
 identity, operations, release, or production requirement has been met.

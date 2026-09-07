@@ -95,9 +95,9 @@ Follow the prerequisites and environment configuration in
 [the release runbook](ops/railway-staging-target.md), then use:
 
 ```sh
-npm run release:staging -- --commit <full-pushed-main-sha> --fleet-receipt <signed-envelope.json>
-npm run promote:production -- --check --fleet-receipt <signed-envelope.json>
-npm run promote:production -- --fleet-receipt <signed-envelope.json>
+npm run release:staging -- --commit <full-pushed-main-sha> --fleet-receipt <signed-envelope.json> --fleet-job <job-id>
+npm run promote:production -- --check --fleet-receipt <signed-envelope.json> --fleet-job <job-id>
+npm run promote:production -- --fleet-receipt <signed-envelope.json> --fleet-job <job-id>
 ```
 
 The coordinator sequences migrator, API, and frontend, verifies digests and
@@ -105,6 +105,8 @@ commit attribution, and records a receipt. Promotion requires a clean pushed
 `main`, staging evidence, complete release-readiness registry, and an exact-commit
 signed Cachy `audit` receipt. Its `--check` mode performs remote reads and
 verification only; it does not advance the release pointer.
+Release intent, canonical Railway project/environment/service IDs and origins,
+the exact fleet job, and the 24-hour evidence window are receipt-bound.
 
 Use [release game day](ops/release-game-day.md) for release failure/recovery
 rehearsals, [runtime KEK rotation](ops/runtime-kek-rotation.md) for event keys,

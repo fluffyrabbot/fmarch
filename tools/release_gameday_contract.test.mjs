@@ -64,6 +64,7 @@ function runtimeValidation(runtime) {
 }
 
 function releaseReceipt(commit, runtime, frontend, id) {
+  const proof = fleetProof(commit, `${id}-proof`);
   return buildReleaseReceipt({
     environment: "staging",
     commit,
@@ -86,15 +87,17 @@ function releaseReceipt(commit, runtime, frontend, id) {
       frontend: { status: "ok", release_commit: commit },
     },
     schemaHead: "0002_profile_mute_durable_target.sql",
-    fleetProof: fleetProof(commit, `${id}-proof`),
+    fleetProof: proof,
     runtimeValidation: runtimeValidation(runtime),
     attemptReceipt: bindReleaseAttempt({
       environment: "staging",
       commit,
       runtimeDigest: runtime,
       frontendDigest: frontend,
+      fleetProof: proof,
+      createdAt: new Date("2026-08-26T23:58:00.000Z"),
     }),
-    hostedAcceptance: {status: 'passed', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
+    hostedAcceptance: {status: 'passed', generatedAt: '2026-08-26T23:59:00.000Z', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
     sentinel: { status: "passed", receipt_sha256: "f".repeat(64) },
     generatedAt: new Date("2026-08-27T00:00:00.000Z"),
   });

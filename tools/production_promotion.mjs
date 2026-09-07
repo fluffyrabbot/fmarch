@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,8 @@ import { preflightWorkosOidc } from "./workos_oidc_preflight.mjs";
 import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import {
+  CANONICAL_RELEASE_TOPOLOGY,
+  assertFreshStagingReleaseReceipt,
   assertReleaseReceipt,
   validateDeploymentArtifact,
   validateHealth,
@@ -15,18 +18,23 @@ import {
 } from "./release_coordinator_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const callerSession = `fmarch-production-promotion-${process.pid}`;
+const stagingTopology = CANONICAL_RELEASE_TOPOLOGY.environments.staging;
+const productionTopology = CANONICAL_RELEASE_TOPOLOGY.environments.production;
 const DEFAULTS = Object.freeze({
-  projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
-  apiServiceId: "18b6f450-3739-4f21-8e01-f58c63cec834",
-  migratorServiceId: undefined,
-  frontendServiceId: "23787c98-db56-4ccc-869a-42dca74d7bc7",
-  stagingEnvironment: "staging",
-  productionEnvironment: "production",
-  stagingApiUrl: "https://fmarch-staging.up.railway.app",
-  stagingFrontendUrl: "https://fmarch-frontend-staging.up.railway.app",
-  productionApiUrl: "https://fmarch-production.up.railway.app",
-  productionFrontendUrl: "https://fmarch-frontend-production.up.railway.app",
-  internalApiUrl: "http://fmarch.railway.internal:8080",
+  projectId: CANONICAL_RELEASE_TOPOLOGY.project_id,
+  apiServiceId: CANONICAL_RELEASE_TOPOLOGY.services.api,
+  migratorServiceId: CANONICAL_RELEASE_TOPOLOGY.services.migrator,
+  frontendServiceId: CANONICAL_RELEASE_TOPOLOGY.services.frontend,
+  stagingEnvironment: stagingTopology.name,
+  stagingEnvironmentId: stagingTopology.id,
+  productionEnvironment: productionTopology.name,
+  productionEnvironmentId: productionTopology.id,
+  stagingApiUrl: stagingTopology.origins.api,
+  stagingFrontendUrl: stagingTopology.origins.frontend,
+  productionApiUrl: productionTopology.origins.api,
+  productionFrontendUrl: productionTopology.origins.frontend,
+  internalApiUrl: stagingTopology.origins.internal_api,
 });
 
 const terminalDeploymentStates = new Set([
@@ -914,11 +922,20 @@ function scrubPrivilegedDatabaseEnvironment(env) {
   ]) {
     delete scrubbed[key];
   }
-  return scrubbed;
+  return {
+    ...scrubbed,
+    RAILWAY_CALLER: "skill:use-railway@1.4.0",
+    RAILWAY_AGENT_SESSION: callerSession,
+  };
 }
 
-export function railwayArguments(projectId, args, { linked = false } = {}) {
-  return linked ? args : [...args, "--project", projectId];
+export function railwayArguments(projectId, args) {
+  assert.equal(
+    projectId,
+    CANONICAL_RELEASE_TOPOLOGY.project_id,
+    "Railway command project drifted from the canonical release topology",
+  );
+  return [...args, "--project", projectId];
 }
 
 export function productionPointerPushArguments(commit, expectedProductionCommit) {
@@ -933,6 +950,114 @@ export function productionPointerPushArguments(commit, expectedProductionCommit)
     "origin",
     `${commit}:refs/heads/production`,
   ];
+}
+
+export async function finalizeProductionPointer({
+  commit,
+  expectedProductionCommit,
+  revalidate,
+  refreshProductionPointer,
+  pushPointer,
+}) {
+  await revalidate();
+  const currentProductionCommit = await refreshProductionPointer();
+  assert.equal(
+    currentProductionCommit,
+    expectedProductionCommit,
+    "production pointer moved after promotion preflight",
+  );
+  await pushPointer(productionPointerPushArguments(commit, expectedProductionCommit));
+}
+
+export const PRODUCTION_PROMOTION_LOCK_REF = "refs/heads/release-locks/production";
+
+export async function withProductionPromotionLock({ acquire, release }, action) {
+  const token = await acquire();
+  let actionError = null;
+  try {
+    return await action(token);
+  } catch (error) {
+    actionError = error;
+    throw error;
+  } finally {
+    try {
+      await release(token);
+    } catch (releaseError) {
+      if (actionError) actionError.cause = releaseError;
+      else throw releaseError;
+    }
+  }
+}
+
+function remotePromotionLock() {
+  const output = text("git", ["ls-remote", "--refs", "origin", PRODUCTION_PROMOTION_LOCK_REF]);
+  if (!output) return null;
+  const [commit, ref, ...extra] = output.split(/\s+/u);
+  assert.equal(ref, PRODUCTION_PROMOTION_LOCK_REF, "production promotion lock ref drifted");
+  assert.equal(extra.length, 0, "production promotion lock returned ambiguous state");
+  assert.match(commit, /^[0-9a-f]{40}$/u, "production promotion lock token is invalid");
+  return commit;
+}
+
+function acquireProductionPromotionLock(commit) {
+  const existing = remotePromotionLock();
+  assert.equal(
+    existing,
+    null,
+    `production promotion is already locked by ${existing}; recover that exact operation before retrying`,
+  );
+  const identity = `fmarch-production-promotion-${randomUUID()}`;
+  const message = JSON.stringify({
+    kind: "fmarch-production-promotion-lock",
+    identity,
+    release_commit: commit,
+    created_at: new Date().toISOString(),
+  });
+  const tokenResult = spawnSync(
+    "git",
+    ["commit-tree", `${commit}^{tree}`, "-p", commit],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      input: `${message}\n`,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "fmarch release coordinator",
+        GIT_AUTHOR_EMAIL: "release@fmarch.invalid",
+        GIT_COMMITTER_NAME: "fmarch release coordinator",
+        GIT_COMMITTER_EMAIL: "release@fmarch.invalid",
+      },
+    },
+  );
+  assert.equal(tokenResult.status, 0, "could not create the production promotion lock token");
+  const token = String(tokenResult.stdout).trim();
+  assert.match(token, /^[0-9a-f]{40}$/u, "production promotion lock token is invalid");
+  run(
+    "git",
+    [
+      "push",
+      `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:`,
+      "origin",
+      `${token}:${PRODUCTION_PROMOTION_LOCK_REF}`,
+    ],
+    { stdio: "inherit" },
+  );
+  assert.equal(remotePromotionLock(), token, "production promotion lock was not published exactly");
+  return token;
+}
+
+function releaseProductionPromotionLock(token) {
+  run(
+    "git",
+    [
+      "push",
+      `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:${token}`,
+      "origin",
+      `:${PRODUCTION_PROMOTION_LOCK_REF}`,
+    ],
+    { stdio: "inherit" },
+  );
+  assert.equal(remotePromotionLock(), null, "production promotion lock was not released");
 }
 
 export function validateReusableProductionReceipt(
@@ -984,6 +1109,39 @@ function optionalReceipt(receiptPath) {
   }
 }
 
+async function revalidateCanonicalProduction(config, receipt) {
+  const productionConfig = await railwayJson(config, [
+    "environment",
+    "config",
+    "--environment",
+    config.productionEnvironmentId,
+    "--json",
+  ]);
+  validateCoordinatedServiceSources(productionConfig, config, receipt);
+  await validateCoordinatedEnvironment(
+    config,
+    { id: config.productionEnvironmentId, name: config.productionEnvironment },
+    receipt,
+    {
+      apiUrl: config.productionApiUrl,
+      frontendUrl: config.productionFrontendUrl,
+    },
+  );
+}
+
+async function finalizeCanonicalProductionPointer(config, receipt, commit, expectedProductionCommit) {
+  await finalizeProductionPointer({
+    commit,
+    expectedProductionCommit,
+    revalidate: () => revalidateCanonicalProduction(config, receipt),
+    refreshProductionPointer: () => {
+      run("git", ["fetch", "--quiet", "origin", "production"]);
+      return text("git", ["rev-parse", "origin/production"]);
+    },
+    pushPointer: (arguments_) => run("git", ["push", ...arguments_], { stdio: "inherit" }),
+  });
+}
+
 async function main() {
   const args = parseArguments(process.argv.slice(2));
   const { checkOnly } = args;
@@ -1003,7 +1161,7 @@ async function main() {
         `${head}.json`,
       ),
   );
-  const stagingReceipt = assertReleaseReceipt(
+  const stagingReceipt = assertFreshStagingReleaseReceipt(
     JSON.parse(readFileSync(stagingReceiptPath, "utf8")),
   );
   assert.equal(stagingReceipt.environment, "staging");
@@ -1022,12 +1180,14 @@ async function main() {
     args.fleetPublicKey ??
     process.env.FMARCH_FLEET_PUBLIC_KEY ??
     defaultFleetPublicKeyPath();
+  const expectedFleetJob = args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID;
+  assert.ok(expectedFleetJob, "production promotion requires --fleet-job or FMARCH_FLEET_JOB_ID");
   const fleetProof = await loadFleetReleaseProof({
     repoRoot,
     commit: head,
     receiptPath: fleetReceiptPath,
     publicKeyPath: fleetPublicKeyPath,
-    expectedJobId: args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID ?? null,
+    expectedJobId: expectedFleetJob,
   });
   assert.deepEqual(
     stagingReceipt.fleet_proof,
@@ -1038,24 +1198,10 @@ async function main() {
   await validateRegistry(completionRegistry);
   const releaseReadiness = validateProductionReleaseReadiness(completionRegistry);
 
-  run(
-    "railway",
-    [
-      "link",
-      "--project",
-      config.projectId,
-      "--environment",
-      config.stagingEnvironment,
-      "--json",
-    ],
-    { env: scrubPrivilegedDatabaseEnvironment(process.env) },
-  );
-
   const [stagingConfig, productionConfig] = await Promise.all([
     railwayJson(
       config,
-      ["environment", "config", "--environment", config.stagingEnvironment, "--json"],
-      { linked: true },
+      ["environment", "config", "--environment", config.stagingEnvironmentId, "--json"],
     ),
     railwayJson(
       config,
@@ -1063,10 +1209,9 @@ async function main() {
         "environment",
         "config",
         "--environment",
-        config.productionEnvironment,
+        config.productionEnvironmentId,
         "--json",
       ],
-      { linked: true },
     ),
   ]);
   validateCoordinatedServiceSources(stagingConfig, config, stagingReceipt);
@@ -1080,12 +1225,12 @@ async function main() {
     productionMigrator,
     productionFrontend,
   ] = await Promise.all([
-    variables(config, config.stagingEnvironment, config.apiServiceId),
-    variables(config, config.stagingEnvironment, config.migratorServiceId),
-    variables(config, config.stagingEnvironment, config.frontendServiceId),
-    variables(config, config.productionEnvironment, config.apiServiceId),
-    variables(config, config.productionEnvironment, config.migratorServiceId),
-    variables(config, config.productionEnvironment, config.frontendServiceId),
+    variables(config, config.stagingEnvironmentId, config.apiServiceId),
+    variables(config, config.stagingEnvironmentId, config.migratorServiceId),
+    variables(config, config.stagingEnvironmentId, config.frontendServiceId),
+    variables(config, config.productionEnvironmentId, config.apiServiceId),
+    variables(config, config.productionEnvironmentId, config.migratorServiceId),
+    variables(config, config.productionEnvironmentId, config.frontendServiceId),
   ]);
   validateHostedVariables({
     stagingApi,
@@ -1110,120 +1255,143 @@ async function main() {
     }),
   ]);
 
-  await validateCoordinatedEnvironment(config, config.stagingEnvironment, stagingReceipt, {
+  await validateCoordinatedEnvironment(
+    config,
+    { id: config.stagingEnvironmentId, name: config.stagingEnvironment },
+    stagingReceipt,
+    {
     apiUrl: config.stagingApiUrl,
     frontendUrl: config.stagingFrontendUrl,
-  });
+    },
+  );
 
   if (checkOnly) {
     console.log(`production promotion check passed for ${head}`);
     return;
   }
 
-  const productionReceiptPath = path.resolve(
-    process.env.FMARCH_PRODUCTION_RELEASE_RECEIPT ??
-      path.join(repoRoot, "target", "releases", "production", `${head}.json`),
-  );
-  const existingProductionReceipt = optionalReceipt(productionReceiptPath);
-  if (existingProductionReceipt) {
-    const reusable = validateReusableProductionReceipt(existingProductionReceipt, {
-      commit: head,
-      stagingReceipt,
-      fleetProof,
-      releaseReadiness,
-    });
-    validateCoordinatedServiceSources(productionConfig, config, reusable);
-    await validateCoordinatedEnvironment(config, config.productionEnvironment, reusable, {
-      apiUrl: config.productionApiUrl,
-      frontendUrl: config.productionFrontendUrl,
-    });
-    run("git", ["push", ...productionPointerPushArguments(head, originProduction)], {
-      stdio: "inherit",
-    });
-    console.log(`production promotion resumed from durable receipt for ${head}`);
-    return;
-  }
+  await withProductionPromotionLock(
+    {
+      acquire: () => acquireProductionPromotionLock(head),
+      release: (token) => releaseProductionPromotionLock(token),
+    },
+    async () => {
+      const productionReceiptPath = path.resolve(
+        process.env.FMARCH_PRODUCTION_RELEASE_RECEIPT ??
+          path.join(repoRoot, "target", "releases", "production", `${head}.json`),
+      );
+      const existingProductionReceipt = optionalReceipt(productionReceiptPath);
+      if (existingProductionReceipt) {
+        const reusable = validateReusableProductionReceipt(existingProductionReceipt, {
+          commit: head,
+          stagingReceipt,
+          fleetProof,
+          releaseReadiness,
+        });
+        await finalizeCanonicalProductionPointer(
+          config,
+          reusable,
+          head,
+          originProduction,
+        );
+        console.log(`production promotion resumed from durable receipt for ${head}`);
+        return;
+      }
 
-  const coordinatorArguments = [
-    "tools/release_coordinator.mjs",
-    "--environment",
-    "production",
-    "--commit",
-    head,
-    "--reuse-staging-receipt",
-    stagingReceiptPath,
-    "--fleet-receipt",
-    fleetReceiptPath,
-    "--fleet-public-key",
-    fleetPublicKeyPath,
-    "--output",
-    productionReceiptPath,
-  ];
-  if (args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID) {
-    coordinatorArguments.push("--fleet-job", args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID);
-  }
-  if (stagingReceipt.schema_epoch_reset) {
-    coordinatorArguments.push(
-      "--schema-epoch-reset",
-      String(stagingReceipt.schema_epoch_reset.epoch),
-    );
-  }
-  run(process.execPath, coordinatorArguments, {
-    env: scrubPrivilegedDatabaseEnvironment(process.env),
-    stdio: "inherit",
-  });
-  run("git", ["push", ...productionPointerPushArguments(head, originProduction)], {
-    stdio: "inherit",
-  });
-  console.log(`production promotion completed for ${head}`);
+      const coordinatorArguments = [
+        "tools/release_coordinator.mjs",
+        "--environment",
+        "production",
+        "--commit",
+        head,
+        "--reuse-staging-receipt",
+        stagingReceiptPath,
+        "--fleet-receipt",
+        fleetReceiptPath,
+        "--fleet-public-key",
+        fleetPublicKeyPath,
+        "--fleet-job",
+        expectedFleetJob,
+        "--output",
+        productionReceiptPath,
+      ];
+      if (stagingReceipt.schema_epoch_reset) {
+        coordinatorArguments.push(
+          "--schema-epoch-reset",
+          String(stagingReceipt.schema_epoch_reset.epoch),
+        );
+      }
+      run(process.execPath, coordinatorArguments, {
+        env: scrubPrivilegedDatabaseEnvironment(process.env),
+        stdio: "inherit",
+      });
+      const productionReceipt = validateReusableProductionReceipt(
+        JSON.parse(readFileSync(productionReceiptPath, "utf8")),
+        { commit: head, stagingReceipt, fleetProof, releaseReadiness },
+      );
+      await finalizeCanonicalProductionPointer(
+        config,
+        productionReceipt,
+        head,
+        originProduction,
+      );
+      console.log(`production promotion completed for ${head}`);
+    },
+  );
 }
 
 export function runtimeConfig(env = process.env) {
-  const migratorServiceId = env.FMARCH_RAILWAY_MIGRATOR_SERVICE_ID;
-  assert.match(
-    migratorServiceId ?? "",
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    "FMARCH_RAILWAY_MIGRATOR_SERVICE_ID must name the provisioned Railway migrator service UUID",
-  );
-  return {
-    ...DEFAULTS,
-    migratorServiceId,
-    projectId: env.FMARCH_RAILWAY_PROJECT_ID ?? DEFAULTS.projectId,
-    stagingEnvironment:
-      env.FMARCH_RAILWAY_STAGING_ENVIRONMENT ?? DEFAULTS.stagingEnvironment,
-    productionEnvironment:
-      env.FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT ?? DEFAULTS.productionEnvironment,
+  const legacyOverrides = {
+    FMARCH_RAILWAY_PROJECT_ID: DEFAULTS.projectId,
+    FMARCH_RAILWAY_MIGRATOR_SERVICE_ID: DEFAULTS.migratorServiceId,
+    FMARCH_RAILWAY_API_SERVICE_ID: DEFAULTS.apiServiceId,
+    FMARCH_RAILWAY_FRONTEND_SERVICE_ID: DEFAULTS.frontendServiceId,
+    FMARCH_RAILWAY_STAGING_ENVIRONMENT: DEFAULTS.stagingEnvironment,
+    FMARCH_RAILWAY_STAGING_ENVIRONMENT_ID: DEFAULTS.stagingEnvironmentId,
+    FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT: DEFAULTS.productionEnvironment,
+    FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT_ID: DEFAULTS.productionEnvironmentId,
+    FMARCH_STAGING_API_URL: DEFAULTS.stagingApiUrl,
+    FMARCH_STAGING_FRONTEND_URL: DEFAULTS.stagingFrontendUrl,
+    FMARCH_PRODUCTION_API_URL: DEFAULTS.productionApiUrl,
+    FMARCH_PRODUCTION_FRONTEND_URL: DEFAULTS.productionFrontendUrl,
   };
+  for (const [key, expected] of Object.entries(legacyOverrides)) {
+    if (env[key] !== undefined) {
+      assert.equal(env[key], expected, `${key} cannot override the canonical release topology`);
+    }
+  }
+  return { ...DEFAULTS };
 }
 
 async function validateCoordinatedEnvironment(config, environment, receipt, urls) {
+  const { id: environmentId, name: environmentName } = environment;
   const [migratorDeployment, apiDeployment, frontendDeployment, apiDomains, frontendDomains] =
     await Promise.all([
-      latestDeployment(config, environment, config.migratorServiceId),
-      latestDeployment(config, environment, config.apiServiceId),
-      latestDeployment(config, environment, config.frontendServiceId),
-      domains(config, environment, config.apiServiceId),
-      domains(config, environment, config.frontendServiceId),
+      latestDeployment(config, environmentId, config.migratorServiceId),
+      latestDeployment(config, environmentId, config.apiServiceId),
+      latestDeployment(config, environmentId, config.frontendServiceId),
+      domains(config, environmentId, config.apiServiceId),
+      domains(config, environmentId, config.frontendServiceId),
     ]);
-  validateDeploymentArtifact(migratorDeployment, receipt.images.runtime, `${environment} migrator`);
-  validateDeploymentArtifact(apiDeployment, receipt.images.runtime, `${environment} API`);
-  validateDeploymentArtifact(frontendDeployment, receipt.images.frontend, `${environment} frontend`);
+  validateDeploymentArtifact(migratorDeployment, receipt.images.runtime, `${environmentName} migrator`);
+  validateDeploymentArtifact(apiDeployment, receipt.images.runtime, `${environmentName} API`);
+  validateDeploymentArtifact(frontendDeployment, receipt.images.frontend, `${environmentName} frontend`);
   assert.equal(
     migratorDeployment.id,
     receipt.deployments.migrator,
-    `${environment} migrator receipt is stale`,
+    `${environmentName} migrator receipt is stale`,
   );
-  assert.equal(apiDeployment.id, receipt.deployments.api, `${environment} API receipt is stale`);
+  assert.equal(apiDeployment.id, receipt.deployments.api, `${environmentName} API receipt is stale`);
   assert.equal(
     frontendDeployment.id,
     receipt.deployments.frontend,
-    `${environment} frontend receipt is stale`,
+    `${environmentName} frontend receipt is stale`,
   );
-  validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environment} API`);
-  validateDomainList(frontendDomains, new URL(urls.frontendUrl).host, `${environment} frontend`);
+  validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environmentName} API`);
+  validateDomainList(frontendDomains, new URL(urls.frontendUrl).host, `${environmentName} frontend`);
   const [apiBody, frontendBody] = await Promise.all([
-    health(`${urls.apiUrl}/readyz`, () => true, `${environment} API`),
-    health(`${urls.frontendUrl}/healthz`, () => true, `${environment} frontend`),
+    health(`${urls.apiUrl}/readyz`, () => true, `${environmentName} API`),
+    health(`${urls.frontendUrl}/healthz`, () => true, `${environmentName} frontend`),
   ]);
   validateHealth(apiBody, receipt.commit, "api");
   validateHealth(frontendBody, receipt.commit, "frontend");
@@ -1340,8 +1508,9 @@ async function latestDeployment(config, environment, service) {
   return deployments[0];
 }
 
-async function railwayJson(config, args, options) {
-  const output = execFileSync("railway", railwayArguments(config.projectId, args, options), {
+async function railwayJson(config, args) {
+  const output = execFileSync("railway", railwayArguments(config.projectId, args), {
+    cwd: repoRoot,
     encoding: "utf8",
     env: scrubPrivilegedDatabaseEnvironment(process.env),
     stdio: ["ignore", "pipe", "pipe"],
@@ -1350,11 +1519,11 @@ async function railwayJson(config, args, options) {
 }
 
 function text(command, args) {
-  return execFileSync(command, args, { encoding: "utf8" }).trim();
+  return execFileSync(command, args, { cwd: repoRoot, encoding: "utf8" }).trim();
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { ...options, encoding: "utf8" });
+  const result = spawnSync(command, args, { cwd: repoRoot, ...options, encoding: "utf8" });
   assert.equal(result.status, 0, `${command} ${args.join(" ")} failed`);
 }
 
