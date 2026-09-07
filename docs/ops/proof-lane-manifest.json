@@ -88,6 +88,7 @@
     "cargo:server": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server --lib --bin fmarch-event-key-admin --bin fmarch-profile-index-admin --bin fmarch-schema-gate --bin server --test event_key_admin_rehearsal --test profile_index_admin_rehearsal --test staging_search_corpus -- --test-threads=1", "assertion_targets": ["server/lib", "server/bin/fmarch-event-key-admin", "server/bin/fmarch-profile-index-admin", "server/bin/fmarch-schema-gate", "server/bin/server", "server/test/event_key_admin_rehearsal", "server/test/profile_index_admin_rehearsal", "server/test/staging_search_corpus"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "admin_rejects_non_deployable_key_configuration_before_database_access", "--required", "deployed_admin_rehearses_old_key_removal_before_retirement", "--", "cargo", "test", "-p", "server", "--lib", "--bin", "fmarch-event-key-admin", "--bin", "fmarch-profile-index-admin", "--bin", "fmarch-schema-gate", "--bin", "server", "--test", "event_key_admin_rehearsal", "--test", "profile_index_admin_rehearsal", "--test", "staging_search_corpus", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:frontend-contract"], "resources": [] } },
     "test:frontend-static-role-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-static-role-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:frontend-cross-browser": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 1800, "argv": ["npm", "run", "test:frontend-cross-browser"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-role-smoke": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:frontend-role-smoke"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-route-live-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-live-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-route-state-render": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-state-render"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
@@ -751,6 +752,7 @@
       "lanes": [
         "test:frontend-contract",
         "test:frontend-role-smoke",
+        "test:frontend-cross-browser",
         "test:frontend-route-live-contract",
         "test:frontend-route-state-render",
         "test:frontend-static-role-contract",
@@ -885,9 +887,12 @@
       "tier": "frozen",
       "paths": [
         "tools/frontend_role_smoke.mjs",
+        "tools/frontend_cross_browser.mjs",
+        "tools/fixtures/frontend-media.png",
+        "tools/frontend_role_smoke_scenarios.mjs",
         "tools/frontend_role_smoke_flows.mjs"
       ],
-      "lanes": ["test:frontend-role-smoke", "test:frontend-visual-regression"],
+      "lanes": ["test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
       "capabilities": [
         "foundation.wire-live-delivery",
         "product.game.setup",
@@ -976,7 +981,7 @@
         "tools/frontend_screenshot_pixels.mjs",
         "tools/fixtures/frontend-visual-baselines/"
       ],
-      "lanes": ["test:frontend-role-smoke", "test:frontend-visual-regression"],
+      "lanes": ["test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
       "capabilities": [
         "foundation.wire-live-delivery",
         "product.game.setup",

@@ -21,7 +21,8 @@
         "bash scripts/provision-linux-proof.sh",
         "npm ci --no-audit --no-fund",
         "npm ci --prefix frontend --no-audit --no-fund",
-        "npm exec -- playwright install chromium"
+        "npm exec -- playwright install chromium",
+        "node tools/frontend_cross_browser.mjs --provision"
       ],
       "verify": [
         "bash scripts/linux-proof.sh --mode full --jobs 2 --keep-going"

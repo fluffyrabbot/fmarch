@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
@@ -17,10 +17,7 @@ const routeStateBundle = path.join(
   "bundle",
   "entry.js",
 );
-const MEDIA_FIXTURE_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGUlEQVR42mP8z8Dwn4GBgYGJgYGB4T8ABYsCBbpn0ZQAAAAASUVORK5CYII=",
-  "base64",
-);
+const MEDIA_FIXTURE_PNG = await readFile(new URL("./fixtures/frontend-media.png", import.meta.url));
 const PLAYER_MEDIA_ALLOWED_VARIANTS = Object.freeze([
   "tablet",
   "small",

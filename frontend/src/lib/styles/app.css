@@ -131,7 +131,7 @@ body {
   font: inherit;
   gap: 0;
   justify-content: center;
-  min-inline-size: 0;
+  min-inline-size: 44px;
   padding: 6px 11px;
   text-align: center;
   text-decoration: none;
