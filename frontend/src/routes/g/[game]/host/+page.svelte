@@ -1,5 +1,6 @@
 <script>
-  import { onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { getContext, onDestroy, onMount } from "svelte";
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
@@ -55,7 +56,7 @@
     buildHostInviteTargets,
     buildHostWorkQueues,
   } from "./host-route-model.mjs";
-  import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
+  import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import {
     commandAttemptId,
@@ -67,6 +68,8 @@
   import "$lib/components/host-action/host-console-critical-path.css";
 
   export let data;
+  const themePhase = getContext(THEME_CONTEXT)?.claim($page.url.pathname);
+  onDestroy(() => themePhase?.release());
   export let form;
 
   let dispatched = [];
@@ -120,9 +123,7 @@
   $: hostAttentionCount = hostTasks.length + moderatorActionGroups.filter(
     (group) => ["deadline", "replacement"].includes(group.id) && group.actions.length > 0,
   ).length;
-  $: if (typeof window !== "undefined") {
-    activePhaseTheme.set(phaseThemeKey(currentPhase));
-  }
+  $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: currentPhase,
     replacement: projection.replacement ?? data.replacement,
@@ -171,7 +172,6 @@
 
   onMount(() => {
     if (typeof data.liveProjection?.endpoint !== "string") {
-      activePhaseTheme.set(null);
       return;
     }
     let browserReconnect = null;
@@ -228,7 +228,6 @@
       delete window.__fmarchCloseHostLiveProjection;
       delete window.__fmarchDropHostLiveProjection;
       delete window.__fmarchDispatchHostAction;
-      activePhaseTheme.set(null);
       browserReconnect.rejectPending();
       pageLifecycle?.detach();
       connection?.close();

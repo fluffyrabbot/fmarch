@@ -35,7 +35,7 @@
   .admin-artifact pre {
     background: var(--fm-surface-cool);
     border: 1px solid var(--fm-line-cool);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-ink);
     margin: 0;
     overflow: auto;

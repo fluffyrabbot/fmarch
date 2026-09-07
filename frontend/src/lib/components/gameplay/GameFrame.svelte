@@ -28,9 +28,9 @@
 
   .game-frame__reading-lane {
     display: grid;
-    gap: 26px;
+    gap: var(--fm-space-reading);
     margin-inline: auto;
-    max-inline-size: 760px;
+    max-inline-size: var(--fm-reading-width);
     min-inline-size: 0;
     padding-block: 0 44px;
     width: 100%;

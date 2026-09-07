@@ -49,7 +49,7 @@
   .admin-audit-panel__all-current {
     background: var(--fm-accent-wash);
     border: 1px solid var(--fm-accent-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-accent-ink);
     font-weight: 800;
     margin: 0;

@@ -1,0 +1,179 @@
+/* A separate design using the same semantic contract and components. */
+[data-theme="slate"] {
+  --fm-font-display: var(--fm-font-ui);
+  --fm-radius-small: 2px;
+  --fm-radius-control: 3px;
+  --fm-radius-dock: 4px;
+  --fm-radius-panel: 4px;
+  --fm-space-card: 12px;
+  --fm-space-well: 8px 10px;
+  --fm-space-reading: 20px;
+  --fm-reading-width: 800px;
+  --fm-size-label: 13px;
+  --fm-size-title: 32px;
+  --fm-weight-heading: 750;
+  --fm-shadow-floating: 0 4px 14px color-mix(in srgb, var(--fm-ink) 12%, transparent);
+}
+[data-theme="slate"][data-palette="day"] {
+  /* ink — text on paper grounds */
+  --fm-ink: #172b46;
+  --fm-ink-muted: #4b5d72;
+  --fm-ink-subtle: #45534b;
+  --fm-ink-disabled: #5c6961;
+
+  /* paper — grounds and raised surfaces */
+  --fm-ground: #edf2f8;
+  --fm-raised: #ffffff;
+  --fm-raised-veil: rgba(255, 255, 255, 0.96);
+  --fm-surface-muted: #e3eaf3;
+  --fm-surface-cool: #e9eff7;
+  --fm-surface-tint: #e0eafa;
+  --fm-topbar-veil: rgba(246, 249, 253, 0.98);
+  --fm-wash-top: #f5f8fc;
+  --fm-wash-mid: #edf2f8;
+  --fm-wash-warm: #edf2f8;
+
+  /* lines — borders and rules */
+  --fm-line: #bcc9d9;
+  --fm-line-strong: #8e9fb4;
+  --fm-line-heavy: #778ca8;
+  --fm-line-soft: #d5deea;
+  --fm-line-cool: #c8d4e3;
+  --fm-line-warm: #c3d3e8;
+  --fm-control-border: #4b5d72;
+
+  /* accent — moss carries the day identity */
+  --fm-accent: #245ea8;
+  --fm-accent-soft: #3d73b4;
+  --fm-accent-ink: #17497e;
+  --fm-accent-wash: #e0ecfc;
+  --fm-accent-wash-strong: #cfdef3;
+
+  /* on-dark — text over ink-colored surfaces (topbar buttons, skip link) */
+  --fm-action-ink: #ffffff;
+  --fm-action-ink-muted: #dde7db;
+  --fm-action-ink-accent: #b8d5c4;
+
+  /* status — phase-invariant semantic colors on the data-state contract */
+  --fm-ok: #2e7d4f;
+  --fm-pending: #b0742c;
+  --fm-pending-soft: #c28e55;
+  --fm-pending-wash: #f8efe1;
+  --fm-confirm-wash: #f7f1dc;
+  --fm-danger: #a63d32;
+  --fm-danger-ink: #8e2a21;
+  --fm-danger-soft: #ba6a5f;
+  --fm-danger-wash: #f4e4e1;
+  --fm-info: #3e6b8c;
+  --fm-focus-ring: #2868a8;
+
+  /* official host post accent */
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+[data-theme="slate"][data-palette="night"] {
+  --fm-ink: #eef4ff;
+  --fm-ink-muted: #b0c0d5;
+  --fm-ink-subtle: #b6bdb2;
+  --fm-ink-disabled: #8b958c;
+
+  --fm-ground: #101b2b;
+  --fm-raised: #1c2c43;
+  --fm-raised-veil: rgba(28, 44, 67, 0.96);
+  --fm-surface-muted: #18283d;
+  --fm-surface-cool: #1b2e46;
+  --fm-surface-tint: #1a304b;
+  --fm-topbar-veil: rgba(16, 27, 43, 0.98);
+  --fm-wash-top: #132136;
+  --fm-wash-mid: #101b2b;
+  --fm-wash-warm: #101b2b;
+
+  --fm-line: #313b44;
+  --fm-line-strong: #46525c;
+  --fm-line-heavy: #55626c;
+  --fm-line-soft: #2a333c;
+  --fm-line-cool: #33404b;
+  --fm-line-warm: #4a4232;
+  --fm-control-border: #b0c0d5;
+
+  --fm-accent: #83b9ff;
+  --fm-accent-soft: #7ba6dc;
+  --fm-accent-ink: #b9d6ff;
+  --fm-accent-wash: #203957;
+  --fm-accent-wash-strong: #294667;
+
+  /* night ink is light, so on-dark flips to the dark ground */
+  --fm-action-ink: #101b2b;
+  --fm-action-ink-muted: #2e3b33;
+  --fm-action-ink-accent: #2c5540;
+
+  /* status inks re-key lighter on the dark ground to hold contrast */
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
+  --fm-pending-wash: #332818;
+  --fm-confirm-wash: #33301c;
+  --fm-danger-wash: #331e1b;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #83b9ff;
+  --fm-official-ink: #4a3a08;
+}
+[data-theme="slate"][data-palette="twilight"] {
+  --fm-ink: #eef4ff;
+  --fm-ink-muted: #b0c0d5;
+  --fm-ink-subtle: #b6bdb2;
+  --fm-ink-disabled: #8b958c;
+
+  --fm-ground: #101b2b;
+  --fm-raised: #1c2c43;
+  --fm-raised-veil: rgba(28, 44, 67, 0.96);
+  --fm-surface-muted: #18283d;
+  --fm-surface-cool: #1b2e46;
+  --fm-surface-tint: #1a304b;
+  --fm-topbar-veil: rgba(16, 27, 43, 0.98);
+  --fm-wash-top: #132136;
+  --fm-wash-mid: #101b2b;
+  --fm-wash-warm: #101b2b;
+
+  --fm-line: #313b44;
+  --fm-line-strong: #46525c;
+  --fm-line-heavy: #55626c;
+  --fm-line-soft: #2a333c;
+  --fm-line-cool: #33404b;
+  --fm-line-warm: #4a4232;
+  --fm-control-border: #b0c0d5;
+
+  --fm-accent: #c4adff;
+  --fm-accent-soft: #7ba6dc;
+  --fm-accent-ink: #b9d6ff;
+  --fm-accent-wash: #302848;
+  --fm-accent-wash-strong: #40305e;
+
+  /* night ink is light, so on-dark flips to the dark ground */
+  --fm-action-ink: #101b2b;
+  --fm-action-ink-muted: #2e3b33;
+  --fm-action-ink-accent: #2c5540;
+
+  /* status inks re-key lighter on the dark ground to hold contrast */
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
+  --fm-pending-wash: #332818;
+  --fm-confirm-wash: #33301c;
+  --fm-danger-wash: #331e1b;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #c4adff;
+  --fm-official-ink: #4a3a08;
+}

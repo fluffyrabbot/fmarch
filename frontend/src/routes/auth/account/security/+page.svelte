@@ -410,6 +410,7 @@
       </p>
     {/if}
   </section>
+  <p><a class="fm-touch-button fm-touch-button--secondary" href="/appearance">Appearance</a></p>
 </main>
 
 <style>
@@ -459,7 +460,7 @@
   .account-security__method {
     align-items: center;
     border: 1px solid var(--fm-line-soft);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     display: flex;
     gap: 12px;
     justify-content: space-between;
@@ -492,7 +493,7 @@
   .account-security__reject {
     background: var(--fm-danger-wash);
     border: 1px solid var(--fm-danger-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-danger-ink);
     font-size: 13px;
     font-weight: 800;
@@ -509,7 +510,7 @@
   .account-security__status {
     background: var(--fm-accent-wash);
     border: 1px solid var(--fm-accent-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-accent-ink);
     display: grid;
     gap: 8px;

@@ -1,6 +1,6 @@
 import { normalizeCapabilities, resolveSurfaceAccess } from "./capabilities.mjs";
 import { canonicalPhaseId, phaseLabelFromId } from "../phase-id.mjs";
-import { phaseThemeKey } from "./phase-theme.mjs";
+
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
 import {
@@ -144,7 +144,7 @@ export function buildAppShell({
   return Object.freeze({
     activeSurface,
     game,
-    phase: phaseThemeKey(phase),
+    phaseId: canonicalPhaseId(phase?.id),
     session,
     sessionLabel: session.viewerLabel,
     surfaces,

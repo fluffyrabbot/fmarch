@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from "svelte";
+  import { getContext, onDestroy, onMount, tick } from "svelte";
   import { createReadingCheckpoint, deliberateReadingOrigin } from "$lib/app/reading-checkpoint.mjs";
   import { privateNewCount } from "$lib/app/private-attention.mjs";
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
@@ -35,7 +35,7 @@
     LIVE_PROJECTION_CONNECTING_STATUS,
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
-  import { activePhaseTheme, phaseThemeKey } from "$lib/app/phase-theme.mjs";
+  import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
   import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
@@ -116,6 +116,8 @@
   import { submittedSlotMentionsPayload } from "$lib/app/slot-mention-model.mjs";
 
   export let data;
+  const themePhase = getContext(THEME_CONTEXT)?.claim($page.url.pathname);
+  onDestroy(() => themePhase?.release());
 
   let composerBody = data.composer.defaultBody ?? "";
   let composerMediaFiles = undefined;
@@ -457,9 +459,7 @@
     endgameSummary: endgameSummary ?? null,
     gameCompleted: player.gameCompleted === true,
   });
-  $: if (typeof window !== "undefined") {
-    activePhaseTheme.set(phaseThemeKey(phase));
-  }
+  $: themePhase?.update(commandState?.gameCompleted ? null : commandState?.phase?.phaseId);
   $: playerEmptyState = buildRouteStateViewModel({
     surface: "player",
     state: "empty",
@@ -550,7 +550,6 @@
       data.liveProjectionEnabled !== true ||
       typeof data.liveProjection?.endpoint !== "string"
     ) {
-      activePhaseTheme.set(null);
       return;
     }
     let browserReconnect = null;
@@ -616,7 +615,6 @@
       delete window.__fmarchPlayerColdLoadEndpoints;
       delete window.__fmarchPlayerReconnectRefreshKeys;
       delete window.__fmarchGetPlayerLiveProjectionMetrics;
-      activePhaseTheme.set(null);
       browserReconnect.rejectPending();
       pageLifecycle?.detach();
       connection?.close();
@@ -1287,7 +1285,7 @@
     gap: 0.25rem;
     padding: 0.85rem 1rem;
     border: 1px solid var(--fm-line-strong);
-    border-radius: 12px;
+    border-radius: var(--fm-radius-panel);
     background: var(--fm-raised);
   }
 

@@ -1,3 +1,4 @@
+import { proveThemes } from "./frontend_theme_proof.mjs";
 import assert from "node:assert/strict";
 import { linuxVisualEnvironment } from "./linux_visual_environment.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -692,6 +693,7 @@ try {
     await assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }),
   );
 
+  evidence.themes = await proveThemes({ browser, baseUrl, artifactDir, proveContrast: provePhaseGroundContrast });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
@@ -1038,17 +1040,17 @@ async function provePhaseGroundContrast(page) {
         info: token("--fm-info"),
       };
     };
-    const original = shell.getAttribute("data-phase");
-    shell.setAttribute("data-phase", "day");
+    const original = shell.getAttribute("data-palette");
+    shell.setAttribute("data-palette", "day");
     const day = readPalette();
-    shell.setAttribute("data-phase", "night");
+    shell.setAttribute("data-palette", "night");
     const night = readPalette();
-    shell.setAttribute("data-phase", "twilight");
+    shell.setAttribute("data-palette", "twilight");
     const twilight = readPalette();
     if (original === null) {
-      shell.removeAttribute("data-phase");
+      shell.removeAttribute("data-palette");
     } else {
-      shell.setAttribute("data-phase", original);
+      shell.setAttribute("data-palette", original);
     }
     return { day, night, twilight };
   });

@@ -97,7 +97,7 @@
 
   .auth-login__status,
   .auth-login__reject {
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     font-size: 13px;
     font-weight: 800;
     line-height: 1.3;

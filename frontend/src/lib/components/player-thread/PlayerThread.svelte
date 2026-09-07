@@ -381,7 +381,7 @@
   .player-surface__embed-frame {
     aspect-ratio: 16 / 9;
     border: 1px solid var(--fm-line);
-    border-radius: 6px;
+    border-radius: var(--fm-radius-small);
     inline-size: 100%;
     max-block-size: 420px;
   }
@@ -442,7 +442,7 @@
   .player-surface__media-item img {
     background: var(--fm-surface-tint);
     border: 1px solid var(--fm-line);
-    border-radius: 6px;
+    border-radius: var(--fm-radius-small);
     display: block;
     inline-size: 100%;
     max-block-size: 420px;
@@ -452,7 +452,7 @@
   .player-surface__media-unavailable {
     background: var(--fm-confirm-wash);
     border: 1px solid var(--fm-official);
-    border-radius: 6px;
+    border-radius: var(--fm-radius-small);
     color: var(--fm-official-ink);
     font-size: 14px;
     font-weight: 800;

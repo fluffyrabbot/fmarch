@@ -1,0 +1,163 @@
+/* Paper owns a complete palette for each resolved appearance. */
+:root, [data-theme="paper"][data-palette="day"] {
+  /* ink — text on paper grounds */
+  --fm-ink: #1c2620;
+  --fm-ink-muted: #57645c;
+  --fm-ink-subtle: #45534b;
+  --fm-ink-disabled: #5c6961;
+
+  /* paper — grounds and raised surfaces */
+  --fm-ground: #eff0e9;
+  --fm-raised: #fdfcf8;
+  --fm-raised-veil: rgba(253, 252, 248, 0.74);
+  --fm-surface-muted: #e6e8df;
+  --fm-surface-cool: #ecefea;
+  --fm-surface-tint: #e9eee7;
+  --fm-topbar-veil: rgba(247, 248, 242, 0.96);
+  --fm-wash-top: #f4f5ee;
+  --fm-wash-mid: #edefe6;
+  --fm-wash-warm: #f2eee2;
+
+  /* lines — borders and rules */
+  --fm-line: #c8cec0;
+  --fm-line-strong: #a9b2a6;
+  --fm-line-heavy: #97a196;
+  --fm-line-soft: #d8dcd1;
+  --fm-line-cool: #c9d2ce;
+  --fm-line-warm: #d6c8a9;
+  --fm-control-border: #57645c;
+
+  /* accent — moss carries the day identity */
+  --fm-accent: #3f7257;
+  --fm-accent-soft: #5c8a70;
+  --fm-accent-ink: #2c5540;
+  --fm-accent-wash: #e2ebe1;
+  --fm-accent-wash-strong: #d6e4d8;
+
+  /* on-dark — text over ink-colored surfaces (topbar buttons, skip link) */
+  --fm-action-ink: #ffffff;
+  --fm-action-ink-muted: #dde7db;
+  --fm-action-ink-accent: #b8d5c4;
+
+  /* status — phase-invariant semantic colors on the data-state contract */
+  --fm-ok: #2e7d4f;
+  --fm-pending: #b0742c;
+  --fm-pending-soft: #c28e55;
+  --fm-pending-wash: #f8efe1;
+  --fm-confirm-wash: #f7f1dc;
+  --fm-danger: #a63d32;
+  --fm-danger-ink: #8e2a21;
+  --fm-danger-soft: #ba6a5f;
+  --fm-danger-wash: #f4e4e1;
+  --fm-info: #3e6b8c;
+  --fm-focus-ring: #2868a8;
+
+  /* official host post accent */
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+[data-theme="paper"][data-palette="night"] {
+  --fm-ink: #e9e6dc;
+  --fm-ink-muted: #a7b0a6;
+  --fm-ink-subtle: #b6bdb2;
+  --fm-ink-disabled: #8b958c;
+
+  --fm-ground: #12161c;
+  --fm-raised: #222b35;
+  --fm-raised-veil: rgba(34, 43, 53, 0.74);
+  --fm-surface-muted: #1a222b;
+  --fm-surface-cool: #1d2630;
+  --fm-surface-tint: #1c252c;
+  --fm-topbar-veil: rgba(18, 22, 28, 0.94);
+  --fm-wash-top: #151a21;
+  --fm-wash-mid: #12161c;
+  --fm-wash-warm: #171c1e;
+
+  --fm-line: #313b44;
+  --fm-line-strong: #46525c;
+  --fm-line-heavy: #55626c;
+  --fm-line-soft: #2a333c;
+  --fm-line-cool: #33404b;
+  --fm-line-warm: #4a4232;
+  --fm-control-border: #a7b0a6;
+
+  --fm-accent: #d2a63c;
+  --fm-accent-soft: #b99244;
+  --fm-accent-ink: #ebcf8e;
+  --fm-accent-wash: #332d1c;
+  --fm-accent-wash-strong: #3b341f;
+
+  /* night ink is light, so on-dark flips to the dark ground */
+  --fm-action-ink: #12161c;
+  --fm-action-ink-muted: #2e3b33;
+  --fm-action-ink-accent: #2c5540;
+
+  /* status inks re-key lighter on the dark ground to hold contrast */
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
+  --fm-pending-wash: #332818;
+  --fm-confirm-wash: #33301c;
+  --fm-danger-wash: #331e1b;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}
+[data-theme="paper"][data-palette="twilight"] {
+  --fm-ink: #efe5e0;
+  --fm-ink-muted: #bda3a4;
+  --fm-ink-subtle: #c2a6a8;
+  --fm-ink-disabled: #a08a8c;
+
+  --fm-ground: #241115;
+  --fm-raised: #382026;
+  --fm-raised-veil: rgba(56, 32, 38, 0.74);
+  --fm-surface-muted: #2c161c;
+  --fm-surface-cool: #301a20;
+  --fm-surface-tint: #2e181e;
+  --fm-topbar-veil: rgba(36, 17, 21, 0.94);
+  --fm-wash-top: #2a151a;
+  --fm-wash-mid: #241115;
+  --fm-wash-warm: #2b1a17;
+
+  --fm-line: #4a3038;
+  --fm-line-strong: #5f414b;
+  --fm-line-heavy: #6e4d57;
+  --fm-line-soft: #3e2830;
+  --fm-line-cool: #46333e;
+  --fm-line-warm: #55402f;
+  --fm-control-border: #bda3a4;
+
+  --fm-accent: #d2a63c;
+  --fm-accent-soft: #b99244;
+  --fm-accent-ink: #ebcf8e;
+  --fm-accent-wash: #3a2a1e;
+  --fm-accent-wash-strong: #423220;
+
+  /* twilight ink is light, so on-dark flips to the oxblood ground */
+  --fm-action-ink: #241115;
+  --fm-action-ink-muted: #3c282d;
+  --fm-action-ink-accent: #55333c;
+
+  --fm-ok: #57a876;
+  --fm-pending: #d09a52;
+  --fm-pending-soft: #d5a05c;
+  --fm-danger: #d67a6a;
+  --fm-danger-ink: #e59486;
+  --fm-danger-soft: #cc8f70;
+  --fm-info: #7aabce;
+
+  --fm-pending-wash: #3a2519;
+  --fm-confirm-wash: #3a301c;
+  --fm-danger-wash: #3d2220;
+  --fm-focus-ring: #7fb1dc;
+
+  --fm-official: #d2a63c;
+  --fm-official-ink: #4a3a08;
+}

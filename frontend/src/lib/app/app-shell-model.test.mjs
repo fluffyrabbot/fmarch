@@ -31,9 +31,9 @@ test("app shell builds role navigation from resolved capabilities", () => {
   });
 
   assert.equal(shell.sessionLabel, "Your account");
-  assert.equal(shell.phase, "night");
+  assert.equal(shell.phaseId, "N02");
   assert.equal(
-    buildAppShell({ activeSurface: "board" }).phase,
+    buildAppShell({ activeSurface: "board" }).phaseId,
     null,
   );
   assert.deepEqual(shell.session, {

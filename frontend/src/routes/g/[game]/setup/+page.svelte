@@ -564,7 +564,7 @@
   .host-setup__canvas {
     background: var(--fm-surface-tint);
     border: 1px solid var(--fm-line-soft);
-    border-radius: 12px;
+    border-radius: var(--fm-radius-panel);
   }
 
   .host-setup__stepper {
@@ -709,7 +709,7 @@
   .host-setup__invite {
     background: var(--fm-raised);
     border: 1px solid var(--fm-line-soft);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     padding: 12px;
   }
 
@@ -781,7 +781,7 @@
     align-items: center;
     background: var(--fm-raised);
     border: 1px solid var(--fm-line-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     display: flex;
     justify-content: space-between;
     min-block-size: 44px;

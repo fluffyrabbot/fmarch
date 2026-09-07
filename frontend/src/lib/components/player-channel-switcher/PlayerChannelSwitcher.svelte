@@ -45,7 +45,7 @@
     align-content: center;
     background: var(--fm-raised-veil);
     border: 1px solid var(--fm-line);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-ink);
     display: grid;
     gap: 2px;

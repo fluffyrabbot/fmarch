@@ -80,6 +80,7 @@
       <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Join with a community invitation</a>
     </nav>
   </section>
+  <p><a class="fm-touch-button fm-touch-button--secondary" href="/appearance">Appearance</a></p>
 </main>
 
 <style>
@@ -102,7 +103,7 @@
 
   .auth-chooser__method {
     border: 1px solid var(--fm-line-soft);
-    border-radius: 10px;
+    border-radius: var(--fm-radius-dock);
     display: grid;
     gap: 10px;
     padding: 16px;
@@ -122,7 +123,7 @@
   .auth-chooser__status {
     background: var(--fm-accent-wash);
     border: 1px solid var(--fm-accent-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-accent-ink);
     font-size: 13px;
     font-weight: 800;
@@ -134,7 +135,7 @@
   .auth-chooser__error {
     background: var(--fm-danger-wash);
     border: 1px solid var(--fm-danger-soft);
-    border-radius: 8px;
+    border-radius: var(--fm-radius-control);
     color: var(--fm-danger-ink);
     font-size: 13px;
     font-weight: 800;
