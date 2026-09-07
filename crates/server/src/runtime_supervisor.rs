@@ -170,7 +170,14 @@ async fn supervise_worker(
             return;
         }
         health.mark_starting(spec.name);
-        let attempt = tokio::spawn((spec.factory)(shutdown.clone(), health.clone())).await;
+        // JoinSet aborts its children on drop, so aborting a timed-out
+        // supervisor cannot detach the worker attempt it currently owns.
+        let mut attempt_set = tokio::task::JoinSet::new();
+        attempt_set.spawn((spec.factory)(shutdown.clone(), health.clone()));
+        let attempt = attempt_set
+            .join_next()
+            .await
+            .expect("supervisor attempt set must contain one worker");
         if *shutdown.borrow() {
             health.mark_stopped(spec.name, false);
             return;
