@@ -45,6 +45,7 @@ fn process_root_owns_runtime_budgets_and_worker_lifecycle() {
         "day_event_spec",
         "identity_delivery_spec",
         "live_listener_spec",
+        "media_reconciliation_spec",
     ] {
         assert!(
             supervisor.contains(worker),
