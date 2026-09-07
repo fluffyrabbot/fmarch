@@ -16,6 +16,8 @@ async function digestFile(file) {
 if (process.platform !== 'linux') throw new Error('Linux proof environment requires Linux');
 const fonts = [...new Set(command('fc-list', ['--format', '%{file}\n']).split('\n').filter(Boolean))].sort();
 if (!fonts.length) throw new Error('Linux browser proof requires installed fonts');
+const fontIdentities = [];
+for (const file of fonts) fontIdentities.push({file, sha256: await digestFile(file)});
 const snapshot = {
   schemaVersion: 1, platform: 'linux', arch: arch(), kernel: release(),
   node: process.version, npm: command('npm', ['--version']),
@@ -24,7 +26,7 @@ const snapshot = {
   packages: command('pacman', ['-Q']).split('\n').sort(),
   browsers: JSON.parse(await readFile(new URL('node_modules/playwright-core/browsers.json', root), 'utf8')),
   chromium: {version: command(chromium.executablePath(), ['--version']), sha256: await digestFile(chromium.executablePath())},
-  fonts: await Promise.all(fonts.map(async file => ({file, sha256: await digestFile(file)}))),
+  fonts: fontIdentities,
 };
 const content = JSON.stringify(snapshot, null, 2) + '\n';
 const sha = createHash('sha256').update(content).digest('hex');
