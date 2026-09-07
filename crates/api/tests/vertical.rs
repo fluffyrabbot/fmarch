@@ -11086,6 +11086,8 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
         }
     );
     assert!(!debug_attempt.contains(&recovery_token));
+    assert!(!debug_attempt.contains(account_id));
+    assert!(!debug_attempt.contains("redacted-hash"));
     assert!(debug_attempt.contains("[sealed]"));
 
     sqlx::query("UPDATE auth_delivery_intent SET next_attempt_at = 0 WHERE delivery_id = $1")

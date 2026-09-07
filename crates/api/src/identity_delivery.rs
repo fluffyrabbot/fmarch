@@ -273,9 +273,9 @@ impl fmt::Debug for IdentityDeliveryAttempt {
             .debug_struct("IdentityDeliveryAttempt")
             .field("delivery_id", &self.delivery_id)
             .field("kind", &self.kind)
-            .field("account_id", &self.account_id)
+            .field("account_id", &"[redacted]")
             .field("principal_id", &self.principal_id)
-            .field("credential_hash", &self.credential_hash)
+            .field("credential_hash", &"[redacted]")
             .field("credential_expires_at", &self.credential_expires_at)
             .field(
                 "credential_material",
@@ -570,6 +570,7 @@ impl HttpJsonIdentityDeliveryGateway {
         }
         let client = Client::builder()
             .connect_timeout(timeouts.connect)
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| format!("identity delivery HTTP client is invalid: {error}"))?;
         Ok(Self {
@@ -662,10 +663,14 @@ impl HttpJsonIdentityDeliveryGateway {
                 IdentityDeliveryFailureCode::ProviderUnavailable,
             );
         }
-        let response_bytes = match tokio::time::timeout(self.timeouts.body, response.bytes()).await
+        let response_bytes = match tokio::time::timeout(
+            self.timeouts.body,
+            read_bounded_delivery_response(response, self.timeouts.max_response_bytes),
+        )
+        .await
         {
-            Ok(Ok(bytes)) if bytes.len() <= self.timeouts.max_response_bytes => bytes,
-            Ok(Ok(_)) | Ok(Err(_)) | Err(_) => {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) | Err(_) => {
                 return IdentityDeliveryOutcome::RetryableFailure(
                     IdentityDeliveryFailureCode::ProviderUnavailable,
                 )
@@ -717,6 +722,24 @@ impl HttpJsonIdentityDeliveryGateway {
                 IdentityDeliveryFailureCode::ProviderUnavailable,
             ),
         }
+    }
+}
+
+async fn read_bounded_delivery_response(
+    mut response: reqwest::Response,
+    max_response_bytes: usize,
+) -> Option<Vec<u8>> {
+    let mut body = Vec::with_capacity(max_response_bytes.min(8 * 1024));
+    loop {
+        let chunk = response.chunk().await.ok()?;
+        let Some(chunk) = chunk else {
+            return Some(body);
+        };
+        let next_len = body.len().checked_add(chunk.len())?;
+        if next_len > max_response_bytes {
+            return None;
+        }
+        body.extend_from_slice(&chunk);
     }
 }
 
@@ -1660,6 +1683,11 @@ async fn finalize_delivery(
         let Some(attempt_count) = cancelled_attempt_count else {
             // A cancellation or a newer lease changed the token while provider
             // I/O was in flight. The obsolete worker has no authority to write.
+            tracing::warn!(
+                delivery_id = %claim.attempt.delivery_id,
+                attempt_number = claim.attempt.attempt_number,
+                "identity delivery completion discarded after claim loss"
+            );
             return Ok(None);
         };
         (
