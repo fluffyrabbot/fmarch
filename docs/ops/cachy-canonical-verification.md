@@ -33,6 +33,11 @@ repository's pinned browser succeeded, and headless Chromium 148.0.7778.96
 launched and rendered a page. These are prerequisite probes, not full
 application acceptance.
 
+After the browser installation, the real
+`npm run test:frontend-csp-browser` check also passed on Cachy, including the
+production nonce CSP and provider-logout continuation proof. This demonstrates
+one application browser lane on Linux; it does not qualify all 66 lanes.
+
 ## Existing machinery to retain
 
 `docs/ops/proof-lane-manifest.json` defines 66 lanes:
