@@ -24,7 +24,7 @@
         "npm exec -- playwright install chromium"
       ],
       "verify": [
-        "bash scripts/linux-proof.sh --mode full"
+        "bash scripts/linux-proof.sh --mode full --jobs 2 --keep-going"
       ],
       "resourceClass": "heavy",
       "stepTimeoutMs": 14400000
