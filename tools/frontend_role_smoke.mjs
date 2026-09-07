@@ -3921,7 +3921,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   assert.equal(await badge.innerText(), "1");
-  await page.reload();
+  await reloadBrowserPage(page);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
   await page.getByTestId(`player-private-link-${id}`).click();
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
@@ -4100,6 +4100,18 @@ async function proveReadingReturn(page, baseUrl, routePath) {
   await page.getByTestId("return-to-thread").click(); await assertReturned();
 }
 
+// Exercise an actual browser reload. Firefox's automation reload command can
+// behave as a new navigation (Playwright #40223), discarding history state.
+async function reloadBrowserPage(page) {
+  const historyLength = await page.evaluate(() => history.length);
+  await Promise.all([
+    page.waitForNavigation({waitUntil: "networkidle"}),
+    page.evaluate(() => location.reload()),
+  ]);
+  assert.equal(await page.evaluate(() => history.length), historyLength, "reload must preserve history length");
+  assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0]?.type), "reload", "proof requires a real reload");
+}
+
 async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "main") {
   const post = seq => ({ game: "midsummer", source_seq: seq, stream_seq: seq,
     channel_id: channel, author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
@@ -4134,7 +4146,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
       const top = await origin.evaluate(el => el.getBoundingClientRect().top);
       await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
       await page.waitForFunction(() => document.activeElement?.id === "player-actions");
-      await page.reload({ waitUntil: "networkidle" });
+      await reloadBrowserPage(page);
       assert.equal(await origin.count(), 0);
       await page.getByTestId("return-to-thread").waitFor({ timeout: 5000 }).catch(async error => {
         const state = await page.evaluate(() => ({ url: location.href, history: history.state,
@@ -4152,7 +4164,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
             throw new Error(`${error.message}; expected=${top}, requests=${requests}, state=${JSON.stringify(state)}`);
           });
         await page.getByRole("button", { name: "Load newer posts", exact: true }).waitFor();
-        await page.reload({ waitUntil: "networkidle" });
+        await reloadBrowserPage(page);
         await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
           Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
             const state = await page.evaluate(() => ({ url: location.href, active: document.activeElement?.id,
@@ -4189,7 +4201,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
           await page.waitForFunction(() => document.activeElement?.id === "thread-post-500");
           assert.equal(await recovery.count(), 0);
           const beforeReload = requests;
-          await page.reload({ waitUntil: "networkidle" });
+          await reloadBrowserPage(page);
           await page.locator("#thread-post-500").waitFor();
           assert.equal(requests, beforeReload);
           assert.equal(await recovery.count(), 0);
@@ -4278,11 +4290,11 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await returnButton.waitFor();
     const returnBox = await returnButton.boundingBox();
     assert.ok(returnBox.width >= 44 && returnBox.height >= 44);
-    await peer.reload({ waitUntil: "networkidle" });
+    await reloadBrowserPage(peer);
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
     await returnButton.focus(); await peer.keyboard.press("Enter");
     await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
-    await peer.reload({ waitUntil: "networkidle" });
+    await reloadBrowserPage(peer);
     await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
     await peer.goForward();
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
@@ -4305,7 +4317,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     unavailable = false;
     await peer.getByTestId("reader-recovery-retry").click();
     await peer.waitForFunction(() => document.activeElement?.id === "thread-post-20");
-    await peer.reload({ waitUntil: "networkidle" });
+    await reloadBrowserPage(peer);
     await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
     for (const outcome of ["hidden", "deleted"]) {
       unavailable = true; saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
