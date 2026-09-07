@@ -125,3 +125,36 @@ workflow commands, canonical host, and unchanged task/default remote branches.
 The push uses an explicit expected-value lease after checking ancestry, so a
 concurrent main update fails without overwriting it. Submit a fresh proof when
 the comparison base changes. Local checkout updates remain separate.
+
+### Additional coverage gates
+
+Narrow selection (`inner`, `push`, `sprint`) fails on unmapped changed paths,
+including JSON planning. Assign new paths to truthful manifest owners or request
+full proof. Focused `--only` runs are diagnostics, not change-coverage claims.
+
+The full graph now includes `test:frontend-cross-browser`: the existing role,
+private-channel, confirmation and keyboard-focus journeys run in Firefox and
+Playwright WebKit. Each browser has separate artifacts and a recorded version.
+Static fallback is forbidden, and these screenshots do not replace the reviewed
+Chromium pixel baseline. Playwright WebKit on Linux is not native Safari or an
+actual iPad; retain those acceptance checks separately. New lanes stay unmeasured
+until there is a real qualifying host observation.
+
+Hosted readiness is deliberately separate from local proof and fixture evidence:
+
+```sh
+FMARCH_HOSTED_MATRIX_FRONTEND_URL=https://fmarch-frontend-staging.up.railway.app \
+FMARCH_HOSTED_MATRIX_API_URL=https://fmarch-staging.up.railway.app \
+FMARCH_HOSTED_EXPECTED_COMMIT=<full-deployed-commit> npm run proof:hosted
+```
+
+Run this on Cachy in the intended pushed checkout after a staging release. It
+requires exact-commit API readiness (including schema, encryption, object storage
+and subject authority), frontend health, and a real public Chromium navigation
+without JavaScript exceptions. Both commit checks repeat after navigation. Missing
+configuration, redirects on health probes, unavailable services, and stale commits
+fail the command. Each success writes a new receipt under `target/hosted-acceptance`.
+This read-only gate does not deploy, sign in, issue commands, or claim authenticated
+identity/durability, real-device, or release readiness. Those require the existing
+real hosted matrix capture and operator acceptance; imported fixture contracts
+cannot substitute for them.

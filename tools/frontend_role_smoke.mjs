@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 import { captureScreenshotEvidence } from "./frontend_screenshot_pixels.mjs";
 import { roleNavTestId } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
@@ -46,13 +46,20 @@ import {
   roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
 
+const browserName = process.env.FMARCH_PROOF_BROWSER ?? "chromium";
+const browserType = { chromium, firefox, webkit }[browserName];
+if (!browserType) throw new Error(`Unknown proof browser: ${browserName}`);
+if (browserName !== "chromium" && process.env.FMARCH_ALLOW_STATIC_ROLE_FALLBACK === "1") {
+  throw new Error("Cross-browser proof requires a real browser; static fallback is forbidden");
+}
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 // A direct human invocation keeps the familiar target path.  The proof runner
 // supplies a run-scoped directory so concurrent proof runs cannot overwrite
 // screenshots or evidence that visual regression consumes.
 const artifactDir = path.resolve(
-  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-role-smoke"),
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", browserName === "chromium" ? "frontend-role-smoke" : `frontend-role-smoke-${browserName}`),
 );
 const evidencePath = path.join(artifactDir, "role-smoke.json");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
@@ -101,15 +108,16 @@ try {
   }
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-  browser = await chromium.launch();
+  browser = await browserType.launch();
   const evidence = {
     status: "passed",
-    visualEnvironment: process.platform === "linux" ? await linuxVisualEnvironment() : {platform:process.platform, arch:process.arch},
+    browser: {name: browserName, version: browser.version()},
+    visualEnvironment: process.platform === "linux" && browserName === "chromium" ? await linuxVisualEnvironment() : {platform:process.platform, arch:process.arch},
     baseUrl,
     viewports,
     navFocusCoverage: {
       boundary:
-        "Browser smoke compares real Chromium focus traversal against this shared scenario nav/focus matrix.",
+        "Browser smoke compares real browser focus traversal against this shared scenario nav/focus matrix.",
       surfaces: navFocusCoverage.surfaces,
     },
     board: [],
