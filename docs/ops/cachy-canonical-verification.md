@@ -54,7 +54,11 @@ The Playwright dependency pins Chromium.
 compiler version, PostgreSQL version/configuration/binary hash, Chromium
 version/binary hash, and every installed font's hash. The snapshot is stored
 under `target/proof-environments/<sha>.json`; its content hash enters both lane
-cache keys and resume context. Environment drift invalidates reuse. A rolling
+cache keys and resume context. Environment drift invalidates reuse. Linux visual samples live in
+`tools/fixtures/frontend-visual-baselines/linux-x64`, with an explicit Chromium
+binary and font-set identity. The existing baseline is retained separately.
+Changed visual identity fails closed until screenshots are reviewed and
+`write:frontend-visual-baseline` is explicitly run on the owning platform. A rolling
 OS update requires fresh qualification; the runner never silently substitutes
 a different required Node, npm, Rust or PostgreSQL version.
 
