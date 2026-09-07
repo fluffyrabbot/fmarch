@@ -19,7 +19,7 @@ test('session imports reject broad, insecure, ambiguous and expired cookies', ()
 test('release acceptance rejects missing, partial and differently attributed evidence', () => {
   const commit = 'a'.repeat(40);
   const journeys = {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true};
-  const receipt = {status: 'passed', checkerCommit: commit, target: {...stagingOrigins, commit}, authenticatedJourneys: journeys};
+  const receipt = {status: 'passed', generatedAt: '2026-09-07T00:00:00.000Z', checkerCommit: commit, target: {...stagingOrigins, commit}, authenticatedJourneys: journeys};
   assertHostedReleaseAcceptance(receipt, commit);
   assert.throws(() => assertHostedReleaseAcceptance(null, commit));
   for (const key of ['commandAcknowledged','socketReconnected','missedUpdateRecovered','durableFreshContext','authenticatedPrivateDenial']) assert.throws(() => assertAuthenticatedReceipt({...journeys,[key]:false}));
