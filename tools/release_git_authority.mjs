@@ -11,30 +11,67 @@ export const CANONICAL_RELEASE_REMOTE_NAME = "origin";
 export const CANONICAL_RELEASE_REMOTE_URL = "https://github.com/fluffyrabbot/fmarch.git";
 export const PRODUCTION_PROMOTION_LOCK_REF = "refs/heads/release-locks/production";
 export const RELEASE_GIT_TIMEOUT_MS = 2 * 60 * 1_000;
+export const RELEASE_GIT_CREDENTIAL_HELPER = "!gh auth git-credential";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export function releaseGitEnvironment(environment = process.env) {
+const releaseGitCommandConfig = Object.freeze([
+  ["credential.helper", ""],
+  ["credential.https://github.com.helper", ""],
+  ["credential.https://github.com.helper", RELEASE_GIT_CREDENTIAL_HELPER],
+  ["http.sslVerify", "true"],
+  ["http.https://github.com/.sslVerify", "true"],
+  ["core.hooksPath", "/dev/null"],
+  ["core.fsmonitor", "false"],
+  ["core.attributesFile", "/dev/null"],
+]);
+
+function isolatedReleaseGitEnvironment(environment, { commandConfig }) {
   const scrubbed = { ...environment };
   for (const name of Object.keys(scrubbed)) {
-    if (name.startsWith("GIT_") || /^(?:https?|all|no)_proxy$/iu.test(name)) delete scrubbed[name];
+    if (
+      name.startsWith("GIT_") ||
+      /^(?:[a-z][a-z0-9+.-]*|all|no)_proxy$/iu.test(name) ||
+      /^(?:SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|GH_HOST)$/u.test(name)
+    ) {
+      delete scrubbed[name];
+    }
   }
-  return {
+  const result = {
     ...scrubbed,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_NO_REPLACE_OBJECTS: "1",
     GIT_TERMINAL_PROMPT: "0",
   };
+  if (commandConfig) {
+    result.GIT_CONFIG_COUNT = String(releaseGitCommandConfig.length);
+    for (const [index, [key, value]] of releaseGitCommandConfig.entries()) {
+      result[`GIT_CONFIG_KEY_${index}`] = key;
+      result[`GIT_CONFIG_VALUE_${index}`] = value;
+    }
+  }
+  return result;
+}
+
+export function releaseGitEnvironment(environment = process.env) {
+  return isolatedReleaseGitEnvironment(environment, { commandConfig: true });
 }
 
 function lines(value) {
   return String(value).trim().split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
-function gitText(args) {
+function gitText(
+  args,
+  { root = repoRoot, environment = process.env, postureInspection = false } = {},
+) {
   return execFileSync("git", args, {
-    cwd: repoRoot,
-    env: releaseGitEnvironment(),
+    cwd: root,
+    env: postureInspection
+      ? isolatedReleaseGitEnvironment(environment, { commandConfig: false })
+      : releaseGitEnvironment(environment),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: RELEASE_GIT_TIMEOUT_MS,
@@ -46,7 +83,7 @@ export function validateReleaseGitPosture({
   grafts = "",
   sparseCheckout = false,
   trackedFlags = [],
-  authorityConfig = [],
+  transportConfigKeys = [],
 }) {
   assert.deepEqual(replaceRefs, [], "release Git rejects refs/replace authority");
   assert.equal(grafts.trim(), "", "release Git rejects legacy graft authority");
@@ -57,43 +94,77 @@ export function validateReleaseGitPosture({
     [],
     "release Git rejects assume-unchanged, skip-worktree, and non-default index flags",
   );
-  assert.deepEqual(
-    authorityConfig,
-    [],
-    "release Git rejects URL rewriting and proxy authority from Git configuration",
+  assert.equal(
+    transportConfigKeys.length,
+    0,
+    "release Git rejects URL, proxy, TLS, and legacy transport authority from local Git configuration",
   );
   return true;
 }
 
-export function assertReleaseGitPosture({ inspect } = {}) {
+export function isForbiddenReleaseGitConfigKey(key) {
+  const normalized = String(key).trim().toLowerCase();
+  return (
+    /^url\..+\.(?:insteadof|pushinsteadof)$/u.test(normalized) ||
+    /^http(?:\.|$)/u.test(normalized) ||
+    /^credential(?:\.|$)/u.test(normalized) ||
+    /^remote\..+\.(?:proxy|proxyauthmethod|uploadpack|receivepack|vcs)$/u.test(normalized) ||
+    /^(?:core\.(?:askpass|attributesfile|fsmonitor|gitproxy|hookspath|sshcommand)|ssh\.variant)$/u.test(
+      normalized,
+    ) ||
+    /^protocol\..+\.allow$/u.test(normalized) ||
+    normalized === "include.path" ||
+    /^includeif\..+\.path$/u.test(normalized)
+  );
+}
+
+export function assertReleaseGitPosture({
+  inspect,
+  root = repoRoot,
+  environment = process.env,
+} = {}) {
   const load = inspect ?? (() => {
-    let authorityConfig = [];
+    let configKeys = [];
     try {
-      authorityConfig = lines(gitText([
-        "config",
-        "--show-origin",
-        "--get-regexp",
-        "^(url\\..*\\.(insteadOf|pushInsteadOf)|http\\..*proxy|remote\\..*\\.proxy)$",
-      ]));
+      configKeys = lines(gitText(["config", "--name-only", "--get-regexp", ".*"], {
+        root,
+        environment,
+        postureInspection: true,
+      }));
     } catch (error) {
       if (error?.status !== 1) throw error;
     }
-    const commonDirectoryValue = gitText(["rev-parse", "--git-common-dir"]);
-    const commonDirectory = path.resolve(repoRoot, commonDirectoryValue);
+    const commonDirectoryValue = gitText(["rev-parse", "--git-common-dir"], {
+      root,
+      environment,
+      postureInspection: true,
+    });
+    const commonDirectory = path.resolve(root, commonDirectoryValue);
     const graftsPath = path.join(commonDirectory, "info", "grafts");
     const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, "utf8") : "";
     let sparseCheckout = false;
     try {
-      sparseCheckout = gitText(["config", "--bool", "core.sparseCheckout"]) === "true";
+      sparseCheckout = gitText(["config", "--bool", "core.sparseCheckout"], {
+        root,
+        environment,
+        postureInspection: true,
+      }) === "true";
     } catch (error) {
       if (error?.status !== 1) throw error;
     }
     return {
-      replaceRefs: lines(gitText(["for-each-ref", "--format=%(refname)", "refs/replace"])),
+      replaceRefs: lines(gitText(
+        ["for-each-ref", "--format=%(refname)", "refs/replace"],
+        { root, environment, postureInspection: true },
+      )),
       grafts,
       sparseCheckout,
-      trackedFlags: lines(gitText(["ls-files", "-v"])),
-      authorityConfig,
+      trackedFlags: lines(gitText(["ls-files", "-v"], {
+        root,
+        environment,
+        postureInspection: true,
+      })),
+      transportConfigKeys: configKeys.filter(isForbiddenReleaseGitConfigKey),
     };
   });
   return validateReleaseGitPosture(load());

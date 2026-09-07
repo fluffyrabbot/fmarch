@@ -157,6 +157,12 @@ async function contract() {
   assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
   assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);
   assert.match(source["tools/release_git_authority.mjs"], /CANONICAL_RELEASE_REMOTE_URL/);
+  assert.match(source["tools/release_git_authority.mjs"], /GIT_CONFIG_NOSYSTEM: "1"/);
+  assert.match(source["tools/release_git_authority.mjs"], /GIT_CONFIG_GLOBAL: "\/dev\/null"/);
+  assert.match(source["tools/release_git_authority.mjs"], /!gh auth git-credential/);
+  assert.match(source["tools/release_git_authority.mjs"], /SSL_CERT_FILE/);
+  assert.match(source["tools/release_git_authority.mjs"], /core\.hooksPath/);
+  assert.match(source["tools/release_git_authority.mjs"], /includeif/);
   assert.match(source["tools/release_coordinator.mjs"], /redirect: "error"/);
   assert.match(source["tools/production_promotion.mjs"], /redirect: "error"/);
   assert.match(source["tools/release_coordinator.mjs"], /timeout:/);

@@ -70,9 +70,15 @@ Release Git authority is pinned to the singular fetch and push URL
 `https://github.com/fluffyrabbot/fmarch.git`; configured `origin` fetch and push
 URLs must both match before any release fetch, lock, or pointer operation, and
 network operations address that URL directly. Release Git subprocesses scrub
-ambient `GIT_*` and proxy authority, set `GIT_NO_REPLACE_OBJECTS=1`, and reject
-replace refs, grafts, sparse checkout, URL-rewrite/proxy configuration, and any
-tracked assume-unchanged or skip-worktree flag before trusting the checkout.
+ambient `GIT_*`, proxy, and CA-bundle authority; ignore system/global Git
+configuration; force verified TLS; and reinject only the repository-owned
+`gh auth git-credential` helper. Local configuration may not delegate through
+`include`/`includeIf` or define URL rewrites, credentials, proxies, TLS/CA
+settings, hooks, fsmonitor, alternate attribute files, SSH commands, protocol
+overrides, or legacy Git proxies. Release commands also disable hooks,
+fsmonitor, replacement objects, and external attributes. Posture rejects
+replace refs, grafts, sparse checkout, and any tracked assume-unchanged or
+skip-worktree flag before trusting the checkout.
 
 Production mutation is serialized by the remote
 `refs/heads/release-locks/production` lease. Its commit binds the release

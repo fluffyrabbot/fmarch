@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,10 +8,13 @@ import test from "node:test";
 import {
   CANONICAL_RELEASE_REMOTE_URL,
   PRODUCTION_PROMOTION_LOCK_REF,
+  RELEASE_GIT_CREDENTIAL_HELPER,
   assertCanonicalReleaseRemote,
+  assertReleaseGitPosture,
   assertProductionPromotionLease,
   canonicalReleaseFetchArguments,
   createProductionPromotionLockIntent,
+  isForbiddenReleaseGitConfigKey,
   productionPointerPushArgumentsForAuthority,
   releaseGitEnvironment,
   validateReleaseGitPosture,
@@ -104,13 +107,32 @@ test("production lease binds exact remote token and complete release intent", ()
 test("release Git rejects ambient authority, replacements, grafts, sparse state, and index concealment", () => {
   const environment = releaseGitEnvironment({
     PATH: process.env.PATH,
+    GH_TOKEN: "deliberate-credential-authority",
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "url.https://attacker.invalid/.insteadOf",
     GIT_CONFIG_VALUE_0: "https://github.com/",
     GIT_OBJECT_DIRECTORY: "/attacker/objects",
+    SSL_CERT_FILE: "/attacker/ca.pem",
+    SSL_CERT_DIR: "/attacker/certs",
+    CURL_CA_BUNDLE: "/attacker/curl-ca.pem",
+    HTTPS_PROXY: "https://attacker.invalid",
+    RSYNC_PROXY: "https://attacker.invalid",
+    GH_HOST: "attacker.invalid",
   });
-  assert.equal(environment.GIT_CONFIG_COUNT, undefined);
   assert.equal(environment.GIT_OBJECT_DIRECTORY, undefined);
+  assert.equal(environment.SSL_CERT_FILE, undefined);
+  assert.equal(environment.SSL_CERT_DIR, undefined);
+  assert.equal(environment.CURL_CA_BUNDLE, undefined);
+  assert.equal(environment.HTTPS_PROXY, undefined);
+  assert.equal(environment.RSYNC_PROXY, undefined);
+  assert.equal(environment.GH_HOST, undefined);
+  assert.equal(environment.GH_TOKEN, "deliberate-credential-authority");
+  assert.equal(environment.GIT_CONFIG_NOSYSTEM, "1");
+  assert.equal(environment.GIT_CONFIG_GLOBAL, "/dev/null");
+  assert.equal(environment.GIT_CONFIG_VALUE_2, RELEASE_GIT_CREDENTIAL_HELPER);
+  assert.equal(environment.GIT_CONFIG_VALUE_3, "true");
+  assert.equal(environment.GIT_CONFIG_VALUE_5, "/dev/null");
+  assert.equal(environment.GIT_CONFIG_VALUE_6, "false");
   assert.equal(environment.GIT_NO_REPLACE_OBJECTS, "1");
   assert.throws(
     () => validateReleaseGitPosture({ replaceRefs: ["refs/replace/abc"] }),
@@ -123,9 +145,105 @@ test("release Git rejects ambient authority, replacements, grafts, sparse state,
     /index flags/,
   );
   assert.throws(
-    () => validateReleaseGitPosture({ authorityConfig: ["file:.git/config url.x.insteadof y"] }),
-    /URL rewriting/,
+    () => validateReleaseGitPosture({ transportConfigKeys: ["url.x.insteadof"] }),
+    /transport authority/,
   );
+  for (const key of [
+    "url.https://attacker.invalid/.insteadof",
+    "URL.https://attacker.invalid/.PUSHINSTEADOF",
+    "http.sslverify",
+    "http.https://github.com/.sslcainfo",
+    "http.sslbackend",
+    "remote.origin.proxy",
+    "core.gitproxy",
+    "credential.helper",
+    "core.hookspath",
+    "core.fsmonitor",
+    "include.path",
+    "includeif.gitdir:/tmp/example.path",
+  ]) {
+    assert.equal(isForbiddenReleaseGitConfigKey(key), true, `${key} must be rejected`);
+  }
+  assert.equal(isForbiddenReleaseGitConfigKey("user.name"), false);
+});
+
+test("release Git isolates global transport attacks and rejects unsafe local keys", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "fmarch-release-git-transport-"));
+  const repository = path.join(directory, "repo");
+  const globalConfig = path.join(directory, "ambient-global.gitconfig");
+  mkdirSync(repository);
+  const ambient = { ...process.env, GIT_CONFIG_GLOBAL: globalConfig };
+  const git = (args, options = {}) => execFileSync("git", args, {
+    cwd: options.cwd ?? repository,
+    encoding: "utf8",
+    env: options.env ?? ambient,
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  try {
+    git(["init", "--quiet"]);
+    git(["remote", "add", "origin", CANONICAL_RELEASE_REMOTE_URL]);
+    git([
+      "config",
+      "--file",
+      globalConfig,
+      "url.https://attacker.invalid/.insteadOf",
+      "https://github.com/",
+    ]);
+    git(["config", "--file", globalConfig, "http.sslVerify", "false"]);
+    git([
+      "config",
+      "--file",
+      globalConfig,
+      "http.https://github.com/.sslCAInfo",
+      path.join(directory, "attacker-ca.pem"),
+    ]);
+    assert.match(git(["remote", "get-url", "origin"]), /^https:\/\/attacker\.invalid\//u);
+
+    const isolated = releaseGitEnvironment(ambient);
+    assert.equal(git(["remote", "get-url", "origin"], { env: isolated }), CANONICAL_RELEASE_REMOTE_URL);
+    assert.equal(git(["config", "--get", "http.sslVerify"], { env: isolated }), "true");
+    assert.equal(git(["config", "--get", "core.hooksPath"], { env: isolated }), "/dev/null");
+    assert.equal(git(["config", "--get", "core.fsmonitor"], { env: isolated }), "false");
+    assert.throws(
+      () => git(["config", "--get", "http.https://github.com/.sslCAInfo"], { env: isolated }),
+    );
+    assert.doesNotThrow(() => assertReleaseGitPosture({ root: repository, environment: ambient }));
+
+    git(["config", "url.https://attacker.invalid/.insteadOf", "https://github.com/"]);
+    assert.throws(
+      () => assertReleaseGitPosture({ root: repository, environment: ambient }),
+      /transport authority/,
+    );
+    git(["config", "--unset-all", "url.https://attacker.invalid/.insteadOf"]);
+
+    git(["config", "http.sslVerify", "false"]);
+    assert.throws(
+      () => assertReleaseGitPosture({ root: repository, environment: ambient }),
+      /transport authority/,
+    );
+    git(["config", "--unset-all", "http.sslVerify"]);
+
+    git([
+      "config",
+      "http.https://github.com/.sslCAInfo",
+      path.join(directory, "local-attacker-ca.pem"),
+    ]);
+    assert.throws(
+      () => assertReleaseGitPosture({ root: repository, environment: ambient }),
+      /transport authority/,
+    );
+    git(["config", "--unset-all", "http.https://github.com/.sslCAInfo"]);
+
+    const included = path.join(directory, "changing-transport-authority.gitconfig");
+    writeFileSync(included, "[http]\n\tsslVerify = false\n");
+    git(["config", "include.path", included]);
+    assert.throws(
+      () => assertReleaseGitPosture({ root: repository, environment: ambient }),
+      /transport authority/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("release Git environment disables the reproduced replace-ref archive attack", () => {
