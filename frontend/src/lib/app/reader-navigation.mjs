@@ -77,11 +77,38 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
     },
     checkpoint(origin, { resume = false, verify = false } = {}) {
       const page = getPage();
-      if (disposed || readerNavigationState(page)?.destination) return;
+      const current = readerNavigationState(page);
+      if (disposed || current?.destination) return;
       this.release();
-      const trip = { scope: readerScope(page.url), origin, destination: null, verify };
+      const trip = { scope: readerScope(page.url), origin, destination: null, verify,
+        returnable: current?.returnable === true, localReturn: current?.localReturn === true };
       if (!resume) { observed = trip; onChange(trip); }
       replace("", { ...page.state, readerNavigation: trip });
+    },
+    visit(origin) {
+      const page = getPage();
+      const current = readerNavigationState(page);
+      if (disposed || returning || current?.destination) return false;
+      const previous = capture();
+      if (!previous) return false;
+      this.release();
+      const prior = { scope: readerScope(page.url), origin: previous, destination: null,
+        verify: true, returnable: current?.returnable === true, localReturn: true };
+      observed = prior;
+      onChange(prior);
+      replace("", { ...page.state, readerNavigation: prior });
+      push("#player-thread", { ...page.state, readerNavigation: {
+        scope: readerScope(page.url), origin, destination: null, verify: true,
+        localReturn: true, returnable: true,
+      } });
+      return true;
+    },
+    returnToPrevious() {
+      const current = readerNavigationState(getPage());
+      if (!disposed && !returning && current?.returnable === true && current.destination === null) {
+        returning = true;
+        back();
+      }
     },
     recover(intent = "origin") {
       const page = getPage();
@@ -122,7 +149,9 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       const origin = current?.destination ? current.origin : capture();
       if (!origin) return;
       const base = { ...page.state };
-      const trip = { scope: readerScope(page.url), origin, destination };
+      const trip = { scope: readerScope(page.url), origin, destination,
+        returnable: current?.returnable === true, localReturn: current?.localReturn === true,
+        verify: current?.localReturn === true };
       const url = destination === "count" ? "#player-actions" : "#player-private-queue";
       if (current?.destination) replace(url, { ...base, readerNavigation: trip });
       else {
