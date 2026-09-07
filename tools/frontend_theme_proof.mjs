@@ -94,6 +94,6 @@ async function saveAppearance(page, context, themeId, scheme) {
     page.waitForNavigation({ waitUntil: "networkidle" }),
     page.getByRole("button", { name: "Save appearance" }).click(),
   ]);
-  assert.equal((await context.cookies()).find(cookie => cookie.name === "fmarch_appearance")?.value,
+  assert.equal(decodeURIComponent((await context.cookies()).find(cookie => cookie.name === "fmarch_appearance")?.value ?? ""),
     `${themeId}:${scheme}`, "the server must persist the submitted appearance before another navigation");
 }

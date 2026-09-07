@@ -136,6 +136,8 @@ try {
     accessibility: [],
   };
 
+  evidence.themes = await proveThemes({ browser, baseUrl, artifactDir, proveContrast: provePhaseGroundContrast });
+
   for (const viewport of viewports) {
     const boardContext = await newContextForViewport(viewport, boardScenario.token);
     const boardPage = await boardContext.newPage();
@@ -693,7 +695,6 @@ try {
     await assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }),
   );
 
-  evidence.themes = await proveThemes({ browser, baseUrl, artifactDir, proveContrast: provePhaseGroundContrast });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
