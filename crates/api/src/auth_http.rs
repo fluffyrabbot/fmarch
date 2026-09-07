@@ -8,8 +8,8 @@ use crate::authentication::{
     record_failed_auth_attempt, AuthAttemptPolicy, AuthCredentialDeliveryRequest,
 };
 use crate::identity_delivery::{
-    process_identity_delivery_intent, IdentityDeliveryGateway, IdentityDeliveryKind,
-    LocalDeterministicIdentityDeliveryGateway,
+    process_identity_delivery_intent_with_config, IdentityDeliveryGateway, IdentityDeliveryKind,
+    IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
 };
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
@@ -87,6 +87,7 @@ pub(super) struct AuthHttpState {
     pub(super) local_proof_auth: Option<LocalProofAuthVerifier>,
     pub(super) auth_attempt_policy: AuthAttemptPolicy,
     pub(super) identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
+    pub(super) identity_delivery_worker_config: IdentityDeliveryWorkerConfig,
     pub(super) password_slots: Arc<Semaphore>,
     pub(super) workos_verification_slots: Arc<Semaphore>,
     pub(super) workos_verification_max_per_source: i32,
@@ -109,6 +110,7 @@ impl AuthHttpState {
             identity_delivery_gateway: Arc::new(
                 LocalDeterministicIdentityDeliveryGateway::from_env(),
             ),
+            identity_delivery_worker_config: IdentityDeliveryWorkerConfig::default(),
             password_slots: Arc::new(Semaphore::new(env_i64(
                 "FMARCH_PASSWORD_MAX_IN_FLIGHT",
                 4,
@@ -4023,13 +4025,14 @@ async fn retry_auth_delivery_intent(
     let actor_principal_id =
         require_global_admin(&state, &request.bearer, "delivery retry").await?;
     let now = unix_now_seconds();
-    let receipt = process_identity_delivery_intent(
+    let receipt = process_identity_delivery_intent_with_config(
         &state.pool,
         state.identity_delivery_gateway.as_ref(),
         delivery_id,
         &actor_principal_id,
         "auth_delivery_retried",
         now,
+        state.identity_delivery_worker_config,
     )
     .await?
     .ok_or_else(|| ApiError::Reject {
