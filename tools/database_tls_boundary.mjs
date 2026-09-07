@@ -22,6 +22,12 @@ const dataDir = path.join(runtimeDir, "postgres");
 const logPath = path.join(runtimeDir, "postgres.log");
 const reportPath = path.join(artifactDir, "report.json");
 let postgresRunning = false;
+let cleanupPromise;
+for (const [signal, status] of [["SIGTERM", 143], ["SIGINT", 130]]) {
+  process.once(signal, () => {
+    void cleanup().catch(console.error).finally(() => process.exit(status));
+  });
+}
 
 try {
   const bindir = (await capture("pg_config", ["--bindir"])).trim();
@@ -145,9 +151,14 @@ try {
   );
   console.log(`database TLS boundary passed; wrote ${path.relative(repoRoot, reportPath)}`);
 } finally {
+  await cleanup();
+}
+
+function cleanup() {
+  return cleanupPromise ??= (async () => {
   if (postgresRunning) {
     const bindir = (await capture("pg_config", ["--bindir"])).trim();
-    await run(path.join(bindir, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "-w", "stop"]);
+    await run(path.join(bindir, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "-t", "3", "-w", "stop"]);
   }
   try {
     await copyFile(logPath, path.join(artifactDir, "postgres.log"));
@@ -156,6 +167,7 @@ try {
   }
   await rm(runtimeDir, { recursive: true, force: true });
   await rm(socketDir, { recursive: true, force: true });
+  })();
 }
 
 function postgresUrl({ username, password, port, database }) {
