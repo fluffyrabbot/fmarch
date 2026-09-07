@@ -322,7 +322,11 @@ async fn deployed_admin_rehearses_old_key_removal_before_retirement(pool: PgPool
         .output()
         .expect("run bounded-lock event-key admin binary");
     assert!(!timeout.status.success());
-    assert!(String::from_utf8_lossy(&timeout.stderr).contains("lock timeout"));
+    assert!(
+        String::from_utf8_lossy(&timeout.stderr).contains("lock timeout"),
+        "unexpected admin failure: {}",
+        String::from_utf8_lossy(&timeout.stderr)
+    );
     held_registry.rollback().await.unwrap();
 
     let plan = run_admin(

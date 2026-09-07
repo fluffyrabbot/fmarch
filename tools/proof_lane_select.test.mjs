@@ -1847,7 +1847,7 @@ test('--skip survives a resume so a resumed sweep still excludes what the operat
         cwd: REPO_ROOT,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, HOST_HEAVY_BUILD_LOCK_HELD: '1' },
+        env: { ...process.env, HOST_HEAVY_BUILD_LOCK_HELD: '1', FMARCH_LOCAL_PLATFORM_PROOF: '1' },
       });
       return '';
     } catch (error) {

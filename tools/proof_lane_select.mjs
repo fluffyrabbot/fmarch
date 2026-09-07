@@ -1138,6 +1138,10 @@ async function main(argv) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const argv = process.argv.slice(2);
+  if (process.platform === 'darwin' && requiresHostHeavyBuildLock(argv) && process.env.FMARCH_LOCAL_PLATFORM_PROOF !== '1') {
+    console.error('Full application proof runs on Cachy: commit/push your task branch, then npm run proof:remote. Explicit Mac-only acceptance requires FMARCH_LOCAL_PLATFORM_PROOF=1.');
+    process.exit(75);
+  }
   const lockHeld =
     process.env.HOST_HEAVY_BUILD_LOCK_HELD === '1' ||
     process.env.MESH_HEAVY_BUILD_LOCK_HELD === '1';
