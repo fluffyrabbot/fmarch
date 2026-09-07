@@ -7,7 +7,7 @@
     "proof:lanes": "node tools/proof_lane_select.mjs",
     "proof:cache": "node tools/proof_lane_cache_admin.mjs",
     "test:proof-cache-maintenance": "node tools/proof_lane_cache_admin.mjs audit",
-    "test:proof-lane-contract": "python3 scripts/with-heavy-build-lock.test.py && node --test tools/proof_remote.test.mjs tools/proof_lane_select.test.mjs tools/proof_lane_execution.test.mjs tools/proof_lane_cache.test.mjs tools/proof_lane_cache_admin.test.mjs tools/frontend_artifact_paths.test.mjs tools/cargo_test_evidence.test.mjs tools/proof_test_evidence.test.mjs && npm run test:architecture-fitness && npm run test:documentation",
+    "test:proof-lane-contract": "python3 scripts/with-heavy-build-lock.test.py && node --test tools/hosted_acceptance.test.mjs tools/proof_remote.test.mjs tools/proof_lane_select.test.mjs tools/proof_lane_execution.test.mjs tools/proof_lane_cache.test.mjs tools/proof_lane_cache_admin.test.mjs tools/frontend_artifact_paths.test.mjs tools/cargo_test_evidence.test.mjs tools/proof_test_evidence.test.mjs && npm run test:architecture-fitness && npm run test:documentation",
     "test:architecture-fitness": "node --test tools/architecture_fitness.test.mjs && node tools/architecture_fitness.mjs",
     "release:staging": "node tools/release_coordinator.mjs --environment staging",
     "test:release-coordinator": "node --test tools/release_coordinator_contract.test.mjs",
@@ -193,7 +193,9 @@
     "proof:remote": "node tools/proof_remote.mjs",
     "generate:rust-reference": "node tools/rust_reference.mjs --write",
     "check:rust-reference": "node tools/rust_reference.mjs --check",
-    "test:documentation": "node --test tools/documentation_check.test.mjs tools/rust_reference.test.mjs && node tools/documentation_check.mjs && npm run check:rust-reference"
+    "test:documentation": "node --test tools/documentation_check.test.mjs tools/rust_reference.test.mjs && node tools/documentation_check.mjs && npm run check:rust-reference",
+    "test:frontend-cross-browser": "node tools/frontend_cross_browser.mjs",
+    "proof:hosted": "node tools/hosted_acceptance.mjs"
   },
   "devDependencies": {
     "github-slugger": "2.0.0",

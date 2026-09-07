@@ -387,6 +387,13 @@ export function gitChangedFiles(
   return [...files];
 }
 
+// Narrow proof cannot claim coverage for a path the manifest does not own.
+export function assertMappedSelection(selection) {
+  if (selection.mode !== 'full' && selection.unmapped.length) {
+    throw new Error(`Unmapped changes block ${selection.mode} proof: ${selection.unmapped.join(', ')}. Extend the manifest or use --mode full.`);
+  }
+}
+
 // Core selection. Pure over its inputs so the contract test can drive it with
 // fixtures. crateGraph of null means "unknown": if a crate or specialized
 // closure area is touched we conservatively arm every crate area instead of
@@ -934,6 +941,7 @@ async function main(argv) {
           laneIds: [args.only], frozenSkipped: [],
         }
       : selectLanes({ changed, manifest, crateGraph, mode: args.mode });
+  assertMappedSelection(selection);
   for (const laneId of selection.laneIds) {
     if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
   }
