@@ -1,7 +1,30 @@
 # Cachy canonical verification
 
-Status: implementation under qualification on 2026-09-06. Canonical authority
-has not changed; a failed or incomplete Linux sweep is not a landing receipt.
+Status: qualified on 2026-09-06. fluffycachy is canonical for ordinary Linux
+application verification; native macOS/Safari acceptance remains separate.
+
+## Qualification evidence
+
+Code checkpoint: `485f4949fcf0c4e189bd45a25817f01c5cba9bf5`.
+Environment SHA-256: `7896fd4dbd243dbde74fdb760f7849769caeee117d4ab6b22dd25b58e0badc7f`.
+Both runs used clean worker-owned worktrees, the same manifest/source identity,
+and `/home/fluffyr/.cache/fluffyfleet/fmarch-canonical-v1` as the owned build root.
+The cold run began with a fresh target/evidence root. The warm run used normal
+cache policy. Every selected lane passed; none were skipped or quarantined.
+
+| Sweep | Signed fleet job | Coverage | Reused lanes | Elapsed |
+|---|---|---|---:|---:|
+| Cold | `20260907T032407Z-9ec444ce` | 66/66 passed | 0 | 41.32 min |
+| Warm | `20260907T040720Z-6741f5a6` | 66/66 passed | 36 | 13.42 min |
+
+Peak worker memory across the sweeps was 13,244,391,424 bytes (12.34 GiB),
+below the 18 GiB soft limit and 22 GiB hard limit. The build volume had
+172 GiB available after the warm sweep. These measurements include the worker
+process tree; they are not a promise that arbitrary concurrent manual jobs fit.
+
+The authority/documentation commit follows this qualified code checkpoint and
+changes no application, workflow, test, or baseline implementation.
+
 
 ## Submit a checkpoint
 
@@ -64,7 +87,7 @@ a different required Node, npm, Rust or PostgreSQL version.
 
 ## Qualification and authority gate
 
-Before changing AGENTS.md and the fleet preferred host together:
+Requalification after a material environment or proof-contract change requires:
 
 1. Pass all 66 lanes in a fresh Linux build/evidence root.
 2. Pass a normal warm full sweep at the same immutable source commit.
@@ -74,8 +97,15 @@ Before changing AGENTS.md and the fleet preferred host together:
    closure or a false passing receipt.
 5. Keep explicit platform-specific Mac acceptance separate from Linux proof.
 
-Shared-admission and deliberate-restart probes have passed. The first broad
-sweep exposed Linux directory-fsync behavior, a spectator-test delivery race,
-mobile layout/caret issues and missing PostgreSQL TLS support; fixes are being
-qualified. Full cold/warm receipts remain required. Do not promote host labels
-or replace cost baselines based on prerequisite probes or partial sweeps.
+Shared-admission and deliberate-restart probes passed. A competing MeSH job
+waited; a manual request returned busy without starting Cargo. Restart produced
+a signed attention receipt, and verification resumed at the original SHA.
+A controlled TLS-harness interruption stopped its disposable PostgreSQL process
+and removed its runtime directory. Three fresh capacity probes passed after
+both sides of the search fixture join received explicit statistics. The MeSH
+manual remote-check path passed and removed its clean owned worktree.
+
+Qualification fixed Linux directory fsync on capability descriptors, a
+spectator-test delivery race, mobile layout/caret behavior, PostgreSQL TLS
+provisioning, and the TLS cold-build budget/interrupt cleanup. Visual samples
+were reviewed on Linux without overwriting the existing baseline.

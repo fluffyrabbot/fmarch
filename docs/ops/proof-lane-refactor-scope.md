@@ -527,39 +527,28 @@ only for the same commit and manifest digest.
   self-managed scratch databases only outside runner context, where applicable.
   Hosted evidence and production promotion remain outside parallel local proof.
 
-### 7. Keep canonical `--run` on the Darwin checkout
+### 7. Canonical application proof on fluffycachy — qualified 2026-09-06
 
-The remaining resource work is isolation and scheduling on this machine, not a
-host swap. Mesh ratified fluffycachy as its remote verification default because
-closure-heavy `cargo check` was pathologically slow on Darwin and because Linux
-gtk/webkit is a required Mesh surface. fmarch's expensive leaves are serial
-Postgres suites and Chromium. `scripts/check-build-posture.sh` keeps `target/`
-as a symlink onto an external writable root: `FMARCH_EXTERNAL_BUILD_ROOT` if
-set, otherwise `/Volumes/rabbitx10/build/fmarch` when that volume is writable,
-otherwise fail closed. `--apply` creates the destination and symlink when
-missing. The Darwin volume is the preferred location on this machine, not the
-invariant.
+The complete 66-lane Linux graph is authoritative for ordinary application
+verification. The cold and normal warm sweeps use one immutable source commit
+and environment identity; their signed receipts are recorded in
+`docs/ops/cachy-canonical-verification.md`. Chromium viewport coverage does not
+certify native Safari/iOS/macOS behavior. Keep those checks explicitly named.
 
-Do not make fluffycachy the canonical fmarch proof host:
+The Mac submits a clean pushed task checkpoint with `npm run proof:remote`.
+The fleet fetches origin and binds the job to its exact SHA, then creates a
+worker-owned task branch/worktree. No source directories or caches are copied.
+fmarch owns its external target and PostgreSQL 16 cluster. Shared host admission
+with MeSH, two Cargo build jobs, and worker memory/CPU limits prevent a second
+heavy closure from competing with a full sweep. A manual contender receives
+busy status; an interrupted supervised job receives a recoverable receipt.
 
-- Browser, visual-regression, CSP, tablet, live-stack, and auth-invite lanes
-  are Darwin evidence. A green Linux result is not a substitute.
-- Both machines are in the same RAM class (~24–27 GiB). fluffycachy already
-  owns Mesh `mesh-verify` and Neoretro x86_64 evidence; parking the fmarch
-  spine there creates cross-repo contention without fixing shared `DATABASE_URL`.
-- The `~/apps/fmarch` tree on fluffycachy is not a proof environment (no
-  `target/`, no `node_modules`, no Postgres on 5544).
-- Tracked timings are host-dependent. The 2026-08-06 host measured
-  `cargo:commands-audit` at ~408–414s; the recorded 2026-08-08/09 baseline is
-  552.2s. Remote wall-clocks must not be `--record`ed into
-  `docs/ops/proof-lane-timings.json`.
-
-Optional later overflow, not authority: a dedicated `fmarch-verify` checkout
-on fluffycachy may run isolated platform-neutral Cargo/Postgres leaves
-(`cargo:commands-audit`, maybe `cargo:api` / `cargo:commands-pg`) after it sets
-`FMARCH_EXTERNAL_BUILD_ROOT`, runs `bash scripts/check-build-posture.sh --apply`,
-has repo-local Postgres, and shares no writable database with another run.
-That is extra evidence beside Darwin push/sprint/full.
+The Linux browser baseline has a separate platform/architecture directory and
+explicit Chromium/font identity. Environment changes invalidate proof reuse;
+visual identity changes require screenshot review and explicit baseline
+publication. Existing Darwin samples and timings remain historical evidence.
+Promote Cachy cost baselines only from qualified measurements with their host
+identity, rather than mixing them into the old Darwin observations.
 
 ### 8. Select assertion-bearing Cargo targets — delivered 2026-08-28
 

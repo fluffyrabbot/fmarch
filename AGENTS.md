@@ -1,7 +1,7 @@
 # Agent Workflow
 
-This repo is currently a one-developer, pre-1.0 workspace. Prefer local proof,
-direct `main` work, and atomic history over PR ceremony.
+This repo is a one-developer, pre-1.0 workspace. Prefer repository-owned proof
+on the canonical Cachy worker, task branches, and atomic history over PR ceremony.
 
 ## Default stance
 
@@ -10,17 +10,30 @@ direct `main` work, and atomic history over PR ceremony.
   further refactor instead of preserving transitional compatibility by default.
 - Keep commits atomic and intentional. Each commit should describe one coherent
   change.
-- Work directly on `main` unless the user explicitly asks for a branch.
-- Push directly to `main` after the relevant local proof is green.
+- Give every task a named branch and its own worktree. Preserve unexpected dirty
+  or unpublished work on a named branch before reconciling it.
+- Push the task checkpoint to origin before verification. Fast-forward `main`
+  only after the required canonical proof passes.
 - Treat `main` as the sole development trunk. Railway staging follows `main`;
   Railway production follows only the explicit `production` release pointer.
   Never use a long-lived pre-production development branch.
-- Treat GitHub primarily as remote backup/history, not as the source of truth for
-  CI/CD, until the project is ready for beta/1.0 release discipline.
+- Treat Git remotes as the source of truth for history. Never synchronize source
+  working directories or build caches between machines. The supervised Cachy
+  worker owns ordinary proof; GitHub-hosted CI is not required for this workflow.
 
-## Local proof preference
+## Verification preference
 
-- Prefer local CI/proof for as long as practical.
+- Run routine application proof on fluffycachy. On the editing machine, commit
+  and push a clean task branch, then run `npm run proof:remote`. Inspect the
+  signed fleet receipt before landing code. Planning and bounded Node/static
+  checks may run on the Mac; ordinary Cargo/full-proof commands must not fall
+  back to the editing machine.
+- Code, workflow and test changes require a passing Linux receipt for their
+  pushed checkpoint. Documentation-only changes use relevant contract checks
+  and cite the unchanged qualified code checkpoint.
+- The current remote entrypoint submits the full repository workflow. The
+  push/sprint/only modes below describe the repository DAG on its qualified
+  worker; use them for planning on the Mac, not local Cargo execution.
 - A 24 GiB host permits one closure-heavy local Rust build at a time across all
   workspaces. Execution-bearing `npm run proof:lanes` modes acquire the shared
   host lock through `scripts/with-heavy-build-lock.py`; they default to serial
@@ -36,7 +49,7 @@ direct `main` work, and atomic history over PR ceremony.
   directly.
   Use an isolated overflow checkout only when its host, target, and database
   resources are independent.
-- Use the narrowest truthful local gate for the touched area, then broaden only
+- Use the narrowest truthful gate for the touched area, then broaden only
   when the change crosses boundaries.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
   (vs `origin/main`, including uncommitted work) to the required lane set via
@@ -92,36 +105,44 @@ direct `main` work, and atomic history over PR ceremony.
   `npm run proof:cache -- audit --quarantine-staging`; live-writer staging is
   never moved.
 - For frontend browser/readiness work, prefer the role proof and artifact
-  contract lanes before pushing.
-- For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run
-  SQLx-heavy tests serially when needed.
-- If podman is unavailable, a repo-local Postgres under `target/` is an
-  acceptable local proof substitute.
-- Canonical `--run` stays on this Darwin checkout. fluffycachy is Mesh's remote
-  verification lane, not fmarch's proof host. A Linux green result does not
-  cover Darwin browser, visual, CSP, tablet, live-stack, or auth-invite lanes,
-  and remote wall-clocks must not be `--record`ed into
-  `docs/ops/proof-lane-timings.json`. Isolated overflow of platform-neutral
-  Cargo/Postgres leaves is allowed only from a dedicated verify checkout that
-  does not share Mesh's `mesh-verify` tree or a writable database with another
-  run. See `docs/ops/proof-lane-refactor-scope.md`.
+  contract lanes on the canonical worker before landing.
+- For Postgres-backed Rust work, use the canonical worker-owned `DATABASE_URL`
+  proof lane and run SQLx-heavy tests serially when needed. The pinned native
+  PostgreSQL installation is provisioned by the Linux workflow.
+- fluffycachy is canonical for the complete Linux application proof graph,
+  including Chromium browser, visual, CSP, tablet viewport, live-stack and
+  auth-invite lanes. Native macOS/Safari acceptance remains explicit and
+  separate; `FMARCH_LOCAL_PLATFORM_PROOF=1` opts into a named Mac-only check.
+  The worker uses a separate fmarch cache/database and the same host-wide heavy
+  lock as MeSH. Never bypass admission or borrow MeSH's writable resources.
+  See `docs/ops/cachy-canonical-verification.md` for the qualified source,
+  environment, cold/warm receipts and operating commands.
+- Existing Darwin timings are historical. Promote new timing baselines only
+  from qualified Cachy measurements, with the host/environment recorded; do not
+  mix measurements from different hosts or silently replace visual identities.
 - Cargo `target/` must be a symlink onto an external writable build root, never
   a real directory in the checkout. Discovery is
   `FMARCH_EXTERNAL_BUILD_ROOT` if set, otherwise
   `/Volumes/rabbitx10/build/fmarch` when that volume is writable, otherwise
   fail closed. `bash scripts/check-build-posture.sh --apply` creates the
-  destination and symlink when missing. A fluffycachy `fmarch-verify` tree sets
-  `FMARCH_EXTERNAL_BUILD_ROOT` and applies posture; that does not move proof
-  authority.
+  destination and symlink when missing. The Linux fleet profile sets its owned
+  `FMARCH_EXTERNAL_BUILD_ROOT`; `scripts/linux-proof.sh` applies posture and
+  starts the pinned isolated PostgreSQL environment under the shared host lock.
 
 ## Publishing
 
-- When local proof is green, commit and push in one shell command when possible,
-  for example:
+- Commit and push a task checkpoint, then submit its proof:
 
   ```sh
-  git add <paths> && git commit -m "<atomic message>" && git push origin main
+  git add <paths>
+  git commit -m "<atomic message>"
+  git push origin HEAD
+  npm run proof:remote
   ```
+
+- After the signed canonical receipt passes for that checkpoint, integrate it
+  with a fast-forward to `main`. Never use a passing receipt for a different
+  code checkpoint or a failed/partial sweep as landing evidence.
 
 - Open a PR only when it is useful as a reviewable checkpoint or backup marker.
 - Prefer fast-forward-only integration. Avoid merge commits for normal solo flow.
@@ -134,7 +155,7 @@ direct `main` work, and atomic history over PR ceremony.
   [the release runbook](docs/ops/railway-staging-target.md). A push must not
   deploy production.
 - Promote production only from a clean, pushed `main` commit after the required
-  local proof, both staging health checks, and commit-attribution checks pass.
+  canonical proof, both staging health checks, and commit-attribution checks pass.
 - Advance the remote `production` branch to that exact commit as the explicit
   release action. Do not develop on `production`, merge production back into
   `main`, or use it as a compatibility branch.
