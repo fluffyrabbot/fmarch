@@ -143,6 +143,7 @@ test('resume retries failures and their artifact producers while reusing unrelat
     worktree_sha256: 'b'.repeat(64),
     manifest_sha256: 'c'.repeat(64),
     database_identity_sha256: 'd'.repeat(64),
+    environment_sha256: 'e'.repeat(64),
   };
   const fixtureManifest = {
     lanes: {
@@ -178,6 +179,10 @@ test('resume retries failures and their artifact producers while reusing unrelat
   assert.deepEqual(plan.selected, ['producer', 'consumer', 'unrelated']);
   assert.deepEqual(plan.rerun, ['producer', 'consumer']);
   assert.deepEqual([...plan.reusedLanes.keys()], ['unrelated']);
+  assert.throws(
+    () => planReceiptResume(receipt, fixtureManifest, { ...context, environment_sha256: 'f'.repeat(64) }),
+    /environment_sha256/,
+  );
   assert.throws(
     () => planReceiptResume(receipt, fixtureManifest, { ...context, worktree_sha256: 'e'.repeat(64) }),
     /worktree_sha256/,
