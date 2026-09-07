@@ -675,7 +675,7 @@ async function proveAdversarialPublicSearch({ baseUrl, psql, databaseUrl }) {
   ).length;
   assert(
     selectivePlanIndexCoverage === selectivePlans.length,
-    "selective search/filter plan lost the partial GIN index",
+    `selective search/filter plan lost the partial GIN index: ${JSON.stringify(selectivePlans)}`,
   );
 
   const searchAdmission = await proveSearchAdmission({
