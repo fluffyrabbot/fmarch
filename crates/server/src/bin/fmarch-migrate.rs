@@ -1,7 +1,10 @@
 use std::{env, str::FromStr};
 
 use serde_json::json;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    Acquire,
+};
 use url::Url;
 
 #[tokio::main]
@@ -41,43 +44,89 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     let pool = PgPoolOptions::new()
-        .max_connections(1)
+        .max_connections(2)
         .connect(&database_url)
         .await?;
-    sqlx::query("SELECT set_config('search_path', 'public', false)")
-        .execute(&pool)
+    let database_identity = (
+        env::var("FMARCH_DATABASE_ENVIRONMENT"),
+        env::var("FMARCH_DATABASE_PROJECT_ID"),
+        env::var("FMARCH_DATABASE_ENVIRONMENT_ID"),
+    );
+    let mut operation_lock = pool.acquire().await?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(server::DATABASE_IDENTITY_ADVISORY_LOCK)
+        .execute(&mut *operation_lock)
         .await?;
-    sqlx::query("SELECT set_config('session_replication_role', 'origin', false)")
-        .execute(&pool)
-        .await?;
-    server::verify_migration_authority(&pool).await?;
-    server::MIGRATOR.run(&pool).await?;
-    server::ensure_schema_ready(&pool).await?;
-    server::reconcile_database_authority(&pool, &application_password, &key_admin_password).await?;
+    let operation = async {
+        sqlx::query("SELECT set_config('search_path', 'public', false)")
+            .execute(&pool)
+            .await?;
+        sqlx::query("SELECT set_config('session_replication_role', 'origin', false)")
+            .execute(&pool)
+            .await?;
+        server::verify_migration_authority(&pool).await?;
+        match database_identity {
+            (Ok(environment), Ok(project_id), Ok(environment_id)) => {
+                server::verify_database_environment_identity(
+                    &mut operation_lock,
+                    &environment,
+                    &project_id,
+                    &environment_id,
+                )
+                .await?;
+            }
+            (
+                Err(env::VarError::NotPresent),
+                Err(env::VarError::NotPresent),
+                Err(env::VarError::NotPresent),
+            ) if api::release_commit() == "development" => {}
+            _ => {
+                return Err("exact release migration requires the complete durable database project/environment identity".into())
+            }
+        }
+        server::MIGRATOR.run(&pool).await?;
+        server::ensure_schema_ready(&pool).await?;
+        server::reconcile_database_authority(&pool, &application_password, &key_admin_password)
+            .await?;
 
-    let base_options = PgConnectOptions::from_str(&database_url)?;
-    let application_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with(
-            base_options
-                .clone()
-                .username(server::APPLICATION_DATABASE_ROLE)
-                .password(&application_password),
+        let base_options = PgConnectOptions::from_str(&database_url)?;
+        let application_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                base_options
+                    .clone()
+                    .username(server::APPLICATION_DATABASE_ROLE)
+                    .password(&application_password),
+            )
+            .await?;
+        server::ensure_schema_ready(&application_pool).await?;
+        server::verify_database_principal(
+            &application_pool,
+            server::DatabasePrincipal::Application,
         )
         .await?;
-    server::ensure_schema_ready(&application_pool).await?;
-    server::verify_database_principal(&application_pool, server::DatabasePrincipal::Application)
+        let key_admin_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                base_options
+                    .username(server::KEY_ADMIN_DATABASE_ROLE)
+                    .password(&key_admin_password),
+            )
+            .await?;
+        server::ensure_schema_ready(&key_admin_pool).await?;
+        server::verify_database_principal(&key_admin_pool, server::DatabasePrincipal::KeyAdmin)
+            .await?;
+        Ok::<_, Box<dyn std::error::Error>>(())
+    }
+    .await;
+    let unlocked: bool = sqlx::query_scalar("SELECT pg_advisory_unlock($1)")
+        .bind(server::DATABASE_IDENTITY_ADVISORY_LOCK)
+        .fetch_one(&mut *operation_lock)
         .await?;
-    let key_admin_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with(
-            base_options
-                .username(server::KEY_ADMIN_DATABASE_ROLE)
-                .password(&key_admin_password),
-        )
-        .await?;
-    server::ensure_schema_ready(&key_admin_pool).await?;
-    server::verify_database_principal(&key_admin_pool, server::DatabasePrincipal::KeyAdmin).await?;
+    if !unlocked {
+        return Err("fmarch-migrate lost its database operation lock".into());
+    }
+    operation?;
     println!(
         "{}",
         json!({

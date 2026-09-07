@@ -10,15 +10,34 @@ import { loadCompletionRegistry, validateRegistry } from "./completeness_scoreca
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import {
   CANONICAL_RELEASE_TOPOLOGY,
+  assertFullCommit,
+  assertFreshReleaseEvidence,
   assertFreshStagingReleaseReceipt,
   assertReleaseReceipt,
   validateDeploymentArtifact,
   validateHealth,
   validateProductionReleaseReadiness,
 } from "./release_coordinator_contract.mjs";
+import {
+  CANONICAL_RELEASE_REMOTE_URL,
+  PRODUCTION_PROMOTION_LOCK_REF,
+  assertCanonicalReleaseRemote,
+  assertProductionPromotionLease,
+  canonicalReleaseFetchArguments,
+  createProductionPromotionLockIntent,
+  productionPointerPushArgumentsForAuthority,
+  releaseGitEnvironment,
+} from "./release_git_authority.mjs";
+
+export { PRODUCTION_PROMOTION_LOCK_REF } from "./release_git_authority.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const callerSession = `fmarch-production-promotion-${process.pid}`;
+const SUBPROCESS_TIMEOUT_MS = Object.freeze({
+  git: 2 * 60 * 1_000,
+  railway: 5 * 60 * 1_000,
+  node: 60 * 60 * 1_000,
+});
 const stagingTopology = CANONICAL_RELEASE_TOPOLOGY.environments.staging;
 const productionTopology = CANONICAL_RELEASE_TOPOLOGY.environments.production;
 const DEFAULTS = Object.freeze({
@@ -47,6 +66,10 @@ const terminalDeploymentStates = new Set([
   "REMOVED",
   "REMOVING",
 ]);
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
 
 export function parseArguments(argv) {
   const result = { checkOnly: false };
@@ -86,15 +109,19 @@ export function validateRepositoryState({
 
 export function validateCoordinatedServiceSources(config, serviceIds = DEFAULTS, receipt = null) {
   const services = config.services ?? config;
-  for (const [label, serviceId] of [
-    ["migrator", serviceIds.migratorServiceId],
-    ["API", serviceIds.apiServiceId],
-    ["frontend", serviceIds.frontendServiceId],
+  for (const [label, serviceId, repository] of [
+    ["migrator", serviceIds.migratorServiceId, CANONICAL_RELEASE_TOPOLOGY.images.runtime],
+    ["API", serviceIds.apiServiceId, CANONICAL_RELEASE_TOPOLOGY.images.runtime],
+    ["frontend", serviceIds.frontendServiceId, CANONICAL_RELEASE_TOPOLOGY.images.frontend],
   ]) {
     assert.ok(serviceId, `Railway ${label} service id is required`);
     const source = services[serviceId]?.source ?? {};
     assert.equal(source.repo ?? null, null, `Railway ${label} must not retain a racing Git source`);
-    assert.match(source.image ?? "", /@sha256:[0-9a-f]{64}$/u, `Railway ${label} must use a digest-pinned OCI image`);
+    assert.match(
+      source.image ?? "",
+      new RegExp(`^${escapeRegex(repository)}@sha256:[0-9a-f]{64}$`, "u"),
+      `Railway ${label} must use its canonical digest-pinned OCI image`,
+    );
   }
   if (receipt) {
     assert.equal(
@@ -102,28 +129,32 @@ export function validateCoordinatedServiceSources(config, serviceIds = DEFAULTS,
       services[serviceIds.apiServiceId].source.image,
       "migrator and API must use the same runtime image reference",
     );
-    assert.ok(
-      services[serviceIds.apiServiceId].source.image.endsWith(`@${receipt.images.runtime}`),
-      `${receipt.environment} API image does not match the release receipt`,
+    assert.equal(
+      services[serviceIds.apiServiceId].source.image,
+      `${CANONICAL_RELEASE_TOPOLOGY.images.runtime}@${receipt.images.runtime}`,
+      `${receipt.environment} API image does not exactly match the canonical release receipt`,
     );
-    assert.ok(
-      services[serviceIds.frontendServiceId].source.image.endsWith(`@${receipt.images.frontend}`),
-      `${receipt.environment} frontend image does not match the release receipt`,
+    assert.equal(
+      services[serviceIds.frontendServiceId].source.image,
+      `${CANONICAL_RELEASE_TOPOLOGY.images.frontend}@${receipt.images.frontend}`,
+      `${receipt.environment} frontend image does not exactly match the canonical release receipt`,
     );
   }
 }
 
 export function validateProductionSourceCutover(config, serviceIds = DEFAULTS) {
   const services = config.services ?? config;
-  for (const [label, serviceId] of [
-    ["migrator", serviceIds.migratorServiceId],
-    ["API", serviceIds.apiServiceId],
-    ["frontend", serviceIds.frontendServiceId],
+  for (const [label, serviceId, repository] of [
+    ["migrator", serviceIds.migratorServiceId, CANONICAL_RELEASE_TOPOLOGY.images.runtime],
+    ["API", serviceIds.apiServiceId, CANONICAL_RELEASE_TOPOLOGY.images.runtime],
+    ["frontend", serviceIds.frontendServiceId, CANONICAL_RELEASE_TOPOLOGY.images.frontend],
   ]) {
     assert.ok(services[serviceId], `Railway production ${label} service is missing`);
     const source = services[serviceId]?.source ?? {};
-    const coordinated = /^ghcr\.io\/fluffyrabbot\/fmarch-(?:runtime|frontend)@sha256:[0-9a-f]{64}$/u
-      .test(source.image ?? "");
+    const coordinated = new RegExp(
+      `^${escapeRegex(repository)}@sha256:[0-9a-f]{64}$`,
+      "u",
+    ).test(source.image ?? "");
     const detachable = source.repo === "fluffyrabbot/fmarch" && source.image == null;
     const interruptedCutover = source.repo == null && source.image == null;
     assert.equal(
@@ -443,6 +474,26 @@ export function validateHostedVariables({
     productionMigrator,
     productionFrontend,
   });
+  for (const [environment, variables, environmentId] of [
+    ["staging", stagingMigrator, DEFAULTS.stagingEnvironmentId],
+    ["production", productionMigrator, DEFAULTS.productionEnvironmentId],
+  ]) {
+    assert.equal(
+      variables.FMARCH_DATABASE_PROJECT_ID,
+      DEFAULTS.projectId,
+      `${environment} database project identity drifted`,
+    );
+    assert.equal(
+      variables.FMARCH_DATABASE_ENVIRONMENT_ID,
+      environmentId,
+      `${environment} database environment UUID drifted`,
+    );
+    assert.equal(
+      variables.FMARCH_DATABASE_ENVIRONMENT,
+      environment,
+      `${environment} database environment identity drifted`,
+    );
+  }
   for (const [name, variables, required] of [
     [
       "staging API",
@@ -939,26 +990,31 @@ export function railwayArguments(projectId, args) {
 }
 
 export function productionPointerPushArguments(commit, expectedProductionCommit) {
-  assert.match(commit ?? "", /^[0-9a-f]{40}$/u, "production commit must be a full Git SHA");
-  assert.match(
-    expectedProductionCommit ?? "",
-    /^[0-9a-f]{40}$/u,
-    "expected production pointer must be a full Git SHA",
+  return productionPointerPushArgumentsForAuthority(commit, expectedProductionCommit);
+}
+
+export function productionReceiptPathForLease(commit, promotionLockToken, root = repoRoot) {
+  assertFullCommit(commit);
+  assertFullCommit(promotionLockToken, "production promotion lock token");
+  return path.resolve(
+    root,
+    "target",
+    "releases",
+    "production",
+    `${commit}.${promotionLockToken}.json`,
   );
-  return [
-    `--force-with-lease=refs/heads/production:${expectedProductionCommit}`,
-    "origin",
-    `${commit}:refs/heads/production`,
-  ];
 }
 
 export async function finalizeProductionPointer({
   commit,
   expectedProductionCommit,
   revalidate,
+  revalidateEvidence = async () => {},
+  assertLease = async () => {},
   refreshProductionPointer,
   pushPointer,
 }) {
+  await revalidateEvidence();
   await revalidate();
   const currentProductionCommit = await refreshProductionPointer();
   assert.equal(
@@ -966,10 +1022,9 @@ export async function finalizeProductionPointer({
     expectedProductionCommit,
     "production pointer moved after promotion preflight",
   );
+  await assertLease();
   await pushPointer(productionPointerPushArguments(commit, expectedProductionCommit));
 }
-
-export const PRODUCTION_PROMOTION_LOCK_REF = "refs/heads/release-locks/production";
 
 export async function withProductionPromotionLock({ acquire, release }, action) {
   const token = await acquire();
@@ -989,8 +1044,34 @@ export async function withProductionPromotionLock({ acquire, release }, action) 
   }
 }
 
+export function reconcilePromotionLockMutation({ operation, token, mutate, inspect }) {
+  assert.ok(["acquire", "release"].includes(operation), "unknown promotion lock mutation");
+  let mutationError = null;
+  try {
+    mutate();
+  } catch (error) {
+    mutationError = error;
+  }
+  const observed = inspect();
+  const expected = operation === "acquire" ? token : null;
+  if (observed === expected) return expected;
+  if (mutationError) throw mutationError;
+  assert.equal(
+    observed,
+    expected,
+    `production promotion lock ${operation} did not reach its exact state`,
+  );
+  return expected;
+}
+
 function remotePromotionLock() {
-  const output = text("git", ["ls-remote", "--refs", "origin", PRODUCTION_PROMOTION_LOCK_REF]);
+  assertCanonicalReleaseRemote();
+  const output = text("git", [
+    "ls-remote",
+    "--refs",
+    CANONICAL_RELEASE_REMOTE_URL,
+    PRODUCTION_PROMOTION_LOCK_REF,
+  ]);
   if (!output) return null;
   const [commit, ref, ...extra] = output.split(/\s+/u);
   assert.equal(ref, PRODUCTION_PROMOTION_LOCK_REF, "production promotion lock ref drifted");
@@ -999,7 +1080,13 @@ function remotePromotionLock() {
   return commit;
 }
 
-function acquireProductionPromotionLock(commit) {
+function acquireProductionPromotionLock({
+  commit,
+  expectedProductionCommit,
+  fleetProof,
+  stagingReceipt,
+}) {
+  assertCanonicalReleaseRemote();
   const existing = remotePromotionLock();
   assert.equal(
     existing,
@@ -1007,12 +1094,15 @@ function acquireProductionPromotionLock(commit) {
     `production promotion is already locked by ${existing}; recover that exact operation before retrying`,
   );
   const identity = `fmarch-production-promotion-${randomUUID()}`;
-  const message = JSON.stringify({
-    kind: "fmarch-production-promotion-lock",
+  const message = JSON.stringify(createProductionPromotionLockIntent({
     identity,
-    release_commit: commit,
-    created_at: new Date().toISOString(),
-  });
+    releaseCommit: commit,
+    expectedProductionCommit,
+    fleetJobId: fleetProof.job_id,
+    fleetReceiptSha256: fleetProof.receipt_sha256,
+    stagingReceiptSha256: stagingReceipt.receipt_sha256,
+    schemaEpochReset: stagingReceipt.schema_epoch_reset?.epoch ?? null,
+  }));
   const tokenResult = spawnSync(
     "git",
     ["commit-tree", `${commit}^{tree}`, "-p", commit],
@@ -1020,8 +1110,9 @@ function acquireProductionPromotionLock(commit) {
       cwd: repoRoot,
       encoding: "utf8",
       input: `${message}\n`,
+      timeout: SUBPROCESS_TIMEOUT_MS.git,
       env: {
-        ...process.env,
+        ...releaseGitEnvironment(),
         GIT_AUTHOR_NAME: "fmarch release coordinator",
         GIT_AUTHOR_EMAIL: "release@fmarch.invalid",
         GIT_COMMITTER_NAME: "fmarch release coordinator",
@@ -1032,32 +1123,41 @@ function acquireProductionPromotionLock(commit) {
   assert.equal(tokenResult.status, 0, "could not create the production promotion lock token");
   const token = String(tokenResult.stdout).trim();
   assert.match(token, /^[0-9a-f]{40}$/u, "production promotion lock token is invalid");
-  run(
-    "git",
-    [
-      "push",
-      `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:`,
-      "origin",
-      `${token}:${PRODUCTION_PROMOTION_LOCK_REF}`,
-    ],
-    { stdio: "inherit" },
-  );
-  assert.equal(remotePromotionLock(), token, "production promotion lock was not published exactly");
+  reconcilePromotionLockMutation({
+    operation: "acquire",
+    token,
+    mutate: () => run(
+      "git",
+      [
+        "push",
+        `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:`,
+        CANONICAL_RELEASE_REMOTE_URL,
+        `${token}:${PRODUCTION_PROMOTION_LOCK_REF}`,
+      ],
+      { stdio: "inherit" },
+    ),
+    inspect: remotePromotionLock,
+  });
   return token;
 }
 
 function releaseProductionPromotionLock(token) {
-  run(
-    "git",
-    [
-      "push",
-      `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:${token}`,
-      "origin",
-      `:${PRODUCTION_PROMOTION_LOCK_REF}`,
-    ],
-    { stdio: "inherit" },
-  );
-  assert.equal(remotePromotionLock(), null, "production promotion lock was not released");
+  assertCanonicalReleaseRemote();
+  reconcilePromotionLockMutation({
+    operation: "release",
+    token,
+    mutate: () => run(
+      "git",
+      [
+        "push",
+        `--force-with-lease=${PRODUCTION_PROMOTION_LOCK_REF}:${token}`,
+        CANONICAL_RELEASE_REMOTE_URL,
+        `:${PRODUCTION_PROMOTION_LOCK_REF}`,
+      ],
+      { stdio: "inherit" },
+    ),
+    inspect: remotePromotionLock,
+  });
 }
 
 export function validateReusableProductionReceipt(
@@ -1129,15 +1229,89 @@ async function revalidateCanonicalProduction(config, receipt) {
   );
 }
 
-async function finalizeCanonicalProductionPointer(config, receipt, commit, expectedProductionCommit) {
+function promotionLeaseExpectation({
+  token,
+  commit,
+  expectedProductionCommit,
+  fleetProof,
+  stagingReceipt,
+}) {
+  return {
+    token,
+    releaseCommit: commit,
+    expectedProductionCommit,
+    fleetJobId: fleetProof.job_id,
+    fleetReceiptSha256: fleetProof.receipt_sha256,
+    stagingReceiptSha256: stagingReceipt.receipt_sha256,
+    schemaEpochReset: stagingReceipt.schema_epoch_reset?.epoch ?? null,
+  };
+}
+
+export async function revalidatePromotionEvidence({
+  stagingReceiptPath,
+  stagingReceipt,
+  productionReceipt,
+  fleetReceiptPath,
+  fleetPublicKeyPath,
+  expectedFleetJob,
+  commit,
+}) {
+  const currentStagingReceipt = assertFreshStagingReleaseReceipt(
+    JSON.parse(readFileSync(stagingReceiptPath, "utf8")),
+  );
+  assert.equal(
+    currentStagingReceipt.receipt_sha256,
+    stagingReceipt.receipt_sha256,
+    "staging receipt changed during production promotion",
+  );
+  const currentFleetProof = await loadFleetReleaseProof({
+    repoRoot,
+    commit,
+    receiptPath: fleetReceiptPath,
+    publicKeyPath: fleetPublicKeyPath,
+    expectedJobId: expectedFleetJob,
+  });
+  assert.deepEqual(currentFleetProof, stagingReceipt.fleet_proof, "fleet proof changed during promotion");
+  assertFreshReleaseEvidence(
+    productionReceipt.attempt.created_at,
+    "production release intent time",
+  );
+  assertFreshReleaseEvidence(
+    productionReceipt.generated_at,
+    "production release generation time",
+  );
+}
+
+async function finalizeCanonicalProductionPointer(
+  config,
+  receipt,
+  commit,
+  expectedProductionCommit,
+  authority,
+) {
   await finalizeProductionPointer({
     commit,
     expectedProductionCommit,
     revalidate: () => revalidateCanonicalProduction(config, receipt),
     refreshProductionPointer: () => {
-      run("git", ["fetch", "--quiet", "origin", "production"]);
+      assertCanonicalReleaseRemote();
+      run("git", canonicalReleaseFetchArguments(["production"]));
       return text("git", ["rev-parse", "origin/production"]);
     },
+    revalidateEvidence: () => revalidatePromotionEvidence({
+      ...authority,
+      productionReceipt: receipt,
+      commit,
+    }),
+    assertLease: () => assertProductionPromotionLease(
+      promotionLeaseExpectation({
+        token: authority.promotionLockToken,
+        commit,
+        expectedProductionCommit,
+        fleetProof: authority.fleetProof,
+        stagingReceipt: authority.stagingReceipt,
+      }),
+    ),
     pushPointer: (arguments_) => run("git", ["push", ...arguments_], { stdio: "inherit" }),
   });
 }
@@ -1148,7 +1322,8 @@ async function main() {
   const config = runtimeConfig();
   validateSecretCustodyPolicy(secretCustodyPolicy());
 
-  run("git", ["fetch", "--quiet", "origin", "main", "production"]);
+  assertCanonicalReleaseRemote();
+  run("git", canonicalReleaseFetchArguments(["main", "production"]));
   const head = text("git", ["rev-parse", "HEAD"]);
   const originProduction = text("git", ["rev-parse", "origin/production"]);
   const stagingReceiptPath = path.resolve(
@@ -1167,7 +1342,11 @@ async function main() {
   assert.equal(stagingReceipt.environment, "staging");
   assert.equal(stagingReceipt.commit, head, "staging receipt does not match the promoted commit");
   const productionIsAncestor =
-    spawnSync("git", ["merge-base", "--is-ancestor", "origin/production", head]).status === 0;
+    spawnSync("git", ["merge-base", "--is-ancestor", "origin/production", head], {
+      cwd: repoRoot,
+      env: releaseGitEnvironment(),
+      timeout: SUBPROCESS_TIMEOUT_MS.git,
+    }).status === 0;
   validateRepositoryState({
     status: text("git", ["status", "--porcelain"]),
     branch: text("git", ["branch", "--show-current"]),
@@ -1272,13 +1451,34 @@ async function main() {
 
   await withProductionPromotionLock(
     {
-      acquire: () => acquireProductionPromotionLock(head),
+      acquire: () => acquireProductionPromotionLock({
+        commit: head,
+        expectedProductionCommit: originProduction,
+        fleetProof,
+        stagingReceipt,
+      }),
       release: (token) => releaseProductionPromotionLock(token),
     },
-    async () => {
-      const productionReceiptPath = path.resolve(
-        process.env.FMARCH_PRODUCTION_RELEASE_RECEIPT ??
-          path.join(repoRoot, "target", "releases", "production", `${head}.json`),
+    async (promotionLockToken) => {
+      const promotionAuthority = {
+        promotionLockToken,
+        stagingReceiptPath,
+        stagingReceipt,
+        fleetProof,
+        fleetReceiptPath,
+        fleetPublicKeyPath,
+        expectedFleetJob,
+      };
+      assertProductionPromotionLease(promotionLeaseExpectation({
+        token: promotionLockToken,
+        commit: head,
+        expectedProductionCommit: originProduction,
+        fleetProof,
+        stagingReceipt,
+      }));
+      const productionReceiptPath = productionReceiptPathForLease(
+        head,
+        promotionLockToken,
       );
       const existingProductionReceipt = optionalReceipt(productionReceiptPath);
       if (existingProductionReceipt) {
@@ -1288,11 +1488,17 @@ async function main() {
           fleetProof,
           releaseReadiness,
         });
+        assert.equal(
+          reusable.attempt.promotion_lease_commit,
+          promotionLockToken,
+          "existing production receipt was authorized by a different promotion lease",
+        );
         await finalizeCanonicalProductionPointer(
           config,
           reusable,
           head,
           originProduction,
+          promotionAuthority,
         );
         console.log(`production promotion resumed from durable receipt for ${head}`);
         return;
@@ -1312,6 +1518,8 @@ async function main() {
         fleetPublicKeyPath,
         "--fleet-job",
         expectedFleetJob,
+        "--production-lock",
+        promotionLockToken,
         "--output",
         productionReceiptPath,
       ];
@@ -1329,11 +1537,17 @@ async function main() {
         JSON.parse(readFileSync(productionReceiptPath, "utf8")),
         { commit: head, stagingReceipt, fleetProof, releaseReadiness },
       );
+      assert.equal(
+        productionReceipt.attempt.promotion_lease_commit,
+        promotionLockToken,
+        "production receipt was not authorized by the held promotion lease",
+      );
       await finalizeCanonicalProductionPointer(
         config,
         productionReceipt,
         head,
         originProduction,
+        promotionAuthority,
       );
       console.log(`production promotion completed for ${head}`);
     },
@@ -1462,8 +1676,14 @@ async function waitForProduction(config, commit) {
 }
 
 async function health(url, predicate, label) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const expected = new URL(url);
+  const response = await fetch(expected, {
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  });
   assert.equal(response.ok, true, `${label} health returned ${response.status}`);
+  assert.equal(response.url, expected.href, `${label} health response URL drifted`);
+  assert.equal(new URL(response.url).origin, expected.origin, `${label} health origin drifted`);
   const body = await response.json();
   assert.equal(predicate(body), true, `${label} health payload was not ready`);
   return body;
@@ -1514,17 +1734,35 @@ async function railwayJson(config, args) {
     encoding: "utf8",
     env: scrubPrivilegedDatabaseEnvironment(process.env),
     stdio: ["ignore", "pipe", "pipe"],
+    timeout: SUBPROCESS_TIMEOUT_MS.railway,
   });
   return JSON.parse(output);
 }
 
 function text(command, args) {
-  return execFileSync(command, args, { cwd: repoRoot, encoding: "utf8" }).trim();
+  return execFileSync(command, args, {
+    cwd: repoRoot,
+    env: path.basename(command) === "git" ? releaseGitEnvironment() : process.env,
+    encoding: "utf8",
+    timeout: SUBPROCESS_TIMEOUT_MS[command] ?? 2 * 60 * 1_000,
+  }).trim();
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: repoRoot, ...options, encoding: "utf8" });
-  assert.equal(result.status, 0, `${command} ${args.join(" ")} failed`);
+  const timeout = options.timeout ?? SUBPROCESS_TIMEOUT_MS[path.basename(command)] ?? 2 * 60 * 1_000;
+  const baseEnvironment = options.env ?? process.env;
+  const result = spawnSync(command, args, {
+    cwd: repoRoot,
+    ...options,
+    env: path.basename(command) === "git" ? releaseGitEnvironment(baseEnvironment) : baseEnvironment,
+    encoding: "utf8",
+    timeout,
+  });
+  assert.equal(
+    result.status,
+    0,
+    `${command} ${args.join(" ")} failed${result.error?.code === "ETIMEDOUT" ? ` after ${timeout}ms` : ""}`,
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

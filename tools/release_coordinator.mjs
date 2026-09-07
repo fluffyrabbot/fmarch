@@ -2,7 +2,8 @@ import {runHostedAcceptance} from './hosted_acceptance.mjs';
 import {prepareAuthenticatedAcceptance} from './hosted_authenticated_acceptance.mjs';
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -29,9 +30,21 @@ import {
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
 import { validateRuntimeImage } from "./exact_image_content_smoke.mjs";
+import {
+  assertCanonicalReleaseRemote,
+  assertProductionPromotionLease,
+  canonicalReleaseFetchArguments,
+  releaseGitEnvironment,
+} from "./release_git_authority.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const callerSession = `fmarch-release-${process.pid}`;
+const SUBPROCESS_TIMEOUT_MS = Object.freeze({
+  git: 2 * 60 * 1_000,
+  railway: 5 * 60 * 1_000,
+  podman: 45 * 60 * 1_000,
+  node: 5 * 60 * 1_000,
+});
 
 export function parseArguments(argv) {
   const result = { environment: "staging", check: false };
@@ -42,9 +55,8 @@ export function parseArguments(argv) {
     else if (argument === "--fleet-receipt") result.fleetReceipt = requiredValue(argv, ++index, argument);
     else if (argument === "--fleet-public-key") result.fleetPublicKey = requiredValue(argv, ++index, argument);
     else if (argument === "--fleet-job") result.fleetJob = requiredValue(argv, ++index, argument);
-    else if (argument === "--runtime-digest") result.runtimeDigest = requiredValue(argv, ++index, argument);
-    else if (argument === "--frontend-digest") result.frontendDigest = requiredValue(argv, ++index, argument);
     else if (argument === "--reuse-staging-receipt") result.reuseStagingReceipt = requiredValue(argv, ++index, argument);
+    else if (argument === "--production-lock") result.productionLock = requiredValue(argv, ++index, argument);
     else if (argument === "--schema-epoch-reset") result.schemaEpochReset = Number.parseInt(requiredValue(argv, ++index, argument), 10);
     else if (argument === "--output") result.output = requiredValue(argv, ++index, argument);
     else if (argument === "--check") result.check = true;
@@ -107,26 +119,31 @@ export function runtimeConfig(environment, env = process.env) {
 }
 
 function commandText(command, args, options = {}) {
+  const baseEnvironment = options.env ?? process.env;
   return execFileSync(command, args, {
     cwd: repoRoot,
-    env: options.env ?? process.env,
+    env: path.basename(command) === "git" ? releaseGitEnvironment(baseEnvironment) : baseEnvironment,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 32 * 1024 * 1024,
+    timeout: options.timeout ?? SUBPROCESS_TIMEOUT_MS[path.basename(command)] ?? 2 * 60 * 1_000,
   }).trim();
 }
 
 function run(command, args, options = {}) {
+  const baseEnvironment = options.env ?? process.env;
   const result = spawnSync(command, args, {
     cwd: repoRoot,
-    env: options.env ?? process.env,
+    env: path.basename(command) === "git" ? releaseGitEnvironment(baseEnvironment) : baseEnvironment,
     encoding: "utf8",
     stdio: options.stdio ?? "inherit",
     maxBuffer: 32 * 1024 * 1024,
+    timeout: options.timeout ?? SUBPROCESS_TIMEOUT_MS[path.basename(command)] ?? 2 * 60 * 1_000,
   });
   if (result.status !== 0) {
     const diagnostic = String(result.stderr || result.stdout || "").trim().slice(-4_000);
-    throw new Error(`${path.basename(command)} ${args[0] ?? ""} failed${diagnostic ? `: ${diagnostic}` : ""}`);
+    const timedOut = result.error?.code === "ETIMEDOUT";
+    throw new Error(`${path.basename(command)} ${args[0] ?? ""} failed${timedOut ? " after its bounded timeout" : ""}${diagnostic ? `: ${diagnostic}` : ""}`);
   }
   return String(result.stdout ?? "").trim();
 }
@@ -149,11 +166,12 @@ function scrubHostedEnvironment(env) {
 }
 
 function validateRepository(commit, environment) {
-  run("git", ["fetch", "--quiet", "origin", "main", "production"]);
+  assertCanonicalReleaseRemote();
+  run("git", canonicalReleaseFetchArguments(["main", "production"]));
   const head = commandText("git", ["rev-parse", "HEAD"]);
   const originMain = commandText("git", ["rev-parse", "origin/main"]);
   const originProduction = commandText("git", ["rev-parse", "origin/production"]);
-  return validateReleaseRepository({
+  validateReleaseRepository({
     status: commandText("git", ["status", "--porcelain"]),
     branch: commandText("git", ["branch", "--show-current"]),
     commit,
@@ -161,10 +179,19 @@ function validateRepository(commit, environment) {
     originMain,
     originProduction,
     productionIsAncestor:
-      spawnSync("git", ["merge-base", "--is-ancestor", originProduction, commit], { cwd: repoRoot }).status === 0,
-    pushed: spawnSync("git", ["merge-base", "--is-ancestor", commit, "origin/main"], { cwd: repoRoot }).status === 0,
+      spawnSync("git", ["merge-base", "--is-ancestor", originProduction, commit], {
+        cwd: repoRoot,
+        env: releaseGitEnvironment(),
+        timeout: SUBPROCESS_TIMEOUT_MS.git,
+      }).status === 0,
+    pushed: spawnSync("git", ["merge-base", "--is-ancestor", commit, "origin/main"], {
+      cwd: repoRoot,
+      env: releaseGitEnvironment(),
+      timeout: SUBPROCESS_TIMEOUT_MS.git,
+    }).status === 0,
     environment,
   });
+  return { originMain, originProduction };
 }
 
 function inspectLocalImage(reference) {
@@ -177,58 +204,111 @@ function inspectLocalImage(reference) {
   };
 }
 
-function pullExistingImage(tag, commit) {
-  const pull = spawnSync("podman", ["pull", "--platform", "linux/amd64", tag], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (pull.status !== 0) {
-    const diagnostic = String(pull.stderr || pull.stdout);
-    if (/manifest unknown|name unknown|not found|404/iu.test(diagnostic)) return null;
-    throw new Error(`cannot inspect existing immutable image ${tag}: ${diagnostic.trim().slice(-2_000)}`);
-  }
-  const image = inspectLocalImage(tag);
-  assert.equal(image.revision, commit, `${tag} exists but its revision label does not match`);
-  assertImageDigest(image.digest, `${tag} digest`);
-  return image.digest;
+async function verifyPublishedImage(repository, digest, commit, operations = {}) {
+  assertImageDigest(digest, `${repository} digest`);
+  const immutableReference = `${repository}@${digest}`;
+  const pull = operations.pull ?? ((reference) => run(
+    "podman",
+    ["pull", "--platform", "linux/amd64", reference],
+  ));
+  const inspect = operations.inspect ?? inspectLocalImage;
+  await pull(immutableReference);
+  const image = await inspect(immutableReference);
+  assert.equal(image.revision, commit, `${immutableReference} revision label does not match`);
+  assert.equal(image.digest, digest, `${immutableReference} resolved to an unexpected digest`);
+  return immutableReference;
 }
 
-async function buildOrReuseImage({ repository, dockerfile, commit }) {
-  const tag = `${repository}:${commit}`;
-  const existing = pullExistingImage(tag, commit);
-  if (existing) return existing;
-  run("podman", [
+export async function publishFreshImage(
+  { repository, dockerfile, commit, attemptIdentity, contextPath },
+  operations = {},
+) {
+  assertFullCommit(commit);
+  assert.match(attemptIdentity ?? "", /^[0-9a-f]{24}$/u, "image attempt identity is invalid");
+  assert.equal(path.isAbsolute(contextPath), true, "image build context must be an absolute snapshot");
+  const tag = `${repository}:release-${commit}-${attemptIdentity}`;
+  const build = operations.build ?? ((reference) => run("podman", [
     "build",
     "--platform",
     "linux/amd64",
     "--build-arg",
     `FMARCH_RELEASE_COMMIT=${commit}`,
     "--file",
-    dockerfile,
+    path.join(contextPath, dockerfile),
     "--tag",
-    tag,
-    ".",
-  ]);
-  const temporary = await mkdtemp(path.join(os.tmpdir(), "fmarch-image-push-"));
+    reference,
+    contextPath,
+  ]));
+  const push = operations.push ?? (async (reference) => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), "fmarch-image-push-"));
+    try {
+      const digestFile = path.join(temporary, "digest");
+      run("podman", ["push", "--digestfile", digestFile, reference]);
+      return (await readFile(digestFile, "utf8")).trim();
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+  const pull = operations.pull ?? ((reference) => run(
+    "podman",
+    ["pull", "--platform", "linux/amd64", reference],
+  ));
+  const inspect = operations.inspect ?? inspectLocalImage;
+
+  await build(tag);
+  const digest = assertImageDigest(await push(tag), `${repository} pushed digest`);
+  await verifyPublishedImage(repository, digest, commit, { pull, inspect });
+  return digest;
+}
+
+function releaseAttemptPath(environment, commit, promotionLeaseCommit = null) {
+  return path.join(
+    repoRoot,
+    "target",
+    "releases",
+    environment,
+    environment === "production"
+      ? `${commit}.${promotionLeaseCommit}.attempt.json`
+      : `${commit}.attempt.json`,
+  );
+}
+
+async function optionalJson(filePath) {
   try {
-    const digestFile = path.join(temporary, "digest");
-    run("podman", ["push", "--digestfile", digestFile, tag]);
-    const digest = (await readFile(digestFile, "utf8")).trim();
-    assertImageDigest(digest, `${repository} pushed digest`);
-    const pulled = pullExistingImage(tag, commit);
-    assert.equal(pulled, digest, `${repository} registry digest changed after push`);
-    return digest;
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+export async function withImmutableReleaseBuildContext(commit, action) {
+  assertFullCommit(commit);
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "fmarch-release-context-"));
+  const archivePath = path.join(temporary, "source.tar");
+  const contextPath = path.join(temporary, "context");
+  try {
+    await mkdir(contextPath);
+    run("git", ["archive", "--format=tar", "--output", archivePath, commit]);
+    run("tar", ["-xf", archivePath, "-C", contextPath], { timeout: 5 * 60 * 1_000 });
+    return await action(contextPath);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
 }
 
-async function resolveArtifacts(args, config, commit, fleetProof) {
+async function resolveArtifacts(
+  args,
+  config,
+  commit,
+  fleetProof,
+  { reusableStagingReceipt = null } = {},
+) {
   if (args.reuseStagingReceipt) {
     assert.equal(args.environment, "production", "only production may reuse a staging receipt");
     const receipt = assertFreshStagingReleaseReceipt(
-      JSON.parse(await readFile(path.resolve(args.reuseStagingReceipt), "utf8")),
+      reusableStagingReceipt ??
+        JSON.parse(await readFile(path.resolve(args.reuseStagingReceipt), "utf8")),
     );
     assert.equal(receipt.environment, "staging", "production can reuse only a staging receipt");
     assert.equal(receipt.commit, commit, "staging receipt commit does not match production release");
@@ -244,25 +324,54 @@ async function resolveArtifacts(args, config, commit, fleetProof) {
         receipt.runtime_validation,
         receipt.images.runtime,
       ),
-    };
-  }
-  if (args.runtimeDigest || args.frontendDigest) {
-    assert.equal(
-      args.environment,
-      "staging",
-      "production must reuse the staging-proven runtime attestation",
-    );
-    assert.ok(args.runtimeDigest && args.frontendDigest, "both image digests must be supplied together");
-    return {
-      runtimeDigest: assertImageDigest(args.runtimeDigest, "runtime digest"),
-      frontendDigest: assertImageDigest(args.frontendDigest, "frontend digest"),
+      stagingReceipt: receipt,
     };
   }
   assert.equal(args.environment, "staging", "production must reuse exact staging image digests");
-  const [runtimeDigest, frontendDigest] = await Promise.all([
-    buildOrReuseImage({ repository: config.runtimeImage, dockerfile: "Dockerfile", commit }),
-    buildOrReuseImage({ repository: config.frontendImage, dockerfile: "Dockerfile.frontend", commit }),
-  ]);
+  const priorAttempt = await optionalJson(releaseAttemptPath("staging", commit));
+  if (priorAttempt) {
+    const attempt = bindReleaseAttempt({
+      environment: "staging",
+      commit,
+      runtimeDigest: priorAttempt.images?.runtime,
+      frontendDigest: priorAttempt.images?.frontend,
+      fleetProof,
+      topology: config.topology,
+      existing: priorAttempt,
+    });
+    assertFreshReleaseEvidence(attempt.created_at, "staging release intent time");
+    await Promise.all([
+      verifyPublishedImage(config.runtimeImage, attempt.images.runtime, commit),
+      verifyPublishedImage(config.frontendImage, attempt.images.frontend, commit),
+    ]);
+    return {
+      runtimeDigest: attempt.images.runtime,
+      frontendDigest: attempt.images.frontend,
+    };
+  }
+  const attemptIdentity = createHash("sha256")
+    .update(`${fleetProof.job_id}:${fleetProof.receipt_sha256}:${randomUUID()}`)
+    .digest("hex")
+    .slice(0, 24);
+  const [runtimeDigest, frontendDigest] = await withImmutableReleaseBuildContext(
+    commit,
+    async (contextPath) => Promise.all([
+      publishFreshImage({
+        repository: config.runtimeImage,
+        dockerfile: "Dockerfile",
+        commit,
+        attemptIdentity,
+        contextPath,
+      }),
+      publishFreshImage({
+        repository: config.frontendImage,
+        dockerfile: "Dockerfile.frontend",
+        commit,
+        attemptIdentity,
+        contextPath,
+      }),
+    ]),
+  );
   return { runtimeDigest, frontendDigest };
 }
 
@@ -290,13 +399,10 @@ async function bindAttempt(
   frontendDigest,
   fleetProof,
   topology,
+  promotionLeaseCommit = null,
 ) {
   const attemptPath = path.join(
-    repoRoot,
-    "target",
-    "releases",
-    environment,
-    `${commit}.attempt.json`,
+    releaseAttemptPath(environment, commit, promotionLeaseCommit),
   );
   let existing = null;
   try {
@@ -311,6 +417,7 @@ async function bindAttempt(
     frontendDigest,
     fleetProof,
     topology,
+    promotionLeaseCommit,
     existing,
   });
   assertFreshReleaseEvidence(attempt.created_at, `${environment} release intent time`);
@@ -348,6 +455,12 @@ function railwayApi(query, variables) {
   return response.data;
 }
 
+function assertProductionMutationAuthority(config) {
+  if (config.environment !== "production") return;
+  assert.ok(config.productionLease, "production Railway mutation requires a promotion lease");
+  assertProductionPromotionLease(config.productionLease);
+}
+
 function latestDeployment(config, serviceId) {
   return railwayJson(config, ["deployment", "list", "--service", serviceId, "--limit", "1"])[0] ?? null;
 }
@@ -372,6 +485,7 @@ async function detachGitSource(config, serviceId, imageReference) {
   let service = railwayService(config, serviceId);
   let action = serviceSourceCutoverAction(service.source, imageReference);
   if (action === "disconnect") {
+    assertProductionMutationAuthority(config);
     railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]);
     service = railwayService(config, serviceId);
     assert.equal(service.source, null, `Railway service ${serviceId} retained its Git source`);
@@ -382,11 +496,21 @@ async function detachGitSource(config, serviceId, imageReference) {
 
 async function deployConfiguredImage(
   config,
-  { serviceId, image, digest, startCommand, label, variables = null, deploymentPolicy = {} },
+  {
+    serviceId,
+    image,
+    digest,
+    startCommand,
+    label,
+    variables = null,
+    deploymentPolicy = {},
+    allowTerminalFailure = false,
+  },
 ) {
   const imageReference = `${image}@${digest}`;
   await detachGitSource(config, serviceId, imageReference);
   if (variables && Object.keys(variables).length > 0) {
+    assertProductionMutationAuthority(config);
     const variablesData = railwayApi(
       "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
       {
@@ -403,6 +527,7 @@ async function deployConfiguredImage(
     assert.equal(variablesData.variableCollectionUpsert, true, `${label} variables were not updated`);
   }
   const previousId = latestDeployment(config, serviceId)?.id ?? null;
+  assertProductionMutationAuthority(config);
   const updateData = railwayApi(
     "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
     {
@@ -417,12 +542,15 @@ async function deployConfiguredImage(
     },
   );
   assert.equal(updateData.serviceInstanceUpdate, true, `${label} service configuration was not updated`);
+  assertProductionMutationAuthority(config);
   const deployData = railwayApi(
     "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
     { serviceId, environmentId: config.environmentId },
   );
   assert.equal(deployData.serviceInstanceDeploy, true, `${label} deployment was not started`);
-  return await waitForNewDeployment(config, serviceId, previousId, digest, label);
+  return await waitForNewDeployment(config, serviceId, previousId, digest, label, {
+    allowTerminalFailure,
+  });
 }
 
 export function canonicalDeploymentPolicy(kind) {
@@ -471,6 +599,7 @@ export async function waitForNewDeployment(
     sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
     timeoutMilliseconds = 15 * 60 * 1_000,
     pollMilliseconds = 10_000,
+    allowTerminalFailure = false,
   } = {},
 ) {
   const deadline = now() + timeoutMilliseconds;
@@ -479,6 +608,10 @@ export async function waitForNewDeployment(
     if (deployment && deployment.id !== previousId) {
       const digest = deploymentImageDigest(deployment);
       if (TERMINAL_DEPLOYMENT_STATES.has(deployment.status)) {
+        if (allowTerminalFailure && ["FAILED", "CRASHED"].includes(deployment.status)) {
+          assert.equal(digest, expectedDigest, `${label} failed from an unexpected digest`);
+          return deployment;
+        }
         validateDeploymentArtifact(deployment, expectedDigest, label);
         return deployment;
       }
@@ -491,13 +624,86 @@ export async function waitForNewDeployment(
   throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
 }
 
-async function deployImage(config, serviceId, image, digest, startCommand, label, kind) {
+async function waitForOneShotTerminal(
+  config,
+  serviceId,
+  previousId,
+  expectedDigest,
+  label,
+  {
+    load = () => latestDeployment(config, serviceId),
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    timeoutMilliseconds = 15 * 60 * 1_000,
+    pollMilliseconds = 10_000,
+  } = {},
+) {
+  const deadline = now() + timeoutMilliseconds;
+  while (now() < deadline) {
+    const deployment = await load();
+    if (deployment && deployment.id !== previousId) {
+      const actualDigest = deploymentImageDigest(deployment);
+      if (actualDigest) {
+        assert.equal(actualDigest, expectedDigest, `${label} started from an unexpected digest`);
+      }
+      if (TERMINAL_DEPLOYMENT_STATES.has(deployment.status)) return deployment;
+    }
+    await sleep(pollMilliseconds);
+  }
+  throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
+}
+
+export async function recoverOneShotDeployment({
+  previousDeploymentId,
+  currentDeployment,
+  awaitTerminal,
+  readCompletion,
+  redeploy,
+  validateCandidate = () => {},
+  label,
+}) {
+  if (!currentDeployment) {
+    assert.equal(previousDeploymentId, null, `${label} recovery found no Railway deployment`);
+  }
+  let candidate = currentDeployment ?? { id: null, status: "BASELINE" };
+  if (candidate.id === previousDeploymentId) {
+    candidate = await redeploy();
+  } else if (!TERMINAL_DEPLOYMENT_STATES.has(candidate.status)) {
+    candidate = await awaitTerminal();
+  }
+  validateCandidate(candidate);
+
+  if (candidate.status === "SUCCESS") {
+    const completion = await readCompletion(candidate, { allowMissing: true });
+    if (completion) return { deployment: candidate, completion, recovered: false };
+  } else if (!["FAILED", "CRASHED"].includes(candidate.status)) {
+    throw new Error(`${label} stopped in non-retryable state ${candidate.status}`);
+  }
+
+  const recovered = await redeploy();
+  validateCandidate(recovered);
+  assert.equal(recovered.status, "SUCCESS", `${label} recovery deployment is ${recovered.status}`);
+  const completion = await readCompletion(recovered, { allowMissing: false });
+  assert.ok(completion, `${label} recovery emitted no completion evidence`);
+  return { deployment: recovered, completion, recovered: true };
+}
+
+function databaseIdentityVariables(config) {
+  return {
+    FMARCH_DATABASE_ENVIRONMENT: config.environment,
+    FMARCH_DATABASE_PROJECT_ID: config.projectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: config.environmentId,
+  };
+}
+
+async function deployImage(config, serviceId, image, digest, startCommand, label, kind, variables = null) {
   return await deployConfiguredImage(config, {
     serviceId,
     image,
     digest,
     startCommand,
     label,
+    variables,
     deploymentPolicy: canonicalDeploymentPolicy(kind),
   });
 }
@@ -606,17 +812,33 @@ export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
   assert.equal(audit.epoch, epoch, "schema epoch reset audit epoch drifted");
   assert.equal(audit.release_commit, commit, "schema epoch reset audit commit drifted");
   assert.equal(audit.execute, false, "pre-reset audit must not mutate the database");
-  for (const field of ["platform_principal", "member_profile", "profile_mute"]) {
+  assert.ok(
+    audit.counts?.application_tables &&
+      typeof audit.counts.application_tables === "object" &&
+      !Array.isArray(audit.counts.application_tables) &&
+      Object.keys(audit.counts.application_tables).length > 0,
+    "schema epoch reset application inventory is empty or invalid",
+  );
+  for (const [table, count] of Object.entries(audit.counts.application_tables)) {
     assert.equal(
-      Number(audit.counts?.[field]),
+      Number(count),
       0,
-      `schema epoch reset refuses non-greenfield ${field} state`,
+      `schema epoch reset refuses non-greenfield ${table} state`,
     );
   }
+  assert.ok(
+    Number.isSafeInteger(Number(audit.counts.sqlx_migrations)) &&
+      Number(audit.counts.sqlx_migrations) >= 0,
+    "schema epoch reset SQLx inventory is invalid",
+  );
+  const inventorySha256 = createHash("sha256")
+    .update(JSON.stringify(audit.counts))
+    .digest("hex");
+  assert.equal(audit.inventory_sha256, inventorySha256, "schema epoch reset inventory digest drifted");
   return audit;
 }
 
-function epochResetOperation(config, digest, commit, epoch) {
+function epochResetOperation(config, digest, commit, epoch, auditEvidence) {
   const base = {
     version: 1,
     kind: "fmarch-schema-epoch-reset-operation",
@@ -625,6 +847,8 @@ function epochResetOperation(config, digest, commit, epoch) {
     epoch,
     commit,
     runtime_digest: digest,
+    audit_inventory_sha256: auditEvidence.inventory_sha256,
+    expected_inventory: auditEvidence.prior_counts,
     topology: config.topology,
   };
   return { ...base, receipt_sha256: receiptDigest(base) };
@@ -750,6 +974,7 @@ async function deployEpochResetAudit(config, digest, commit, epoch) {
     label: `${config.environment} schema epoch reset audit`,
     deploymentPolicy: canonicalDeploymentPolicy("migrator"),
     variables: {
+      ...databaseIdentityVariables(config),
       FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
       FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
       FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: confirmation,
@@ -765,15 +990,25 @@ async function deployEpochResetAudit(config, digest, commit, epoch) {
   validateEpochResetAudit(audit, { environment: config.environment, epoch, commit });
   return {
     audit_deployment_id: auditDeployment.id,
+    inventory_sha256: audit.inventory_sha256,
     prior_counts: audit.counts,
   };
 }
 
 async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, auditEvidence) {
   const serviceId = config.migratorServiceId;
-  let deployment = latestDeployment(config, serviceId);
-  if ((deployment?.id ?? null) === plan.previous_deployment_id) {
-    deployment = await deployConfiguredImage(config, {
+  assert.equal(
+    plan.audit_inventory_sha256,
+    auditEvidence.inventory_sha256,
+    "schema epoch reset start plan no longer binds its audit inventory",
+  );
+  assert.deepEqual(
+    plan.expected_inventory,
+    auditEvidence.prior_counts,
+    "schema epoch reset start plan inventory drifted",
+  );
+  const expectedInventory = JSON.stringify(plan.expected_inventory);
+  const deploy = () => deployConfiguredImage(config, {
       serviceId,
       image: config.runtimeImage,
       digest,
@@ -781,41 +1016,66 @@ async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, au
       label: `${config.environment} schema epoch reset`,
       deploymentPolicy: canonicalDeploymentPolicy("migrator"),
       variables: {
+        ...databaseIdentityVariables(config),
         FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
         FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
         FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: `${config.environment}:${epoch}:${commit}`,
+        FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY: expectedInventory,
+        FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY_SHA256: plan.audit_inventory_sha256,
       },
+      allowTerminalFailure: true,
     });
-  } else {
-    assert.ok(deployment, "schema epoch reset recovery found no Railway deployment");
-    deployment = await waitForNewDeployment(
+  const readCompletion = async (deployment, { allowMissing }) => {
+    let parsed;
+    try {
+      parsed = await waitForResetLogRows(
+        config,
+        deployment.id,
+        serviceId,
+        ["audit", "complete"],
+        "schema epoch reset deployment",
+      );
+    } catch (error) {
+      if (allowMissing && /emitted no audit and complete record/u.test(error.message)) return null;
+      throw error;
+    }
+    validateEpochResetAudit(
+      { ...parsed.audit, execute: false },
+      { environment: config.environment, epoch, commit },
+    );
+    assert.equal(parsed.audit.execute, true, "schema epoch reset execution audit is not mutating");
+    assert.equal(parsed.complete.release_commit, commit);
+    assert.equal(parsed.complete.environment, config.environment);
+    assert.equal(parsed.complete.epoch, epoch);
+    assert.deepEqual(
+      parsed.complete.prior_counts,
+      auditEvidence.prior_counts,
+      "schema epoch reset execution no longer matches its greenfield audit",
+    );
+    return parsed;
+  };
+  const outcome = await recoverOneShotDeployment({
+    previousDeploymentId: plan.previous_deployment_id,
+    currentDeployment: latestDeployment(config, serviceId),
+    awaitTerminal: () => waitForOneShotTerminal(
       config,
       serviceId,
       plan.previous_deployment_id,
       digest,
       `${config.environment} schema epoch reset recovery`,
-    );
-  }
-  const parsed = await waitForResetLogRows(
-    config,
-    deployment.id,
-    serviceId,
-    ["audit", "complete"],
-    "schema epoch reset deployment",
-  );
-  validateEpochResetAudit(
-    { ...parsed.audit, execute: false },
-    { environment: config.environment, epoch, commit },
-  );
-  assert.equal(parsed.audit.execute, true, "schema epoch reset execution audit is not mutating");
-  assert.equal(parsed.complete.release_commit, commit);
-  assert.equal(parsed.complete.environment, config.environment);
-  assert.equal(parsed.complete.epoch, epoch);
-  assert.deepEqual(
-    parsed.complete.prior_counts,
-    auditEvidence.prior_counts,
-    "schema epoch reset execution no longer matches its greenfield audit",
-  );
+    ),
+    readCompletion,
+    redeploy: deploy,
+    validateCandidate: (deployment) => {
+      assert.equal(
+        deploymentImageDigest(deployment),
+        digest,
+        `${config.environment} schema epoch reset recovery digest drifted`,
+      );
+    },
+    label: `${config.environment} schema epoch reset`,
+  });
+  const { deployment, completion: parsed } = outcome;
   const base = {
     version: 1,
     kind: "fmarch-schema-epoch-reset",
@@ -834,27 +1094,46 @@ async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, au
 
 async function deployOrRecoverMigrator(config, digest, commit, plan) {
   const serviceId = config.migratorServiceId;
-  let deployment = latestDeployment(config, serviceId);
-  if ((deployment?.id ?? null) === plan.previous_deployment_id) {
-    deployment = await deployConfiguredImage(config, {
+  const deploy = () => deployConfiguredImage(config, {
       serviceId,
       image: config.runtimeImage,
       digest,
       startCommand: "fmarch-migrate",
       label: `${config.environment} migrator`,
       deploymentPolicy: canonicalDeploymentPolicy("migrator"),
+      variables: databaseIdentityVariables(config),
+      allowTerminalFailure: true,
     });
-  } else {
-    assert.ok(deployment, "schema epoch migration recovery found no Railway deployment");
-    deployment = await waitForNewDeployment(
+  const readCompletion = async (deployment, { allowMissing }) => {
+    try {
+      return await waitForMigrationCompletion(config, deployment.id, serviceId, commit);
+    } catch (error) {
+      if (allowMissing && /emitted no exact-commit completion record/u.test(error.message)) return null;
+      throw error;
+    }
+  };
+  const outcome = await recoverOneShotDeployment({
+    previousDeploymentId: plan.previous_deployment_id,
+    currentDeployment: latestDeployment(config, serviceId),
+    awaitTerminal: () => waitForOneShotTerminal(
       config,
       serviceId,
       plan.previous_deployment_id,
       digest,
       `${config.environment} migrator recovery`,
-    );
-  }
-  await waitForMigrationCompletion(config, deployment.id, serviceId, commit);
+    ),
+    readCompletion,
+    redeploy: deploy,
+    validateCandidate: (deployment) => {
+      assert.equal(
+        deploymentImageDigest(deployment),
+        digest,
+        `${config.environment} migrator recovery digest drifted`,
+      );
+    },
+    label: `${config.environment} migrator`,
+  });
+  const { deployment } = outcome;
   return {
     deployment: {
       id: deployment.id,
@@ -865,7 +1144,14 @@ async function deployOrRecoverMigrator(config, digest, commit, plan) {
 }
 
 async function coordinateEpochReset(config, digest, commit, epoch) {
-  const operation = epochResetOperation(config, digest, commit, epoch);
+  const currentAuditEvidence = await deployEpochResetAudit(config, digest, commit, epoch);
+  const operation = epochResetOperation(
+    config,
+    digest,
+    commit,
+    epoch,
+    currentAuditEvidence,
+  );
   const journalDirectory = path.join(
     repoRoot,
     "target",
@@ -889,9 +1175,11 @@ async function coordinateEpochReset(config, digest, commit, epoch) {
     operation,
     loadPhase,
     publishPhase,
-    audit: () => deployEpochResetAudit(config, digest, commit, epoch),
-    planReset: async () => ({
+    audit: async () => currentAuditEvidence,
+    planReset: async (auditEvidence) => ({
       previous_deployment_id: latestDeployment(config, config.migratorServiceId)?.id ?? null,
+      audit_inventory_sha256: auditEvidence.inventory_sha256,
+      expected_inventory: auditEvidence.prior_counts,
     }),
     executeOrRecoverReset: (plan, auditEvidence) =>
       deployOrRecoverEpochReset(config, digest, commit, epoch, plan, auditEvidence),
@@ -904,8 +1192,14 @@ async function coordinateEpochReset(config, digest, commit, epoch) {
 }
 
 async function fetchHealth(url, commit, kind) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const expected = new URL(url);
+  const response = await fetch(expected, {
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  });
   assert.equal(response.ok, true, `${kind} health returned ${response.status}`);
+  assert.equal(response.url, expected.href, `${kind} health response URL drifted`);
+  assert.equal(new URL(response.url).origin, expected.origin, `${kind} health response origin drifted`);
   const body = await response.json();
   validateHealth(body, commit, kind);
   return body;
@@ -959,6 +1253,7 @@ async function runStagingSentinel(config, commit, runtimeDigest) {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: 32 * 1024 * 1024,
+        timeout: SUBPROCESS_TIMEOUT_MS.node,
       });
       if (![0, 2].includes(result.status)) {
         const diagnostic = String(result.stderr || result.stdout || "").trim().slice(-4_000);
@@ -991,30 +1286,47 @@ export async function waitForStagingSentinelReceipt({
   throw new Error("public-search staging telemetry remained insufficient for 60 seconds");
 }
 
-async function schemaHead() {
-  try {
-    const epoch = JSON.parse(
-      await readFile(path.join(repoRoot, "crates", "database_schema", "schema", "epoch.json"), "utf8"),
-    );
-    return epoch.migrations.at(-1).filename;
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-    const migrations = (await readdir(
-      path.join(repoRoot, "crates", "database_schema", "migrations"),
-    )).filter((filename) => /^\d{4}_[a-z0-9_]+\.sql$/u.test(filename)).sort();
-    assert.ok(migrations.length > 0, "release has no database migration head");
-    return migrations.at(-1);
-  }
+function schemaDocumentAtCommit(commit) {
+  assertFullCommit(commit);
+  return JSON.parse(commandText("git", [
+    "show",
+    `${commit}:crates/database_schema/schema/epoch.json`,
+  ]));
+}
+
+function schemaHead(commit) {
+  const document = schemaDocumentAtCommit(commit);
+  const head = document.migrations?.at(-1)?.filename;
+  assert.match(head ?? "", /^\d{4}_[a-z0-9_]+\.sql$/u, "release has no schema head");
+  return head;
+}
+
+export async function checkedInSchemaEpoch(commit) {
+  const document = schemaDocumentAtCommit(commit);
+  assert.ok(Number.isSafeInteger(document.epoch) && document.epoch > 0, "checked-in schema epoch is invalid");
+  return document.epoch;
+}
+
+export function validateRequestedSchemaEpoch(requestedEpoch, checkedInEpoch) {
+  assert.equal(
+    requestedEpoch,
+    checkedInEpoch,
+    `--schema-epoch-reset must equal checked-in schema epoch ${checkedInEpoch}`,
+  );
+  return requestedEpoch;
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArguments(argv);
   if (args.help) {
-    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--schema-epoch-reset N] [--check]");
+    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--production-lock <lease-commit>] [--schema-epoch-reset N] [--check]");
     return;
   }
   const commit = assertFullCommit(args.commit ?? commandText("git", ["rev-parse", "HEAD"]));
-  validateRepository(commit, args.environment);
+  const repository = validateRepository(commit, args.environment);
+  if (args.schemaEpochReset !== undefined) {
+    validateRequestedSchemaEpoch(args.schemaEpochReset, await checkedInSchemaEpoch(commit));
+  }
   const expectedFleetJob = args.fleetJob ?? process.env.FMARCH_FLEET_JOB_ID;
   assert.ok(expectedFleetJob, "release requires --fleet-job or FMARCH_FLEET_JOB_ID");
   const fleetProof = await loadFleetReleaseProof({
@@ -1035,13 +1347,45 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const config = runtimeConfig(args.environment);
   const acceptanceEnv = {...process.env, FMARCH_HOSTED_EXPECTED_COMMIT: commit, FMARCH_HOSTED_MATRIX_API_URL: config.apiUrl, FMARCH_HOSTED_MATRIX_FRONTEND_URL: config.frontendUrl, FMARCH_HOSTED_AUTHENTICATED: '1'};
-  if (args.environment === 'staging') await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
   if (args.check) {
     console.log(`release coordination check passed for ${args.environment} ${commit}`);
     return;
   }
-  const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } =
-    await resolveArtifacts(args, config, commit, fleetProof);
+  let promotionLeaseCommit = null;
+  let reusableStagingReceipt = null;
+  if (args.environment === "production") {
+    assert.ok(args.reuseStagingReceipt, "production requires --reuse-staging-receipt");
+    reusableStagingReceipt = assertFreshStagingReleaseReceipt(
+      JSON.parse(await readFile(path.resolve(args.reuseStagingReceipt), "utf8")),
+    );
+    assert.equal(reusableStagingReceipt.commit, commit, "staging receipt commit drifted");
+    assert.deepEqual(reusableStagingReceipt.fleet_proof, fleetProof, "staging fleet proof drifted");
+    assert.equal(
+      args.schemaEpochReset ?? null,
+      reusableStagingReceipt.schema_epoch_reset?.epoch ?? null,
+      "production schema epoch reset decision must exactly match staging",
+    );
+    promotionLeaseCommit = assertFullCommit(
+      args.productionLock,
+      "production promotion lock token",
+    );
+    config.productionLease = {
+      token: promotionLeaseCommit,
+      releaseCommit: commit,
+      expectedProductionCommit: repository.originProduction,
+      fleetJobId: fleetProof.job_id,
+      fleetReceiptSha256: fleetProof.receipt_sha256,
+      stagingReceiptSha256: reusableStagingReceipt.receipt_sha256,
+      schemaEpochReset: args.schemaEpochReset ?? null,
+    };
+    assertProductionPromotionLease(config.productionLease);
+  } else {
+    await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
+  }
+  const artifacts = await resolveArtifacts(args, config, commit, fleetProof, {
+    reusableStagingReceipt,
+  });
+  const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } = artifacts;
   const runtimeValidation = releaseRuntimeValidation({
     environment: args.environment,
     runtimeRepository: config.runtimeImage,
@@ -1055,6 +1399,7 @@ export async function main(argv = process.argv.slice(2)) {
     frontendDigest,
     fleetProof,
     config.topology,
+    promotionLeaseCommit,
   );
   let schemaEpochReset = null;
   let migrator;
@@ -1076,6 +1421,7 @@ export async function main(argv = process.argv.slice(2)) {
       "fmarch-migrate",
       `${args.environment} migrator`,
       "migrator",
+      databaseIdentityVariables(config),
     );
   }
   await waitForMigrationCompletion(
@@ -1103,7 +1449,7 @@ export async function main(argv = process.argv.slice(2)) {
     frontendDigest,
     deployments: { migrator, api, frontend },
     health: { api: apiHealth, frontend: frontendHealth },
-    schemaHead: await schemaHead(),
+    schemaHead: schemaHead(commit),
     fleetProof,
     attemptReceipt,
     runtimeValidation,
@@ -1113,6 +1459,7 @@ export async function main(argv = process.argv.slice(2)) {
     schemaEpochReset,
     topology: config.topology,
   });
+  if (args.environment === "production") assertProductionMutationAuthority(config);
   const output = path.resolve(
     args.output ?? path.join(repoRoot, "target", "releases", args.environment, `${commit}.json`),
   );

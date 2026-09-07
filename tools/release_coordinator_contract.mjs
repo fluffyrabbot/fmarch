@@ -2,7 +2,7 @@ import {assertAuthenticatedReceipt, stagingOrigins} from './hosted_authenticated
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-export const RELEASE_RECEIPT_VERSION = 5;
+export const RELEASE_RECEIPT_VERSION = 6;
 export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 export const CANONICAL_RELEASE_TOPOLOGY = Object.freeze({
@@ -439,6 +439,7 @@ export function bindReleaseAttempt({
   frontendDigest,
   fleetProof,
   topology = canonicalReleaseTopology(environment),
+  promotionLeaseCommit = null,
   createdAt = new Date(),
   existing = null,
 }) {
@@ -448,16 +449,22 @@ export function bindReleaseAttempt({
   assertImageDigest(frontendDigest, "frontend digest");
   assertFleetProofAttestation(fleetProof, commit);
   assertCanonicalReleaseTopology(topology, environment);
+  if (environment === "production") {
+    assertFullCommit(promotionLeaseCommit, "production promotion lease commit");
+  } else {
+    assert.equal(promotionLeaseCommit, null, "staging must not claim a production promotion lease");
+  }
   const createdAtValue = existing?.created_at ?? createdAt.toISOString();
   canonicalInstant(createdAtValue, "release attempt creation time");
   const base = {
-    version: 2,
+    version: 3,
     kind: "fmarch-release-attempt",
     environment,
     commit,
     created_at: createdAtValue,
     images: { runtime: runtimeDigest, frontend: frontendDigest },
     topology,
+    promotion_lease_commit: promotionLeaseCommit,
     fleet_job_id: fleetProof.job_id,
     fleet_receipt_sha256: fleetProof.receipt_sha256,
   };
@@ -514,6 +521,7 @@ export function buildReleaseReceipt({
       frontendDigest,
       fleetProof,
       topology,
+      promotionLeaseCommit: attemptReceipt?.promotion_lease_commit ?? null,
       existing: attemptReceipt,
     }).receipt_sha256,
     "release receipt requires its exact artifact attempt binding",
@@ -535,6 +543,7 @@ export function buildReleaseReceipt({
     commit,
     generated_at: generatedAt.toISOString(),
     topology,
+    promotion_lease_commit: attemptReceipt.promotion_lease_commit,
     images: {
       runtime: runtimeDigest,
       frontend: frontendDigest,
@@ -582,8 +591,14 @@ export function assertReleaseReceipt(receipt) {
     frontendDigest: receipt.images.frontend,
     fleetProof: receipt.fleet_proof,
     topology: receipt.topology,
+    promotionLeaseCommit: receipt.promotion_lease_commit,
     existing: receipt.attempt,
   });
+  assert.equal(
+    receipt.promotion_lease_commit,
+    attempt.promotion_lease_commit,
+    "release receipt promotion lease binding is invalid",
+  );
   assert.equal(
     receipt.attempt_receipt_sha256,
     attempt.receipt_sha256,

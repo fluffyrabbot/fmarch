@@ -9,6 +9,10 @@ use thiserror::Error;
 
 pub const APPLICATION_DATABASE_ROLE: &str = "fmarch_application";
 pub const KEY_ADMIN_DATABASE_ROLE: &str = "fmarch_key_admin";
+pub const RELEASE_AUTHORITY_SCHEMA: &str = "fmarch_release_authority";
+pub const DATABASE_ENVIRONMENT_IDENTITY_TABLE: &str = "database_environment_identity";
+pub const SCHEMA_EPOCH_RESET_COMPLETION_TABLE: &str = "schema_epoch_reset_completion";
+pub const DATABASE_IDENTITY_ADVISORY_LOCK: i64 = 2_542_974_982_456_656_081;
 
 const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "action_counter",
@@ -1654,10 +1658,67 @@ async fn verify_catalog_manifest_on(
     )
     .fetch_all(&mut *connection)
     .await?;
-    if user_schemas != ["public"] {
-        return Err(DatabaseAuthorityError::Configuration(format!(
-            "database contains unclassified user schemas: {user_schemas:?}"
-        )));
+    match user_schemas.as_slice() {
+        [schema] if schema == "public" => {}
+        [release_schema, public]
+            if release_schema == RELEASE_AUTHORITY_SCHEMA && public == "public" =>
+        {
+            if !verify_database_environment_identity_authority(connection).await? {
+                return Err(DatabaseAuthorityError::Configuration(
+                    "database environment identity authority disappeared during verification"
+                        .to_string(),
+                ));
+            }
+            let completion_present =
+                verify_schema_epoch_reset_completion_authority(connection).await?;
+            let relations: Vec<String> = sqlx::query_scalar(
+                r#"
+                SELECT relation.relname
+                FROM pg_class relation
+                JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+                WHERE namespace.nspname = $1
+                  AND relation.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+                ORDER BY relation.relname
+                "#,
+            )
+            .bind(RELEASE_AUTHORITY_SCHEMA)
+            .fetch_all(&mut *connection)
+            .await?;
+            let expected_relations = if completion_present {
+                vec![
+                    DATABASE_ENVIRONMENT_IDENTITY_TABLE.to_string(),
+                    SCHEMA_EPOCH_RESET_COMPLETION_TABLE.to_string(),
+                ]
+            } else {
+                vec![DATABASE_ENVIRONMENT_IDENTITY_TABLE.to_string()]
+            };
+            if relations != expected_relations {
+                return Err(DatabaseAuthorityError::Configuration(format!(
+                    "release authority schema relations drifted: {relations:?}"
+                )));
+            }
+            let routines: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COUNT(*)
+                FROM pg_proc routine
+                JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+                WHERE namespace.nspname = $1
+                "#,
+            )
+            .bind(RELEASE_AUTHORITY_SCHEMA)
+            .fetch_one(&mut *connection)
+            .await?;
+            if routines != 0 {
+                return Err(DatabaseAuthorityError::Configuration(
+                    "release authority schema contains unexpected routines".to_string(),
+                ));
+            }
+        }
+        _ => {
+            return Err(DatabaseAuthorityError::Configuration(format!(
+                "database contains unclassified user schemas: {user_schemas:?}"
+            )));
+        }
     }
     let rows = sqlx::query(
         r#"
@@ -1710,6 +1771,408 @@ async fn verify_catalog_manifest_on(
         )));
     }
     Ok(())
+}
+
+pub async fn bind_database_environment_identity(
+    pool: &PgPool,
+    expected_environment: &str,
+    expected_project_id: &str,
+    expected_environment_id: &str,
+) -> Result<(), DatabaseAuthorityError> {
+    validate_release_identity(
+        expected_environment,
+        expected_project_id,
+        expected_environment_id,
+    )?;
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(DATABASE_IDENTITY_ADVISORY_LOCK)
+        .execute(&mut *tx)
+        .await?;
+    let schema_exists: bool = sqlx::query_scalar("SELECT to_regnamespace($1) IS NOT NULL")
+        .bind(RELEASE_AUTHORITY_SCHEMA)
+        .fetch_one(&mut *tx)
+        .await?;
+    if !schema_exists {
+        sqlx::query("CREATE SCHEMA fmarch_release_authority AUTHORIZATION CURRENT_USER")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("REVOKE ALL ON SCHEMA fmarch_release_authority FROM PUBLIC")
+            .execute(&mut *tx)
+            .await?;
+    }
+    let table_exists: bool = sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
+        .bind(format!(
+            "{RELEASE_AUTHORITY_SCHEMA}.{DATABASE_ENVIRONMENT_IDENTITY_TABLE}"
+        ))
+        .fetch_one(&mut *tx)
+        .await?;
+    if !table_exists {
+        sqlx::query(
+            r#"
+            CREATE TABLE fmarch_release_authority.database_environment_identity (
+                singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+                project_id uuid NOT NULL,
+                environment_id uuid NOT NULL,
+                environment text NOT NULL CHECK (environment IN ('staging', 'production')),
+                created_at timestamp with time zone NOT NULL DEFAULT clock_timestamp()
+            )
+            "#,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "REVOKE ALL ON TABLE fmarch_release_authority.database_environment_identity FROM PUBLIC",
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    if !verify_database_environment_identity_authority(&mut tx).await? {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database environment identity authority was not created".to_string(),
+        ));
+    }
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT project_id::text, environment_id::text, environment FROM fmarch_release_authority.database_environment_identity",
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    match rows.as_slice() {
+        [] => {
+            sqlx::query(
+                "INSERT INTO fmarch_release_authority.database_environment_identity (project_id, environment_id, environment) VALUES ($1::uuid, $2::uuid, $3)",
+            )
+            .bind(expected_project_id)
+            .bind(expected_environment_id)
+            .bind(expected_environment)
+            .execute(&mut *tx)
+            .await?;
+        }
+        [(project_id, environment_id, environment)]
+            if project_id == expected_project_id
+                && environment_id == expected_environment_id
+                && environment == expected_environment => {}
+        [(project_id, environment_id, environment)] => {
+            return Err(DatabaseAuthorityError::Configuration(format!(
+                "database identity is {project_id}/{environment_id}/{environment}, expected {expected_project_id}/{expected_environment_id}/{expected_environment}"
+            )));
+        }
+        _ => {
+            return Err(DatabaseAuthorityError::Configuration(
+                "database environment identity has multiple rows".to_string(),
+            ));
+        }
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn verify_database_environment_identity(
+    connection: &mut PgConnection,
+    expected_environment: &str,
+    expected_project_id: &str,
+    expected_environment_id: &str,
+) -> Result<(), DatabaseAuthorityError> {
+    validate_release_identity(
+        expected_environment,
+        expected_project_id,
+        expected_environment_id,
+    )?;
+    if !verify_database_environment_identity_authority(connection).await? {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database environment identity is not provisioned".to_string(),
+        ));
+    }
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT project_id::text, environment_id::text, environment FROM fmarch_release_authority.database_environment_identity",
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    match rows.as_slice() {
+        [(project_id, environment_id, environment)]
+            if project_id == expected_project_id
+                && environment_id == expected_environment_id
+                && environment == expected_environment => Ok(()),
+        [(project_id, environment_id, environment)] => Err(DatabaseAuthorityError::Configuration(format!(
+            "database identity is {project_id}/{environment_id}/{environment}, expected {expected_project_id}/{expected_environment_id}/{expected_environment}"
+        ))),
+        _ => Err(DatabaseAuthorityError::Configuration(
+            "database environment identity must contain exactly one row".to_string(),
+        )),
+    }
+}
+
+fn validate_release_identity(
+    environment: &str,
+    project_id: &str,
+    environment_id: &str,
+) -> Result<(), DatabaseAuthorityError> {
+    if !matches!(environment, "staging" | "production") {
+        Err(DatabaseAuthorityError::Configuration(
+            "database environment identity must be staging or production".to_string(),
+        ))?;
+    }
+    for (label, value) in [("project", project_id), ("environment", environment_id)] {
+        let parsed = uuid::Uuid::parse_str(value).map_err(|_| {
+            DatabaseAuthorityError::Configuration(format!(
+                "database {label} identity must be a canonical UUID"
+            ))
+        })?;
+        if parsed.to_string() != value {
+            return Err(DatabaseAuthorityError::Configuration(format!(
+                "database {label} identity must be a canonical UUID"
+            )));
+        }
+    }
+    Ok(())
+}
+
+async fn verify_release_authority_schema(
+    connection: &mut PgConnection,
+) -> Result<bool, DatabaseAuthorityError> {
+    let schema: Option<(bool, bool)> = sqlx::query_as(
+        r#"
+        SELECT namespace.nspowner = (
+                   SELECT datdba FROM pg_database WHERE datname = current_database()
+               ),
+               NOT EXISTS (
+                   SELECT 1
+                   FROM aclexplode(COALESCE(namespace.nspacl, acldefault('n', namespace.nspowner))) acl
+                   WHERE acl.grantee <> namespace.nspowner
+               )
+        FROM pg_namespace namespace
+        WHERE namespace.nspname = $1
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((schema_owned, schema_owner_only)) = schema else {
+        return Ok(false);
+    };
+    if !schema_owned || !schema_owner_only {
+        return Err(DatabaseAuthorityError::Configuration(
+            "release authority schema must be owned solely by the database owner".to_string(),
+        ));
+    }
+    Ok(true)
+}
+
+async fn verify_database_environment_identity_authority(
+    connection: &mut PgConnection,
+) -> Result<bool, DatabaseAuthorityError> {
+    if !verify_release_authority_schema(connection).await? {
+        return Ok(false);
+    }
+    let table: Option<(bool, String, bool, bool, i64)> = sqlx::query_as(
+        r#"
+        SELECT relation.relowner = (
+                   SELECT datdba FROM pg_database WHERE datname = current_database()
+               ),
+               relation.relkind::text,
+               relation.relrowsecurity,
+               NOT EXISTS (
+                   SELECT 1
+                   FROM aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) acl
+                   WHERE acl.grantee <> relation.relowner
+               ),
+               (SELECT COUNT(*)
+                FROM pg_trigger trigger_record
+                WHERE trigger_record.tgrelid = relation.oid
+                  AND NOT trigger_record.tgisinternal)
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(DATABASE_ENVIRONMENT_IDENTITY_TABLE)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((table_owned, relation_kind, row_security, owner_only, trigger_count)) = table else {
+        return Ok(false);
+    };
+    if !table_owned || relation_kind != "r" || row_security || !owner_only || trigger_count != 0 {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database environment identity authority drifted".to_string(),
+        ));
+    }
+    let columns: Vec<(String, String, bool)> = sqlx::query_as(
+        r#"
+        SELECT attribute.attname,
+               format_type(attribute.atttypid, attribute.atttypmod),
+               attribute.attnotnull
+        FROM pg_attribute attribute
+        JOIN pg_class relation ON relation.oid = attribute.attrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+        ORDER BY attribute.attnum
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(DATABASE_ENVIRONMENT_IDENTITY_TABLE)
+    .fetch_all(&mut *connection)
+    .await?;
+    if columns
+        != [
+            ("singleton".to_string(), "boolean".to_string(), true),
+            ("project_id".to_string(), "uuid".to_string(), true),
+            ("environment_id".to_string(), "uuid".to_string(), true),
+            ("environment".to_string(), "text".to_string(), true),
+            (
+                "created_at".to_string(),
+                "timestamp with time zone".to_string(),
+                true,
+            ),
+        ]
+    {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database environment identity table shape drifted".to_string(),
+        ));
+    }
+    let primary_key: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT attribute.attname
+        FROM pg_constraint constraint_record
+        CROSS JOIN LATERAL unnest(constraint_record.conkey)
+            WITH ORDINALITY AS key(attribute_number, ordinality)
+        JOIN pg_attribute attribute
+          ON attribute.attrelid = constraint_record.conrelid
+         AND attribute.attnum = key.attribute_number
+        JOIN pg_class relation ON relation.oid = constraint_record.conrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+          AND constraint_record.contype = 'p'
+        ORDER BY key.ordinality
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(DATABASE_ENVIRONMENT_IDENTITY_TABLE)
+    .fetch_all(&mut *connection)
+    .await?;
+    if primary_key != ["singleton"] {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database environment identity primary key drifted".to_string(),
+        ));
+    }
+    Ok(true)
+}
+
+/// Validate the only non-public schema admitted by the physical database
+/// contract. `Ok(false)` means the schema does not exist; any partial or
+/// authority-drifted form is an error rather than an absent optional feature.
+pub async fn verify_schema_epoch_reset_completion_authority(
+    connection: &mut PgConnection,
+) -> Result<bool, DatabaseAuthorityError> {
+    if !verify_release_authority_schema(connection).await? {
+        return Ok(false);
+    }
+
+    let table: Option<(bool, String, bool, bool, i64)> = sqlx::query_as(
+        r#"
+        SELECT relation.relowner = (
+                   SELECT datdba FROM pg_database WHERE datname = current_database()
+               ),
+               relation.relkind::text,
+               relation.relrowsecurity,
+               NOT EXISTS (
+                   SELECT 1
+                   FROM aclexplode(COALESCE(relation.relacl, acldefault('r', relation.relowner))) acl
+                   WHERE acl.grantee <> relation.relowner
+               ),
+               (SELECT COUNT(*)
+                FROM pg_trigger trigger_record
+                WHERE trigger_record.tgrelid = relation.oid
+                  AND NOT trigger_record.tgisinternal)
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(SCHEMA_EPOCH_RESET_COMPLETION_TABLE)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((table_owned, relation_kind, row_security, table_private, trigger_count)) = table
+    else {
+        return Ok(false);
+    };
+    if !table_owned || relation_kind != "r" || row_security || !table_private || trigger_count != 0
+    {
+        return Err(DatabaseAuthorityError::Configuration(
+            "schema epoch reset completion table authority drifted".to_string(),
+        ));
+    }
+
+    let columns: Vec<(String, String, bool)> = sqlx::query_as(
+        r#"
+        SELECT attribute.attname,
+               format_type(attribute.atttypid, attribute.atttypmod),
+               attribute.attnotnull
+        FROM pg_attribute attribute
+        JOIN pg_class relation ON relation.oid = attribute.attrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+        ORDER BY attribute.attnum
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(SCHEMA_EPOCH_RESET_COMPLETION_TABLE)
+    .fetch_all(&mut *connection)
+    .await?;
+    let expected_columns = vec![
+        ("environment".to_string(), "text".to_string(), true),
+        ("epoch".to_string(), "bigint".to_string(), true),
+        ("release_commit".to_string(), "text".to_string(), true),
+        ("prior_counts".to_string(), "jsonb".to_string(), true),
+        (
+            "completed_at".to_string(),
+            "timestamp with time zone".to_string(),
+            true,
+        ),
+    ];
+    if columns != expected_columns {
+        return Err(DatabaseAuthorityError::Configuration(
+            "schema epoch reset completion table shape drifted".to_string(),
+        ));
+    }
+
+    let primary_key: Vec<String> = sqlx::query_scalar(
+        r#"
+        SELECT attribute.attname
+        FROM pg_constraint constraint_record
+        CROSS JOIN LATERAL unnest(constraint_record.conkey)
+            WITH ORDINALITY AS key(attribute_number, ordinality)
+        JOIN pg_attribute attribute
+          ON attribute.attrelid = constraint_record.conrelid
+         AND attribute.attnum = key.attribute_number
+        JOIN pg_class relation ON relation.oid = constraint_record.conrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = $1
+          AND relation.relname = $2
+          AND constraint_record.contype = 'p'
+        ORDER BY key.ordinality
+        "#,
+    )
+    .bind(RELEASE_AUTHORITY_SCHEMA)
+    .bind(SCHEMA_EPOCH_RESET_COMPLETION_TABLE)
+    .fetch_all(&mut *connection)
+    .await?;
+    if primary_key != ["environment", "epoch"] {
+        return Err(DatabaseAuthorityError::Configuration(
+            "schema epoch reset completion primary key drifted".to_string(),
+        ));
+    }
+    Ok(true)
 }
 
 async fn verify_guard_manifest(pool: &PgPool) -> Result<(), DatabaseAuthorityError> {

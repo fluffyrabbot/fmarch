@@ -21,6 +21,8 @@ import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import { validateReusableProductionReceipt } from "./production_promotion.mjs";
 import {
   canonicalDeploymentPolicy,
+  publishFreshImage,
+  recoverOneShotDeployment,
   parseMigrationCompletion,
   serviceSourceCutoverAction,
   parseResetLogRows,
@@ -28,6 +30,7 @@ import {
   runEpochResetJournal,
   runtimeConfig,
   validateEpochResetAudit,
+  validateRequestedSchemaEpoch,
   waitForNewDeployment,
   waitForMigrationCompletion,
   waitForResetLogRows,
@@ -37,6 +40,7 @@ import {
 const commit = "a".repeat(40);
 const runtimeDigest = `sha256:${"b".repeat(64)}`;
 const frontendDigest = `sha256:${"c".repeat(64)}`;
+const promotionLeaseCommit = "d".repeat(40);
 const fleetJobId = "20260907T120000Z-release";
 const fleetCompletedAt = "2026-09-07T12:30:00.000Z";
 const releaseNow = new Date("2026-09-07T13:00:00.000Z");
@@ -573,21 +577,98 @@ test("staging validates the immutable amd64 runtime while production reuses its 
   );
 });
 
-test("epoch reset audit permits only identity-empty greenfield state", () => {
+test("fresh image publication never accepts a pre-existing mutable commit tag", async () => {
+  const events = [];
+  const digest = `sha256:${"9".repeat(64)}`;
+  const published = await publishFreshImage(
+    {
+      repository: "ghcr.io/fluffyrabbot/fmarch-runtime",
+      dockerfile: "Dockerfile",
+      commit,
+      attemptIdentity: "1".repeat(24),
+      contextPath: "/immutable-release-context",
+    },
+    {
+      build: async (reference) => events.push(["build", reference]),
+      push: async (reference) => {
+        events.push(["push", reference]);
+        return digest;
+      },
+      pull: async (reference) => events.push(["pull", reference]),
+      inspect: async (reference) => {
+        events.push(["inspect", reference]);
+        return { digest, revision: commit };
+      },
+    },
+  );
+  assert.equal(published, digest);
+  assert.deepEqual(events.map(([kind]) => kind), ["build", "push", "pull", "inspect"]);
+  assert.match(events[0][1], new RegExp(`:release-${commit}-[0-9a-f]{24}$`, "u"));
+  assert.notEqual(events[0][1], `ghcr.io/fluffyrabbot/fmarch-runtime:${commit}`);
+  assert.equal(events[2][1], `ghcr.io/fluffyrabbot/fmarch-runtime@${digest}`);
+});
+
+test("schema reset request must equal the immutable release epoch", () => {
+  assert.equal(validateRequestedSchemaEpoch(3, 3), 3);
+  assert.throws(() => validateRequestedSchemaEpoch(2, 3), /must equal checked-in schema epoch 3/);
+});
+
+test("failed or log-ambiguous one-shots recover once while approval states fail closed", async () => {
+  for (const initial of [
+    { id: "crashed", status: "CRASHED" },
+    { id: "committed-without-log", status: "SUCCESS" },
+  ]) {
+    let redeployments = 0;
+    const outcome = await recoverOneShotDeployment({
+      previousDeploymentId: "before",
+      currentDeployment: initial,
+      awaitTerminal: async () => assert.fail("terminal successor must not be awaited"),
+      readCompletion: async (deployment) =>
+        deployment.id === "recovery" ? { durable: true } : null,
+      redeploy: async () => {
+        redeployments += 1;
+        return { id: "recovery", status: "SUCCESS" };
+      },
+      validateCandidate: () => {},
+      label: "schema reset",
+    });
+    assert.equal(outcome.completion.durable, true);
+    assert.equal(outcome.recovered, true);
+    assert.equal(redeployments, 1);
+  }
+
+  await assert.rejects(
+    recoverOneShotDeployment({
+      previousDeploymentId: "before",
+      currentDeployment: { id: "approval", status: "NEEDS_APPROVAL" },
+      awaitTerminal: async () => {},
+      readCompletion: async () => null,
+      redeploy: async () => assert.fail("approval state must not auto-retry"),
+      label: "migrator",
+    }),
+    /non-retryable state NEEDS_APPROVAL/,
+  );
+});
+
+test("epoch reset audit permits only an exhaustively empty application inventory", () => {
+  const counts = {
+    application_tables: {
+      platform_principal: 0,
+      member_profile: 0,
+      profile_mute: 0,
+      events: 0,
+      public_search_document: 0,
+    },
+    sqlx_migrations: 1,
+  };
   const audit = {
     kind: "fmarch-schema-epoch-reset-audit",
     environment: "staging",
     epoch: 1,
     release_commit: commit,
     execute: false,
-    counts: {
-      platform_principal: 0,
-      member_profile: 0,
-      profile_mute: 0,
-      events: 2,
-      public_search_document: 1,
-      sqlx_migrations: 1,
-    },
+    inventory_sha256: createHash("sha256").update(JSON.stringify(counts)).digest("hex"),
+    counts,
   };
   assert.equal(
     validateEpochResetAudit(audit, { environment: "staging", epoch: 1, commit }),
@@ -595,10 +676,22 @@ test("epoch reset audit permits only identity-empty greenfield state", () => {
   );
   assert.throws(
     () => validateEpochResetAudit(
-      { ...audit, counts: { ...audit.counts, platform_principal: 1 } },
+      {
+        ...audit,
+        inventory_sha256: createHash("sha256")
+          .update(JSON.stringify({
+            ...counts,
+            application_tables: { ...counts.application_tables, events: 1 },
+          }))
+          .digest("hex"),
+        counts: {
+          ...counts,
+          application_tables: { ...counts.application_tables, events: 1 },
+        },
+      },
       { environment: "staging", epoch: 1, commit },
     ),
-    /non-greenfield platform_principal/,
+    /non-greenfield events/,
   );
   assert.throws(
     () => validateEpochResetAudit({ ...audit, execute: true }, { environment: "staging", epoch: 1, commit }),
@@ -676,6 +769,8 @@ test("schema epoch reset resumes from the durable destructive-phase fence", asyn
     epoch: 1,
     commit,
     runtime_digest: runtimeDigest,
+    audit_inventory_sha256: "a".repeat(64),
+    expected_inventory: { application_tables: { events: 0 }, sqlx_migrations: 1 },
     topology: runtimeConfig("staging", {}).topology,
   };
   const operation = {
@@ -694,8 +789,16 @@ test("schema epoch reset resumes from the durable destructive-phase fence", asyn
       assert.equal(phases.has(phase), false, `phase ${phase} was replaced`);
       phases.set(phase, structuredClone(receipt));
     },
-    audit: async () => ({ audit_deployment_id: "audit", prior_counts: {} }),
-    planReset: async () => ({ previous_deployment_id: "before-reset" }),
+    audit: async () => ({
+      audit_deployment_id: "audit",
+      inventory_sha256: "a".repeat(64),
+      prior_counts: { application_tables: { events: 0 }, sqlx_migrations: 1 },
+    }),
+    planReset: async (auditEvidence) => ({
+      previous_deployment_id: "before-reset",
+      audit_inventory_sha256: auditEvidence.inventory_sha256,
+      expected_inventory: auditEvidence.prior_counts,
+    }),
     executeOrRecoverReset: async () => {
       if (!remoteResetComplete) {
         destructiveExecutions += 1;
@@ -901,6 +1004,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     runtimeDigest,
     frontendDigest,
     fleetProof,
+    promotionLeaseCommit,
     createdAt: new Date("2026-09-07T12:40:00.000Z"),
   });
   const productionReceipt = buildReleaseReceipt({
@@ -943,6 +1047,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     runtimeDigest,
     frontendDigest: `sha256:${"f".repeat(64)}`,
     fleetProof,
+    promotionLeaseCommit,
     createdAt: new Date("2026-09-07T12:45:00.000Z"),
   });
   assert.throws(

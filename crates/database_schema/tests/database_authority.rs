@@ -1,7 +1,8 @@
 use std::{str::FromStr, time::Duration};
 
 use database_schema::{
-    reconcile_database_authority, verify_database_principal, DatabasePrincipal,
+    bind_database_environment_identity, reconcile_database_authority,
+    verify_database_environment_identity, verify_database_principal, DatabasePrincipal,
     APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
 };
 use sqlx::{
@@ -20,6 +21,63 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     reconcile_database_authority(&owner, APPLICATION_PASSWORD, KEY_ADMIN_PASSWORD)
         .await
         .expect("reconcile exact database roles and ACLs");
+    bind_database_environment_identity(
+        &owner,
+        "staging",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .await
+    .expect("bind the explicit test database identity");
+    let mut owner_connection = owner.acquire().await.unwrap();
+    verify_database_environment_identity(
+        &mut owner_connection,
+        "staging",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .await
+    .expect("canonical identity is admitted");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "GRANT SELECT ON fmarch_release_authority.database_environment_identity TO {APPLICATION_DATABASE_ROLE}"
+    )))
+    .execute(&owner)
+    .await
+    .unwrap();
+    verify_database_environment_identity(
+        &mut owner_connection,
+        "staging",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .await
+    .expect_err("a non-owner control-table grant must fail identity admission");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "REVOKE ALL ON fmarch_release_authority.database_environment_identity FROM {APPLICATION_DATABASE_ROLE}"
+    )))
+    .execute(&owner)
+    .await
+    .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "GRANT USAGE ON SCHEMA fmarch_release_authority TO {APPLICATION_DATABASE_ROLE}"
+    )))
+    .execute(&owner)
+    .await
+    .unwrap();
+    verify_database_environment_identity(
+        &mut owner_connection,
+        "staging",
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .await
+    .expect_err("a non-owner control-schema grant must fail identity admission");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "REVOKE ALL ON SCHEMA fmarch_release_authority FROM {APPLICATION_DATABASE_ROLE}"
+    )))
+    .execute(&owner)
+    .await
+    .unwrap();
     let application = role_pool(&owner, APPLICATION_DATABASE_ROLE, APPLICATION_PASSWORD).await;
     let key_admin = role_pool(&owner, KEY_ADMIN_DATABASE_ROLE, KEY_ADMIN_PASSWORD).await;
     verify_database_principal(&application, DatabasePrincipal::Application)

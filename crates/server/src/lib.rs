@@ -1,8 +1,10 @@
 pub use database_schema::{
-    ensure_schema_ready, inspect_schema_readiness, reconcile_database_authority,
-    verify_database_principal, verify_migration_authority, DatabaseAuthorityError,
-    DatabasePrincipal, SchemaReadiness, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
-    MIGRATOR,
+    bind_database_environment_identity, ensure_schema_ready, inspect_schema_readiness,
+    reconcile_database_authority, verify_database_environment_identity, verify_database_principal,
+    verify_migration_authority, verify_schema_epoch_reset_completion_authority,
+    DatabaseAuthorityError, DatabasePrincipal, SchemaReadiness, APPLICATION_DATABASE_ROLE,
+    DATABASE_ENVIRONMENT_IDENTITY_TABLE, DATABASE_IDENTITY_ADVISORY_LOCK, KEY_ADMIN_DATABASE_ROLE,
+    MIGRATOR, RELEASE_AUTHORITY_SCHEMA, SCHEMA_EPOCH_RESET_COMPLETION_TABLE,
 };
 
 pub mod staging_search_corpus;

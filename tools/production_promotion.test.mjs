@@ -6,6 +6,8 @@ import {
   finalizeProductionPointer,
   parseArguments,
   productionPointerPushArguments,
+  productionReceiptPathForLease,
+  reconcilePromotionLockMutation,
   railwayArguments,
   runtimeConfig,
   validateDatabaseAuthorityVariables,
@@ -63,6 +65,9 @@ test("production promotion consumes the coordinated staging receipt", async () =
   assert.equal(finalFreshValidation > coordinator, true);
   assert.equal(source.includes('"proof:lanes"'), false);
   assert.equal(source.includes("disconnectProductionGitSources"), false);
+  assert.match(source, /productionReceiptPathForLease/);
+  assert.doesNotMatch(source, /FMARCH_PRODUCTION_RELEASE_RECEIPT/);
+  assert.match(source, /existing production receipt was authorized by a different promotion lease/);
 });
 
 test("production pointer advancement is an exact expected-value CAS", () => {
@@ -70,10 +75,20 @@ test("production pointer advancement is an exact expected-value CAS", () => {
   const prior = "b".repeat(40);
   assert.deepEqual(productionPointerPushArguments(commit, prior), [
     `--force-with-lease=refs/heads/production:${prior}`,
-    "origin",
+    "https://github.com/fluffyrabbot/fmarch.git",
     `${commit}:refs/heads/production`,
   ]);
-  assert.throws(() => productionPointerPushArguments("main", prior), /full Git SHA/);
+  assert.throws(() => productionPointerPushArguments("main", prior), /full lowercase Git SHA/);
+});
+
+test("production receipts are scoped to the exact lease for crash recovery", () => {
+  const commit = "a".repeat(40);
+  const firstLease = "b".repeat(40);
+  const secondLease = "c".repeat(40);
+  const first = productionReceiptPathForLease(commit, firstLease, "/release-root");
+  const second = productionReceiptPathForLease(commit, secondLease, "/release-root");
+  assert.equal(first, `/release-root/target/releases/production/${commit}.${firstLease}.json`);
+  assert.notEqual(first, second);
 });
 
 test("production pointer refresh and CAS occur only after fresh live revalidation", async () => {
@@ -83,6 +98,7 @@ test("production pointer refresh and CAS occur only after fresh live revalidatio
   await finalizeProductionPointer({
     commit,
     expectedProductionCommit: prior,
+    revalidateEvidence: async () => events.push("evidence"),
     revalidate: async () => events.push("live"),
     refreshProductionPointer: async () => {
       events.push("fetch");
@@ -92,8 +108,9 @@ test("production pointer refresh and CAS occur only after fresh live revalidatio
       events.push("cas");
       assert.deepEqual(arguments_, productionPointerPushArguments(commit, prior));
     },
+    assertLease: async () => events.push("lease"),
   });
-  assert.deepEqual(events, ["live", "fetch", "cas"]);
+  assert.deepEqual(events, ["evidence", "live", "fetch", "lease", "cas"]);
   await assert.rejects(
     finalizeProductionPointer({
       commit,
@@ -158,6 +175,52 @@ test("production promotion lock rejects contention and permits a released replay
   await first;
   await withProductionPromotionLock({ acquire, release }, async () => {});
   assert.equal(owner, null);
+
+  await assert.rejects(
+    withProductionPromotionLock({ acquire, release }, async () => {
+      const timeout = new Error("subprocess timed out");
+      timeout.code = "ETIMEDOUT";
+      throw timeout;
+    }),
+    /timed out/,
+  );
+  assert.equal(owner, null, "timeout must release the exact promotion lease");
+});
+
+test("ambiguous promotion lock pushes reconcile only the exact intended state", () => {
+  const token = "a".repeat(40);
+  const timedOut = () => {
+    const error = new Error("push timed out");
+    error.code = "ETIMEDOUT";
+    throw error;
+  };
+  assert.equal(
+    reconcilePromotionLockMutation({
+      operation: "acquire",
+      token,
+      mutate: timedOut,
+      inspect: () => token,
+    }),
+    token,
+  );
+  assert.equal(
+    reconcilePromotionLockMutation({
+      operation: "release",
+      token,
+      mutate: timedOut,
+      inspect: () => null,
+    }),
+    null,
+  );
+  assert.throws(
+    () => reconcilePromotionLockMutation({
+      operation: "release",
+      token,
+      mutate: timedOut,
+      inspect: () => "b".repeat(40),
+    }),
+    /push timed out/,
+  );
 });
 
 test("repository state requires clean synchronized main and an ancestor release pointer", () => {
@@ -188,6 +251,13 @@ test("Railway services use digest-pinned images without a racing Git source", ()
     },
   };
   assert.doesNotThrow(() => validateCoordinatedServiceSources(config, serviceIds));
+  config.services[frontendServiceId].source.image =
+    `ghcr.io/attacker/fmarch-frontend@sha256:${"b".repeat(64)}`;
+  assert.throws(
+    () => validateCoordinatedServiceSources(config, serviceIds),
+    /canonical digest-pinned OCI image/,
+  );
+  config.services[frontendServiceId].source.image = frontend;
   config.services[frontendServiceId].source.repo = "fluffyrabbot/fmarch";
   assert.throws(() => validateCoordinatedServiceSources(config, serviceIds), /must not retain/);
 });
@@ -267,6 +337,9 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_DATABASE_APPLICATION_PASSWORD: "staging-application-password-32-bytes",
     FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "staging-key-admin-password-32-bytes-ok",
     FMARCH_DATABASE_AUTHORITY_REVISION: "staging-db-2026-08-14",
+    FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    FMARCH_DATABASE_ENVIRONMENT: "staging",
   };
   const productionApi = {
     DATABASE_URL:
@@ -323,6 +396,9 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_DATABASE_APPLICATION_PASSWORD: "production-application-password-32-bytes",
     FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "production-key-admin-password-32-bytes-ok",
     FMARCH_DATABASE_AUTHORITY_REVISION: "production-db-2026-08-14",
+    FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: "c1378737-84cc-45ba-8474-9c868baf7cfb",
+    FMARCH_DATABASE_ENVIRONMENT: "production",
   };
   const ready = {
     stagingApi,
@@ -333,6 +409,16 @@ test("hosted variables require isolated production identity credentials", () => 
     productionFrontend,
   };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  assert.throws(
+    () => validateHostedVariables({
+      ...ready,
+      productionMigrator: {
+        ...productionMigrator,
+        FMARCH_DATABASE_ENVIRONMENT_ID: stagingMigrator.FMARCH_DATABASE_ENVIRONMENT_ID,
+      },
+    }),
+    /production database environment UUID drifted/,
+  );
   for (const frontend of ["stagingFrontend", "productionFrontend"]) {
     assert.throws(
       () =>

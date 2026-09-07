@@ -41,6 +41,7 @@ async function contract() {
         "tools/production_promotion.mjs",
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
+        "tools/release_git_authority.mjs",
         "tools/workos_oidc_preflight.mjs",
         "package.json",
         "crates/server/src/main.rs",
@@ -52,6 +53,7 @@ async function contract() {
         "crates/api/src/lib.rs",
         "crates/media/src/repository.rs",
         "crates/database_schema/src/schema.rs",
+        "crates/database_schema/src/authority.rs",
       ].map(async (relativePath) => [relativePath, await read(relativePath)]),
     ),
   );
@@ -153,6 +155,11 @@ async function contract() {
   assert.match(source["tools/release_coordinator.mjs"], /await deployImage\([\s\S]*migratorServiceId/);
   assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
   assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);
+  assert.match(source["tools/release_git_authority.mjs"], /CANONICAL_RELEASE_REMOTE_URL/);
+  assert.match(source["tools/release_coordinator.mjs"], /redirect: "error"/);
+  assert.match(source["tools/production_promotion.mjs"], /redirect: "error"/);
+  assert.match(source["tools/release_coordinator.mjs"], /timeout:/);
+  assert.match(source["tools/production_promotion.mjs"], /timeout:/);
   assert.match(
     source["deploy/railway/migrator.railway.toml"],
     /startCommand = "fmarch-migrate"/,
@@ -223,6 +230,18 @@ async function contract() {
   assert.match(
     source["deploy/railway/migrator.env.example"],
     /^FMARCH_DATABASE_AUTHORITY_REVISION=/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_PROJECT_ID=9d285d67-c11b-4508-9efb-fad042787b4c$/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_ENVIRONMENT_ID=e109e500-2a4c-48a3-96f2-e92a9edb63e4$/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_ENVIRONMENT=staging$/m,
   );
   for (const forbidden of [
     "DATABASE_URL",
@@ -596,6 +615,11 @@ async function contract() {
   );
   assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
+  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /pg_advisory_lock/);
+  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /verify_database_environment_identity/);
+  assert.match(source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"], /--bind-database-identity/);
+  assert.match(source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"], /ACCESS EXCLUSIVE/);
+  assert.match(source["crates/database_schema/src/authority.rs"], /acl\.grantee <> relation\.relowner/);
   assert.match(
     source["crates/server/src/bin/fmarch-migrate.rs"],
     /DATABASE_MIGRATION_URL/,

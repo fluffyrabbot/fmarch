@@ -66,11 +66,38 @@ identify a commit already reachable from `origin/main`. Production promotion
 requires a clean worktree, the required signed canonical-worker audit proof, successful staging
 migrator/API/frontend deployments, API and frontend health checks, and Railway
 deployment metadata showing that all three services run the same commit.
+Release Git authority is pinned to the singular fetch and push URL
+`https://github.com/fluffyrabbot/fmarch.git`; configured `origin` fetch and push
+URLs must both match before any release fetch, lock, or pointer operation, and
+network operations address that URL directly. Release Git subprocesses scrub
+ambient `GIT_*` and proxy authority, set `GIT_NO_REPLACE_OBJECTS=1`, and reject
+replace refs, grafts, sparse checkout, URL-rewrite/proxy configuration, and any
+tracked assume-unchanged or skip-worktree flag before trusting the checkout.
+
+Production mutation is serialized by the remote
+`refs/heads/release-locks/production` lease. Its commit binds the release
+commit and tree, expected prior production pointer, signed fleet job and
+receipt, staging receipt digest, nullable schema-reset epoch, canonical Git
+URL, and complete Railway topology. The promoter passes that exact lease
+commit to the production coordinator. Direct production coordination without
+it is forbidden, and the coordinator re-fetches and proves the lease before
+each production-side Railway mutation and once more before publishing its
+immutable receipt. `FAILED` or `CRASHED` one-shot reset/migrator deployments
+may be re-dispatched with the same digest; approval and other ambiguous
+terminal states remain operator-visible and fail closed. All release Git,
+Railway, and Podman subprocesses have bounded timeouts; a timeout unwinds the
+promoter and releases only its exact lease.
 
 Do not retain a Git source or enable image auto-updates on these services.
 `tools/release_coordinator.mjs` is the only release sequencer. It runs from a
 clean `main` checkout or a clean detached checkout of the exact `origin/main`
 commit: it deploys and
+builds runtime and frontend images from one temporary `git archive` of that
+commit, never from the live worktree. Every new attempt uses a unique registry
+tag, records the push-returned digest, then pulls and validates the exact
+`repository@digest`; a pre-existing commit tag is never release provenance.
+An already-published staging attempt resumes only from its receipt-bound
+immutable digests after identity/content revalidation. It then
 first disconnects the canonical Git source without stopping the last successful
 deployment, then
 restores the complete service policy that source cutover would otherwise clear
@@ -82,6 +109,12 @@ environment receipt. A failed migrator starts neither later deployment. A
 failed API or frontend may be retried only with the same receipt-bound digest.
 The bounded API schema gate still tolerates normal migration progress but never
 migrates or weakens checksum/ACL failures.
+
+Immediately before the production pointer CAS, promotion revalidates staging,
+fleet, and production-attempt freshness, then rechecks exact live production
+sources, deployments, canonical non-redirecting health origins, the remote
+production pointer, and the held lease. A long-paused promoter therefore
+cannot resume with expired evidence or after losing its lease.
 
 After coordinator or Railway topology changes, execute the staging-only release
 game day in [release-game-day.md](release-game-day.md). Its receipt proves slow
@@ -173,6 +206,15 @@ business integrity or plaintext confidentiality after API compromise.
    values. It has no public domain, TCP proxy, event keys, bucket
    credentials, or identity credentials. Its `NEVER` restart policy preserves
    one-shot semantics.
+   Set `FMARCH_DATABASE_PROJECT_ID`, `FMARCH_DATABASE_ENVIRONMENT_ID`, and
+   `FMARCH_DATABASE_ENVIRONMENT` to the repository-owned canonical values for
+   that environment. Before the first normal migration, run the exact release
+   image once with `fmarch-schema-epoch-reset --bind-database-identity` and set
+   `FMARCH_DATABASE_IDENTITY_BIND_CONFIRM` to
+   `<project-uuid>:<environment-uuid>:<environment-name>:<release-commit>`.
+   This is the sole create-only bootstrap: remove the confirmation afterward.
+   Normal migrator/reset runs verify the immutable database-owner-only identity
+   and refuse an absent, swapped, relabeled, or additionally granted ledger.
 3. Run the coordinator. Its migrator phase must create/reconcile the fixed
    `fmarch_application` and `fmarch_key_admin` login roles, apply migrations
    through the schema-owner connection, reconcile exact privileges/default
@@ -263,7 +305,8 @@ npm run promote:production -- --fleet-receipt <signed-envelope.json> --fleet-job
 ```
 
 The command reuses the staging-proven digests, sequences migrator before API/frontend,
-verifies both production health endpoints, publishes the immutable release receipt, and only
+verifies both production health endpoints, publishes the immutable lease-scoped
+release receipt, and only
 then advances the release pointer.
 It does not offer a force flag or a proof bypass.
 
@@ -294,11 +337,13 @@ If any service fails, leave the release pointer unchanged, diagnose the failed d
 and do not move the release pointer until the trio
 can be proven together. Do not deploy a dirty local directory to production.
 If coordination and immutable receipt publication succeed but the final Git
-pointer update fails, rerun the same promotion command. It accepts only the
-byte-identical receipt and revalidates its commit, signed proof, staging image
-digests, current Railway source configuration, exact deployment ids, domains,
-and live health before retrying only the expected-value pointer update. It does
-not redeploy services or replace release evidence on that replay path.
+pointer update fails, rerun the promotion. Each acquired lease owns
+`target/releases/production/<commit>.<lease>.json`; a new lease never adopts an
+old-token receipt or overwrites it. The new holder revalidates the staging
+proof and immutable digests, safely reconciles the already-live exact deployment,
+publishes its own current-token receipt, and then retries the expected-value
+pointer update. This avoids both stale-authority adoption and an immutable
+fixed-path recovery wedge.
 The promotion lock is removed with an exact lease in a `finally` path. If the
 operator process is killed and leaves the remote lock ref behind, inspect the
 lock commit and the exact production receipt/live state before deleting that

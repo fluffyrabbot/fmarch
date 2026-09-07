@@ -36,9 +36,11 @@ newer than the binary remains terminal.
 
 Squashing is not an ordinary migration operation. It creates a new epoch and
 requires deliberate recreation of every persistent environment. Before an
-epoch reset, record environment, exact commit, prior epoch/head, row counts for
-identity/profile/mute/event/search state, and the re-bootstrap sources. Stop if
-the audit finds state outside the declared reset plan.
+epoch reset, record environment, exact commit, prior epoch/head, a
+catalog-derived count for every base or partitioned table, and the re-bootstrap
+sources. `_sqlx_migrations` is the only table permitted to be nonempty. Stop if
+any application table is nonempty or if any data-bearing relation kind cannot
+be classified.
 
 For each environment, recreate the isolated application database/schema using
 the schema-owner credential, leaving no hand-edited SQLx rows. Then run the
@@ -52,10 +54,39 @@ under `target/releases/<environment>/schema-epoch-reset/`, keyed by exact
 environment, epoch, commit, runtime digest, and canonical Railway topology. It
 records the prior migrator deployment before dispatching the destructive reset.
 After interruption it inspects the succeeding Railway deployment and requires
-matching signed-in-image reset logs before recording reset completion or
-starting the migrator; it never guesses by rerunning the destructive command.
-Migration completion is likewise recovered only from the exact deployment and
-exact-commit completion record.
+the expected image digest. A failed or log-ambiguous successor is re-dispatched
+once with that same digest; the binary reads the database ledger to distinguish
+committed completion from work that still must run. Migration completion is
+likewise recovered only from a same-digest deployment and exact-commit record.
+
+The requested reset epoch must equal `schema/epoch.json` at the exact release
+Git commit, and `fmarch-schema-epoch-reset` independently requires the same
+epoch embedded in its image at build time. Every persistent database first has
+a create-only identity bound explicitly to the canonical Railway project UUID,
+environment UUID, and environment name. Normal migrator/reset paths only
+verify that owner-only row; they never create, relabel, or repair it. The reset
+binary owns a private
+`fmarch_release_authority.schema_epoch_reset_completion` ledger outside the
+dropped `public` schema. It validates exact database-owner-only schema/table ACLs,
+relation shape, primary key, row-security state, and trigger absence before
+trusting it. `DROP/CREATE public` and insertion of the exact
+environment–epoch–commit prior-count evidence commit in one transaction under
+the shared database-operation advisory lock. Execute takes `ACCESS EXCLUSIVE`
+locks on the complete, stably ordered public data-relation inventory, recounts,
+and requires the exact audit inventory plus digest supplied by the coordinator
+before `DROP`; a post-audit insert therefore aborts without destroying data.
+A retry after commit but before
+stdout reconstructs the same audit/completion from that ledger and never
+repeats the drop. The filesystem phase journal is orchestration evidence, not
+the authority for whether the database transaction committed. If a Railway
+reset or SQLx migrator process is `FAILED`/`CRASHED`, or succeeds without its
+terminal log, the coordinator re-dispatches the same digest once so the reset
+can read the ledger or SQLx can verify its already-committed history; other
+terminal states fail closed.
+
+The canonical `cargo:server` Postgres lane exercises the test-only
+`after-commit-before-output` failpoint, exact ledger recovery without a second
+drop, changed-inventory refusal, and a successful migration after recovery.
 
 Epoch one has one exceptional cutover: staging briefly applied a rewritten
 `0001` checksum before append-only history existed. Freeze the pre-rewrite

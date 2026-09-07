@@ -8,7 +8,7 @@ publish.workspace = true
 sha2 = "0.10"
 sqlx = { workspace = true, features = ["macros", "migrate", "uuid"] }
 thiserror = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-uuid = { version = "1", features = ["v4"] }
