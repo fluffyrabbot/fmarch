@@ -31,7 +31,8 @@ changes no application, workflow, test, or baseline implementation.
 Commit and push a clean task branch, then run `npm run proof:remote` from that
 worktree. Use `npm run proof:remote -- --mode push` for the touched closure plus
 push sentinels, or `--mode sprint` for the active frontier. No arguments selects
-full. Commands come from the committed workflow, never arbitrary CLI text.
+full. Use `npm run proof:remote -- --mode audit` for a forced full sweep: all
+67 lanes execute even when frozen cache entries match. Commands come from the committed workflow, never arbitrary CLI text.
 The controller pins origin/main as the comparison SHA at submission, and the
 worker uses that SHA even if main moves while queued.
 

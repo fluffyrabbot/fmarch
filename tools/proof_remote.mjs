@@ -11,7 +11,7 @@ function git(...args) {
 }
 export function parseRemoteMode(args) {
   const mode = args.length === 0 ? 'full' : args.length === 2 && args[0] === '--mode' ? args[1] : null;
-  if (!['push', 'sprint', 'full'].includes(mode)) throw new Error('Usage: proof:remote [--mode push|sprint|full]');
+  if (!['push', 'sprint', 'full', 'audit'].includes(mode)) throw new Error('Usage: proof:remote [--mode push|sprint|full|audit]');
   return mode;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
