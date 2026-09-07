@@ -156,17 +156,17 @@ try {
 
 function cleanup() {
   return cleanupPromise ??= (async () => {
-  if (postgresRunning) {
-    const bindir = (await capture("pg_config", ["--bindir"])).trim();
-    await run(path.join(bindir, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "-t", "3", "-w", "stop"]);
-  }
-  try {
-    await copyFile(logPath, path.join(artifactDir, "postgres.log"));
-  } catch {
-    // No server log exists when setup fails before PostgreSQL starts.
-  }
-  await rm(runtimeDir, { recursive: true, force: true });
-  await rm(socketDir, { recursive: true, force: true });
+    if (postgresRunning) {
+      const bindir = (await capture("pg_config", ["--bindir"])).trim();
+      await run(path.join(bindir, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "-t", "3", "-w", "stop"]);
+    }
+    try {
+      await copyFile(logPath, path.join(artifactDir, "postgres.log"));
+    } catch {
+      // No server log exists when setup fails before PostgreSQL starts.
+    }
+    await rm(runtimeDir, { recursive: true, force: true });
+    await rm(socketDir, { recursive: true, force: true });
   })();
 }
 
