@@ -619,6 +619,11 @@ impl From<IdentityDeliveryError> for ApiError {
                 error: RejectCode::Internal,
                 message: format!("identity delivery credential boundary failed: {error}"),
             },
+            IdentityDeliveryError::Worker(_) => ApiError::Reject {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error: RejectCode::Internal,
+                message: "identity delivery worker task failed".to_string(),
+            },
         }
     }
 }
