@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { linuxVisualEnvironment } from "./linux_visual_environment.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -103,6 +104,7 @@ try {
   browser = await chromium.launch();
   const evidence = {
     status: "passed",
+    visualEnvironment: process.platform === "linux" ? await linuxVisualEnvironment() : {platform:process.platform, arch:process.arch},
     baseUrl,
     viewports,
     navFocusCoverage: {

@@ -10,7 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const artifactDir = path.resolve(
   process.env.FMARCH_ROLE_SMOKE_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-role-smoke"),
 );
-const baselineDir = path.join(repoRoot, "tools", "fixtures", "frontend-visual-baselines");
+const baselineRoot = path.join(repoRoot, "tools", "fixtures", "frontend-visual-baselines");
+const baselineDir = process.platform === "linux" ? path.join(baselineRoot, `linux-${process.arch}`) : baselineRoot;
 const reportDir = path.resolve(
   process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-visual-regression"),
 );
@@ -90,6 +91,12 @@ const current = Object.fromEntries(
 if (writeBaseline) {
   await mkdir(baselineDir, { recursive: true });
   const expectedFiles = new Set(selectedScreenshots.map(baselineFileName));
+  if (process.platform === "linux") {
+    assert.equal(roleSmokeEvidence.visualEnvironment?.platform, "linux");
+    assert.match(roleSmokeEvidence.visualEnvironment?.sha256 ?? "", /^[a-f0-9]{64}$/);
+    await writeFile(path.join(baselineDir, "identity.json"), JSON.stringify(roleSmokeEvidence.visualEnvironment, null, 2) + "\n");
+    expectedFiles.add("identity.json");
+  }
   for (const name of selectedScreenshots) {
     await writeFile(path.join(baselineDir, baselineFileName(name)), serializeBaselineSample(name, current[name]));
   }
@@ -102,7 +109,11 @@ if (writeBaseline) {
   process.exit(0);
 }
 
-const baselineFiles = (await readdir(baselineDir)).filter((entry) => entry.endsWith(".json"));
+if (process.platform === "linux") {
+  const identity = JSON.parse(await readFile(path.join(baselineDir, "identity.json"), "utf8"));
+  assert.deepEqual(roleSmokeEvidence.visualEnvironment, identity, "Linux browser/font identity changed; review and record the new baseline explicitly");
+}
+const baselineFiles = (await readdir(baselineDir)).filter((entry) => entry.endsWith(".json") && entry !== "identity.json");
 assert.deepEqual(
   [...baselineFiles].sort(),
   selectedScreenshots.map(baselineFileName).sort(),
@@ -126,6 +137,7 @@ await writeFile(
     status: failed.length === 0 ? "passed" : "failed",
     boundary:
       "Perceptual pixel baselines compare a 12x12 RGB sampling grid and full-page geometry for selected mobile, tablet, and desktop product surfaces.",
+    visualEnvironment: roleSmokeEvidence.visualEnvironment,
     comparisons,
   }, null, 2)}\n`,
 );

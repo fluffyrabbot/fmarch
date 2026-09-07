@@ -600,8 +600,13 @@ body {
     display: grid;
     grid-column: 1 / -1;
     grid-row: 2;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(max-content, 1fr));
     padding-block-start: 4px;
+  }
+
+  .fm-app-shell__nav--primary .fm-app-shell__nav-item {
+    padding-inline: 6px;
+    white-space: nowrap;
   }
 
   .fm-app-shell__nav--workspace {
