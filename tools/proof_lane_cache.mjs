@@ -110,6 +110,7 @@ function commandVersion(file, args = []) {
 
 export function proofToolchain() {
   return {
+    environment_sha256: process.env.FMARCH_PROOF_ENVIRONMENT_SHA ?? null,
     platform: platform(),
     arch: arch(),
     os_release: release(),

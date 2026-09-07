@@ -19,6 +19,7 @@ export FMARCH_DEV_POSTGRES_DATA="$FMARCH_EXTERNAL_BUILD_ROOT/postgres/data"
 export FMARCH_DEV_POSTGRES_LOG="$FMARCH_EXTERNAL_BUILD_ROOT/postgres/server.log"
 export DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:15544/fmarch
 bash scripts/check-build-posture.sh --apply
+export FMARCH_PROOF_ENVIRONMENT_SHA="$(node tools/linux_proof_environment.mjs)"
 node tools/dev_postgres.mjs start
 trap 'node tools/dev_postgres.mjs stop' EXIT
 npm run proof:lanes -- "$@" --run
