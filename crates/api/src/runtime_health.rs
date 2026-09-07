@@ -44,7 +44,8 @@ impl RuntimeWorkerHealth {
     }
 
     pub fn register(&self, name: impl Into<String>, required: bool) {
-        self.inner
+        let previous = self
+            .inner
             .write()
             .expect("worker health lock poisoned")
             .insert(
@@ -59,6 +60,7 @@ impl RuntimeWorkerHealth {
                     last_iteration_succeeded: false,
                 },
             );
+        assert!(previous.is_none(), "runtime worker registered twice");
     }
 
     pub fn mark_starting(&self, name: &str) {
@@ -182,6 +184,8 @@ mod tests {
         let snapshot = health.snapshot();
         assert_eq!(snapshot[0].progress, 2);
         assert_eq!(snapshot[0].backlog, Some(3));
+        health.iteration_failed("required");
+        assert!(!health.required_workers_ready());
     }
 
     #[test]

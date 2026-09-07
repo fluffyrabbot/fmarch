@@ -1951,12 +1951,25 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         .with_websocket_audience("transport-proof")
         .with_websocket_poll_interval(Duration::from_secs(5)),
     );
-    let app_b = api::router_with_state(
-        ApiState::new(pool.clone(), media, api::ApiRuntimeConfig::default())
-            .unwrap()
-            .with_websocket_audience("transport-proof")
-            .with_websocket_poll_interval(Duration::from_secs(5)),
-    );
+    let state_b = ApiState::new(pool.clone(), media, api::ApiRuntimeConfig::default())
+        .unwrap()
+        .with_websocket_audience("transport-proof")
+        .with_websocket_poll_interval(Duration::from_secs(5));
+    let app_b = api::router_with_state(state_b.clone());
+    let (live_shutdown, live_shutdown_receiver) = tokio::sync::watch::channel(false);
+    let live_ready = std::sync::Arc::new(tokio::sync::Notify::new());
+    let listener_ready = live_ready.clone();
+    let live_listener = tokio::spawn(async move {
+        state_b
+            .run_live_event_listener(live_shutdown_receiver, move |_| {
+                listener_ready.notify_one();
+            })
+            .await
+            .unwrap();
+    });
+    tokio::time::timeout(Duration::from_secs(2), live_ready.notified())
+        .await
+        .expect("instance B live-event listener became ready");
     let game = Uuid::new_v4();
     insert_account_session(
         &pool,
@@ -2162,6 +2175,8 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         .await
         .unwrap()
         .is_empty());
+    live_shutdown.send(true).unwrap();
+    live_listener.await.unwrap();
     server.abort();
     let _ = server.await;
 }
