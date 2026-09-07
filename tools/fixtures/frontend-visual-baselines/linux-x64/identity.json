@@ -1,0 +1,10 @@
+{
+  "platform": "linux",
+  "arch": "x64",
+  "chromium": {
+    "version": "Google Chrome for Testing 148.0.7778.96",
+    "sha256": "adc1c21ceed5c2a67184766376fe816ac03e556cc0ca3f782e8212235fe05c6f"
+  },
+  "fontsSha256": "2dd80bb889524cafd85bd21e213dde3cb5083ea51adb4609237aab67021fbdb7",
+  "sha256": "f834d0043263020ba4c39f8eb4a75557fbfceda0d4d47804697e1b60122b50a8"
+}
