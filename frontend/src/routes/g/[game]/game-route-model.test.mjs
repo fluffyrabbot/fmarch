@@ -490,7 +490,15 @@ test("player route data marks active private channel access without host data", 
 });
 
 test("player commands require command-state proof for the exact SlotOccupant slot", () => {
+  const otherSlotSnapshot = buildGameRouteData({
+    game: "midsummer", principalId: "player_mira",
+    capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
+  });
   const data = buildGameRouteData({
+    coldLoad: Object.fromEntries([
+      "thread", "votecount", "dayVoteOutcomes", "endgameSummary",
+      "notifications", "investigationResults", "slotMentions", "commandState",
+    ].map((key) => [key, otherSlotSnapshot[key]])),
     game: "midsummer",
     principalId: "player_mira",
     capabilities: [
