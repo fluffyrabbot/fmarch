@@ -198,10 +198,21 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "pool.begin().await?",
             "EXTRACT(EPOCH FROM clock_timestamp())",
             "finalize_delivery(",
-            "requested_event_kind,",
-            "finalized_at,",
         ],
         "delivery transaction",
+    );
+    let finalization_call_start = delivery
+        .find("let receipt = finalize_delivery(")
+        .expect("delivery finalization call");
+    assert_ordered(
+        &delivery[finalization_call_start..],
+        &[
+            "let receipt = finalize_delivery(",
+            "requested_event_kind,",
+            "finalized_at,",
+            "config,",
+        ],
+        "delivery finalization call",
     );
     assert!(
         !delivery.contains("lock_active_credential") && !delivery.contains("lock_claimed_delivery"),
