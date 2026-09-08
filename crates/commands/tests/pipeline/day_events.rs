@@ -2,7 +2,8 @@
 
 use crate::common::*;
 use commands::day_scheduler::{
-    day_event_scheduler_status, run_day_event_scheduler_once, DayEventSchedulerConfig,
+    day_event_scheduler_queue_health, day_event_scheduler_status, run_day_event_scheduler_once,
+    DayEventSchedulerConfig,
 };
 use commands::{
     advance_day_event_automation_as_scheduler, load_engine_snapshot, CohostPermissionClass,
@@ -611,6 +612,10 @@ async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool
         .await
         .unwrap();
     assert_eq!(first.failed_games, 1);
+    let queue = day_event_scheduler_queue_health(&pool, 100).await.unwrap();
+    assert_eq!(queue.failed_games, 1);
+    assert_eq!(queue.pending_games, 1);
+    assert_eq!(queue.oldest_due_at, Some(100));
     let status = day_event_scheduler_status(&pool, game, 100)
         .await
         .unwrap()
@@ -624,6 +629,27 @@ async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool
         .await
         .unwrap();
     assert_eq!(suppressed.claimed_games, 0);
+    let queue = day_event_scheduler_queue_health(&pool, 104).await.unwrap();
+    assert_eq!(queue.failed_games, 1, "backoff must retain unhealthy work");
+    assert_eq!(queue.pending_games, 1);
+
+    sqlx::query("UPDATE phase_state SET phase_id = 'D01' WHERE game_id = $1")
+        .bind(game)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let recovered = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 105)
+        .await
+        .unwrap();
+    assert_eq!(recovered.failed_games, 0);
+    assert_eq!(recovered.succeeded_games, 1);
+    assert_eq!(
+        day_event_scheduler_queue_health(&pool, 105)
+            .await
+            .unwrap()
+            .failed_games,
+        0
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
