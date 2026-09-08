@@ -9651,7 +9651,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
     pool: sqlx::PgPool,
 ) {
     const PROVIDER_CLOCK_LAG_SECONDS: i64 = 1;
-    const PROVIDER_CLOCK_SKEW_MARGIN_SECONDS: i64 = 5;
+    const PROVIDER_CLOCK_SKEW_MARGIN_SECONDS: i64 = 3;
     let (request_sender, mut request_receiver) =
         tokio::sync::mpsc::unbounded_channel::<serde_json::Value>();
     let (quiesced_sender, mut quiesced_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -9678,22 +9678,28 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
                 request_sender
                     .send(payload)
                     .expect("timeout provider request receiver remains live");
-                loop {
-                    // This provider clock deliberately lags the database. The
-                    // earlier effect deadline absorbs that lag; the provider
-                    // performs no side effect and acknowledges quiescence
-                    // before the later generation fence may expire.
-                    let provider_now =
-                        unix_now_seconds().saturating_sub(PROVIDER_CLOCK_LAG_SECONDS);
-                    if provider_now >= lease_expires_at {
-                        break;
+                // Provider execution is independent of the HTTP connection:
+                // the client timeout cancels this response future, but cannot
+                // prove that a remote side-effect worker stopped. Detach that
+                // worker so the fixture models the uncertainty being fenced.
+                let _provider_effect = tokio::spawn(async move {
+                    loop {
+                        // This provider clock deliberately lags the database.
+                        // The earlier effect deadline absorbs that lag; the
+                        // provider performs no side effect and acknowledges
+                        // quiescence before the generation fence may expire.
+                        let provider_now =
+                            unix_now_seconds().saturating_sub(PROVIDER_CLOCK_LAG_SECONDS);
+                        if provider_now >= lease_expires_at {
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                }
-                quiesced_sender
-                    .send(attempt_token)
-                    .expect("provider quiescence receiver remains live");
-                StatusCode::GONE
+                    quiesced_sender
+                        .send(attempt_token)
+                        .expect("provider quiescence receiver remains live");
+                });
+                std::future::pending::<StatusCode>().await
             }
         }),
     );
@@ -9729,7 +9735,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         1,
         1,
         std::time::Duration::from_millis(10),
-        std::time::Duration::from_secs(8),
+        std::time::Duration::from_secs(6),
         std::time::Duration::from_secs(PROVIDER_CLOCK_SKEW_MARGIN_SECONDS as u64),
         std::time::Duration::from_millis(500),
         std::time::Duration::from_millis(250),
@@ -9812,7 +9818,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
     assert_eq!(fence.1, "fixture-http-timeout-v1");
     let generation_fence_expires_at = effect_deadline_at + wire_clock_skew_margin_seconds;
     assert_eq!(fence.3, generation_fence_expires_at);
-    assert_eq!(fence.3 - fence.2, 8);
+    assert_eq!(fence.3 - fence.2, 6);
 
     let erased = sqlx::query("DELETE FROM auth_delivery_intent WHERE delivery_id = $1")
         .bind(delivery_id)
@@ -9852,7 +9858,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .contains("provider attempts to quiesce"));
 
     let mut effect_deadline_elapsed = false;
-    for _ in 0..160 {
+    for _ in 0..80 {
         let database_now = sqlx::query_scalar::<_, i64>(
             "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
         )
@@ -9877,7 +9883,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .to_string()
         .contains("provider attempts to quiesce"));
     let quiesced_attempt =
-        tokio::time::timeout(std::time::Duration::from_secs(5), quiesced_receiver.recv())
+        tokio::time::timeout(std::time::Duration::from_secs(2), quiesced_receiver.recv())
             .await
             .expect("lagging provider terminates by the skew-adjusted safety window")
             .expect("provider quiescence channel remains open");
@@ -9896,7 +9902,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .to_string()
         .contains("provider attempts to quiesce"));
     let mut generation_fence_expired = false;
-    for _ in 0..160 {
+    for _ in 0..80 {
         let database_now = sqlx::query_scalar::<_, i64>(
             "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
         )
