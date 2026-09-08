@@ -35,7 +35,7 @@ pub struct PersonalExport {
 /// by deactivation; the direct erasure flow is intentionally orchestrated by
 /// [`erase_member`] because revoking the current session makes two HTTP calls
 /// impossible to complete safely.
-pub async fn apply_member_lifecycle(
+pub(crate) async fn apply_member_lifecycle(
     pool: &PgPool,
     principal_id: &PrincipalId,
     command: MemberLifecycleCommand,
@@ -60,6 +60,7 @@ pub async fn apply_member_lifecycle_authenticated(
     now: i64,
     recent_auth_max_age_seconds: i64,
 ) -> Result<MemberLifecycleStatus, IdentityFlowError> {
+    initiating_session.require_principal(principal_id)?;
     apply_member_lifecycle_with_authority(
         pool,
         principal_id,
@@ -111,7 +112,7 @@ async fn apply_member_lifecycle_with_authority(
 /// inline worker attempt for the current HTTP contract. A failed authority call
 /// leaves a durable `erasure_in_progress` aggregate for startup/background
 /// resumption; it never rolls the security cutoff back.
-pub async fn erase_member(
+pub(crate) async fn erase_member(
     pool: &PgPool,
     principal_id: &PrincipalId,
     now: i64,
@@ -141,7 +142,7 @@ pub async fn erase_member(
 /// owner transaction begins. The random alias, fingerprint, and authority
 /// identity are committed in a create-only outbox beside the immediate auth
 /// cutoff and pending-presentation redaction.
-pub async fn request_member_erasure(
+pub(crate) async fn request_member_erasure(
     pool: &PgPool,
     principal_id: &PrincipalId,
     now: i64,
@@ -170,6 +171,7 @@ pub async fn request_member_erasure_authenticated(
     now: i64,
     recent_auth_max_age_seconds: i64,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
+    initiating_session.require_principal(principal_id)?;
     let key_store = crate::active_subject_key_store()
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
@@ -188,7 +190,7 @@ pub async fn request_member_erasure_authenticated(
     .map(|(snapshot, _)| snapshot)
 }
 
-pub async fn request_member_erasure_with_store(
+pub(crate) async fn request_member_erasure_with_store(
     pool: &PgPool,
     key_store: &dyn SubjectKeyStore,
     principal_id: &PrincipalId,
@@ -576,7 +578,7 @@ pub(crate) async fn recover_member_erasure_from_revocation(
 
 /// Assemble the subject-scoped export before erasure. It intentionally omits
 /// passwords, recovery tokens, session tokens, and raw provider credentials.
-pub async fn create_personal_export(
+pub(crate) async fn create_personal_export(
     pool: &PgPool,
     principal_id: &PrincipalId,
     now: i64,
@@ -594,6 +596,7 @@ pub async fn create_personal_export_authenticated(
     now: i64,
     recent_auth_max_age_seconds: i64,
 ) -> Result<PersonalExport, IdentityFlowError> {
+    initiating_session.require_principal(principal_id)?;
     create_personal_export_with_authority(
         pool,
         principal_id,
@@ -687,7 +690,7 @@ async fn create_personal_export_with_authority(
     })
 }
 
-pub async fn load_personal_export(
+pub(crate) async fn load_personal_export(
     pool: &PgPool,
     principal_id: &PrincipalId,
     export_id: Uuid,
@@ -706,6 +709,7 @@ pub async fn load_personal_export_authenticated(
     export_id: Uuid,
     now: i64,
 ) -> Result<Option<PersonalExport>, IdentityFlowError> {
+    initiating_session.require_principal(principal_id)?;
     load_personal_export_with_authority(
         pool,
         principal_id,
@@ -812,7 +816,7 @@ async fn require_initiating_authority(
     .await?;
     if recent_auth_max_age_seconds != i64::MAX {
         crate::methods::require_recent_authentication(
-            authorization.authenticated_at,
+            authorization.authenticated_at(),
             current_unix_seconds(),
             recent_auth_max_age_seconds,
         )?;
@@ -830,7 +834,7 @@ fn current_unix_seconds() -> i64 {
 /// Re-fold the lifecycle event stream into its projection. This deliberately
 /// owns no destructive side effects: rebuild restores a read model, while the
 /// append handler is the only authority that erases credentials/identifiers.
-pub async fn rebuild_member_lifecycle(
+pub(crate) async fn rebuild_member_lifecycle(
     pool: &PgPool,
     principal_id: &PrincipalId,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {

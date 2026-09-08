@@ -25,6 +25,7 @@ const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "auth_account_recovery_credential",
     "auth_credential_attempt",
     "auth_delivery_intent",
+    "auth_delivery_provider_authority",
     "game_invitation",
     "auth_registration_attempt",
     "auth_session",
@@ -105,6 +106,7 @@ const APPLICATION_DELETE_TABLES: &[&str] = &[
     "auth_account_recovery_credential",
     "auth_credential_attempt",
     "auth_delivery_intent",
+    "auth_delivery_provider_attempt_fence",
     "community_invitation_credential",
     "game_invitation",
     "auth_registration_attempt",
@@ -196,8 +198,28 @@ const EXPECTED_VIEWS: &[&str] = &["event_direct_key_reference"];
 const EXPECTED_GUARDS: &[(&str, &str, &str)] = &[
     (
         "auth_delivery_intent",
+        "auth_delivery_intent_attempt_fence_insert",
+        "auth_delivery_intent_attempt_fence_insert",
+    ),
+    (
+        "auth_delivery_intent",
+        "auth_delivery_intent_attempt_count_guard",
+        "auth_delivery_intent_attempt_count_monotonic",
+    ),
+    (
+        "auth_delivery_intent",
         "auth_delivery_intent_direct_envelope_guard",
         "event_direct_envelope_write_guard",
+    ),
+    (
+        "auth_delivery_intent",
+        "auth_delivery_intent_provider_authority_guard",
+        "auth_delivery_intent_provider_authority_guard",
+    ),
+    (
+        "auth_delivery_provider_authority",
+        "auth_delivery_provider_authority_invariant_guard",
+        "auth_delivery_provider_authority_invariant_guard",
     ),
     (
         "completed_game_detached_alias",
@@ -362,6 +384,10 @@ const EXPECTED_GUARDS: &[(&str, &str, &str)] = &[
     ),
 ];
 const EXPECTED_GUARD_FUNCTIONS: &[&str] = &[
+    "auth_delivery_intent_attempt_count_monotonic",
+    "auth_delivery_intent_attempt_fence_insert",
+    "auth_delivery_intent_provider_authority_guard",
+    "auth_delivery_provider_authority_invariant_guard",
     "event_direct_envelope_write_guard",
     "event_direct_key_sentinel_guard_mutation",
     "event_direct_key_sentinel_lock_transition",
@@ -378,8 +404,24 @@ const EXPECTED_GUARD_FUNCTIONS: &[&str] = &[
 ];
 const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
     (
+        "auth_delivery_intent_attempt_fence_insert",
+        "de8fd1b2761c1d024a913186c9a57d007c0b3c9ec3a278932505a6d5b9cf05b4",
+    ),
+    (
+        "auth_delivery_intent_attempt_count_guard",
+        "a1ce10d5054377c9a283d97004bedbdcca04581867b69dad23aa6f0745560920",
+    ),
+    (
         "auth_delivery_intent_direct_envelope_guard",
         "b59c7d75900eefe37368ce221ad1cab4c7127c443558430947111efba6301746",
+    ),
+    (
+        "auth_delivery_intent_provider_authority_guard",
+        "d2494bf7b652926f6140ee3820cf7d483e5c85184dbcaff0fd1222c95cc3559d",
+    ),
+    (
+        "auth_delivery_provider_authority_invariant_guard",
+        "fe32ce9c4d1a05fcada80ab47961f8386c2b7b11c2c87a66122846b86d255d11",
     ),
     (
         "completed_game_detached_alias_no_mutation",
@@ -516,6 +558,22 @@ const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
 ];
 const EXPECTED_FUNCTION_SOURCE_HASHES: &[(&str, &str)] = &[
     (
+        "auth_delivery_intent_attempt_fence_insert",
+        "a47d4f1b092e414e061365bf9d390d5f97f05aa8257a3bb0a46e1b11701d8c8f",
+    ),
+    (
+        "auth_delivery_intent_attempt_count_monotonic",
+        "44583e6520d8bd752691ca90316cb256a3c50dc69e176f0e35034fcc15b1ae9f",
+    ),
+    (
+        "auth_delivery_intent_provider_authority_guard",
+        "517920c3cf16b49936d4e23d8b9042df3e84e61439b62d195ec8848136dd7f0b",
+    ),
+    (
+        "auth_delivery_provider_authority_invariant_guard",
+        "f891b5c00c1f592870fb72a2d2bf161d3dc17dea2cfdffd8cb619c75df7e259b",
+    ),
+    (
         "event_direct_envelope_write_guard",
         "9e5cd2f0d82c58db7c31931622f7e95101fda5128b290cf89b589eafc89775f9",
     ),
@@ -578,6 +636,8 @@ const EXPECTED_TABLES: &[&str] = &[
     "auth_account_recovery_credential",
     "auth_credential_attempt",
     "auth_delivery_intent",
+    "auth_delivery_provider_attempt_fence",
+    "auth_delivery_provider_authority",
     "game_invitation",
     "auth_registration_attempt",
     "auth_session",

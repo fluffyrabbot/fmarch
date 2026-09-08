@@ -41,6 +41,7 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
     "FMARCH_PROFILE_HANDLE_INDEX_KEY",
     "FMARCH_PROFILE_HANDLE_INDEX_KID",
+    "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
     ...Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES),
   ]) {
     assertSecretRelation(
@@ -377,6 +378,16 @@ export function validateHostedVariables({
       productionApi.AWS_S3_BUCKET_NAME !== stagingApi.AWS_S3_BUCKET_NAME,
     "production and staging must use isolated object storage",
   );
+  assertSecretRelation(
+    productionApi.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN !==
+      stagingApi.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN,
+    "production and staging must not share the identity-delivery authentication token",
+  );
+  assertSecretRelation(
+    productionApi.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID !==
+      stagingApi.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID,
+    "production and staging must not share the identity-delivery provider generation",
+  );
   for (const [label, left, right] of [
     ["WorkOS client", productionApi.WORKOS_CLIENT_ID, stagingApi.WORKOS_CLIENT_ID],
     ["WorkOS API key", productionFrontend.WORKOS_API_KEY, stagingFrontend.WORKOS_API_KEY],
@@ -487,6 +498,8 @@ function validateHostedEnvironmentVariables({
         "AWS_S3_BUCKET_NAME",
         "FMARCH_MEDIA_READ_MAX_IN_FLIGHT",
         "FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES",
+        "FMARCH_HTTP_REQUEST_TIMEOUT_MS",
+        "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS",
         "FMARCH_CLASSIC_AUTH",
         "WORKOS_CLIENT_ID",
         "WORKOS_ISSUER",
@@ -520,6 +533,7 @@ function validateHostedEnvironmentVariables({
   }
 
   validateHostedIdentityDelivery(`${environment} API`, api);
+  validateHostedRuntimeBudgets(`${environment} API`, api);
   assert.equal(
     frontend.FMARCH_API_BASE_URL,
     apiUrl,
@@ -730,30 +744,299 @@ function validateHostedIdentityDelivery(name, variables) {
     "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID",
     "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
   ];
-  if (mode === "0") {
-    for (const key of deliveryVariables) {
-      assert.equal(
-        variables[key],
-        undefined,
-        `${name} WorkOS-only mode must not retain ${key}`,
-      );
-    }
-    return;
-  }
-
   for (const key of deliveryVariables) {
-    assert.ok(variables[key], `${name} classic mode is missing ${key}`);
+    assert.ok(variables[key], `${name} identity delivery is missing ${key}`);
   }
   let endpoint;
   try {
     endpoint = new URL(variables.FMARCH_IDENTITY_DELIVERY_ENDPOINT);
   } catch {
-    assert.fail(`${name} classic delivery endpoint is not a valid URL`);
+    assert.fail(`${name} identity-delivery endpoint is not a valid URL`);
   }
   assert.equal(
     endpoint.protocol,
     "https:",
-    `${name} classic delivery endpoint must use HTTPS`,
+    `${name} identity-delivery endpoint must use HTTPS`,
+  );
+  // URL.search normalizes a bare trailing query delimiter to an empty string.
+  const hasQueryDelimiter = endpoint.href.includes("?");
+  assertSecretRelation(
+    endpoint.username === "" &&
+      endpoint.password === "" &&
+      endpoint.search === "" &&
+      !hasQueryDelimiter &&
+      endpoint.hash === "" &&
+      !isPlaceholderHostedName(endpoint.hostname),
+    `${name} identity-delivery endpoint must be a real hosted HTTPS URL without embedded credentials, query strings, or fragments`,
+  );
+  assertSecretRelation(
+    typeof variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID === "string" &&
+      variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID ===
+        variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID.trim() &&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*$/u.test(
+        variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID,
+      ) &&
+      variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID.length <= 128 &&
+      variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID !== "http-json" &&
+      !/(?:replace[\s_-]*me|placeholder|example|disabled)/iu.test(
+        variables.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID,
+      ),
+    `${name} identity-delivery provider id must name a versioned, environment-specific generation instead of a generic adapter`,
+  );
+  assertSecretRelation(
+    isStrongOpaqueSecret(variables.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN),
+    `${name} identity-delivery authentication token must be a non-placeholder value of at least 32 characters`,
+  );
+}
+
+function validateHostedRuntimeBudgets(name, variables) {
+  const databaseConnections = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_DB_MAX_CONNECTIONS",
+    10,
+    5,
+    256,
+  );
+  const authorityTransactionMaxInFlight = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT",
+    databaseConnections - 3,
+    2,
+    databaseConnections - 3,
+  );
+  const databaseAcquire = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_DB_ACQUIRE_TIMEOUT_MS",
+    250,
+    1,
+    60_000,
+  );
+  const databaseStatement = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_DB_STATEMENT_TIMEOUT_MS",
+    5_000,
+    10,
+    300_000,
+  );
+  const deliveryConnect = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS",
+    1_000,
+    1,
+    120_000,
+  );
+  const deliveryResponse = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS",
+    3_000,
+    1,
+    120_000,
+  );
+  const deliveryBody = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS",
+    1_000,
+    1,
+    120_000,
+  );
+  const deliveryTotal = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS",
+    5_000,
+    1,
+    120_000,
+  );
+  hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES",
+    64 * 1_024,
+    1,
+    1_024 * 1_024,
+  );
+  const deliveryConcurrency = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY",
+    4,
+    1,
+    64,
+  );
+  hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS",
+    100,
+    1,
+    60_000,
+  );
+  const deliveryClaimLease = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS",
+    40_000,
+    2_000,
+    300_000,
+  );
+  const deliveryProviderClockSkewMargin = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS",
+    5_000,
+    1_000,
+    60_000,
+  );
+  const deliveryDatabase = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS",
+    6_000,
+    1,
+    120_000,
+  );
+  const deliveryProvider = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS",
+    10_000,
+    1,
+    120_000,
+  );
+  const retryBase = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_RETRY_BASE_SECONDS",
+    2,
+    1,
+    86_400,
+  );
+  const retryMax = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS",
+    300,
+    1,
+    86_400,
+  );
+  hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_IDENTITY_DELIVERY_MAX_ATTEMPTS",
+    8,
+    1,
+    100,
+  );
+  const request = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_HTTP_REQUEST_TIMEOUT_MS",
+    null,
+    10,
+    300_000,
+  );
+  const shutdown = hostedBoundedUnsignedInteger(
+    name,
+    variables,
+    "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS",
+    null,
+    1_000,
+    300_000,
+  );
+  const deliveryDatabaseHeadroom = databaseConnections
+    - authorityTransactionMaxInFlight
+    - 1;
+  const deliveryDatabaseInFlight = Math.min(
+    deliveryConcurrency,
+    deliveryDatabaseHeadroom,
+  );
+  assert.ok(
+    deliveryDatabaseInFlight >= 1 &&
+      deliveryDatabaseInFlight <= deliveryConcurrency,
+    `${name} identity delivery database concurrency must be positive and must not exceed provider concurrency`,
+  );
+  assert.ok(
+    deliveryConnect <= deliveryResponse,
+    `${name} identity delivery connect deadline must not exceed the response deadline`,
+  );
+  assert.ok(
+    deliveryResponse + deliveryBody <= deliveryTotal,
+    `${name} identity delivery total deadline must cover the response and body deadlines`,
+  );
+  assert.ok(
+    deliveryTotal <= deliveryProvider,
+    `${name} identity delivery HTTP total timeout must not exceed the provider timeout`,
+  );
+  assert.ok(
+    deliveryClaimLease % 1_000 === 0 &&
+      deliveryProviderClockSkewMargin % 1_000 === 0 &&
+      deliveryClaimLease >
+        deliveryProvider +
+          (3 * deliveryDatabase) +
+          deliveryProviderClockSkewMargin +
+          1_000,
+    `${name} identity delivery claim lease and provider clock-skew margin must use whole seconds, and the lease must exceed the bounded claim commit, preparation, provider, and finalization lifetime by that margin plus a one-second database-clock quantization reserve`,
+  );
+  assert.ok(
+    retryBase <= retryMax,
+    `${name} identity delivery retry bounds must be whole-second values with 1s <= base <= max <= 24h`,
+  );
+  assert.ok(
+    deliveryDatabase > databaseAcquire + databaseStatement,
+    `${name} identity delivery database timeout must cover one bounded database acquire and statement`,
+  );
+  const completeRetry = databaseAcquire
+    + (2 * databaseStatement)
+    + deliveryProvider
+    + (3 * deliveryDatabase)
+    + 1_000;
+  assert.ok(
+    request > completeRetry,
+    `${name} FMARCH_HTTP_REQUEST_TIMEOUT_MS must exceed one database acquisition, both request-authentication statements, the complete identity delivery claim, preparation, provider, and finalization budget, and a one-second response margin`,
+  );
+  assert.ok(
+    shutdown > request + 1_000,
+    `${name} FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS plus a one-second process-drain margin`,
+  );
+}
+
+function hostedBoundedUnsignedInteger(
+  name,
+  variables,
+  key,
+  defaultValue,
+  minimum,
+  maximum,
+) {
+  const raw = variables[key] ?? (defaultValue === null ? undefined : String(defaultValue));
+  assert.ok(raw, `${name} is missing ${key}`);
+  assert.match(
+    raw,
+    /^(?:0|[1-9][0-9]*)$/u,
+    `${name} ${key} must be a canonical unsigned integer`,
+  );
+  const value = Number(raw);
+  assert.ok(
+    Number.isSafeInteger(value) && value >= minimum && value <= maximum,
+    `${name} ${key} must be between ${minimum} and ${maximum} milliseconds`,
+  );
+  return value;
+}
+
+function isPlaceholderHostedName(hostname) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    /(?:^|\.)(?:example|invalid)(?:\.(?:com|net|org|test))?$/u.test(normalized) ||
+    /(?:replace[\s_-]*me|placeholder)/u.test(normalized)
   );
 }
 

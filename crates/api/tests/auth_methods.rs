@@ -7,14 +7,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use api::ApiState;
+use api::{
+    identity_delivery::{
+        bind_identity_delivery_provider_authority, IdentityDeliveryGateway,
+        LocalDeterministicIdentityDeliveryGateway,
+    },
+    ApiState,
+};
 use async_trait::async_trait;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use identity::{
-    AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,
-    WorkosSessionId,
-};
+use identity::test_support::StaticAccessTokenVerifier;
+use identity::{AccessTokenVerifier, IdentityError, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore};
 use principal::PrincipalId;
 use tempfile::TempDir;
@@ -30,9 +34,34 @@ fn test_local_proof_verifier() -> api::LocalProofAuthVerifier {
         .expect("test local-proof secret is canonical")
 }
 
-fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
+fn test_verified_workos_identity(
+    subject: impl Into<String>,
+    session_id: WorkosSessionId,
+    issued_at: i64,
+    signing_key_id: &str,
+    email: Option<String>,
+) -> VerifiedIdentity {
+    identity::test_support::verified_workos_identity(
+        subject,
+        session_id,
+        issued_at,
+        4_102_444_800,
+        signing_key_id,
+        email,
+    )
+    .expect("test WorkOS identity is canonical")
+}
+
+async fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    ApiState::new(pool, store, api::ApiRuntimeConfig::default()).unwrap()
+    let gateway: Arc<dyn IdentityDeliveryGateway> =
+        Arc::new(LocalDeterministicIdentityDeliveryGateway::new(false));
+    bind_identity_delivery_provider_authority(&pool, gateway.as_ref())
+        .await
+        .expect("bind test identity-delivery provider authority");
+    ApiState::new(pool, store, api::ApiRuntimeConfig::default())
+        .unwrap()
+        .with_identity_delivery_gateway(gateway)
 }
 
 async fn json_body(response: axum::response::Response) -> serde_json::Value {
@@ -425,7 +454,7 @@ async fn session_row(pool: &sqlx::PgPool, token: &str) -> (Option<Uuid>, Option<
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
 
     let response = register_classic_response(
         &app,
@@ -462,7 +491,7 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
 
     let password = "correct horse battery staple";
     let password_hash = identity::password::hash_password_sync(password).unwrap();
@@ -523,7 +552,9 @@ async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::
 async fn local_proof_sessions_and_rotation_issue_backend_tokens(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_local_proof_auth(test_local_proof_verifier()),
+        test_state(pool.clone(), &root)
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
 
     let response = post_json(
@@ -597,14 +628,13 @@ fn workos_verifier_issued_at(
 ) -> StaticAccessTokenVerifier {
     StaticAccessTokenVerifier::new([(
         token.to_string(),
-        VerifiedIdentity {
-            subject: subject.to_string(),
-            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+        test_verified_workos_identity(
+            subject,
+            WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
             issued_at,
-            expires_at: 4_102_444_800,
-            signing_key_id: "test-workos-key".to_string(),
-            email: Some(format!("{subject}@example.test")),
-        },
+            "test-workos-key",
+            Some(format!("{subject}@example.test")),
+        ),
     )])
 }
 
@@ -636,14 +666,13 @@ fn workos_race_verifier() -> StaticAccessTokenVerifier {
     StaticAccessTokenVerifier::new(["workos-race-a", "workos-race-b"].map(|token| {
         (
             token.to_string(),
-            VerifiedIdentity {
-                subject: "user_workos_race".to_string(),
-                session_id: session_id.clone(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: Some("user_workos_race@example.test".to_string()),
-            },
+            test_verified_workos_identity(
+                "user_workos_race",
+                session_id.clone(),
+                1,
+                "test-workos-key",
+                Some("user_workos_race@example.test".to_string()),
+            ),
         )
     }))
 }
@@ -653,25 +682,23 @@ fn workos_retirement_verifier() -> StaticAccessTokenVerifier {
     StaticAccessTokenVerifier::new([
         (
             "retirement-existing".to_string(),
-            VerifiedIdentity {
-                subject: "user_retirement_existing".to_string(),
-                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap(),
+            test_verified_workos_identity(
+                "user_retirement_existing",
+                WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap(),
                 issued_at,
-                expires_at: 4_102_444_800,
-                signing_key_id: "compromised-workos-key".to_string(),
-                email: Some("user_retirement_existing@example.test".to_string()),
-            },
+                "compromised-workos-key",
+                Some("user_retirement_existing@example.test".to_string()),
+            ),
         ),
         (
             "retirement-future".to_string(),
-            VerifiedIdentity {
-                subject: "user_retirement_future".to_string(),
-                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0D").unwrap(),
+            test_verified_workos_identity(
+                "user_retirement_future",
+                WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0D").unwrap(),
                 issued_at,
-                expires_at: 4_102_444_800,
-                signing_key_id: "compromised-workos-key".to_string(),
-                email: Some("user_retirement_future@example.test".to_string()),
-            },
+                "compromised-workos-key",
+                Some("user_retirement_future@example.test".to_string()),
+            ),
         ),
     ])
 }
@@ -721,6 +748,7 @@ async fn workos_verification_source_budget_rejects_before_repeated_crypto(pool: 
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool, &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_verifier("known-token", "known-user")))
             .with_trusted_auth_attempt_source_header(true)
             .with_workos_verification_source_limit(2),
@@ -761,6 +789,7 @@ async fn stale_workos_source_budget_cleanup_is_bounded_per_request(pool: sqlx::P
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_verifier("known-token", "known-user"))),
     );
 
@@ -785,18 +814,17 @@ async fn workos_verification_concurrency_sheds_overload_before_the_verifier(pool
     let invocations = Arc::new(AtomicUsize::new(0));
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_workos_verification_limit(1)
             .with_workos_verification_source_limit(3)
             .with_access_token_verifier(Arc::new(BlockingWorkosVerifier {
-                identity: VerifiedIdentity {
-                    subject: "user_workos_capacity".to_string(),
-                    session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0E")
-                        .unwrap(),
-                    issued_at: 1,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "capacity-workos-key".to_string(),
-                    email: Some("user_workos_capacity@example.test".to_string()),
-                },
+                identity: test_verified_workos_identity(
+                    "user_workos_capacity",
+                    WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0E").unwrap(),
+                    1,
+                    "capacity-workos-key",
+                    Some("user_workos_capacity@example.test".to_string()),
+                ),
                 entered: entered.clone(),
                 release: release.clone(),
                 invocations: invocations.clone(),
@@ -862,6 +890,7 @@ async fn workos_signing_key_retirement_is_monotonic_and_targets_only_live_sessio
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (_, target_token) = seed_workos_race_session(&app, &pool).await;
@@ -1017,6 +1046,7 @@ async fn global_admin_http_retirement_revokes_and_permanently_denies_a_workos_ke
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_local_proof_auth(test_local_proof_verifier())
             .with_access_token_verifier(Arc::new(workos_retirement_verifier())),
     );
@@ -1178,6 +1208,7 @@ async fn concurrent_global_admin_retirements_serialize_before_session_locks(pool
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (first_admin, first_token) = register_classic_account(
@@ -1284,6 +1315,7 @@ async fn concurrent_workos_issuance_commits_before_retirement_and_is_still_revok
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_retirement_verifier())),
     );
     let (admin, admin_token) = register_classic_account(
@@ -1397,6 +1429,7 @@ async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sql
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, local_token) = register_classic_account(
@@ -1469,6 +1502,7 @@ async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool:
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, local_token) = register_classic_account(
@@ -1548,6 +1582,7 @@ async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sql
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, local_token) = register_classic_account(
@@ -1618,6 +1653,7 @@ async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombst
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, first_local_token) = seed_workos_race_session(&app, &pool).await;
@@ -1678,6 +1714,7 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
         test_state(pool.clone(), &root)
+            .await
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, first_local_token) = seed_workos_race_session(&app, &pool).await;
@@ -1728,6 +1765,7 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
 async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
+        .await
         .with_access_token_verifier(Arc::new(workos_verifier_issued_at(
             "workos-token",
             "user_convert",
@@ -2013,6 +2051,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
 async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
+        .await
         .with_access_token_verifier(Arc::new(workos_verifier("workos-old", "user_old")));
     let app = api::router_with_state(state);
 
@@ -2091,7 +2130,7 @@ async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn idle_expired_sessions_cannot_rotate_or_choose_legacy_bearers(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let password = "correct horse battery staple";
 
     let response =
@@ -2220,7 +2259,7 @@ async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_i
     pool: sqlx::PgPool,
 ) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
 
     let response = register_classic_response(
         &app,
@@ -2333,7 +2372,9 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
     let local_proof_verifier = test_local_proof_verifier();
     let local_proof_instance_id = local_proof_verifier.instance_id().clone();
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_local_proof_auth(local_proof_verifier),
+        test_state(pool.clone(), &root)
+            .await
+            .with_local_proof_auth(local_proof_verifier),
     );
     let principal_id = principal::PrincipalId::fixture("missing-platform-principal");
     let token = identity::token::generate_session_token();
@@ -2419,7 +2460,7 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let password = "correct horse battery staple";
 
     let response = register_classic_response(&app, &pool, "revoked@example.test", password).await;
@@ -2492,31 +2533,31 @@ async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_withou
         .map(|(token, session_id, _)| {
             (
                 (*token).to_string(),
-                VerifiedIdentity {
-                    subject: format!("user_{token}"),
-                    session_id: WorkosSessionId::parse(*session_id).unwrap(),
-                    issued_at: 1,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "test-workos-key".to_string(),
-                    email: None,
-                },
+                test_verified_workos_identity(
+                    format!("user_{token}"),
+                    WorkosSessionId::parse(*session_id).unwrap(),
+                    1,
+                    "test-workos-key",
+                    None,
+                ),
             )
         })
         .collect::<Vec<_>>();
     identities.push((
         "link-recover-erased-subject".to_string(),
-        VerifiedIdentity {
-            subject: erased_subject.to_string(),
-            session_id: WorkosSessionId::parse(erased_sid).unwrap(),
-            issued_at: 1,
-            expires_at: 4_102_444_800,
-            signing_key_id: "test-workos-key".to_string(),
-            email: None,
-        },
+        test_verified_workos_identity(
+            erased_subject,
+            WorkosSessionId::parse(erased_sid).unwrap(),
+            1,
+            "test-workos-key",
+            None,
+        ),
     ));
     let verifier = StaticAccessTokenVerifier::new(identities);
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+        test_state(pool.clone(), &root)
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
     let (_, local_session) = register_classic_account(
         &app,
@@ -2619,18 +2660,19 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
         .map(|(token, session_id)| {
             (
                 token.to_string(),
-                VerifiedIdentity {
-                    subject: "user_attach".to_string(),
+                test_verified_workos_identity(
+                    "user_attach",
                     session_id,
-                    issued_at: 1,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "test-workos-key".to_string(),
-                    email: Some("user_attach@example.test".to_string()),
-                },
+                    1,
+                    "test-workos-key",
+                    Some("user_attach@example.test".to_string()),
+                ),
             )
         }),
     );
-    let state = test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier));
+    let state = test_state(pool.clone(), &root)
+        .await
+        .with_access_token_verifier(Arc::new(verifier));
     let app = api::router_with_state(state);
 
     let response = register_classic_response(
@@ -2772,19 +2814,20 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
         .map(|(token, session_id)| {
             (
                 token.to_string(),
-                VerifiedIdentity {
-                    subject: "user_disable_replay".to_string(),
+                test_verified_workos_identity(
+                    "user_disable_replay",
                     session_id,
                     issued_at,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "test-workos-key".to_string(),
-                    email: Some("disable-replay@example.test".to_string()),
-                },
+                    "test-workos-key",
+                    Some("disable-replay@example.test".to_string()),
+                ),
             )
         }),
     );
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+        test_state(pool.clone(), &root)
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
 
     let invitation = community_invitation_for(&pool, "disable-replay@example.test").await;
@@ -2896,19 +2939,20 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
         .map(|(token, provider_session_id)| {
             (
                 token.to_string(),
-                VerifiedIdentity {
-                    subject: "user_link_only".to_string(),
-                    session_id: provider_session_id,
-                    issued_at: 1,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "test-workos-key".to_string(),
-                    email: None,
-                },
+                test_verified_workos_identity(
+                    "user_link_only",
+                    provider_session_id,
+                    1,
+                    "test-workos-key",
+                    None,
+                ),
             )
         }),
     );
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+        test_state(pool.clone(), &root)
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
     let registration = register_classic_response(
         &app,
@@ -3040,6 +3084,7 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
 async fn provider_jwts_and_random_bearers_are_never_general_credentials(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
+        .await
         .with_access_token_verifier(Arc::new(workos_verifier("workos-token", "user_dispatch")));
     let app = api::router_with_state(state);
 
@@ -3070,7 +3115,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     pool: sqlx::PgPool,
 ) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let response = register_classic_response(
         &app,
         &pool,
@@ -3321,7 +3366,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         .await
         .unwrap();
 
-    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
+    let rebuilt = identity::test_support::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
@@ -3366,7 +3411,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn logout_wins_before_a_delayed_erasure_commit_boundary(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let (principal, token) = register_classic_account(
         &app,
         &pool,
@@ -3447,7 +3492,7 @@ async fn logout_wins_before_a_delayed_erasure_commit_boundary(pool: sqlx::PgPool
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let account_id = "recovery-race@example.test";
     let password = "correct horse battery staple";
     let (principal, token) = register_classic_account(&app, &pool, account_id, password).await;
@@ -3505,7 +3550,8 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let erasure_pool = pool.clone();
     let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
-        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+        identity::test_support::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds())
+            .await
     });
     wait_for_owner_lock_waiters(&pool, 2).await;
     owner_gate.commit().await.unwrap();
@@ -3524,7 +3570,9 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
 async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_local_proof_auth(test_local_proof_verifier()),
+        test_state(pool.clone(), &root)
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let account_id = "invite-race@example.test";
     let password = "correct horse battery staple";
@@ -3583,7 +3631,8 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     let erasure_pool = pool.clone();
     let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
-        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+        identity::test_support::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds())
+            .await
     });
     wait_for_owner_lock_waiters(&pool, 2).await;
     owner_gate.commit().await.unwrap();
@@ -3601,7 +3650,9 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
 async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
-        test_state(pool.clone(), &root).with_local_proof_auth(test_local_proof_verifier()),
+        test_state(pool.clone(), &root)
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let account_id = "disable-race@example.test";
     let (principal, _) =
@@ -3641,7 +3692,8 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     let erasure_pool = pool.clone();
     let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
-        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+        identity::test_support::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds())
+            .await
     });
     wait_for_owner_lock_waiters(&pool, 2).await;
     owner_gate.commit().await.unwrap();
@@ -3658,7 +3710,7 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let (principal, token) = register_classic_account(
         &app,
         &pool,
@@ -3700,7 +3752,8 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let erasure_pool = pool.clone();
     let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
-        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+        identity::test_support::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds())
+            .await
     });
     wait_for_owner_lock_waiters(&pool, 2).await;
     owner_gate.commit().await.unwrap();
@@ -3717,7 +3770,7 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let app = api::router_with_state(test_state(pool.clone(), &root).await);
     let (principal, _) = register_classic_account(
         &app,
         &pool,
@@ -3725,7 +3778,7 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
         "correct horse battery staple",
     )
     .await;
-    identity::apply_member_lifecycle(
+    identity::test_support::apply_member_lifecycle(
         &pool,
         &principal,
         identity::MemberLifecycleCommand::Deactivate {
@@ -3745,7 +3798,7 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     let rebuild_pool = pool.clone();
     let rebuild_principal = principal;
     let rebuild = tokio::spawn(async move {
-        identity::rebuild_member_lifecycle(&rebuild_pool, &rebuild_principal).await
+        identity::test_support::rebuild_member_lifecycle(&rebuild_pool, &rebuild_principal).await
     });
     wait_for_owner_lock_waiters(&pool, 1).await;
 
@@ -3762,7 +3815,8 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     let erasure_pool = pool.clone();
     let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
-        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+        identity::test_support::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds())
+            .await
     });
     wait_for_owner_lock_waiters(&pool, 2).await;
     owner_gate.commit().await.unwrap();
@@ -3777,7 +3831,7 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     );
     erasure.unwrap().unwrap();
 
-    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
+    let rebuilt = identity::test_support::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);

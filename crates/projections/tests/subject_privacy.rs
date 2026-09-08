@@ -366,7 +366,9 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         assert!(!raw_claim.contains(canary));
     }
 
-    let erased = identity::erase_member(&pool, &principal, 10).await.unwrap();
+    let erased = identity::test_support::erase_member(&pool, &principal, 10)
+        .await
+        .unwrap();
     let alias = erased.pseudonym.unwrap();
     assert!(alias.starts_with("former-member-"));
     assert!(!alias.contains(&principal.to_string()));
@@ -386,7 +388,7 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let rebuilt_lifecycle = identity::rebuild_member_lifecycle(&pool, &principal)
+    let rebuilt_lifecycle = identity::test_support::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(rebuilt_lifecycle.pseudonym.as_deref(), Some(alias.as_str()));
@@ -429,7 +431,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
     )
     .await;
 
-    let pending = identity::request_member_erasure(&pool, &principal, 10)
+    let pending = identity::test_support::request_member_erasure(&pool, &principal, 10)
         .await
         .unwrap();
     let alias = pending.pseudonym.unwrap();
@@ -494,7 +496,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
         .execute(&pool)
         .await
         .unwrap();
-    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
+    let rebuilt = identity::test_support::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(
@@ -548,7 +550,7 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
         ActorId::Principal(actor) if actor == &principal
     ));
 
-    let alias = identity::erase_member(&pool, &principal, 10)
+    let alias = identity::test_support::erase_member(&pool, &principal, 10)
         .await
         .unwrap()
         .pseudonym
@@ -668,10 +670,9 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
 
     let erasure_pool = pool.clone();
     let erased_principal = principal;
-    let erasure =
-        tokio::spawn(
-            async move { identity::erase_member(&erasure_pool, &erased_principal, 10).await },
-        );
+    let erasure = tokio::spawn(async move {
+        identity::test_support::erase_member(&erasure_pool, &erased_principal, 10).await
+    });
     wait_for_lock_waiters(&pool, 2).await;
     projection_guard.commit().await.unwrap();
 
@@ -741,10 +742,9 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
 
     let erasure_pool = pool.clone();
     let erased_principal = principal;
-    let erasure =
-        tokio::spawn(
-            async move { identity::erase_member(&erasure_pool, &erased_principal, 10).await },
-        );
+    let erasure = tokio::spawn(async move {
+        identity::test_support::erase_member(&erasure_pool, &erased_principal, 10).await
+    });
     wait_for_lock_waiters(&pool, 2).await;
     projection_guard.commit().await.unwrap();
 
@@ -889,7 +889,7 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
         .unwrap(),
         "disabled"
     );
-    let lifecycle = identity::rebuild_member_lifecycle(&pool, &principal)
+    let lifecycle = identity::test_support::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(lifecycle.status, identity::MemberLifecycleStatus::Erased);
@@ -922,6 +922,14 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         1
     );
     insert_classic_account_fixture(&pool, &account_id, principal, "secret-hash").await;
+    sqlx::query(
+        "INSERT INTO auth_delivery_provider_authority (\
+            generation_id, configuration_fingerprint, activated_at, last_bound_at\
+         ) VALUES ('test-provider', repeat('a', 64), 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query("INSERT INTO game_invitation (token_hash, principal_id, created_at, expires_at, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,$3,$4)")
         .bind("11".repeat(32))
         .bind(principal.as_uuid())
@@ -963,7 +971,9 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     .await
     .unwrap();
 
-    let erased = identity::erase_member(&pool, &principal, 10).await.unwrap();
+    let erased = identity::test_support::erase_member(&pool, &principal, 10)
+        .await
+        .unwrap();
     assert_eq!(erased.status, identity::MemberLifecycleStatus::Erased);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
@@ -1022,7 +1032,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         .await
         .unwrap();
     assert_eq!(
-        identity::rebuild_member_lifecycle(&pool, &principal)
+        identity::test_support::rebuild_member_lifecycle(&pool, &principal)
             .await
             .unwrap()
             .pseudonym,
@@ -1077,7 +1087,9 @@ async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
     .await
     .unwrap();
 
-    let erased = identity::erase_member(&pool, &principal, 3).await.unwrap();
+    let erased = identity::test_support::erase_member(&pool, &principal, 3)
+        .await
+        .unwrap();
     assert_eq!(erased.status, identity::MemberLifecycleStatus::Erased);
     assert_eq!(erased.last_seq, 4);
     assert!(erased.pseudonym.unwrap().starts_with("former-member-"));
@@ -1093,7 +1105,7 @@ async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool:
     ensure_principal(&pool, other).await;
     insert_classic_account_fixture(&pool, &account_canary, principal, "not-exported").await;
 
-    let export = identity::create_personal_export(&pool, &principal, 2)
+    let export = identity::test_support::create_personal_export(&pool, &principal, 2)
         .await
         .unwrap();
     assert_eq!(export.artifact["accounts"][0]["account_id"], account_canary);
@@ -1108,17 +1120,19 @@ async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool:
     assert!(!raw.contains(&account_canary));
     assert!(raw.contains("fmarch-subject-claim-v1"));
     assert_eq!(
-        identity::load_personal_export(&pool, &principal, export_id, 3)
+        identity::test_support::load_personal_export(&pool, &principal, export_id, 3)
             .await
             .unwrap()
             .unwrap()
             .artifact["accounts"][0]["account_id"],
         account_canary
     );
-    assert!(identity::load_personal_export(&pool, &other, export_id, 3)
-        .await
-        .unwrap()
-        .is_none());
+    assert!(
+        identity::test_support::load_personal_export(&pool, &other, export_id, 3)
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     let subject_id: Uuid =
         sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
@@ -1132,7 +1146,7 @@ async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool:
         .await
         .unwrap();
     assert!(matches!(
-        identity::load_personal_export(&pool, &principal, export_id, 3).await,
+        identity::test_support::load_personal_export(&pool, &principal, export_id, 3).await,
         Err(identity::IdentityFlowError::Internal(message)) if message.contains("is missing")
     ));
 }

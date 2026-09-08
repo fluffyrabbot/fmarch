@@ -1,9 +1,9 @@
 use bytes::Bytes;
 use futures_util::stream::BoxStream;
+use identity::test_support::request_member_erasure_with_store;
 use identity::{
     prepare_subject_authority_for_service, process_pending_subject_erasures_with_store,
     random_tombstone_alias, reconcile_subject_revocations_with_store,
-    request_member_erasure_with_store,
     subject_privacy::reconcile_subject_revocations_with_store_and_preflight_query_count,
     verify_active_subject_keys, verify_or_bind_database_authority, ConfiguredSubjectKeyAuthority,
     MemberLifecycleStatus, ObjectSubjectKeyStore, PrincipalId, SubjectId, SubjectKeyStore,

@@ -5,11 +5,13 @@ fn assert_ordered(section: &str, contracts: &[&str], boundary: &str) {
     for (index, contract) in contracts.iter().enumerate() {
         let position = section
             .find(contract)
-            .unwrap_or_else(|| panic!("{boundary} lost contract: {contract}"));
+            .unwrap_or_else(|| panic!("{} lost contract: {}", boundary, contract));
         if index > 0 {
             assert!(
                 position > previous,
-                "{boundary} ordering changed at {contract}"
+                "{} ordering changed at {}",
+                boundary,
+                contract
             );
         }
         previous = position;
@@ -56,6 +58,36 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "shared delivery admission drifted at {admission_contract}"
         );
     }
+    for continuity_contract in [
+        "pub async fn bind_identity_delivery_provider_authority(",
+        "lock_provider_authority_protocol(&mut tx).await?",
+        "WHERE status IN ('queued', 'processing', 'retryable_failed')",
+        "generation switch requires all provider attempts to quiesce",
+        "provider generation '{}' was already used and cannot be reactivated",
+        "configuration_fingerprint",
+        "IdentityDeliveryError::ProviderContinuity",
+    ] {
+        assert!(
+            source.contains(continuity_contract),
+            "provider continuity boundary drifted at {continuity_contract}"
+        );
+    }
+    for provider_completion_contract in [
+        "http-json-delivery-v2+bound-result-v2+provider-probe-v1",
+        "#[serde(deny_unknown_fields)]\nstruct IdentityDeliveryProviderResponse",
+        "fmarch.identity-delivery-result.v2",
+        "provider_response.provider_generation != self.provider_id",
+        "provider_response.delivery_id != attempt.delivery_id",
+        "provider_response.attempt_token != attempt.attempt_token",
+        "(\"retryable_failure\", Some(\"provider_unavailable\"), None, retry_after_seconds)",
+        "(\"permanent_failure\", Some(\"recipient_rejected\"), None, None)",
+        "_ => IdentityDeliveryOutcome::UncertainFailure",
+    ] {
+        assert!(
+            source.contains(provider_completion_contract),
+            "provider completion proof boundary drifted at {provider_completion_contract}"
+        );
+    }
     let retry_start = source
         .find("pub(super) async fn retry_identity_delivery_intent_with_config(")
         .expect("typed delivery retry owner");
@@ -75,7 +107,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "request.session_policy",
             "capability == \"GlobalAdmin\"",
             "claim_delivery_transaction(",
-            "actor_principal_id: authorization.principal_id",
+            "actor_principal_id: authorization.principal_id()",
             "expected_attempt_count: request.expected_attempt_count",
             "tx.commit().await?",
             "IdentityDeliveryClaimResult::Reconciled(receipt)",
@@ -180,8 +212,16 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert!(
         claim.contains("bounded_delivery_database_operation(config.database_timeout(), \"claim\"")
     );
+    let claim_transaction_start = claim
+        .find("async fn claim_delivery_transaction(")
+        .expect("claim transaction owner");
+    let claim_transaction_end = claim[claim_transaction_start..]
+        .find("async fn credential_is_active(")
+        .map(|offset| claim_transaction_start + offset)
+        .expect("claim transaction boundary");
+    let claim_transaction = &claim[claim_transaction_start..claim_transaction_end];
     assert_eq!(
-        claim
+        claim_transaction
             .matches("EXTRACT(EPOCH FROM clock_timestamp())")
             .count(),
         2,
@@ -189,6 +229,62 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     );
     assert!(claim.contains("OR (status = 'retryable_failed' AND next_attempt_at <= $3)"));
     assert!(claim.contains(".bind(database_now)"));
+    assert_ordered(
+        claim,
+        &[
+            "FROM auth_delivery_intent",
+            "FOR UPDATE SKIP LOCKED",
+            "lock_identity_delivery_provider_authority(tx, gateway).await",
+            "WITH mutation_clock AS MATERIALIZED",
+        ],
+        "delivery-before-provider claim lock order",
+    );
+    let invocation_start = claim
+        .find("async fn revalidate_identity_delivery_invocation(")
+        .expect("provider invocation permission owner");
+    let invocation = &claim[invocation_start..];
+    for invocation_contract in [
+        "IdentityDeliveryInvocationPermission::Permitted",
+        "IdentityDeliveryInvocationPermission::ClaimLost",
+        "IdentityDeliveryInvocationPermission::CredentialInactive",
+        "IdentityDeliveryInvocationPermission::CredentialExpired",
+        "IdentityDeliveryInvocationPermission::ProviderSuspended",
+        "bounded_delivery_database_operation(config.database_timeout(), \"preparation\"",
+        "WHERE delivery_id = $1 AND status = 'processing' AND claim_token = $2",
+        "let invocation_now = database_now(&mut tx).await?",
+        "let effect_deadline_at = config.provider_effect_deadline_at(claim_expires_at)",
+        "claim.attempt.lease_expires_at != effect_deadline_at",
+        "if effect_deadline_at <= invocation_now || claim_expires_at <= invocation_now",
+        "claim.attempt.credential_expires_at <= invocation_now",
+    ] {
+        assert!(
+            invocation.contains(invocation_contract),
+            "pre-send provider fence drifted at {invocation_contract}"
+        );
+    }
+    assert_ordered(
+        invocation,
+        &[
+            "FROM auth_delivery_intent",
+            "FOR UPDATE",
+            "credential_is_active(",
+            "lock_identity_delivery_provider_authority(&mut tx, gateway)",
+            "let invocation_now = database_now(&mut tx).await?",
+            "let effect_deadline_at = config.provider_effect_deadline_at(claim_expires_at)",
+            "claim.attempt.lease_expires_at != effect_deadline_at",
+            "if effect_deadline_at <= invocation_now || claim_expires_at <= invocation_now",
+            "claim.attempt.credential_expires_at <= invocation_now",
+        ],
+        "pre-send delivery-before-provider lock order",
+    );
+    let provider_revalidation_position = invocation
+        .find("lock_identity_delivery_provider_authority(&mut tx, gateway)")
+        .unwrap();
+    let permission_commit_position = invocation.rfind("tx.commit().await?").unwrap();
+    assert!(
+        permission_commit_position > provider_revalidation_position,
+        "provider invocation permission must commit only after both live fences pass"
+    );
     for claim_target_contract in [
         "IdentityDeliveryClaimTarget::NextDue",
         "IdentityDeliveryClaimTarget::ExplicitRetry {",
@@ -238,7 +334,10 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         &[
             "WITH mutation_clock AS MATERIALIZED",
             "claim_expires_at = mutation_clock.claimed_at + $3",
-            "WHEN delivery.status <> 'processing' AND attempt_count < $4 THEN 1",
+            "WHEN delivery.status <> 'processing'",
+            "attempt_count < $4",
+            "delivery.outcome_code = 'provider_unavailable'",
+            ") THEN 1",
             "claim_source = $5",
             "claim_actor_principal_id = $6",
             "updated_at = mutation_clock.claimed_at",
@@ -246,16 +345,18 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "delivery.claim_expires_at,",
             "delivery.attempt_count",
             "if claim_expires_at != claimed_at.saturating_add(claim_lease_seconds)",
+            "let generation_fence_expires_at = claim_expires_at",
+            "config.provider_effect_deadline_at(generation_fence_expires_at)",
+            "if effect_deadline_at <= claimed_at",
         ],
         "claim mutation lease",
     );
     assert!(claim.contains(
-        "claim_token,\n            claimed_at,\n            provenance,\n            recovered: reclaiming,\n            provider_attempt_permitted,"
+        "claim_token,\n            provenance,\n            provider_attempt_permitted,"
     ));
     for persisted_row_contract in [
         "claim_source: Option<String>",
         "claim_actor_principal_id: Option<Uuid>",
-        "recovered: bool",
     ] {
         assert!(
             source.contains(persisted_row_contract),
@@ -268,13 +369,14 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "row.claim_source.as_deref().unwrap_or_default()",
         "row.claim_actor_principal_id",
         "target.provenance()",
-        "let provider_attempt_permitted = reclaiming || row.attempt_count < config.max_attempts()",
+        "let provider_attempt_permitted = reclaiming",
+        "row.attempt_count < config.max_attempts()",
+        "row.outcome_code.as_deref() == Some(\"provider_unavailable\")",
         "let claim_source = provenance.persisted_source()",
         "let claim_actor_principal_id = provenance.persisted_actor_principal_id()",
         ".bind(claim_source)",
         ".bind(claim_actor_principal_id)",
         "attempt_number,",
-        "recovered: reclaiming",
     ] {
         assert!(
             claim.contains(persisted_provenance_contract),
@@ -323,8 +425,18 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     );
 
     let outcome = &source[outcome_start..delivery_start];
-    assert!(outcome
-        .contains("if !claim.recovered && claim.attempt.credential_expires_at <= claimed_at"));
+    assert!(outcome.contains("IdentityDeliveryInvocationPermission::CredentialExpired"));
+    assert!(outcome.contains("IdentityDeliveryFailureCode::CredentialExpired"));
+    assert_ordered(
+        outcome,
+        &[
+            "revalidate_identity_delivery_invocation(pool, gateway, claim, config, admission)",
+            "decrypt_delivery_credential(",
+            "claim.attempt.credential_material = Some(credential_material)",
+            "gateway.deliver(&claim.attempt)",
+        ],
+        "provider call unsealing fence",
+    );
 
     let delivery = &source[delivery_start..finalize_start];
     assert_ordered(
@@ -340,7 +452,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "delivery transaction",
     );
     assert!(delivery.contains(
-        "let receipt = finalize_delivery(&mut tx, claim, outcome, finalized_at, config).await?;"
+        "let receipt =\n            finalize_delivery(&mut tx, gateway, claim, outcome, finalized_at, config).await?;"
     ));
     assert!(
         !delivery.contains("requested_event_kind") && !delivery.contains("actor_principal_id"),
@@ -368,6 +480,23 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert!(finalization.contains(
         "IdentityDeliveryOutcome::Cancelled(_) | IdentityDeliveryOutcome::Delivered { .. }"
     ));
+    for provider_unavailable_contract in [
+        "let provider_is_unavailable = outcome.provider_unavailable();",
+        "let provider_unavailability_was_observed = provider_was_invoked && provider_is_unavailable;",
+        "provider_was_invoked && outcome.provider_completion_uncertain();",
+        "if !provider_is_unavailable",
+        "if provider_unavailability_was_observed",
+        "attempt_token = $2 AND generation_id = $3 AND NOT $4",
+        "WHERE expires_at <= $1",
+        "LIMIT $5",
+        ".bind(provider_completion_was_uncertain)",
+        ".bind(EXPIRED_PROVIDER_ATTEMPT_FENCE_GC_BATCH)",
+    ] {
+        assert!(
+            finalization.contains(provider_unavailable_contract),
+            "provider outage retry/observation separation drifted at {provider_unavailable_contract}"
+        );
+    }
     assert_ordered(
         finalization,
         &[
@@ -391,6 +520,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "WHEN 'community_invitation' THEN EXISTS",
             "let cancelled_attempt_count",
             "AND NOT CASE $4",
+            "persist_identity_delivery_provider_unavailable(",
+            "DELETE FROM auth_delivery_provider_attempt_fence",
+            "let Some((attempt_count, event_kind, outcome)) = finalized else",
             "record_delivery_audit(",
         ],
         "delivery finalization",
@@ -401,6 +533,12 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         1,
         "delivery finalization must persist exactly one lifecycle audit"
     );
+    assert!(finalization.contains(
+        "Cancellation, erasure, or a\n    // newer delivery lease can revoke authority to mutate the intent"
+    ));
+    assert!(finalization.contains("circuit_version = circuit_version + 1"));
+    assert!(finalization.contains("probe_token = NULL"));
+    assert!(!finalization.contains("lock_identity_delivery_provider_for_finalization"));
     assert_eq!(
         finalization.matches("claim_source = NULL").count(),
         2,
@@ -545,8 +683,11 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
     assert!(source.contains(
         "let lease_coverage_timeout = post_claim_timeout.saturating_add(database_timeout)"
     ));
-    assert!(source
-        .contains("claim_lease <= lease_coverage_timeout.saturating_add(Duration::from_secs(1))"));
+    assert!(source.contains(".saturating_add(provider_clock_skew_margin)"));
+    assert!(source.contains(".saturating_add(DATABASE_CLOCK_QUANTIZATION_RESERVE)"));
+    assert!(source.contains(
+        "generation_fence_expires_at.saturating_sub(self.provider_clock_skew_margin.as_secs() as i64)"
+    ));
 
     for contract in [
         "IdentityDeliveryWorkerObservation",

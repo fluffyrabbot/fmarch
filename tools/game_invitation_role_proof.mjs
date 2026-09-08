@@ -77,9 +77,11 @@ const scratchApiDatabaseCapacity = Object.freeze({
   identityDeliveryProviderTimeoutMs: "10000",
   identityDeliveryDatabaseTimeoutMs: "9000",
   identityDeliveryClaimLeaseMs: "45000",
+  identityDeliveryProviderClockSkewMarginMs: "5000",
   identityDeliveryRetryMaxSeconds: "300",
+  httpRequestTimeoutMs: "55000",
   workerReadinessGraceMs: "10000",
-  shutdownDrainTimeoutMs: "30000",
+  shutdownDrainTimeoutMs: "60000",
 });
 const host = "127.0.0.1";
 const game = randomUUID();
@@ -591,7 +593,11 @@ async function issueCommunityInvitation({
     const capture = deliveryProvider.captures.get(response.delivery_id);
     if (capture !== undefined) {
       if (
-        capture.schema !== "fmarch.identity-delivery.v1" ||
+        capture.schema !== "fmarch.identity-delivery.v2" ||
+        capture.provider_generation !== "local-deterministic" ||
+        typeof capture.attempt_token !== "string" ||
+        !deliveryLeaseIsLive(capture) ||
+        !deliveryClockSkewMarginCoversCrossClockBound(capture) ||
         capture.delivery_kind !== "community_invitation" ||
         capture.account_id !== accountId.toLowerCase() ||
         typeof capture.credential !== "string" ||
@@ -2689,6 +2695,20 @@ async function retryFailedDelivery({
     credentialHash,
     expectedKind,
   });
+  const probe = await fetchJson(`${apiBaseUrl}/admin/auth-delivery-provider/probe`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+    },
+  });
+  if (
+    probe.status !== "available" ||
+    probe.provider_generation !== delivery.providerId ||
+    probe.provider_operable !== true ||
+    !Number.isInteger(probe.circuit_version)
+  ) {
+    throw new Error(`delivery provider recovery probe drifted: ${JSON.stringify(probe)}`);
+  }
   const response = await fetchJson(
     `${apiBaseUrl}/auth/delivery-intents/${encodeURIComponent(delivery.deliveryId)}/retry`,
     {
@@ -4071,6 +4091,27 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
+// The safety margin must cover the database clock's maximum lead over the
+// provider clock plus the provider's maximum deadline-to-no-effect quiescence
+// lag. This proof's final deadline check and synchronous capture mutation are
+// one uninterrupted turn, so its quiescence-lag term is zero.
+const identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds = 5;
+
+function deliveryLeaseIsLive(delivery) {
+  return (
+    Number.isInteger(delivery.lease_expires_at) &&
+    delivery.lease_expires_at > Math.floor(Date.now() / 1000)
+  );
+}
+
+function deliveryClockSkewMarginCoversCrossClockBound(delivery) {
+  return (
+    Number.isInteger(delivery.clock_skew_margin_seconds) &&
+    delivery.clock_skew_margin_seconds >=
+      identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds
+  );
+}
+
 async function startIdentityDeliveryCapture() {
   const captures = new Map();
   const authToken = `local-delivery-auth-${game}`;
@@ -4094,15 +4135,60 @@ async function startIdentityDeliveryCapture() {
         chunks.push(chunk);
       }
       const delivery = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (delivery.schema === "fmarch.identity-delivery-provider-probe.v1") {
+        if (
+          delivery.provider_generation !== "local-deterministic" ||
+          typeof delivery.probe_token !== "string"
+        ) {
+          response.writeHead(409).end();
+          return;
+        }
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            schema: delivery.schema,
+            provider_generation: delivery.provider_generation,
+            probe_token: delivery.probe_token,
+            status: "available",
+          }),
+        );
+        return;
+      }
+      if (
+        delivery.schema !== "fmarch.identity-delivery.v2" ||
+        delivery.provider_generation !== "local-deterministic" ||
+        typeof delivery.attempt_token !== "string" ||
+        !deliveryLeaseIsLive(delivery) ||
+        !deliveryClockSkewMarginCoversCrossClockBound(delivery) ||
+        delivery.idempotency_key !== delivery.delivery_id
+      ) {
+        response.writeHead(409).end();
+        return;
+      }
+      // Delivery-v2 makes the lease a hard execution/commit deadline, not
+      // merely an admission check. Revalidate immediately before the simulated
+      // provider effect so no credential side effect can commit at or after it.
+      if (!deliveryLeaseIsLive(delivery)) {
+        response.writeHead(409).end();
+        return;
+      }
       captures.set(delivery.delivery_id, structuredClone(delivery));
       const outcome =
         delivery.attempt_number === 1
           ? {
+              schema: "fmarch.identity-delivery-result.v2",
+              provider_generation: delivery.provider_generation,
+              delivery_id: delivery.delivery_id,
+              attempt_token: delivery.attempt_token,
               status: "retryable_failure",
               code: "provider_unavailable",
               retry_after_seconds: explicitRetryBackoffSeconds,
             }
           : {
+              schema: "fmarch.identity-delivery-result.v2",
+              provider_generation: delivery.provider_generation,
+              delivery_id: delivery.delivery_id,
+              attempt_token: delivery.attempt_token,
               status: "delivered",
               provider_receipt_id: `local-${delivery.delivery_id}`,
             };
@@ -4152,8 +4238,8 @@ async function startApi(applicationUrl, deliveryEndpoint) {
       FMARCH_EVENT_ARCHIVE_KID: eventArchiveKid,
       FMARCH_AUTH_SOURCE_SIGNING_KEY: authSourceSigningKey,
       // This scratch-stack lane deliberately exercises the debug-only local
-      // delivery adapter. Hosted and release-mode classic auth must provide an
-      // explicit HTTP delivery endpoint instead.
+      // delivery adapter. Every hosted deployment must provide an explicit
+      // provider-neutral HTTP delivery endpoint instead.
       FMARCH_CLASSIC_AUTH: "1",
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
@@ -4176,8 +4262,12 @@ async function startApi(applicationUrl, deliveryEndpoint) {
         scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs,
       FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS:
         scratchApiDatabaseCapacity.identityDeliveryClaimLeaseMs,
+      FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS:
+        scratchApiDatabaseCapacity.identityDeliveryProviderClockSkewMarginMs,
       FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS:
         scratchApiDatabaseCapacity.identityDeliveryRetryMaxSeconds,
+      FMARCH_HTTP_REQUEST_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.httpRequestTimeoutMs,
       FMARCH_WORKER_READINESS_GRACE_MS:
         scratchApiDatabaseCapacity.workerReadinessGraceMs,
       FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS:

@@ -4,14 +4,15 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 fn verified(subject: String) -> VerifiedIdentity {
-    VerifiedIdentity {
+    VerifiedIdentity::for_test(
         subject,
-        session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-        issued_at: 1,
-        expires_at: 4_102_444_800,
-        signing_key_id: "workos-erasure-test-key".to_string(),
-        email: Some("workos-proof@example.test".to_string()),
-    }
+        WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+        1,
+        4_102_444_800,
+        "workos-erasure-test-key",
+        Some("workos-proof@example.test".to_string()),
+    )
+    .unwrap()
 }
 
 async fn seed_workos_identity(
@@ -30,9 +31,9 @@ async fn seed_workos_identity(
     sqlx::query(
         "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, 10, 10, $4)",
     )
-    .bind(assertion.subject.as_str())
+    .bind(assertion.subject())
     .bind(principal_id.as_uuid())
-    .bind(assertion.email.as_deref())
+    .bind(assertion.email())
     .bind(method_id)
     .execute(&mut *tx)
     .await
@@ -49,7 +50,7 @@ async fn seed_workos_identity(
     tx.commit().await.unwrap();
     (
         principal_id,
-        assertion.subject.clone(),
+        assertion.subject().to_string(),
         method_id,
         assertion,
     )
@@ -127,15 +128,15 @@ async fn admission_binding_provisions_privacy_subject_before_provider_binding(po
           AND identity.subject = $2
         "#,
     )
-    .bind(resolution.principal_id.as_uuid())
-    .bind(assertion.subject.as_str())
+    .bind(resolution.principal_id().as_uuid())
+    .bind(assertion.subject())
     .fetch_one(&mut *tx)
     .await
     .unwrap();
     assert_eq!(ownership.0, "active");
     assert_eq!(ownership.1, "workos");
-    assert_eq!(ownership.2, resolution.method_id);
-    assert_eq!(ownership.3, resolution.method_id);
+    assert_eq!(ownership.2, resolution.method_id());
+    assert_eq!(ownership.3, resolution.method_id());
     tx.commit().await.unwrap();
 }
 

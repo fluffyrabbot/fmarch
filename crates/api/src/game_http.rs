@@ -120,8 +120,8 @@ pub(super) struct GameAuthorization {
 impl GameAuthorization {
     pub(super) fn from_context(context: &AuthorizationContext) -> Self {
         Self {
-            principal_id: context.principal_id,
-            global_capabilities: context.global_capabilities.clone(),
+            principal_id: context.principal_id(),
+            global_capabilities: context.global_capabilities().to_vec(),
         }
     }
 

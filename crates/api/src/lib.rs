@@ -698,6 +698,16 @@ impl From<IdentityDeliveryError> for ApiError {
                 error: RejectCode::NotAuthorized,
                 message: "delivery retry requires current GlobalAdmin authority".to_string(),
             },
+            IdentityDeliveryError::ProviderContinuity(error) => ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message: format!("identity delivery provider authority is unavailable: {error}"),
+            },
+            IdentityDeliveryError::ProviderSuspended => ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message:
+                    "identity delivery provider is suspended; a GlobalAdmin provider probe is required"
+                        .to_string(),
+            },
             IdentityDeliveryError::Worker(_) => ApiError::Reject {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error: RejectCode::Internal,

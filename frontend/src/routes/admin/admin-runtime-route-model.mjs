@@ -15,7 +15,6 @@ export async function buildAdminRuntimeRouteData({
   identityPrincipalId = principalId,
   gameIndexPage = null,
   bootstrapCatalog = null,
-  includeLegacyIdentityOps = true,
 }) {
   const gameSelection = normalizeAdminGameSelection(gameIndexPage, game);
   const selectedGame = gameSelection.selectedGame;
@@ -34,6 +33,7 @@ export async function buildAdminRuntimeRouteData({
   const communityAudit = capabilities.some((capability) => capability?.kind === "GlobalAdmin")
     ? [communityStewardshipAudit()]
     : [];
+  const deliveryAudit = access.allowed ? [authDeliveryQueueAudit()] : [];
 
   if (!access.allowed || selectedGame === null) {
     return Object.freeze({
@@ -45,7 +45,7 @@ export async function buildAdminRuntimeRouteData({
       bootstrap: normalizeAdminBootstrap(bootstrapCatalog, { access, capabilities }),
       command: emptyAdminCommand(),
       gameSetup: Object.freeze([]),
-      audit: Object.freeze(communityAudit),
+      audit: Object.freeze([...communityAudit, ...deliveryAudit]),
       recoveryTasks: Object.freeze([]),
       escalations: Object.freeze([]),
     });
@@ -87,7 +87,7 @@ export async function buildAdminRuntimeRouteData({
     ]),
     audit: Object.freeze([
       ...communityAudit,
-      ...(includeLegacyIdentityOps ? [authDeliveryQueueAudit()] : []),
+      ...deliveryAudit,
       ...withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
     ]),
     recoveryTasks: Object.freeze([

@@ -13,8 +13,8 @@
   <header class="delivery-queue__header">
     <div>
       <p class="fm-eyebrow">Admin · Identity delivery</p>
-      <h1>Delivery exceptions</h1>
-      <p>Review failed or cancelled invite and recovery delivery without exposing credentials.</p>
+      <h1>Identity delivery queue</h1>
+      <p>Review active, failed, or cancelled credential delivery without exposing credentials.</p>
     </div>
     <a class="fm-touch-button fm-touch-button--secondary" href="/admin">Back to operations</a>
   </header>
@@ -23,10 +23,33 @@
     <p class="fm-well" data-state={form.state} role="status">{form.message}</p>
   {/if}
 
+  {#if data.deliveryConfigured === false}
+    <p class="fm-well" data-state="reject" role="alert">
+      Identity delivery is not configured. Existing queued work is visible below, but issuance and retries are unavailable.
+    </p>
+  {:else if data.deliveryBound === false}
+    <p class="fm-well" data-state="reject" role="alert">
+      The configured provider generation does not own the active database authority. Issuance and retries are fenced until startup binding is corrected.
+    </p>
+  {:else if data.deliveryOperable === false}
+    <section class="fm-well delivery-queue__provider-recovery" data-state="reject" role="alert">
+      <p>
+        Provider generation {data.configuredGeneration} is suspended ({data.suspensionCode ?? "provider unavailable"}). Delivery retries remain fenced until a credential-free recovery probe succeeds.
+      </p>
+      {#if data.canProbe}
+        <form method="POST" action="?/probe">
+          <button class="fm-touch-button" type="submit" disabled={data.probeInFlight === true}>
+            {data.probeInFlight ? "Recovery probe in progress" : "Probe provider recovery"}
+          </button>
+        </form>
+      {/if}
+    </section>
+  {/if}
+
   {#if queue.empty}
     <section class="fm-panel"><h2>Queue clear</h2><p>No undelivered credentials need operator review.</p></section>
   {:else}
-    <section class="delivery-queue__list" aria-label="Auth delivery exceptions">
+    <section class="delivery-queue__list" aria-label="Identity delivery queue">
       {#each queue.items as item}
         <article class="fm-panel" data-status={item.status} data-testid={`auth-delivery-${item.id}`}>
           <header>
@@ -60,6 +83,8 @@
   .delivery-queue__header > div { display: grid; gap: 7px; }
   .delivery-queue__list { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
   .delivery-queue__list article { display: grid; gap: 16px; }
+  .delivery-queue__provider-recovery { display: grid; gap: 12px; }
+  .delivery-queue__provider-recovery p { margin: 0; }
   .delivery-queue__list article > header strong { color: var(--fm-ink-muted); font-size: 12px; }
   dl { display: grid; gap: 8px; margin: 0; }
   dl > div { display: grid; gap: 8px; grid-template-columns: 86px minmax(0, 1fr); }

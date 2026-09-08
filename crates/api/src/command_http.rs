@@ -395,7 +395,7 @@ async fn apply_authorized_command_in_tx(
             .map_err(|error| {
                 AuthorizedCommandExecuteError::Boundary(command_identity_error(error, true))
             })?;
-    if authorization.principal_id != expected_principal_id {
+    if authorization.principal_id() != expected_principal_id {
         return Err(AuthorizedCommandExecuteError::Boundary(
             unauthorized_session(),
         ));
@@ -406,7 +406,7 @@ async fn apply_authorized_command_in_tx(
 
     commands::handle_idempotent_in_tx(
         tx,
-        &Principal::authenticated(authorization.principal_id),
+        &Principal::authenticated(authorization.principal_id()),
         command_id,
         command,
     )
@@ -675,7 +675,7 @@ async fn command(
         }
     }
 
-    let principal_id = initial_authorization.principal_id;
+    let principal_id = initial_authorization.principal_id();
     let _admission = match CommandAdmission::acquire(&state, principal_id).await {
         Ok(admission) => admission,
         Err(error) => return command_api_error_response(envelope.id, error),

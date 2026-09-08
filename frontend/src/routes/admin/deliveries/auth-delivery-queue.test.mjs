@@ -66,3 +66,26 @@ test("delivery queue never exposes retries outside retryable failure state", () 
   assert.equal(view.items[0].retryEligible, false);
   assert.equal(view.retryCount, 0);
 });
+
+test("delivery queue preserves queued and processing diagnostics", () => {
+  const base = {
+    delivery_id: "11111111-1111-4111-8111-111111111111",
+    delivery_kind: "community_invitation",
+    account_id: "redacted",
+    principal_id: "principal-p",
+    attempt_count: 0,
+    provider_id: "http-json",
+    retry_eligible: false,
+  };
+  const view = buildAuthDeliveryQueueView([
+    { ...base, status: "queued" },
+    {
+      ...base,
+      delivery_id: "22222222-2222-4222-8222-222222222222",
+      status: "processing",
+      attempt_count: 1,
+    },
+  ]);
+  assert.deepEqual(view.items.map((item) => item.status), ["queued", "processing"]);
+  assert.equal(view.retryCount, 0);
+});

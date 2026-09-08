@@ -159,7 +159,7 @@ async fn own_lineage(
     auth: AuthenticatedRequest,
 ) -> Result<Json<MembershipLineageResponse>, ApiError> {
     let lineage =
-        membership_application::lineage_for_principal(&state.pool, auth.context.principal_id)
+        membership_application::lineage_for_principal(&state.pool, auth.context.principal_id())
             .await
             .map_err(|error| ApiError::Reject {
                 status: StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,4 +1,6 @@
 use rand::{rngs::OsRng, RngCore};
+#[cfg(debug_assertions)]
+use sha2::{Digest, Sha256};
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
@@ -12,7 +14,7 @@ use uuid::Uuid;
 
 use crate::error::IdentityFlowError;
 use crate::token::{generate_session_token, hash_token, APP_SESSION_TOKEN_PREFIX};
-use crate::{Assurance, MethodKind, PrincipalId, WorkosSessionId};
+use crate::{Assurance, MethodKind, PrincipalId, VerifiedIdentity, WorkosSessionId};
 
 /// One lock namespace for every destructive mutation of outstanding
 /// WebSocket bearer tickets. Cleanup can try this lock and skip a ticket while
@@ -85,14 +87,30 @@ struct LocalProofSessionAuthorization {
     expires_at: i64,
 }
 
-/// A debug-only grant awaiting attachment to a committed Dev session. It can
-/// only target the exact process instance that created it and is never written
-/// to Postgres or serialized into a hosted credential.
+/// Process-secret proof for one debug-only local session. There is no public
+/// constructor: only [`LocalProofSessionAuthority::authorize`] can mint it.
 #[cfg(debug_assertions)]
-#[derive(Debug, Clone)]
-pub struct LocalProofAuthorization {
+pub struct LocalProofSessionGrant {
     instance_id: LocalProofInstanceId,
     global_capabilities: Vec<String>,
+}
+
+/// Debug-only verifier owned by the API composition root. Clones retain only a
+/// digest of the launch secret and the same process-instance designation.
+#[cfg(debug_assertions)]
+#[derive(Clone)]
+pub struct LocalProofSessionAuthority {
+    secret_digest: [u8; 32],
+    instance_id: LocalProofInstanceId,
+}
+
+/// A Dev session that must be activated only after its database transaction
+/// commits. The process-bound authority remains unusable while this value is
+/// pending.
+#[cfg(debug_assertions)]
+pub struct PendingLocalProofSession {
+    issued: IssuedSession,
+    grant: LocalProofSessionGrant,
 }
 
 impl LocalProofInstanceId {
@@ -216,11 +234,36 @@ impl Hash for LocalProofInstanceId {
 }
 
 #[cfg(debug_assertions)]
-impl LocalProofAuthorization {
-    pub fn new(
-        instance_id: &LocalProofInstanceId,
+impl LocalProofSessionAuthority {
+    pub fn from_secret(secret: &str) -> Result<Self, IdentityFlowError> {
+        if !is_lower_hex_256(secret) {
+            return Err(IdentityFlowError::Invalid(
+                "local-proof secret must encode 32 random bytes as lowercase hex".to_string(),
+            ));
+        }
+        Ok(Self {
+            secret_digest: Sha256::digest(secret.as_bytes()).into(),
+            instance_id: LocalProofInstanceId::random(),
+        })
+    }
+
+    pub fn instance_id(&self) -> &LocalProofInstanceId {
+        &self.instance_id
+    }
+
+    pub fn authorize(
+        &self,
+        presented_secret: &str,
         global_capabilities: Vec<String>,
-    ) -> Result<Self, IdentityFlowError> {
+    ) -> Result<LocalProofSessionGrant, IdentityFlowError> {
+        let presented_digest = Sha256::digest(presented_secret.as_bytes());
+        let mut difference = 0_u8;
+        for (expected, actual) in self.secret_digest.iter().zip(presented_digest) {
+            difference |= *expected ^ actual;
+        }
+        if difference != 0 {
+            return Err(IdentityFlowError::Unauthorized);
+        }
         let mut normalized = Vec::with_capacity(global_capabilities.len());
         for capability in global_capabilities {
             if !matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod") {
@@ -233,10 +276,30 @@ impl LocalProofAuthorization {
                 normalized.push(capability);
             }
         }
-        Ok(Self {
-            instance_id: instance_id.clone(),
+        Ok(LocalProofSessionGrant {
+            instance_id: self.instance_id.clone(),
             global_capabilities: normalized,
         })
+    }
+}
+
+#[cfg(debug_assertions)]
+impl PendingLocalProofSession {
+    pub fn issued(&self) -> &IssuedSession {
+        &self.issued
+    }
+
+    pub fn global_capabilities(&self) -> &[String] {
+        &self.grant.global_capabilities
+    }
+
+    pub fn activate(self) -> Result<IssuedSession, IdentityFlowError> {
+        self.grant.instance_id.insert_session_authorization(
+            self.issued.token_hash.clone(),
+            self.grant.global_capabilities,
+            self.issued.expires_at,
+        )?;
+        Ok(self.issued)
     }
 }
 
@@ -345,23 +408,22 @@ impl Default for SessionPolicy {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SessionSpec<'a> {
-    pub principal_id: &'a PrincipalId,
-    pub authenticated_via_method_id: Option<Uuid>,
-    pub assurance: Assurance,
+struct SessionSpec<'a> {
+    principal_id: &'a PrincipalId,
+    authenticated_via_method_id: Option<Uuid>,
+    assurance: Assurance,
     /// Required only for a debug local-proof session and supplied exclusively
     /// by the process-local proof authority at the API composition root.
-    pub local_proof_instance_id: Option<&'a LocalProofInstanceId>,
+    local_proof_instance_id: Option<&'a LocalProofInstanceId>,
     /// Present only for WorkOS external-SSO sessions. This is sourced from the
     /// verified `sid` claim, never from a client request.
-    pub workos_session_id: Option<&'a WorkosSessionId>,
+    workos_session_id: Option<&'a WorkosSessionId>,
     /// The verified JWKS key id that signed a WorkOS assertion. This remains
     /// backend-only provenance for exact key retirement and session rotation.
-    pub workos_signing_key_id: Option<&'a str>,
-    pub authenticated_at: i64,
-    pub expires_at: i64,
-    pub idle_expires_at: i64,
+    workos_signing_key_id: Option<&'a str>,
+    authenticated_at: i64,
+    expires_at: i64,
+    idle_expires_at: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -373,23 +435,805 @@ pub struct IssuedSession {
     pub idle_expires_at: i64,
 }
 
-/// Attach debug local-proof authority only after the corresponding Dev session
-/// transaction commits. Hosted sessions cannot call this in release builds,
-/// and the process-bound grant disappears on restart even if a stale database
-/// row survives unexpectedly.
-#[cfg(debug_assertions)]
-pub fn activate_local_proof_authorization(
-    issued: &IssuedSession,
-    authorization: LocalProofAuthorization,
-) -> Result<(), IdentityFlowError> {
-    authorization.instance_id.insert_session_authorization(
-        issued.token_hash.clone(),
-        authorization.global_capabilities,
-        issued.expires_at,
-    )
+/// Opaque result of ceremony-bound issuance. The values are observable only
+/// after identity has validated the ceremony and inserted the session.
+#[derive(Debug)]
+pub struct SessionIssuance {
+    issued: IssuedSession,
+    method_id: Uuid,
+    global_capabilities: Vec<String>,
 }
 
-pub async fn issue_session(
+impl SessionIssuance {
+    pub fn issued(&self) -> &IssuedSession {
+        &self.issued
+    }
+
+    pub fn into_issued(self) -> IssuedSession {
+        self.issued
+    }
+
+    pub fn principal_id(&self) -> PrincipalId {
+        self.issued.principal_id
+    }
+
+    pub fn method_id(&self) -> Uuid {
+        self.method_id
+    }
+
+    pub fn global_capabilities(&self) -> &[String] {
+        &self.global_capabilities
+    }
+}
+
+/// Password-verification evidence whose encoded hash is deliberately hidden.
+/// Issuance always compares it with the exact account row under the identity
+/// owner lock, so verifying a caller-created hash grants no authority.
+pub struct ClassicPasswordProof {
+    encoded_hash: String,
+}
+
+impl ClassicPasswordProof {
+    pub fn verify(encoded_hash: impl Into<String>, password: &str) -> Option<Self> {
+        let encoded_hash = encoded_hash.into();
+        crate::password::verify_password_sync(encoded_hash.as_str(), password)
+            .then_some(Self { encoded_hash })
+    }
+}
+
+/// Verified provider provenance bound back to its exact durable WorkOS method.
+/// There is no public constructor; [`authorize_workos_session`] is the only
+/// factory and [`issue_workos_session`] consumes the grant.
+pub struct WorkosSessionGrant {
+    subject: String,
+    principal_id: PrincipalId,
+    method_id: Uuid,
+    session_id: WorkosSessionId,
+    signing_key_id: WorkosSigningKeyId,
+    assertion_issued_at: i64,
+    assertion_expires_at: i64,
+}
+
+#[derive(Debug)]
+pub struct RecoverySessionIssuance {
+    session: SessionIssuance,
+    recovery_id: Uuid,
+    credential_hash: String,
+    revoked_session_count: u64,
+}
+
+impl RecoverySessionIssuance {
+    pub fn session(&self) -> &SessionIssuance {
+        &self.session
+    }
+
+    pub fn into_session(self) -> SessionIssuance {
+        self.session
+    }
+
+    pub fn recovery_id(&self) -> Uuid {
+        self.recovery_id
+    }
+
+    pub fn credential_hash(&self) -> &str {
+        self.credential_hash.as_str()
+    }
+
+    pub fn revoked_session_count(&self) -> u64 {
+        self.revoked_session_count
+    }
+}
+
+#[derive(Debug)]
+pub struct GameInvitationSessionIssuance {
+    session: SessionIssuance,
+    credential_hash: String,
+    invitation_expires_at: i64,
+}
+
+impl GameInvitationSessionIssuance {
+    pub fn session(&self) -> &SessionIssuance {
+        &self.session
+    }
+
+    pub fn into_session(self) -> SessionIssuance {
+        self.session
+    }
+
+    pub fn credential_hash(&self) -> &str {
+        self.credential_hash.as_str()
+    }
+
+    pub fn invitation_expires_at(&self) -> i64 {
+        self.invitation_expires_at
+    }
+}
+
+fn password_session_spec<'a>(
+    principal_id: &'a PrincipalId,
+    method_id: Uuid,
+    policy: &SessionPolicy,
+    now: i64,
+) -> SessionSpec<'a> {
+    let expires_at = policy.classic_expiry(now);
+    SessionSpec {
+        principal_id,
+        authenticated_via_method_id: Some(method_id),
+        assurance: Assurance::Password,
+        local_proof_instance_id: None,
+        workos_session_id: None,
+        workos_signing_key_id: None,
+        authenticated_at: now,
+        expires_at,
+        idle_expires_at: policy.idle_expiry(now, expires_at),
+    }
+}
+
+fn session_issuance(
+    issued: IssuedSession,
+    method_id: Uuid,
+    global_capabilities: Vec<String>,
+) -> SessionIssuance {
+    SessionIssuance {
+        issued,
+        method_id,
+        global_capabilities,
+    }
+}
+
+async fn discover_account_principal(
+    conn: &mut PgConnection,
+    account_id: &str,
+) -> Result<PrincipalId, IdentityFlowError> {
+    sqlx::query_scalar::<_, Uuid>("SELECT principal_id FROM auth_account WHERE account_id = $1")
+        .bind(account_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .map(PrincipalId::from_uuid)
+        .ok_or(IdentityFlowError::Unauthorized)
+}
+
+async fn lock_verified_classic_account(
+    conn: &mut PgConnection,
+    account_id: &str,
+    principal_id: &PrincipalId,
+    proof: ClassicPasswordProof,
+    now: i64,
+) -> Result<Uuid, IdentityFlowError> {
+    let row = sqlx::query_as::<_, (Uuid, String, Uuid, String, String)>(
+        r#"
+        SELECT account.method_id,
+               account.password_hash,
+               method.principal_id,
+               method.kind,
+               method.status
+        FROM auth_account AS account
+        JOIN authentication_method AS method ON method.method_id = account.method_id
+        WHERE account.account_id = $1
+          AND account.principal_id = $2
+          AND account.disabled_at IS NULL
+        FOR UPDATE OF account, method
+        "#,
+    )
+    .bind(account_id)
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let (method_id, encoded_hash, method_principal_id, kind, status) = row;
+    if proof.encoded_hash != encoded_hash
+        || method_principal_id != principal_id.as_uuid()
+        || kind != MethodKind::ClassicPassword.as_str()
+        || status != "active"
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    crate::methods::touch_method(conn, method_id, now).await?;
+    Ok(method_id)
+}
+
+/// Exchange a password proof for a session only after matching that proof to
+/// the exact locked, active account and method rows.
+pub async fn issue_classic_password_session(
+    conn: &mut PgConnection,
+    account_id: &str,
+    proof: ClassicPasswordProof,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<SessionIssuance, IdentityFlowError> {
+    if account_id.is_empty() {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let principal_id = discover_account_principal(conn, account_id).await?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let method_id =
+        lock_verified_classic_account(conn, account_id, &principal_id, proof, now).await?;
+    let issued = issue_session_raw(
+        conn,
+        password_session_spec(&principal_id, method_id, policy, now),
+        now,
+    )
+    .await?;
+    Ok(session_issuance(
+        issued,
+        method_id,
+        owner.global_capabilities,
+    ))
+}
+
+/// Bind a verifier-produced WorkOS assertion to its exact durable subject,
+/// principal, and active WorkOS method. Provider/session/key tombstones are
+/// checked under the same transaction before the opaque grant is minted.
+pub async fn authorize_workos_session(
+    conn: &mut PgConnection,
+    verified: &VerifiedIdentity,
+    now: i64,
+) -> Result<WorkosSessionGrant, IdentityFlowError> {
+    if verified.expires_at() <= now {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    crate::workos::lock_subject_advisory(conn, verified.subject()).await?;
+    reject_workos_tombstones(conn, verified.session_id(), verified.subject()).await?;
+
+    let discovered = sqlx::query_as::<_, (Uuid, Uuid)>(
+        r#"
+        SELECT principal_id, method_id
+        FROM external_identity
+        WHERE provider = 'workos' AND subject = $1
+        "#,
+    )
+    .bind(verified.subject())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let principal_id = PrincipalId::from_uuid(discovered.0);
+    let _ =
+        lock_workos_session_binding(conn, verified.subject(), &principal_id, discovered.1).await?;
+    let signing_key_id = WorkosSigningKeyId::parse(verified.signing_key_id().to_string())?;
+    require_active_workos_signing_key(conn, &signing_key_id).await?;
+    crate::methods::touch_method(conn, discovered.1, now).await?;
+    Ok(WorkosSessionGrant {
+        subject: verified.subject().to_string(),
+        principal_id,
+        method_id: discovered.1,
+        session_id: verified.session_id().clone(),
+        signing_key_id,
+        assertion_issued_at: verified.issued_at().min(now),
+        assertion_expires_at: verified.expires_at(),
+    })
+}
+
+async fn reject_workos_tombstones(
+    conn: &mut PgConnection,
+    session_id: &WorkosSessionId,
+    subject: &str,
+) -> Result<(), IdentityFlowError> {
+    let tombstoned: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $1
+               )
+            OR EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $2
+               )
+        "#,
+    )
+    .bind(session_id.fingerprint())
+    .bind(crate::workos::subject_fingerprint(subject))
+    .fetch_one(&mut *conn)
+    .await?;
+    if tombstoned {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    Ok(())
+}
+
+async fn lock_workos_session_binding(
+    conn: &mut PgConnection,
+    subject: &str,
+    principal_id: &PrincipalId,
+    method_id: Uuid,
+) -> Result<Vec<String>, IdentityFlowError> {
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let locked = sqlx::query_as::<_, (Uuid, Uuid, String, String)>(
+        r#"
+        SELECT external.principal_id,
+               external.method_id,
+               method.kind,
+               method.status
+        FROM external_identity AS external
+        JOIN authentication_method AS method ON method.method_id = external.method_id
+        WHERE external.provider = 'workos'
+          AND external.subject = $1
+          AND external.principal_id = $2
+          AND external.method_id = $3
+        FOR UPDATE OF external, method
+        "#,
+    )
+    .bind(subject)
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    if locked.0 != principal_id.as_uuid()
+        || locked.1 != method_id
+        || locked.2 != MethodKind::Workos.as_str()
+        || locked.3 != "active"
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    Ok(owner.global_capabilities)
+}
+
+/// Consume an exact verified WorkOS binding grant. No principal, method,
+/// assurance, provider session, or signing key is caller-selectable here.
+pub async fn issue_workos_session(
+    conn: &mut PgConnection,
+    grant: WorkosSessionGrant,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<SessionIssuance, IdentityFlowError> {
+    if grant.assertion_expires_at <= now {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    crate::workos::lock_subject_advisory(conn, grant.subject.as_str()).await?;
+    reject_workos_tombstones(conn, &grant.session_id, grant.subject.as_str()).await?;
+    let global_capabilities = lock_workos_session_binding(
+        conn,
+        grant.subject.as_str(),
+        &grant.principal_id,
+        grant.method_id,
+    )
+    .await?;
+    crate::methods::touch_method(conn, grant.method_id, now).await?;
+    let expires_at = policy.workos_expiry(now).min(grant.assertion_expires_at);
+    let spec = SessionSpec {
+        principal_id: &grant.principal_id,
+        authenticated_via_method_id: Some(grant.method_id),
+        assurance: Assurance::ExternalSso,
+        local_proof_instance_id: None,
+        workos_session_id: Some(&grant.session_id),
+        workos_signing_key_id: Some(grant.signing_key_id.as_str()),
+        authenticated_at: grant.assertion_issued_at,
+        expires_at,
+        idle_expires_at: policy.idle_expiry(now, expires_at),
+    };
+    let issued = issue_session_raw(conn, spec, now).await?;
+    Ok(session_issuance(
+        issued,
+        grant.method_id,
+        global_capabilities,
+    ))
+}
+
+/// Issue a debug session from a process-secret grant. The returned pending
+/// value cannot authorize requests until the caller commits and activates it.
+#[cfg(debug_assertions)]
+pub async fn issue_local_proof_session(
+    conn: &mut PgConnection,
+    principal_id: &PrincipalId,
+    grant: LocalProofSessionGrant,
+    requested_expires_at: i64,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<PendingLocalProofSession, IdentityFlowError> {
+    let policy_instance = policy
+        .local_proof_instance_id
+        .as_ref()
+        .ok_or(IdentityFlowError::Unauthorized)?;
+    if policy_instance != &grant.instance_id {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    crate::methods::ensure_principal(conn, principal_id, &[], now).await?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let expires_at = requested_expires_at.min(policy.classic_expiry(now));
+    let issued = issue_session_raw(
+        conn,
+        SessionSpec {
+            principal_id,
+            authenticated_via_method_id: None,
+            assurance: Assurance::Dev,
+            local_proof_instance_id: Some(policy_instance),
+            workos_session_id: None,
+            workos_signing_key_id: None,
+            authenticated_at: now,
+            expires_at,
+            idle_expires_at: policy.idle_expiry(now, expires_at),
+        },
+        now,
+    )
+    .await?;
+    Ok(PendingLocalProofSession { issued, grant })
+}
+
+/// Issue the successor password session for a classic method created in this
+/// transaction, after revalidating the exact bearer-origin initiating session.
+pub async fn issue_session_after_classic_method_added(
+    conn: &mut PgConnection,
+    initiating_session: &InitiatingSession,
+    account_id: &str,
+    policy: &SessionPolicy,
+    now: i64,
+    recent_authentication_max_age_seconds: i64,
+) -> Result<SessionIssuance, IdentityFlowError> {
+    let authorization =
+        validate_initiating_session_for_update(conn, initiating_session, policy).await?;
+    crate::methods::require_recent_authentication(
+        authorization.authenticated_at,
+        now,
+        recent_authentication_max_age_seconds,
+    )?;
+    let method_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT method.method_id
+        FROM auth_account AS account
+        JOIN authentication_method AS method ON method.method_id = account.method_id
+        WHERE account.account_id = $1
+          AND account.principal_id = $2
+          AND account.disabled_at IS NULL
+          AND account.created_at = $3
+          AND method.principal_id = $2
+          AND method.kind = 'classic_password'
+          AND method.status = 'active'
+          AND method.created_at = $3
+        FOR UPDATE OF account, method
+        "#,
+    )
+    .bind(account_id)
+    .bind(authorization.principal_id.as_uuid())
+    .bind(now)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    crate::methods::touch_method(conn, method_id, now).await?;
+    let issued = issue_session_raw(
+        conn,
+        password_session_spec(&authorization.principal_id, method_id, policy, now),
+        now,
+    )
+    .await?;
+    Ok(session_issuance(
+        issued,
+        method_id,
+        authorization.global_capabilities,
+    ))
+}
+
+fn valid_argon2id_hash(encoded_hash: &str) -> bool {
+    argon2::PasswordHash::new(encoded_hash).is_ok_and(|hash| hash.algorithm.as_str() == "argon2id")
+}
+
+/// Consume one exact recovery secret, replace its account password, revoke all
+/// predecessor sessions, and issue the successor in the same transaction.
+pub async fn redeem_recovery_credential_and_issue_session(
+    conn: &mut PgConnection,
+    account_id: &str,
+    recovery_credential: &str,
+    new_password_hash: &str,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<RecoverySessionIssuance, IdentityFlowError> {
+    if account_id.is_empty()
+        || recovery_credential.is_empty()
+        || recovery_credential.len() > 256
+        || !valid_argon2id_hash(new_password_hash)
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let credential_hash = hash_token(recovery_credential);
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT account.principal_id
+        FROM auth_account_recovery_credential AS recovery
+        JOIN auth_account AS account USING (account_id)
+        WHERE recovery.account_id = $1 AND recovery.token_hash = $2
+        "#,
+    )
+    .bind(account_id)
+    .bind(credential_hash.as_str())
+    .fetch_optional(&mut *conn)
+    .await?
+    .map(PrincipalId::from_uuid)
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let recovery_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT recovery.recovery_id
+        FROM auth_account_recovery_credential AS recovery
+        JOIN auth_account AS account ON account.account_id = recovery.account_id
+        WHERE recovery.account_id = $1
+          AND recovery.token_hash = $2
+          AND recovery.used_at IS NULL
+          AND recovery.revoked_at IS NULL
+          AND recovery.expires_at > $3
+          AND account.principal_id = $4
+          AND account.disabled_at IS NULL
+        FOR UPDATE OF recovery, account
+        "#,
+    )
+    .bind(account_id)
+    .bind(credential_hash.as_str())
+    .bind(now)
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let consumed = sqlx::query(
+        r#"
+        UPDATE auth_account_recovery_credential
+        SET used_at = $1
+        WHERE recovery_id = $2
+          AND token_hash = $3
+          AND used_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        "#,
+    )
+    .bind(now)
+    .bind(recovery_id)
+    .bind(credential_hash.as_str())
+    .execute(&mut *conn)
+    .await?;
+    if consumed.rows_affected() != 1 {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let changed = sqlx::query(
+        r#"
+        UPDATE auth_account
+        SET password_hash = $1
+        WHERE account_id = $2
+          AND principal_id = $3
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(new_password_hash)
+    .bind(account_id)
+    .bind(principal_id.as_uuid())
+    .execute(&mut *conn)
+    .await?;
+    if changed.rows_affected() != 1 {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let revoked_session_count = revoke_sessions_for_principal(conn, &principal_id, now).await?;
+    let method_id =
+        crate::methods::touch_active_classic_method(conn, account_id, &principal_id, now).await?;
+    let issued = issue_session_raw(
+        conn,
+        password_session_spec(&principal_id, method_id, policy, now),
+        now,
+    )
+    .await?;
+    Ok(RecoverySessionIssuance {
+        session: session_issuance(issued, method_id, owner.global_capabilities),
+        recovery_id,
+        credential_hash,
+        revoked_session_count,
+    })
+}
+
+/// Atomically bind one game invitation and its account password proof to the
+/// only session that can redeem the invitation.
+pub async fn redeem_game_invitation_and_issue_session(
+    conn: &mut PgConnection,
+    invitation_credential: &str,
+    account_id: &str,
+    password_proof: ClassicPasswordProof,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<GameInvitationSessionIssuance, IdentityFlowError> {
+    if invitation_credential.is_empty()
+        || account_id.is_empty()
+        || invitation_credential.len() > 256
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let credential_hash = hash_token(invitation_credential);
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT invitation.principal_id
+        FROM game_invitation AS invitation
+        JOIN auth_account AS account ON account.account_id = invitation.account_id
+        WHERE invitation.token_hash = $1
+          AND invitation.account_id = $2
+          AND account.principal_id = invitation.principal_id
+        "#,
+    )
+    .bind(credential_hash.as_str())
+    .bind(account_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .map(PrincipalId::from_uuid)
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let invitation = sqlx::query_as::<_, (i64, String)>(
+        r#"
+        SELECT invitation.expires_at, account.password_hash
+        FROM game_invitation AS invitation
+        JOIN auth_account AS account ON account.account_id = invitation.account_id
+        WHERE invitation.token_hash = $1
+          AND invitation.account_id = $2
+          AND invitation.principal_id = $3
+          AND invitation.redeemed_at IS NULL
+          AND invitation.revoked_at IS NULL
+          AND invitation.expires_at > $4
+          AND account.principal_id = invitation.principal_id
+          AND account.disabled_at IS NULL
+        FOR UPDATE OF invitation, account
+        "#,
+    )
+    .bind(credential_hash.as_str())
+    .bind(account_id)
+    .bind(principal_id.as_uuid())
+    .bind(now)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    if invitation.1 != password_proof.encoded_hash {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let method_id =
+        crate::methods::touch_active_classic_method(conn, account_id, &principal_id, now).await?;
+    let issued = issue_session_raw(
+        conn,
+        password_session_spec(&principal_id, method_id, policy, now),
+        now,
+    )
+    .await?;
+    let redeemed = sqlx::query(
+        r#"
+        UPDATE game_invitation
+        SET redeemed_at = $1, redeemed_session_token_hash = $2
+        WHERE token_hash = $3
+          AND redeemed_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        "#,
+    )
+    .bind(now)
+    .bind(issued.token_hash.as_str())
+    .bind(credential_hash.as_str())
+    .execute(&mut *conn)
+    .await?;
+    if redeemed.rows_affected() != 1 {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    Ok(GameInvitationSessionIssuance {
+        session: session_issuance(issued, method_id, owner.global_capabilities),
+        credential_hash,
+        invitation_expires_at: invitation.0,
+    })
+}
+
+/// Issue the initial classic session only for the exact invitation credential
+/// consumed by a just-completed community admission. The absence of any prior
+/// session makes the durable ceremony single-use even if the plaintext invite
+/// were retained.
+pub async fn issue_community_admission_session(
+    conn: &mut PgConnection,
+    invitation_credential: &str,
+    account_id: &str,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<SessionIssuance, IdentityFlowError> {
+    if invitation_credential.is_empty()
+        || invitation_credential.len() > 256
+        || account_id.is_empty()
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let credential_hash = hash_token(invitation_credential);
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT membership.active_principal_id
+        FROM community_invitation_credential AS credential
+        JOIN community_invitation AS invitation
+          ON invitation.invitation_id = credential.invitation_id
+        JOIN community_membership AS membership
+          ON membership.membership_id = invitation.admitted_membership_id
+        WHERE credential.token_hash = $1
+          AND membership.active_principal_id IS NOT NULL
+        "#,
+    )
+    .bind(credential_hash.as_str())
+    .fetch_optional(&mut *conn)
+    .await?
+    .map(PrincipalId::from_uuid)
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let method_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT method.method_id
+        FROM community_invitation_credential AS credential
+        JOIN community_invitation AS invitation
+          ON invitation.invitation_id = credential.invitation_id
+        JOIN community_membership AS membership
+          ON membership.membership_id = invitation.admitted_membership_id
+        JOIN auth_account AS account
+          ON account.principal_id = membership.active_principal_id
+        JOIN authentication_method AS method ON method.method_id = account.method_id
+        WHERE credential.token_hash = $1
+          AND credential.consumed_at = $2
+          AND credential.revoked_at IS NULL
+          AND invitation.status = 'accepted'
+          AND invitation.admitted_membership_id = membership.membership_id
+          AND membership.status = 'active'
+          AND membership.origin_kind = 'invitation'
+          AND membership.admission_invitation_id = invitation.invitation_id
+          AND membership.active_principal_id = $3
+          AND account.account_id = $4
+          AND account.disabled_at IS NULL
+          AND method.principal_id = $3
+          AND method.kind = 'classic_password'
+          AND method.status = 'active'
+          AND NOT EXISTS (
+              SELECT 1 FROM auth_session WHERE principal_id = $3
+          )
+        FOR UPDATE OF credential, invitation, membership, account, method
+        "#,
+    )
+    .bind(credential_hash.as_str())
+    .bind(now)
+    .bind(principal_id.as_uuid())
+    .bind(account_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    crate::methods::touch_method(conn, method_id, now).await?;
+    let issued = issue_session_raw(
+        conn,
+        password_session_spec(&principal_id, method_id, policy, now),
+        now,
+    )
+    .await?;
+    Ok(session_issuance(
+        issued,
+        method_id,
+        owner.global_capabilities,
+    ))
+}
+
+async fn issue_session_raw(
     conn: &mut PgConnection,
     spec: SessionSpec<'_>,
     now: i64,
@@ -488,30 +1332,109 @@ pub async fn issue_session(
 /// app session. `session_reference` is the stored token hash, never a bearer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorizationContext {
-    pub principal_id: PrincipalId,
-    pub global_capabilities: Vec<String>,
-    pub method: Option<(Uuid, MethodKind)>,
-    pub assurance: Assurance,
+    principal_id: PrincipalId,
+    global_capabilities: Vec<String>,
+    method: Option<(Uuid, MethodKind)>,
+    assurance: Assurance,
     /// The trusted provider session behind a WorkOS local session. This value
     /// is never serialized directly to clients.
-    pub workos_session_id: Option<WorkosSessionId>,
-    pub session_reference: String,
-    pub created_at: i64,
-    pub authenticated_at: i64,
-    pub expires_at: i64,
-    pub idle_expires_at: i64,
+    workos_session_id: Option<WorkosSessionId>,
+    session_reference: String,
+    created_at: i64,
+    authenticated_at: i64,
+    expires_at: i64,
+    idle_expires_at: i64,
 }
 
 impl AuthorizationContext {
-    /// Capture the exact initiating session for a later commit-time authority
-    /// fence. The returned proof contains no bearer credential and has no public
-    /// constructor, so lifecycle services cannot substitute a principal-only
-    /// lookup for the session that actually authorized the request.
-    pub fn initiating_session(&self) -> InitiatingSession {
-        InitiatingSession {
-            principal_id: self.principal_id,
-            session_reference: self.session_reference.clone(),
+    fn new(
+        principal_id: PrincipalId,
+        global_capabilities: Vec<String>,
+        method: Option<(Uuid, MethodKind)>,
+        assurance: Assurance,
+        workos_session_id: Option<WorkosSessionId>,
+        session_reference: String,
+        created_at: i64,
+        authenticated_at: i64,
+        expires_at: i64,
+        idle_expires_at: i64,
+    ) -> Result<Self, IdentityFlowError> {
+        let authority_shape_is_valid = match (&method, assurance, &workos_session_id) {
+            (Some((_, MethodKind::ClassicPassword)), Assurance::Password, None)
+            | (Some((_, MethodKind::Workos)), Assurance::ExternalSso, Some(_)) => true,
+            #[cfg(debug_assertions)]
+            (None, Assurance::Dev, None) => true,
+            _ => false,
+        };
+        let capabilities_are_valid =
+            global_capabilities
+                .iter()
+                .enumerate()
+                .all(|(index, capability)| {
+                    matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod")
+                        && !global_capabilities[..index].contains(capability)
+                });
+        if !is_canonical_session_reference(session_reference.as_str())
+            || !authority_shape_is_valid
+            || !capabilities_are_valid
+            || authenticated_at > created_at
+            || created_at >= expires_at
+            || idle_expires_at > expires_at
+        {
+            return Err(IdentityFlowError::Unauthorized);
         }
+        Ok(Self {
+            principal_id,
+            global_capabilities,
+            method,
+            assurance,
+            workos_session_id,
+            session_reference,
+            created_at,
+            authenticated_at,
+            expires_at,
+            idle_expires_at,
+        })
+    }
+
+    pub fn principal_id(&self) -> PrincipalId {
+        self.principal_id
+    }
+
+    pub fn global_capabilities(&self) -> &[String] {
+        &self.global_capabilities
+    }
+
+    pub fn method(&self) -> Option<(Uuid, MethodKind)> {
+        self.method
+    }
+
+    pub fn assurance(&self) -> Assurance {
+        self.assurance
+    }
+
+    pub fn workos_session_id(&self) -> Option<&WorkosSessionId> {
+        self.workos_session_id.as_ref()
+    }
+
+    pub fn session_reference(&self) -> &str {
+        self.session_reference.as_str()
+    }
+
+    pub fn created_at(&self) -> i64 {
+        self.created_at
+    }
+
+    pub fn authenticated_at(&self) -> i64 {
+        self.authenticated_at
+    }
+
+    pub fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+
+    pub fn idle_expires_at(&self) -> i64 {
+        self.idle_expires_at
     }
 }
 
@@ -520,6 +1443,48 @@ impl AuthorizationContext {
 pub struct InitiatingSession {
     principal_id: PrincipalId,
     session_reference: String,
+}
+
+impl InitiatingSession {
+    pub(crate) fn require_principal(
+        &self,
+        principal_id: &PrincipalId,
+    ) -> Result<(), IdentityFlowError> {
+        if self.principal_id != *principal_id {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+        Ok(())
+    }
+}
+
+/// Bearer-origin proof package. Only raw canonical bearer validation can mint
+/// the initiating-session proof; trusted stored-reference lookups intentionally
+/// return an authorization context without mutation authority.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthenticatedSession {
+    authorization: AuthorizationContext,
+    initiating_session: InitiatingSession,
+}
+
+impl AuthenticatedSession {
+    fn from_bearer_authorization(authorization: AuthorizationContext) -> Self {
+        let initiating_session = InitiatingSession {
+            principal_id: authorization.principal_id,
+            session_reference: authorization.session_reference.clone(),
+        };
+        Self {
+            authorization,
+            initiating_session,
+        }
+    }
+
+    pub fn authorization(&self) -> &AuthorizationContext {
+        &self.authorization
+    }
+
+    pub fn initiating_session(&self) -> &InitiatingSession {
+        &self.initiating_session
+    }
 }
 
 /// Retry evidence for a WorkOS logout whose local commit already completed
@@ -584,11 +1549,15 @@ pub async fn validate_session(
     token: &str,
     policy: &SessionPolicy,
     now: i64,
-) -> Result<AuthorizationContext, IdentityFlowError> {
+) -> Result<AuthenticatedSession, IdentityFlowError> {
     if !is_canonical_app_session_token(token) {
         return Err(IdentityFlowError::Unauthorized);
     }
-    validate_session_reference(pool, hash_token(token).as_str(), policy, now).await
+    let authorization =
+        validate_session_reference(pool, hash_token(token).as_str(), policy, now).await?;
+    Ok(AuthenticatedSession::from_bearer_authorization(
+        authorization,
+    ))
 }
 
 /// Validate and lock one canonical app session inside a caller-owned
@@ -1003,12 +1972,18 @@ pub async fn rotate_session(
         expires_at: eligible.context.expires_at,
         idle_expires_at,
     };
-    let context = AuthorizationContext {
-        session_reference: token_hash,
-        created_at: now,
+    let context = AuthorizationContext::new(
+        eligible.context.principal_id,
+        eligible.context.global_capabilities,
+        eligible.context.method,
+        eligible.context.assurance,
+        eligible.context.workos_session_id,
+        token_hash,
+        now,
+        eligible.context.authenticated_at,
+        eligible.context.expires_at,
         idle_expires_at,
-        ..eligible.context
-    };
+    )?;
     tx.commit().await?;
     #[cfg(debug_assertions)]
     if context.assurance == Assurance::Dev {
@@ -1240,18 +2215,18 @@ async fn load_eligible_session(
     }
 
     Ok(EligibleSession {
-        context: AuthorizationContext {
+        context: AuthorizationContext::new(
             principal_id,
             global_capabilities,
             method,
             assurance,
             workos_session_id,
-            session_reference: session_reference.to_string(),
+            session_reference.to_string(),
             created_at,
             authenticated_at,
             expires_at,
-            idle_expires_at: effective_idle_expires_at,
-        },
+            effective_idle_expires_at,
+        )?,
         local_proof_capabilities,
         workos_signing_key_id,
     })

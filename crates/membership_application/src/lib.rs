@@ -12,7 +12,7 @@ use community_membership::{
 };
 use eventstore::{ActorId, EventInput};
 use hmac::{Hmac, Mac};
-use identity::{Assurance, IssuedSession, SessionPolicy, SessionSpec};
+use identity::{IssuedSession, SessionPolicy};
 use principal::PrincipalId;
 use rand::RngCore;
 use serde::Serialize;
@@ -344,6 +344,7 @@ pub async fn admit_classic(
     now: i64,
 ) -> Result<ClassicAdmission, MembershipApplicationError> {
     let account_id = normalize_target(account_id)?;
+    let invitation_credential = invitation_credential.trim();
     let mut tx = pool.begin().await?;
     let permit = lock_admission(
         &mut tx,
@@ -389,23 +390,19 @@ pub async fn admit_classic(
     .await?;
 
     complete_admission(&mut tx, &permit, principal_id, now).await?;
-    let expires_at = session_policy.classic_expiry(now);
-    let session = identity::session::issue_session(
+    let session_issuance = identity::session::issue_community_admission_session(
         &mut tx,
-        SessionSpec {
-            principal_id: &principal_id,
-            authenticated_via_method_id: Some(method_id),
-            assurance: Assurance::Password,
-            local_proof_instance_id: None,
-            workos_session_id: None,
-            workos_signing_key_id: None,
-            authenticated_at: now,
-            expires_at,
-            idle_expires_at: session_policy.idle_expiry(now, expires_at),
-        },
+        invitation_credential,
+        account_id.as_str(),
+        session_policy,
         now,
     )
     .await?;
+    if session_issuance.principal_id() != principal_id || session_issuance.method_id() != method_id
+    {
+        return Err(MembershipApplicationError::Unavailable);
+    }
+    let session = session_issuance.into_issued();
     insert_admission_audit(
         &mut tx,
         principal_id,

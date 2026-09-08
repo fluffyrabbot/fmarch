@@ -32,6 +32,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [dev-dependencies]
 game_persona_application = { path = "../game_persona_application", version = "0.1.0" }
+identity = { path = "../identity", version = "0.1.0", features = ["test-support"] }
 object_store = { version = "0.14.1", default-features = false }
 profile_application = { path = "../profile_application", version = "0.1.0" }
 tempfile = "3"

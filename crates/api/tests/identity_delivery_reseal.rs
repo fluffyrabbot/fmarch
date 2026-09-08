@@ -1,6 +1,7 @@
 use api::identity_delivery::{
-    count_delivery_credential_envelopes_by_kid, delivery_aad,
-    reseal_identity_delivery_credentials_batch, IdentityDeliveryKind,
+    bind_identity_delivery_provider_authority, count_delivery_credential_envelopes_by_kid,
+    delivery_aad, reseal_identity_delivery_credentials_batch, IdentityDeliveryKind,
+    LocalDeterministicIdentityDeliveryGateway,
 };
 use principal::PrincipalId;
 use serde_json::Value;
@@ -71,6 +72,12 @@ enum DeliveryState {
 }
 
 async fn seed_account(pool: &PgPool) {
+    bind_identity_delivery_provider_authority(
+        pool,
+        &LocalDeterministicIdentityDeliveryGateway::new(false),
+    )
+    .await
+    .unwrap();
     let principal_id = PrincipalId::fixture("reseal-user");
     let mut connection = pool.acquire().await.unwrap();
     identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
@@ -117,34 +124,6 @@ async fn seed_delivery(
             .unwrap(),
         )
     };
-    let (status, outcome_kind, outcome_code, next_attempt_at, claim_token, claim_expires_at) =
-        match state {
-            DeliveryState::Queued => ("queued", "queued", None, Some(100), None, None),
-            DeliveryState::Retryable => (
-                "retryable_failed",
-                "retryable_failure",
-                Some("provider_unavailable"),
-                Some(100),
-                None,
-                None,
-            ),
-            DeliveryState::Processing => (
-                "processing",
-                "processing",
-                None,
-                None,
-                Some(Uuid::new_v4()),
-                Some(200),
-            ),
-            DeliveryState::Cancelled => (
-                "cancelled",
-                "cancelled",
-                Some("credential_inactive"),
-                None,
-                None,
-                None,
-            ),
-        };
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent (
@@ -152,12 +131,12 @@ async fn seed_delivery(
             credential_hash, credential_expires_at, credential_envelope,
             status, attempt_count, next_attempt_at, delivered_at, last_error,
             created_at, updated_at, provider_id, outcome_kind, outcome_code,
-            provider_receipt_id, claim_token, claim_expires_at, claim_source
+            provider_receipt_id, claim_token, claim_expires_at
         )
         VALUES (
             $1, $2, 'reseal@example.test', $3, $4, 1_000, $5,
-            $6, 0, $7, NULL, $8, 10, 10, 'local-deterministic', $9, $8,
-            NULL, $10, $11, $12
+            'queued', 0, 100, NULL, NULL, 10, 10, 'local-deterministic',
+            'queued', NULL, NULL, NULL, NULL
         )
         "#,
     )
@@ -166,16 +145,52 @@ async fn seed_delivery(
     .bind(principal_id.as_uuid())
     .bind(format!("hash-{delivery_id}"))
     .bind(envelope)
-    .bind(status)
-    .bind(next_attempt_at)
-    .bind(outcome_code)
-    .bind(outcome_kind)
-    .bind(claim_token)
-    .bind(claim_expires_at)
-    .bind(matches!(state, DeliveryState::Processing).then_some("automatic"))
     .execute(&mut **tx)
     .await
     .unwrap();
+    match state {
+        DeliveryState::Queued => {}
+        DeliveryState::Retryable => {
+            sqlx::query(
+                "UPDATE auth_delivery_intent \
+                 SET status = 'retryable_failed', outcome_kind = 'retryable_failure', \
+                     outcome_code = 'provider_unavailable', \
+                     last_error = 'provider_unavailable', updated_at = 11 \
+                 WHERE delivery_id = $1",
+            )
+            .bind(delivery_id)
+            .execute(&mut **tx)
+            .await
+            .unwrap();
+        }
+        DeliveryState::Processing => {
+            sqlx::query(
+                "UPDATE auth_delivery_intent \
+                 SET status = 'processing', outcome_kind = 'processing', next_attempt_at = NULL, \
+                     claim_token = $2, claim_expires_at = 200, claim_source = 'automatic', \
+                     updated_at = 11 \
+                 WHERE delivery_id = $1",
+            )
+            .bind(delivery_id)
+            .bind(Uuid::new_v4())
+            .execute(&mut **tx)
+            .await
+            .unwrap();
+        }
+        DeliveryState::Cancelled => {
+            sqlx::query(
+                "UPDATE auth_delivery_intent \
+                 SET status = 'cancelled', outcome_kind = 'cancelled', \
+                     outcome_code = 'credential_inactive', next_attempt_at = NULL, \
+                     last_error = 'credential_inactive', updated_at = 11 \
+                 WHERE delivery_id = $1",
+            )
+            .bind(delivery_id)
+            .execute(&mut **tx)
+            .await
+            .unwrap();
+        }
+    }
 }
 
 async fn begin_retirement(env: &EncryptionEnvGuard, pool: &PgPool) {

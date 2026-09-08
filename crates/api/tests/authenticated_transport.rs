@@ -4,7 +4,8 @@ use api::{ApiState, MediaUploadResponse, WebsocketTicketResponse};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
-use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
+use identity::test_support::{verified_workos_identity, StaticAccessTokenVerifier};
+use identity::WorkosSessionId;
 use media::{MediaLimits, MediaReadLimits, MediaRepository, MediaStore};
 use principal::PrincipalId;
 use sha2::{Digest, Sha256};
@@ -743,14 +744,15 @@ async fn command_authority_lease_cannot_starve_workos_key_retirement(pool: sqlx:
     let signing_key_id = "retirement-fence-key";
     let verifier = StaticAccessTokenVerifier::new([(
         "workos-fence-assertion".to_string(),
-        VerifiedIdentity {
-            subject: "workos-fence-user".to_string(),
-            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap(),
-            issued_at: 1,
-            expires_at: 4_102_444_800,
-            signing_key_id: signing_key_id.to_string(),
-            email: Some("workos-fence@example.test".to_string()),
-        },
+        verified_workos_identity(
+            "workos-fence-user",
+            WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap(),
+            1,
+            4_102_444_800,
+            signing_key_id,
+            Some("workos-fence@example.test".to_string()),
+        )
+        .unwrap(),
     )]);
     let state = test_state(pool.clone(), &root)
         .with_access_token_verifier(Arc::new(verifier))
@@ -1842,14 +1844,15 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     let root = tempfile::tempdir().unwrap();
     let verifier = StaticAccessTokenVerifier::new([(
         "workos-token".to_string(),
-        VerifiedIdentity {
-            subject: "workos-user".to_string(),
-            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-            issued_at: 1,
-            expires_at: 4_102_444_800,
-            signing_key_id: "test-workos-key".to_string(),
-            email: Some("host@example.test".to_string()),
-        },
+        verified_workos_identity(
+            "workos-user",
+            WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+            1,
+            4_102_444_800,
+            "test-workos-key",
+            Some("host@example.test".to_string()),
+        )
+        .unwrap(),
     )]);
     let state = test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier));
     let app = api::router_with_state(state);

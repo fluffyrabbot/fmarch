@@ -571,15 +571,43 @@ async function contract() {
   assert.match(source["deploy/railway/api.env.example"], /^FMARCH_CLASSIC_AUTH=0$/m);
   assert.match(
     source["deploy/railway/api.env.example"],
+    /^FMARCH_HTTP_REQUEST_TIMEOUT_MS=40000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS=45000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
     /FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID=/,
   );
   assert.match(
     source["deploy/railway/api.env.example"],
-    /^# FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/m,
+    /^FMARCH_IDENTITY_DELIVERY_ENDPOINT=https:\/\/.+/m,
   );
   assert.match(
     source["deploy/railway/api.env.example"],
-    /^# FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\}/m,
+    /^FMARCH_IDENTITY_DELIVERY_PROVIDER_ID=staging-mail-v1$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\}/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^# FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS=40000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^# FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS=5000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /maximum database-clock lead over its clock plus its maximum[\s\S]*deadline-to-no-effect quiescence lag/,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /claim lease also reserves one second for DB clock flooring/,
   );
   assert.doesNotMatch(
     source["deploy/railway/api.env.example"],
@@ -772,7 +800,23 @@ async function contract() {
   );
   assert.match(
     source["crates/server/src/main.rs"],
-    /classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
+    /identity delivery requires FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
+  );
+  assert.match(
+    source["tools/release_hosted_variable_authority.mjs"],
+    /identity delivery is missing \$\{key\}/,
+  );
+  assert.doesNotMatch(
+    source["tools/release_hosted_variable_authority.mjs"],
+    /WorkOS-only mode must not retain/,
+  );
+  assert.match(
+    source["tools/release_hosted_variable_authority.mjs"],
+    /FMARCH_HTTP_REQUEST_TIMEOUT_MS must exceed one database acquisition, both request-authentication statements, the complete identity delivery claim, preparation, provider, and finalization budget, and a one-second response margin/,
+  );
+  assert.match(
+    source["tools/release_hosted_variable_authority.mjs"],
+    /FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS plus a one-second process-drain margin/,
   );
   assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
   assert.match(

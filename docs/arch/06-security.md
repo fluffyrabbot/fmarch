@@ -36,10 +36,35 @@ remain adapter-local strings; none is an application principal or an authorizati
   credentials and sessions stay on this server; no third-party identity provider is
   contacted.* Credential verification has no outbound identity-provider dependency;
   hosted invite and recovery delivery still require the configured HTTPS delivery
-  transport. `FMARCH_CLASSIC_AUTH=0` disables classic for a WorkOS-only deployment;
-  otherwise startup requires that real transport. The deterministic delivery adapter is
-  available only with `FMARCH_DEV_AUTH=1` in a debug build and can never satisfy a hosted
-  delivery contract. Startup requires at least one enabled method.
+  transport. Identity delivery is provider-neutral and remains available for community
+  invitations in WorkOS-only mode. `FMARCH_CLASSIC_AUTH=0` disables classic, but every serving
+  process still requires either the real delivery transport or the debug-only deterministic
+  adapter; identity configuration cannot silently strand already-issued intents. Hosted release
+  preflight requires the real transport for either sign-in shape. The deterministic adapter is
+  available only with `FMARCH_DEV_AUTH=1` in a debug build and can never satisfy a hosted delivery
+  contract. Startup requires at least one enabled sign-in method. A hosted delivery provider id is
+  an immutable, environment-specific generation rather than the generic adapter name: its durable
+  fingerprint binds the endpoint and adapter protocol while excluding the rotatable bearer token.
+  Endpoint or protocol changes therefore require a fresh generation. Bearer-token rotation may
+  stay within a generation only while old and new credentials overlap through replica drain;
+  otherwise it is a fresh generation cut so a revoked old replica cannot reopen the circuit.
+  Every delivery-v2 request carries the exact generation, anonymous attempt token, an earlier
+  provider-effect `lease_expires_at` as Unix epoch seconds, and the configured clock-skew margin.
+  The verified margin satisfies `margin >= ceil(max(database clock - provider clock) + max(provider deadline-to-no-effect quiescence lag))`;
+  the second term is zero only when the provider's final deadline check and
+  credential effect are atomic. A provider must reject a wrong generation, an elapsed effect
+  deadline, or a smaller declared margin, recheck that sole authority deadline immediately before
+  its credential side effect, permit no such effect to commit at or after the deadline, and
+  deduplicate the stable delivery id. A completion response is proof only when the strict
+  `fmarch.identity-delivery-result.v2` body echoes the exact generation, delivery id, and attempt
+  token and carries a valid status-specific shape. Non-success HTTP statuses and malformed,
+  unbound, or unknown bodies remain uncertain remote execution. The later generation-fence expiry
+  remains database-internal and equals the wire deadline plus the declared margin. An uncertain
+  request retains its anonymous fence until that later expiry because cancellation or an
+  intermediary response does not prove the remote handler stopped.
+  Provider-unavailable evidence suspends delivery for that generation on every replica, including
+  explicit retries. Only a credential-free, nonce-echoed GlobalAdmin probe can clear the circuit,
+  so delivery of a live invitation or recovery secret is never repurposed as a health check.
 - **WorkOS — managed sign-in (additive):** AuthKit owns the interactive ceremony (signup,
   email verification, passkeys, MFA, provider-side recovery). The frontend confines AuthKit
   middleware and its sealed cookie to the start and callback routes; after the OAuth
@@ -231,9 +256,11 @@ remain adapter-local strings; none is an application principal or an authorizati
   before a visibility-filtered snapshot. Sequence movement or broadcast lag produces
   `ResyncRequired` followed by capability-filtered snapshots, and a fresh reconnect ticket
   hydrates projections from durable state even if the client cursor is stale.
-- Private game reads and WebSockets have no query-supplied-principal fallback. The sole request
-  authority is the exact presented app session, resolved into `AuthorizationContext`; game-scoped
-  capabilities are then resolved for that context's principal.
+- Private game reads and WebSockets have no query-supplied-principal fallback. Raw app-session
+  bearers resolve into an opaque `AuthenticatedSession` that packages a read-only
+  `AuthorizationContext` with the exact `InitiatingSession` proof. Trusted stored session
+  references resolve only the read-only context and therefore cannot mint mutation authority;
+  game-scoped capabilities are resolved for that context's principal.
 
 ## Authorization: capabilities, not ambient roles
 

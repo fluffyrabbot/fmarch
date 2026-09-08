@@ -400,8 +400,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
         let auth = AuthHttpState::from_ref(state);
-        require_active_community_membership(&auth.pool, request.context.principal_id).await?;
-        Ok(Self(request.context.principal_id))
+        require_active_community_membership(&auth.pool, request.context.principal_id()).await?;
+        Ok(Self(request.context.principal_id()))
     }
 }
 
@@ -426,7 +426,7 @@ where
             .ok_or_else(unauthorized_account)?
             .to_string();
         let context = authorization_context(&auth, &token).await?;
-        Ok(Self(Some(context.principal_id)))
+        Ok(Self(Some(context.principal_id())))
     }
 }
 
@@ -442,7 +442,7 @@ impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthenticati
         state: &PublicPlatformHttpState,
     ) -> Result<Self, Self::Rejection> {
         let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
-        let principal_id = request.context.principal_id;
+        let principal_id = request.context.principal_id();
         require_active_community_membership(&state.pool, principal_id).await?;
         let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
             .await?
@@ -1273,11 +1273,11 @@ async fn require_global_mod(
 ) -> Result<PrincipalId, ApiError> {
     let authorization = authorization_context(&state.auth, token).await?;
     if authorization
-        .global_capabilities
+        .global_capabilities()
         .iter()
         .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
     {
-        return Ok(authorization.principal_id);
+        return Ok(authorization.principal_id());
     }
     Err(ApiError::Reject {
         status: StatusCode::FORBIDDEN,

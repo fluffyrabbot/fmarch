@@ -144,7 +144,7 @@ export async function inspectDatabaseSchema({
   const triggerCount = countLines(currentSchema, /^CREATE TRIGGER /u);
   const functionCount = countLines(currentSchema, /^CREATE FUNCTION /u);
   const viewCount = countLines(currentSchema, /^CREATE VIEW /u);
-  if (tableCount !== 101 || triggerCount !== 35 || functionCount !== 14 || viewCount !== 1) {
+  if (tableCount !== 103 || triggerCount !== 38 || functionCount !== 17 || viewCount !== 1) {
     throw new Error(
       `canonical catalog counts drifted: tables=${tableCount} triggers=${triggerCount} functions=${functionCount} views=${viewCount}`,
     );

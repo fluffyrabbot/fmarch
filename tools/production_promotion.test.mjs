@@ -447,7 +447,14 @@ test("hosted variables require isolated production identity credentials", async 
     AWS_S3_BUCKET_NAME: "staging-media",
     FMARCH_MEDIA_READ_MAX_IN_FLIGHT: "16",
     FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES: "67108864",
+    FMARCH_HTTP_REQUEST_TIMEOUT_MS: "40000",
+    FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "45000",
     FMARCH_CLASSIC_AUTH: "0",
+    FMARCH_IDENTITY_DELIVERY_ENDPOINT:
+      "https://identity-delivery.staging.fmarch.app/v1/deliveries",
+    FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "staging-mail-v1",
+    FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN:
+      "staging-identity-delivery-token-material-0001",
     WORKOS_CLIENT_ID: "client_01STAGING00000000000000000",
     WORKOS_ISSUER:
       "https://api.workos.com/user_management/client_01STAGING00000000000000000",
@@ -509,7 +516,14 @@ test("hosted variables require isolated production identity credentials", async 
     AWS_S3_BUCKET_NAME: "production-media",
     FMARCH_MEDIA_READ_MAX_IN_FLIGHT: "16",
     FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES: "67108864",
+    FMARCH_HTTP_REQUEST_TIMEOUT_MS: "40000",
+    FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "45000",
     FMARCH_CLASSIC_AUTH: "0",
+    FMARCH_IDENTITY_DELIVERY_ENDPOINT:
+      "https://identity-delivery.production.fmarch.app/v1/deliveries",
+    FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "production-mail-v1",
+    FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN:
+      "production-identity-delivery-token-material-01",
     WORKOS_CLIENT_ID: "client_01PRODUCTION000000000000000",
     WORKOS_ISSUER:
       "https://api.workos.com/user_management/client_01PRODUCTION000000000000000",
@@ -1037,24 +1051,29 @@ test("hosted variables require isolated production identity credentials", async 
       }),
     /missing FMARCH_CLASSIC_AUTH/,
   );
-  assert.throws(
-    () =>
-      validateHostedVariables({
-        ...ready,
-        productionApi: { ...productionApi, FMARCH_CLASSIC_AUTH: "1" },
-      }),
-    /classic mode is missing FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
-  );
+  for (const key of [
+    "FMARCH_IDENTITY_DELIVERY_ENDPOINT",
+    "FMARCH_IDENTITY_DELIVERY_PROVIDER_ID",
+    "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
+  ]) {
+    assert.throws(
+      () =>
+        validateHostedVariables({
+          ...ready,
+          productionApi: {
+            ...productionApi,
+            [key]: undefined,
+          },
+        }),
+      new RegExp(`identity delivery is missing ${key}`),
+    );
+  }
   assert.doesNotThrow(() =>
     validateHostedVariables({
       ...ready,
       productionApi: {
         ...productionApi,
         FMARCH_CLASSIC_AUTH: "1",
-        FMARCH_IDENTITY_DELIVERY_ENDPOINT:
-          "https://identity-delivery.example.test/v1/deliveries",
-        FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "http-json",
-        FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: "production-delivery-token",
       },
     }),
   );
@@ -1067,11 +1086,215 @@ test("hosted variables require isolated production identity credentials", async 
           FMARCH_CLASSIC_AUTH: "1",
           FMARCH_IDENTITY_DELIVERY_ENDPOINT:
             "http://identity-delivery.example.test/v1/deliveries",
-          FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "http-json",
-          FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: "production-delivery-token",
         },
       }),
     /must use HTTPS/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_ENDPOINT: "https://host/path?token=x",
+        },
+      }),
+    /without embedded credentials, query strings, or fragments/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_ENDPOINT:
+            "https://provider.example.test/v1/deliveries",
+        },
+      }),
+    /must be a real hosted HTTPS URL/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: "replace_me",
+        },
+      }),
+    /identity-delivery authentication token must be a non-placeholder value of at least 32 characters/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "http-json",
+        },
+      }),
+    /provider id must name a versioned, environment-specific generation instead of a generic adapter/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_PROVIDER_ID:
+            stagingApi.FMARCH_IDENTITY_DELIVERY_PROVIDER_ID,
+        },
+      }),
+    /must not share the identity-delivery provider generation/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN:
+            stagingApi.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN,
+        },
+      }),
+    /must not share the identity-delivery authentication token/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionFrontend: {
+          ...productionFrontend,
+          FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN:
+            productionApi.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN,
+        },
+      }),
+    /production frontend must not receive FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN/,
+  );
+  const invalidIdentityDeliveryRanges = [
+    ["FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_BODY_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES", ["0", "1048577"]],
+    ["FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY", ["0", "65"]],
+    ["FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS", ["0", "60001"]],
+    ["FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS", ["1999", "300001"]],
+    ["FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS", ["999", "60001"]],
+    ["FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS", ["0", "120001"]],
+    ["FMARCH_IDENTITY_DELIVERY_RETRY_BASE_SECONDS", ["0", "86401"]],
+    ["FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS", ["0", "86401"]],
+    ["FMARCH_IDENTITY_DELIVERY_MAX_ATTEMPTS", ["0", "101"]],
+  ];
+  for (const [key, invalidValues] of invalidIdentityDeliveryRanges) {
+    for (const value of invalidValues) {
+      assert.throws(
+        () =>
+          validateHostedVariables({
+            ...ready,
+            productionApi: { ...productionApi, [key]: value },
+          }),
+        new RegExp(`${key} must be between`),
+        `${key} must reject ${value}`,
+      );
+    }
+  }
+  const invalidIdentityDeliveryRelations = [
+    [
+      { FMARCH_IDENTITY_DELIVERY_CONNECT_TIMEOUT_MS: "3001" },
+      /connect deadline must not exceed the response deadline/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_RESPONSE_TIMEOUT_MS: "4001" },
+      /total deadline must cover the response and body deadlines/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS: "10001" },
+      /HTTP total timeout must not exceed the provider timeout/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS: "34000" },
+      /claim lease and provider clock-skew margin must use whole seconds/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS: "29000" },
+      /claim lease and provider clock-skew margin must use whole seconds/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS: "5500" },
+      /claim lease and provider clock-skew margin must use whole seconds/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_RETRY_BASE_SECONDS: "301" },
+      /retry bounds must be whole-second values with 1s <= base <= max <= 24h/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS: "5250" },
+      /database timeout must cover one bounded database acquire and statement/,
+    ],
+  ];
+  for (const [overrides, message] of invalidIdentityDeliveryRelations) {
+    assert.throws(
+      () =>
+        validateHostedVariables({
+          ...ready,
+          productionApi: { ...productionApi, ...overrides },
+        }),
+      message,
+    );
+  }
+  assert.doesNotThrow(() =>
+    validateHostedVariables({
+      ...ready,
+      productionApi: {
+        ...productionApi,
+        FMARCH_DB_MAX_CONNECTIONS: "5",
+        FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT: "2",
+        FMARCH_IDENTITY_DELIVERY_MAX_CONCURRENCY: "64",
+      },
+    }),
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_HTTP_REQUEST_TIMEOUT_MS: "39250",
+        },
+      }),
+    /must exceed one database acquisition, both request-authentication statements, the complete identity delivery claim, preparation, provider, and finalization budget/,
+  );
+  assert.doesNotThrow(() =>
+    validateHostedVariables({
+      ...ready,
+      productionApi: {
+        ...productionApi,
+        FMARCH_HTTP_REQUEST_TIMEOUT_MS: "39251",
+        FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "40252",
+      },
+    }),
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "41000",
+        },
+      }),
+    /FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS plus a one-second process-drain margin/,
+  );
+  assert.doesNotThrow(() =>
+    validateHostedVariables({
+      ...ready,
+      productionApi: {
+        ...productionApi,
+        FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "41001",
+      },
+    }),
   );
   assert.throws(
     () =>

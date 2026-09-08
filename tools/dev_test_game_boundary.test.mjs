@@ -279,12 +279,16 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     identityDeliveryProviderTimeoutMs: 10000,
     identityDeliveryDatabaseTimeoutMs: 9000,
     identityDeliveryClaimLeaseMs: 45000,
+    identityDeliveryProviderClockSkewMarginMs: 5000,
     identityDeliveryRetryMaxSeconds: 300,
+    httpRequestTimeoutMs: 55000,
     workerReadinessGraceMs: 10000,
-    shutdownDrainTimeoutMs: 30000,
+    shutdownDrainTimeoutMs: 60000,
   });
   const oneDatabaseOperation =
     capacity.acquireTimeoutMs + capacity.statementTimeoutMs;
+  const authenticationDatabaseBudget =
+    capacity.acquireTimeoutMs + 2 * capacity.statementTimeoutMs;
   assert.ok(capacity.workerReadinessGraceMs > oneDatabaseOperation);
   assert.ok(
     capacity.identityDeliveryDatabaseTimeoutMs > oneDatabaseOperation,
@@ -293,12 +297,19 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     capacity.identityDeliveryClaimLeaseMs >
       capacity.identityDeliveryProviderTimeoutMs +
         3 * capacity.identityDeliveryDatabaseTimeoutMs +
+        capacity.identityDeliveryProviderClockSkewMarginMs +
+        1000,
+  );
+  assert.ok(
+    capacity.httpRequestTimeoutMs >
+      authenticationDatabaseBudget +
+        capacity.identityDeliveryProviderTimeoutMs +
+        3 * capacity.identityDeliveryDatabaseTimeoutMs +
         1000,
   );
   assert.ok(
     capacity.shutdownDrainTimeoutMs >
-      capacity.identityDeliveryProviderTimeoutMs +
-        2 * capacity.identityDeliveryDatabaseTimeoutMs,
+      capacity.httpRequestTimeoutMs + 1000,
   );
   const deliveryObservationBudget =
     capacity.workerReadinessGraceMs +
@@ -344,8 +355,11 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS:
       "identityDeliveryDatabaseTimeoutMs",
     FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS: "identityDeliveryClaimLeaseMs",
+    FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS:
+      "identityDeliveryProviderClockSkewMarginMs",
     FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS:
       "identityDeliveryRetryMaxSeconds",
+    FMARCH_HTTP_REQUEST_TIMEOUT_MS: "httpRequestTimeoutMs",
     FMARCH_WORKER_READINESS_GRACE_MS: "workerReadinessGraceMs",
     FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "shutdownDrainTimeoutMs",
   })) {
@@ -380,4 +394,35 @@ test("auth invite proof observes provider backoff before an explicit admin retry
     /await delay\(1100\)/u,
     "admin retry must wait on durable delivery state rather than a wall-clock guess",
   );
+});
+
+test("auth invite provider enforces one skew-guarded side-effect deadline", async () => {
+  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
+
+  assert.match(source, /function deliveryLeaseIsLive\(delivery\)/u);
+  assert.match(
+    source,
+    /function deliveryClockSkewMarginCoversCrossClockBound\(delivery\)/u,
+  );
+  assert.match(
+    source,
+    /identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds = 5/u,
+  );
+  assert.equal(
+    source.match(/deliveryLeaseIsLive\(delivery\)/gu)?.length,
+    3,
+    "the helper definition, admission check, and final pre-effect check must remain explicit",
+  );
+  assert.match(
+    source,
+    /if \(!deliveryLeaseIsLive\(delivery\)\) \{[\s\S]*?captures\.set\(delivery\.delivery_id/u,
+  );
+  assert.match(source, /schema: "fmarch\.identity-delivery-result\.v2"/u);
+  for (const field of ["provider_generation", "delivery_id", "attempt_token"]) {
+    assert.match(
+      source,
+      new RegExp(`${field}: delivery\\.${field}`, "u"),
+      `provider completion must echo ${field}`,
+    );
+  }
 });

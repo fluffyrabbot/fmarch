@@ -16,6 +16,8 @@ use admission::{enforce_http_admission, HttpAdmission};
 // protocol deadline so a valid fence cannot be killed before it commits.
 const MIN_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 10_000;
 const MIN_DATABASE_POOL_CONNECTIONS: u64 = 5;
+const IDENTITY_DELIVERY_HTTP_COMPLETION_MARGIN: Duration = Duration::from_secs(1);
+const HTTP_SHUTDOWN_DRAIN_MARGIN: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
 struct RuntimeConfig {
@@ -44,7 +46,6 @@ enum MediaConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IdentityDeliveryMode {
-    Disabled,
     HttpJson,
     LocalDeterministic,
 }
@@ -156,7 +157,7 @@ impl RuntimeConfig {
         let http = HttpCapacity {
             max_in_flight: bounded_env("FMARCH_HTTP_MAX_IN_FLIGHT", 128, 1, 65_536)? as usize,
             queue_timeout_ms: bounded_env("FMARCH_HTTP_QUEUE_TIMEOUT_MS", 50, 1, 60_000)?,
-            request_timeout_ms: bounded_env("FMARCH_HTTP_REQUEST_TIMEOUT_MS", 15_000, 10, 300_000)?,
+            request_timeout_ms: bounded_env("FMARCH_HTTP_REQUEST_TIMEOUT_MS", 40_000, 10, 300_000)?,
             retry_after_seconds: bounded_env("FMARCH_HTTP_RETRY_AFTER_SECONDS", 1, 1, 300)? as i64,
         };
         let authority_transaction_max_in_flight = bounded_env(
@@ -340,7 +341,6 @@ impl RuntimeConfig {
         };
         api.validate(database.max_connections as usize)?;
         let identity_delivery_gateway = identity_delivery_gateway_from_env(
-            classic_enabled,
             dev_auth_requested,
             cfg!(debug_assertions),
             api.auth.identity_delivery_worker_config.provider_timeout(),
@@ -397,7 +397,7 @@ impl RuntimeConfig {
             )?),
             shutdown_drain_timeout: Duration::from_millis(bounded_env(
                 "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS",
-                30_000,
+                45_000,
                 1_000,
                 300_000,
             )?),
@@ -530,6 +530,11 @@ impl RuntimeConfig {
                 .acquire_timeout_ms
                 .saturating_add(self.database.statement_timeout_ms),
         );
+        let authentication_database_budget = Duration::from_millis(
+            self.database
+                .acquire_timeout_ms
+                .saturating_add(self.database.statement_timeout_ms.saturating_mul(2)),
+        );
         if self.workers.readiness_grace <= startup_database_budget {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -551,20 +556,53 @@ impl RuntimeConfig {
             ));
         }
         let identity_delivery = self.api.auth.identity_delivery_worker_config;
+        validate_identity_delivery_http_budget(
+            Duration::from_millis(self.http.request_timeout_ms),
+            authentication_database_budget,
+            identity_delivery,
+        )?;
         if identity_delivery.database_timeout() <= startup_database_budget {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "identity delivery database timeout must cover one bounded database acquire and statement",
             ));
         }
-        if self.workers.shutdown_drain_timeout <= identity_delivery.total_timeout() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "worker shutdown drain timeout must cover one bounded identity delivery preparation, provider call, and finalization",
-            ));
-        }
+        validate_http_shutdown_budget(
+            Duration::from_millis(self.http.request_timeout_ms),
+            self.workers.shutdown_drain_timeout,
+        )?;
         Ok(())
     }
+}
+
+fn validate_http_shutdown_budget(
+    request_timeout: Duration,
+    shutdown_drain_timeout: Duration,
+) -> Result<(), std::io::Error> {
+    if shutdown_drain_timeout <= request_timeout.saturating_add(HTTP_SHUTDOWN_DRAIN_MARGIN) {
+        return Err(invalid_runtime_config(
+            "FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS must exceed FMARCH_HTTP_REQUEST_TIMEOUT_MS plus a one-second process-drain margin"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_identity_delivery_http_budget(
+    request_timeout: Duration,
+    authentication_budget: Duration,
+    identity_delivery: api::identity_delivery::IdentityDeliveryWorkerConfig,
+) -> Result<(), std::io::Error> {
+    let required_timeout = authentication_budget
+        .saturating_add(identity_delivery.lease_coverage_timeout())
+        .saturating_add(IDENTITY_DELIVERY_HTTP_COMPLETION_MARGIN);
+    if request_timeout <= required_timeout {
+        return Err(invalid_runtime_config(
+            "FMARCH_HTTP_REQUEST_TIMEOUT_MS must exceed one database acquisition, both request-authentication statements, the complete identity delivery claim, preparation, provider, and finalization budget, and a one-second response margin"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn required_env(name: &str) -> Result<String, std::io::Error> {
@@ -762,9 +800,15 @@ fn identity_delivery_worker_config_from_env(
         )?),
         Duration::from_millis(bounded_env(
             "FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS",
-            30_000,
+            40_000,
             2_000,
             300_000,
+        )?),
+        Duration::from_millis(bounded_env(
+            "FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS",
+            5_000,
+            1_000,
+            60_000,
         )?),
         Duration::from_millis(bounded_env(
             "FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS",
@@ -841,14 +885,10 @@ fn bind_from_values(
 }
 
 fn identity_delivery_mode(
-    classic_enabled: bool,
     http_gateway_configured: bool,
     dev_auth_enabled: bool,
     debug_build: bool,
 ) -> Result<IdentityDeliveryMode, std::io::Error> {
-    if !classic_enabled {
-        return Ok(IdentityDeliveryMode::Disabled);
-    }
     if http_gateway_configured {
         return Ok(IdentityDeliveryMode::HttpJson);
     }
@@ -857,12 +897,11 @@ fn identity_delivery_mode(
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
-        "classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT; the local deterministic delivery gateway is available only with FMARCH_DEV_AUTH=1 in a debug build, or set FMARCH_CLASSIC_AUTH=0 for a WorkOS-only deployment",
+        "identity delivery requires FMARCH_IDENTITY_DELIVERY_ENDPOINT; the local deterministic delivery gateway is available only with FMARCH_DEV_AUTH=1 in a debug build",
     ))
 }
 
 fn identity_delivery_gateway_from_env(
-    classic_enabled: bool,
     dev_auth_requested: bool,
     debug_build: bool,
     provider_timeout: Duration,
@@ -884,17 +923,6 @@ fn identity_delivery_gateway_from_env(
         || total_timeout.is_some()
         || max_response_bytes.is_some();
 
-    if !classic_enabled {
-        if endpoint.is_some() || http_companion_configured || local_fail_first.is_some() {
-            return Err(invalid_runtime_config(
-                "identity delivery settings must be absent when classic authentication is disabled"
-                    .to_string(),
-            ));
-        }
-        return Ok(std::sync::Arc::new(
-            api::identity_delivery::DisabledIdentityDeliveryGateway,
-        ));
-    }
     if endpoint.is_none() && http_companion_configured {
         return Err(invalid_runtime_config(
             "identity delivery provider, token, and deadline settings require FMARCH_IDENTITY_DELIVERY_ENDPOINT"
@@ -902,15 +930,7 @@ fn identity_delivery_gateway_from_env(
         ));
     }
 
-    match identity_delivery_mode(
-        classic_enabled,
-        endpoint.is_some(),
-        dev_auth_requested,
-        debug_build,
-    )? {
-        IdentityDeliveryMode::Disabled => Ok(std::sync::Arc::new(
-            api::identity_delivery::DisabledIdentityDeliveryGateway,
-        )),
+    match identity_delivery_mode(endpoint.is_some(), dev_auth_requested, debug_build)? {
         IdentityDeliveryMode::LocalDeterministic => {
             let fail_first_attempt = parse_optional_bool(
                 "FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT",
@@ -1299,13 +1319,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RuntimeConfig owns transport parsing and deadline validation before any
     // external authority or database side effects occur.
-    let gateway = identity_delivery_gateway;
     let worker_health = api::RuntimeWorkerHealth::new(config.workers.heartbeat_stale_after)
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
     let mut api_state = api::ApiState::new(pool.clone(), media_store, config.api.clone())?
         .with_classic_auth(classic_enabled)
         .with_subject_key_store(subject_authority.key_store.clone())
-        .with_identity_delivery_gateway(gateway.clone())
+        .with_identity_delivery_gateway(identity_delivery_gateway.clone())
         .with_worker_health(worker_health.clone());
     if let Some(identity) = database_identity {
         api_state = api_state.with_database_environment_identity(identity);
@@ -1325,22 +1344,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(instance_id) = local_proof_instance_id {
         operator_state = operator_state.with_local_proof_instance(instance_id);
     }
-    // Claim the listener before starting managed workers so a bind failure
-    // cannot detach background work from the process lifecycle.
+    // Claim the listener and prove every required runtime worker before
+    // changing the durable provider generation. A deployment that cannot
+    // become ready must never retire the generation still owned by healthy
+    // replicas.
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
-    let identity_delivery_worker = if classic_enabled {
-        Some(runtime_supervisor::IdentityDeliveryWorkerBinding::new(
-            gateway,
-            config.api.auth.identity_delivery_worker_config,
-            api_state.identity_delivery_admission(),
-        ))
-    } else {
-        None
-    };
-    let mut supervisor = runtime_supervisor::RuntimeSupervisor::start(
+    let mut supervisor = runtime_supervisor::RuntimeSupervisor::start_required(
         pool.clone(),
         api_state.clone(),
-        identity_delivery_worker,
         config.scheduler.clone(),
         config.workers.clone(),
         worker_health,
@@ -1357,6 +1368,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, message).into());
     }
+    // Provider binding is the final fallible activation gate and a durable,
+    // irreversible database mutation. It follows application-principal and
+    // environment-identity attestation plus required-worker readiness, so a
+    // stale, invalid, or unready deployment cannot write continuity state into
+    // the wrong database or strand the generation used by healthy replicas.
+    let identity_delivery_provider =
+        match api::identity_delivery::bind_identity_delivery_provider_authority(
+            &pool,
+            identity_delivery_gateway.as_ref(),
+        )
+        .await
+        {
+            Ok(provider) => provider,
+            Err(error) => {
+                supervisor.request_shutdown();
+                let shutdown_result = supervisor.shutdown().await;
+                pool.close().await;
+                if shutdown_result.is_err() {
+                    tracing::error!(
+                        event = "runtime_startup_abort_failed",
+                        "runtime workers failed while aborting provider binding"
+                    );
+                }
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("identity delivery startup binding failed: {error}"),
+                )
+                .into());
+            }
+        };
+    tracing::info!(
+        provider_generation = identity_delivery_provider.configured_generation,
+        provider_operable = identity_delivery_provider.operable,
+        "bound durable identity delivery provider authority"
+    );
+    let identity_delivery_worker = runtime_supervisor::IdentityDeliveryWorkerBinding::new(
+        identity_delivery_gateway,
+        config.api.auth.identity_delivery_worker_config,
+        api_state.identity_delivery_admission(),
+    );
+    supervisor.start_identity_delivery(pool.clone(), identity_delivery_worker, &config.workers);
     let app = api::router_with_state(api_state)
         .merge(operator_api::router_with_state(operator_state))
         .layer(middleware::from_fn_with_state(
@@ -1499,9 +1551,11 @@ mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
         local_proof_auth_from_values, required_bounded_env, strict_bool_env,
+        validate_http_shutdown_budget, validate_identity_delivery_http_budget,
         virtual_hosted_style_from_value, wait_for_shutdown_request, IdentityDeliveryMode,
         MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
+    use std::time::Duration;
 
     const TEST_LOCAL_PROOF_SECRET: &str =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -1509,20 +1563,71 @@ mod tests {
     #[test]
     fn identity_delivery_selection_is_explicit_and_fail_closed() {
         assert_eq!(
-            identity_delivery_mode(false, false, false, false).unwrap(),
-            IdentityDeliveryMode::Disabled
-        );
-        assert_eq!(
-            identity_delivery_mode(true, true, false, false).unwrap(),
+            identity_delivery_mode(true, false, false).unwrap(),
             IdentityDeliveryMode::HttpJson
         );
         assert_eq!(
-            identity_delivery_mode(true, false, true, true).unwrap(),
+            identity_delivery_mode(false, true, true).unwrap(),
             IdentityDeliveryMode::LocalDeterministic
         );
-        assert!(identity_delivery_mode(true, false, false, true).is_err());
-        assert!(identity_delivery_mode(true, false, true, false).is_err());
+        assert!(identity_delivery_mode(false, false, true).is_err());
+        assert!(identity_delivery_mode(false, true, false).is_err());
     }
+
+    #[test]
+    fn http_deadline_strictly_covers_synchronous_identity_delivery() {
+        let retry = api::identity_delivery::IdentityDeliveryRetryPolicy::new(
+            Duration::from_secs(2),
+            Duration::from_secs(300),
+            8,
+        )
+        .unwrap();
+        let delivery = api::identity_delivery::IdentityDeliveryWorkerConfig::new(
+            4,
+            2,
+            Duration::from_millis(100),
+            Duration::from_secs(40),
+            Duration::from_secs(5),
+            Duration::from_secs(10),
+            Duration::from_secs(6),
+            retry,
+        )
+        .unwrap();
+        assert_eq!(delivery.lease_coverage_timeout(), Duration::from_secs(28));
+        let authentication = Duration::from_millis(10_250);
+        assert!(validate_identity_delivery_http_budget(
+            Duration::from_millis(39_250),
+            authentication,
+            delivery,
+        )
+        .is_err());
+        assert!(validate_identity_delivery_http_budget(
+            Duration::from_millis(39_251),
+            authentication,
+            delivery,
+        )
+        .is_ok());
+        assert!(validate_identity_delivery_http_budget(
+            Duration::from_secs(40),
+            authentication,
+            delivery,
+        )
+        .is_ok());
+        assert!(
+            validate_http_shutdown_budget(Duration::from_secs(40), Duration::from_secs(41),)
+                .is_err()
+        );
+        assert!(validate_http_shutdown_budget(
+            Duration::from_secs(40),
+            Duration::from_millis(41_001),
+        )
+        .is_ok());
+        assert!(
+            validate_http_shutdown_budget(Duration::from_secs(40), Duration::from_secs(45),)
+                .is_ok()
+        );
+    }
+
     #[test]
     fn configured_bind_overrides_platform_port() {
         assert_eq!(

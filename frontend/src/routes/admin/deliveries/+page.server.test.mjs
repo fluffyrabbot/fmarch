@@ -13,13 +13,117 @@ test("delivery page loads the authenticated redacted operator queue", async () =
     url: new URL("http://localhost/admin/deliveries"),
     fetch: async (url, init) => {
       requested = { url, init };
-      return response({ deliveries: [{ delivery_id: "delivery-1" }] });
+      return response({
+        delivery_configured: true,
+        delivery_bound: true,
+        delivery_operable: false,
+        configured_generation: "staging-mail-v4",
+        active_generation: "staging-mail-v4",
+        suspension_code: "provider_unavailable",
+        probe_in_flight: true,
+        circuit_version: 7,
+        deliveries: [{ delivery_id: "delivery-1" }],
+      });
     },
   });
   assert.match(requested.url, /\/admin\/auth-deliveries\?limit=200$/u);
   assert.equal(requested.init.headers.authorization, "Bearer operator-session");
   assert.equal(data.deliveries[0].delivery_id, "delivery-1");
+  assert.equal(data.deliveryConfigured, true);
+  assert.equal(data.deliveryBound, true);
+  assert.equal(data.deliveryOperable, false);
+  assert.equal(data.configuredGeneration, "staging-mail-v4");
+  assert.equal(data.activeGeneration, "staging-mail-v4");
+  assert.equal(data.suspensionCode, "provider_unavailable");
+  assert.equal(data.probeInFlight, true);
+  assert.equal(data.circuitVersion, 7);
   assert.equal(data.canRetry, false);
+  assert.equal(data.canProbe, false);
+});
+
+test("delivery operations remain available when classic sign-in is disabled", async () => {
+  const priorClassicAuth = process.env.FMARCH_CLASSIC_AUTH;
+  process.env.FMARCH_CLASSIC_AUTH = "0";
+  try {
+    const data = await load({
+      cookies: { get: () => "operator-session" },
+      locals: {
+        principalId: "admin_a",
+        resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+      },
+      url: new URL("http://localhost/admin/deliveries"),
+      fetch: async () =>
+        response({
+          delivery_configured: true,
+          delivery_bound: true,
+          delivery_operable: true,
+          configured_generation: "staging-mail-v4",
+          active_generation: "staging-mail-v4",
+          suspension_code: null,
+          probe_in_flight: false,
+          circuit_version: 2,
+          deliveries: [],
+        }),
+    });
+    assert.deepEqual(data.deliveries, []);
+    assert.equal(data.deliveryConfigured, true);
+    assert.equal(data.deliveryBound, true);
+    assert.equal(data.deliveryOperable, true);
+    assert.equal(data.canRetry, true);
+    assert.equal(data.canProbe, true);
+
+    let retried = false;
+    const result = await actions.retry({
+      cookies: { get: () => "operator-session" },
+      locals: { resolvedCapabilities: [{ kind: "GlobalAdmin" }] },
+      request: formRequest("11111111-1111-4111-8111-111111111111", 0),
+      fetch: async () => {
+        retried = true;
+        return response({ status: "retryable_failed", attempt_count: 1 });
+      },
+    });
+    assert.equal(retried, true);
+    assert.equal(result.state, "pending");
+  } finally {
+    if (priorClassicAuth === undefined) delete process.env.FMARCH_CLASSIC_AUTH;
+    else process.env.FMARCH_CLASSIC_AUTH = priorClassicAuth;
+  }
+});
+
+test("provider recovery probe is a credential-free GlobalAdmin operation", async () => {
+  let requested = null;
+  const result = await actions.probe({
+    cookies: { get: () => "admin-session" },
+    locals: { resolvedCapabilities: [{ kind: "GlobalAdmin" }] },
+    fetch: async (url, init) => {
+      requested = { url, init };
+      return response({
+        status: "available",
+        provider_generation: "staging-mail-v4",
+        provider_operable: true,
+        circuit_version: 9,
+      });
+    },
+  });
+  assert.match(requested.url, /\/admin\/auth-delivery-provider\/probe$/u);
+  assert.equal(requested.init.method, "POST");
+  assert.equal(requested.init.headers.authorization, "Bearer admin-session");
+  assert.equal(initHasBody(requested.init), false);
+  assert.equal(result.state, "ack");
+  assert.match(result.message, /circuit version 9/u);
+});
+
+test("provider recovery probe rejects GlobalMod before calling the API", async () => {
+  let called = false;
+  const result = await actions.probe({
+    cookies: { get: () => "mod-session" },
+    locals: { resolvedCapabilities: [{ kind: "GlobalMod" }] },
+    fetch: async () => {
+      called = true;
+    },
+  });
+  assert.equal(called, false);
+  assert.equal(result.status, 403);
 });
 
 test("delivery retry delegates only a validated id from a GlobalAdmin session", async () => {
@@ -89,4 +193,8 @@ function response(body, status = 200) {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+function initHasBody(init) {
+  return Object.hasOwn(init, "body") && init.body !== undefined && init.body !== null;
 }

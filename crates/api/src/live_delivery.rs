@@ -436,7 +436,7 @@ async fn create_websocket_ticket(
     authorization: AuthenticatedRequest,
     Json(request): Json<CreateWebsocketTicket>,
 ) -> Result<Json<WebsocketTicketResponse>, ApiError> {
-    let principal_id = authorization.context.principal_id;
+    let principal_id = authorization.context.principal_id();
     let ticket_scope =
         hash_session_token(format!("websocket-ticket-principal:{principal_id}").as_str());
     enforce_public_request_limit(
@@ -520,18 +520,18 @@ async fn create_websocket_ticket(
     )
     .await
     .map_err(|_| unauthorized_session())?;
-    if locked_authorization.principal_id != principal_id {
+    if locked_authorization.principal_id() != principal_id {
         return Err(unauthorized_session());
     }
     let issued_at = unix_now_seconds();
-    if locked_authorization.expires_at <= issued_at
-        || locked_authorization.idle_expires_at <= issued_at
+    if locked_authorization.expires_at() <= issued_at
+        || locked_authorization.idle_expires_at() <= issued_at
     {
         return Err(unauthorized_session());
     }
     let access_expires_at = locked_authorization
-        .idle_expires_at
-        .min(locked_authorization.expires_at);
+        .idle_expires_at()
+        .min(locked_authorization.expires_at());
     let expires_at = issued_at
         .saturating_add(state.auth.websocket_ticket_ttl.as_secs() as i64)
         .min(access_expires_at);
@@ -546,7 +546,7 @@ async fn create_websocket_ticket(
         "#,
     )
     .bind(hash_session_token(ticket.as_str()))
-    .bind(locked_authorization.session_reference)
+    .bind(locked_authorization.session_reference())
     .bind(access_expires_at)
     .bind(audience)
     .bind(request.game)
@@ -643,7 +643,7 @@ async fn redeem_websocket_ticket(
     )
     .await
     .map_err(|_| unauthorized_session())?;
-    if authorization.principal_id != discovered_principal_id {
+    if authorization.principal_id() != discovered_principal_id {
         return Err(unauthorized_session());
     }
     identity::session::lock_websocket_ticket_mutation(&mut tx, ticket_hash.as_str())
@@ -683,7 +683,7 @@ async fn redeem_websocket_ticket(
     let claim = WebsocketTicketClaim {
         session_reference,
         access_expires_at: row.0,
-        principal_id: authorization.principal_id,
+        principal_id: authorization.principal_id(),
         scope,
         after_seq: row.4,
     };
@@ -794,12 +794,12 @@ impl SessionDeliveryGuard {
                     return None;
                 }
             };
-            if authorization.principal_id != claim.principal_id {
+            if authorization.principal_id() != claim.principal_id {
                 return None;
             }
             let mut capabilities = match caps::resolve_live_delivery_in_tx(
                 &mut tx,
-                &Principal::authenticated(authorization.principal_id),
+                &Principal::authenticated(authorization.principal_id()),
                 claim.scope.game(),
             )
             .await
@@ -810,7 +810,7 @@ impl SessionDeliveryGuard {
                     return None;
                 }
             };
-            for capability in &authorization.global_capabilities {
+            for capability in authorization.global_capabilities() {
                 match capability.as_str() {
                     "GlobalAdmin" => capabilities.insert(Capability::GlobalAdmin),
                     "GlobalMod" => capabilities.insert(Capability::GlobalMod),
@@ -861,8 +861,8 @@ impl SessionDeliveryGuard {
         };
         let valid_until = claim
             .access_expires_at
-            .min(authorization.expires_at)
-            .min(authorization.idle_expires_at);
+            .min(authorization.expires_at())
+            .min(authorization.idle_expires_at());
         let Some(deadline) = live_delivery_deadline_bounded_by(valid_until, lease_deadline) else {
             if tokio::time::timeout_at(lease_deadline, tx.rollback())
                 .await
@@ -939,7 +939,7 @@ async fn websocket_authorization_context(
     )
     .await
     .ok()?;
-    (authorization.principal_id == claim.principal_id).then_some(authorization)
+    (authorization.principal_id() == claim.principal_id).then_some(authorization)
 }
 
 async fn ws(

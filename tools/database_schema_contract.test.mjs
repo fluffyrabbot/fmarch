@@ -65,11 +65,13 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0010_identity_delivery_claim_provenance.sql");
-  assert.equal(report.migration_file_count, 10);
+  assert.equal(report.migration_head, "0011_identity_delivery_provider_authority.sql");
+  assert.equal(report.migration_file_count, 11);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 101);
+  assert.equal(report.table_count, 103);
+  assert.equal(report.trigger_count, 38);
+  assert.equal(report.function_count, 17);
   assert.doesNotMatch(checkedSnapshot, /admin_grant/u);
   assert.match(
     checkedMigrations["0004_remove_admin_grant_assurance.sql"],
@@ -163,6 +165,64 @@ test("identity delivery claims persist one valid provenance shape", () => {
   assert.match(
     checkedSnapshot,
     /CREATE TRIGGER auth_delivery_intent_attempt_count_guard BEFORE UPDATE OF attempt_count ON public\.auth_delivery_intent[\s\S]*auth_delivery_intent_attempt_count_monotonic\(\)/u,
+  );
+});
+
+test("identity delivery provider generations are retained and exactly fenced", () => {
+  const authorityMigration =
+    checkedMigrations["0011_identity_delivery_provider_authority.sql"];
+  assert.equal(typeof authorityMigration, "string");
+  assert.match(
+    authorityMigration,
+    /CREATE TABLE public\.auth_delivery_provider_authority[\s\S]*generation_id text PRIMARY KEY[\s\S]*configuration_fingerprint text NOT NULL[\s\S]*circuit_version bigint[\s\S]*suspended_at bigint[\s\S]*suspension_code text[\s\S]*probe_token uuid[\s\S]*probe_expires_at bigint/u,
+  );
+  assert.match(
+    authorityMigration,
+    /configuration_fingerprint ~ '\^\[0-9a-f\]\{64\}\$'/u,
+  );
+  assert.match(
+    authorityMigration,
+    /CREATE UNIQUE INDEX auth_delivery_provider_authority_one_active[\s\S]*WHERE retired_at IS NULL/u,
+  );
+  assert.match(
+    authorityMigration,
+    /deliberately is not a foreign key:[\s\S]*suspension_observation_id uuid/u,
+  );
+  assert.match(
+    authorityMigration,
+    /ADD CONSTRAINT auth_delivery_intent_provider_generation_fkey[\s\S]*FOREIGN KEY \(provider_id\)[\s\S]*REFERENCES public\.auth_delivery_provider_authority\(generation_id\)[\s\S]*ON DELETE RESTRICT/u,
+  );
+  assert.doesNotMatch(
+    authorityMigration,
+    /FOREIGN KEY \(suspension_observation_id\)/u,
+  );
+  assert.match(
+    authorityMigration,
+    /CREATE TABLE public\.auth_delivery_provider_attempt_fence[\s\S]*attempt_token uuid PRIMARY KEY[\s\S]*generation_id text NOT NULL[\s\S]*expires_at bigint NOT NULL[\s\S]*FOREIGN KEY \(generation_id\)/u,
+  );
+  assert.match(
+    authorityMigration,
+    /IF EXISTS \([\s\S]*FROM public\.auth_delivery_intent[\s\S]*status = 'processing'[\s\S]*provider-authority migration requires a drained processing queue/u,
+  );
+  assert.doesNotMatch(
+    authorityMigration,
+    /INSERT INTO public\.auth_delivery_provider_attempt_fence[\s\S]*SELECT claim_token, provider_id, updated_at, claim_expires_at[\s\S]*WHERE status = 'processing'/u,
+  );
+  assert.match(
+    authorityMigration,
+    /CREATE TRIGGER auth_delivery_provider_authority_invariant_guard[\s\S]*CREATE TRIGGER auth_delivery_intent_provider_authority_guard[\s\S]*CREATE TRIGGER auth_delivery_intent_attempt_fence_insert/u,
+  );
+  assert.match(
+    authorityMigration,
+    /provider generation identity is immutable[\s\S]*NEW\.circuit_version < OLD\.circuit_version[\s\S]*provider retirement is irreversible/u,
+  );
+  assert.match(
+    authorityMigration,
+    /IF TG_OP = 'INSERT' AND NEW\.status <> 'queued'[\s\S]*identity delivery intents must enter through queued state/u,
+  );
+  assert.match(
+    checkedSnapshot,
+    /CREATE TABLE public\.auth_delivery_provider_authority \([\s\S]*auth_delivery_provider_authority_lifecycle_check/u,
   );
 });
 

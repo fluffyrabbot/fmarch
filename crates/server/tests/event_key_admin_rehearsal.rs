@@ -188,6 +188,14 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
     let slot_context = format!("fmarch-projection-v1:slot_state:{game_text}:slot_1");
     let delivery_context = format!("fmarch:identity-delivery:v1:{delivery}:invite");
     let mut tx = pool.begin().await.unwrap();
+    sqlx::query(
+        "INSERT INTO auth_delivery_provider_authority (\
+            generation_id, configuration_fingerprint, activated_at, last_bound_at\
+         ) VALUES ('local-deterministic', repeat('a', 64), 1, 1)",
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
     let slot_envelope = eventstore::encrypt_private_projection(
         &mut tx,
         serde_json::json!({"role_key": "doctor", "alignment": "town"}),

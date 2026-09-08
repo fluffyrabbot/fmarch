@@ -26,12 +26,69 @@ use crate::PrincipalId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedIdentity {
-    pub subject: String,
-    pub session_id: WorkosSessionId,
-    pub issued_at: i64,
-    pub expires_at: i64,
-    pub signing_key_id: String,
-    pub email: Option<String>,
+    subject: String,
+    session_id: WorkosSessionId,
+    issued_at: i64,
+    expires_at: i64,
+    signing_key_id: String,
+    email: Option<String>,
+}
+
+impl VerifiedIdentity {
+    pub fn subject(&self) -> &str {
+        self.subject.as_str()
+    }
+
+    pub fn session_id(&self) -> &WorkosSessionId {
+        &self.session_id
+    }
+
+    pub fn issued_at(&self) -> i64 {
+        self.issued_at
+    }
+
+    pub fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+
+    pub fn signing_key_id(&self) -> &str {
+        self.signing_key_id.as_str()
+    }
+
+    pub fn email(&self) -> Option<&str> {
+        self.email.as_deref()
+    }
+
+    /// Hermetic assertion evidence for debug test graphs. Production code can
+    /// obtain this type only through an [`AccessTokenVerifier`].
+    #[cfg(all(feature = "test-support", debug_assertions))]
+    pub fn for_test(
+        subject: impl Into<String>,
+        session_id: WorkosSessionId,
+        issued_at: i64,
+        expires_at: i64,
+        signing_key_id: impl Into<String>,
+        email: Option<String>,
+    ) -> Result<Self, IdentityError> {
+        let subject = subject.into();
+        let signing_key_id = signing_key_id.into();
+        if subject.trim().is_empty()
+            || subject != subject.trim()
+            || issued_at < 0
+            || expires_at <= issued_at
+            || !is_canonical_signing_key_id(signing_key_id.as_str())
+        {
+            return Err(IdentityError::InvalidToken);
+        }
+        Ok(Self {
+            subject,
+            session_id,
+            issued_at,
+            expires_at,
+            signing_key_id,
+            email: email.filter(|email| !email.trim().is_empty()),
+        })
+    }
 }
 
 /// A canonical WorkOS session identifier from the signed `sid` access-token
@@ -785,11 +842,13 @@ fn required(value: String, label: &str) -> Result<String, IdentityError> {
     Ok(value.to_string())
 }
 
+#[cfg(all(feature = "test-support", debug_assertions))]
 #[derive(Clone, Default)]
 pub struct StaticAccessTokenVerifier {
     identities: Arc<HashMap<String, VerifiedIdentity>>,
 }
 
+#[cfg(all(feature = "test-support", debug_assertions))]
 impl StaticAccessTokenVerifier {
     pub fn new(entries: impl IntoIterator<Item = (String, VerifiedIdentity)>) -> Self {
         Self {
@@ -798,6 +857,7 @@ impl StaticAccessTokenVerifier {
     }
 }
 
+#[cfg(all(feature = "test-support", debug_assertions))]
 #[async_trait]
 impl AccessTokenVerifier for StaticAccessTokenVerifier {
     async fn verify(&self, token: &str) -> Result<VerifiedIdentity, IdentityError> {
@@ -810,9 +870,23 @@ impl AccessTokenVerifier for StaticAccessTokenVerifier {
 
 #[derive(Debug, Clone)]
 pub struct WorkosResolution {
-    pub principal_id: PrincipalId,
-    pub global_capabilities: Vec<String>,
-    pub method_id: Uuid,
+    principal_id: PrincipalId,
+    global_capabilities: Vec<String>,
+    method_id: Uuid,
+}
+
+impl WorkosResolution {
+    pub fn principal_id(&self) -> PrincipalId {
+        self.principal_id
+    }
+
+    pub fn global_capabilities(&self) -> &[String] {
+        &self.global_capabilities
+    }
+
+    pub fn method_id(&self) -> Uuid {
+        self.method_id
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1204,12 +1278,13 @@ mod tests {
     use base64::Engine;
     use jsonwebtoken::{encode, EncodingKey, Header};
 
+    #[cfg(feature = "test-support")]
+    use super::StaticAccessTokenVerifier;
     use super::{
         current_unix_timestamp, logout_url, subject_fingerprint, validate_assertion_window,
-        AccessTokenVerifier, IdentityError, JwksPolicy, StaticAccessTokenVerifier,
-        VerifiedIdentity, VerifiedJwks, WorkosAccessTokenVerifier, WorkosSessionId,
-        COMPACT_JWT_MAX_BYTES, WORKOS_ASSERTION_MAX_AGE_SECS, WORKOS_ASSERTION_MAX_LIFETIME_SECS,
-        WORKOS_CLOCK_SKEW_SECS,
+        AccessTokenVerifier, IdentityError, JwksPolicy, VerifiedIdentity, VerifiedJwks,
+        WorkosAccessTokenVerifier, WorkosSessionId, COMPACT_JWT_MAX_BYTES,
+        WORKOS_ASSERTION_MAX_AGE_SECS, WORKOS_ASSERTION_MAX_LIFETIME_SECS, WORKOS_CLOCK_SKEW_SECS,
     };
 
     #[derive(Clone)]
@@ -1561,6 +1636,7 @@ jg/3747WSsf/zBTcHihTRBdAv6OmdhV4/dD5YBfLAkLrd+mX7iE=
     }
 
     #[tokio::test]
+    #[cfg(feature = "test-support")]
     async fn static_verifier_is_a_deterministic_local_proof_boundary() {
         let expected = VerifiedIdentity {
             subject: "user_01".to_string(),

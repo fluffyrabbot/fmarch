@@ -131,6 +131,63 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         .execute(&application)
         .await
         .expect("ordinary application insert");
+    sqlx::query(
+        "INSERT INTO auth_delivery_provider_authority (\
+            generation_id, configuration_fingerprint, activated_at, last_bound_at\
+         ) VALUES ('authority-proof-v1', repeat('a', 64), 1, 1)",
+    )
+    .execute(&application)
+    .await
+    .expect("application may bind the first delivery provider generation");
+    sqlx::query(
+        "SELECT generation_id FROM auth_delivery_provider_authority \
+         WHERE retired_at IS NULL FOR SHARE",
+    )
+    .fetch_one(&application)
+    .await
+    .expect("application may share-lock active provider authority");
+    sqlx::query(
+        "UPDATE auth_delivery_provider_authority SET last_bound_at = 2 \
+         WHERE generation_id = 'authority-proof-v1'",
+    )
+    .execute(&application)
+    .await
+    .expect("application may advance provider authority state");
+    let immutable_generation = sqlx::query(
+        "UPDATE auth_delivery_provider_authority \
+         SET configuration_fingerprint = repeat('b', 64) \
+         WHERE generation_id = 'authority-proof-v1'",
+    )
+    .execute(&application)
+    .await
+    .expect_err("application cannot rewrite retained provider generation identity");
+    assert_eq!(
+        immutable_generation
+            .as_database_error()
+            .and_then(|error| error.code())
+            .as_deref(),
+        Some("23514")
+    );
+    let attempt_token = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO auth_delivery_provider_attempt_fence (\
+            attempt_token, generation_id, started_at, expires_at\
+         ) VALUES ($1, 'authority-proof-v1', 2, 3)",
+    )
+    .bind(attempt_token)
+    .execute(&application)
+    .await
+    .expect("application may publish an anonymous provider-attempt fence");
+    sqlx::query("DELETE FROM auth_delivery_provider_attempt_fence WHERE attempt_token = $1")
+        .bind(attempt_token)
+        .execute(&application)
+        .await
+        .expect("application may resolve its anonymous provider-attempt fence");
+    assert_denied(
+        &application,
+        "DELETE FROM auth_delivery_provider_authority WHERE generation_id = 'authority-proof-v1'",
+    )
+    .await;
     sqlx::query("SELECT token_hash FROM auth_session WHERE FALSE FOR UPDATE")
         .fetch_all(&application)
         .await
@@ -233,8 +290,10 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         "CREATE TABLE public.authority_escape (id bigint)",
         "INSERT INTO public.events (stream_id, stream_seq, kind, version, occurred_at, sealed_version, stream_key_epoch, sealed_nonce, sealed_body) VALUES ('00000000-0000-0000-0000-000000000001', 1, 'proof', 1, 1, 3, 1, decode(repeat('00', 24), 'hex'), decode(repeat('00', 16), 'hex'))",
         "DELETE FROM public.auth_delivery_intent",
+        "DELETE FROM public.auth_delivery_provider_attempt_fence",
         "TRUNCATE TABLE public.event_stream_keys",
         "UPDATE public.auth_delivery_intent SET status = status",
+        "UPDATE public.auth_delivery_provider_authority SET last_bound_at = last_bound_at",
         "UPDATE public.event_direct_key_sentinel SET kid = kid WHERE kid = 'authority-proof'",
     ] {
         assert_denied(&key_admin, statement).await;

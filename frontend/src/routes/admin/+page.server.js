@@ -50,7 +50,6 @@ export async function load({ cookies, locals, fetch, url }) {
     sessionToken,
     gameIndexPage,
     bootstrapCatalog,
-    includeLegacyIdentityOps: classicAuthEnabled(process.env),
     identityPrincipalId,
   });
 
@@ -205,12 +204,6 @@ export const actions = {
     };
   },
 };
-
-// Classic identity operations are first-class whenever the classic sign-in
-// method is enabled, independent of whether WorkOS is also configured.
-function classicAuthEnabled(env) {
-  return env?.FMARCH_CLASSIC_AUTH !== "0";
-}
 
 function requiredFormString(formData, field) {
   const value = formData.get(field);

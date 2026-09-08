@@ -34,7 +34,7 @@ impl AuthorizedUnitOfWork {
             &state.session_policy,
         )
         .await?;
-        if authorization.principal_id != request.context.principal_id {
+        if authorization.principal_id() != request.context.principal_id() {
             return Err(unauthorized_session());
         }
         Ok(Self {
@@ -44,7 +44,7 @@ impl AuthorizedUnitOfWork {
     }
 
     pub(super) fn principal_id(&self) -> PrincipalId {
-        self.authorization.principal_id
+        self.authorization.principal_id()
     }
 
     pub(super) fn require_global_admin(&self, action: &str) -> Result<PrincipalId, ApiError> {

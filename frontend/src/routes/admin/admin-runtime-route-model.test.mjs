@@ -41,6 +41,7 @@ test("admin route selects a live game without requiring a query parameter", asyn
   assert.equal(data.shell.game, "setup-game");
   assert.equal(data.gameSetup[0].href, "/g/setup-game/setup");
   assert.equal("cohost" in data.command, false);
+  assert.equal(data.audit.some((item) => item.id === "auth-deliveries"), true);
 });
 
 test("runtime admin defaults the identity audit to the current canonical principal", async () => {
@@ -101,6 +102,7 @@ test("fresh-install admin receives a pack catalog without inventing a game works
   assert.equal(data.bootstrap.defaultPack, "mafiascum");
   assert.deepEqual(data.bootstrap.packs.map((pack) => pack.name), ["Mafiascum", "Mafia Universe"]);
   assert.deepEqual(data.gameSetup, []);
+  assert.equal(data.audit.some((item) => item.id === "auth-deliveries"), true);
 });
 
 test("admin bootstrap catalog uses the authenticated GlobalAdmin boundary", async () => {

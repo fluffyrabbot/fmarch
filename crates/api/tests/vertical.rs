@@ -2,10 +2,12 @@ mod support;
 
 use api::{
     identity_delivery::{
-        process_next_identity_delivery_with_config, unix_now_seconds, IdentityDeliveryAdmission,
+        bind_identity_delivery_provider_authority, process_next_identity_delivery_with_config,
+        unix_now_seconds, HttpJsonIdentityDeliveryGateway, IdentityDeliveryAdmission,
         IdentityDeliveryAttempt, IdentityDeliveryFailureCode, IdentityDeliveryFuture,
-        IdentityDeliveryGateway, IdentityDeliveryOutcome, IdentityDeliveryRetryPolicy,
-        IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
+        IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts, IdentityDeliveryOutcome,
+        IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerConfig,
+        LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostConsoleStateResponse, HostSetupStateResponse, MediaUploadResponse,
     WebsocketTicketResponse,
@@ -14,7 +16,8 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use futures_util::StreamExt;
-use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
+use identity::test_support::StaticAccessTokenVerifier;
+use identity::WorkosSessionId;
 use media::{MediaLimits, MediaStore, VariantLimits};
 use principal::PrincipalId;
 use sha2::{Digest, Sha256};
@@ -54,6 +57,24 @@ const TEST_LOCAL_PROOF_SECRET: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const SECOND_TEST_LOCAL_PROOF_SECRET: &str =
     "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+fn test_verified_workos_identity(
+    subject: impl Into<String>,
+    session_id: WorkosSessionId,
+    issued_at: i64,
+    expires_at: i64,
+    email: Option<&str>,
+) -> identity::VerifiedIdentity {
+    identity::test_support::verified_workos_identity(
+        subject,
+        session_id,
+        issued_at,
+        expires_at,
+        "test-workos-key",
+        email.map(str::to_string),
+    )
+    .expect("test WorkOS identity is canonical")
+}
 
 fn test_local_proof_verifier() -> api::LocalProofAuthVerifier {
     test_local_proof_verifier_for(TEST_LOCAL_PROOF_SECRET)
@@ -119,22 +140,44 @@ impl ServerMsgLiveTestExt for ServerMsg {
     }
 }
 
-fn router(pool: sqlx::PgPool) -> axum::Router {
-    api::router_with_state(test_api_state(pool).with_local_proof_auth(test_local_proof_verifier()))
+async fn router(pool: sqlx::PgPool) -> axum::Router {
+    api::router_with_state(
+        test_api_state(pool)
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    )
 }
 
-fn router_with_local_proof_auth(pool: sqlx::PgPool) -> axum::Router {
-    router_with_local_proof_verifier(pool, test_local_proof_verifier())
+async fn router_with_local_proof_auth(pool: sqlx::PgPool) -> axum::Router {
+    router_with_local_proof_verifier(pool, test_local_proof_verifier()).await
 }
 
-fn router_with_local_proof_verifier(
+async fn router_with_local_proof_verifier(
     pool: sqlx::PgPool,
     verifier: api::LocalProofAuthVerifier,
 ) -> axum::Router {
-    api::router_with_state(test_api_state(pool).with_local_proof_auth(verifier))
+    api::router_with_state(test_api_state(pool).await.with_local_proof_auth(verifier))
 }
 
-fn test_api_state(pool: sqlx::PgPool) -> ApiState {
+async fn test_api_state(pool: sqlx::PgPool) -> ApiState {
+    test_api_state_with_gateway(
+        pool,
+        Arc::new(LocalDeterministicIdentityDeliveryGateway::new(false)),
+    )
+    .await
+}
+
+async fn test_api_state_with_gateway(
+    pool: sqlx::PgPool,
+    gateway: Arc<dyn IdentityDeliveryGateway>,
+) -> ApiState {
+    bind_identity_delivery_provider_authority(&pool, gateway.as_ref())
+        .await
+        .expect("bind test identity delivery provider authority");
+    unbound_test_api_state(pool).with_identity_delivery_gateway(gateway)
+}
+
+fn unbound_test_api_state(pool: sqlx::PgPool) -> ApiState {
     ApiState::new(
         pool,
         shared_test_media_store(),
@@ -419,6 +462,13 @@ impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
             )
         })
     }
+
+    fn probe<'a>(
+        &'a self,
+        _probe_token: Uuid,
+    ) -> api::identity_delivery::IdentityDeliveryProviderProbeFuture<'a> {
+        Box::pin(async { api::identity_delivery::IdentityDeliveryProviderProbeOutcome::Available })
+    }
 }
 
 #[derive(Debug)]
@@ -431,6 +481,13 @@ impl IdentityDeliveryGateway for UnexpectedIdentityDeliveryGateway {
 
     fn deliver<'a>(&'a self, _: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
         Box::pin(async move { panic!("inactive credentials must be cancelled before delivery") })
+    }
+
+    fn probe<'a>(
+        &'a self,
+        _probe_token: Uuid,
+    ) -> api::identity_delivery::IdentityDeliveryProviderProbeFuture<'a> {
+        Box::pin(async { api::identity_delivery::IdentityDeliveryProviderProbeOutcome::Available })
     }
 }
 
@@ -445,6 +502,68 @@ struct FencedIdentityDeliveryGateway {
     attempts: Mutex<Vec<(Uuid, i32)>>,
     first_started: Semaphore,
     release_first: Semaphore,
+}
+
+#[derive(Debug)]
+struct SuspendingIdentityDeliveryGateway {
+    block_first_delivery: bool,
+    delivery_calls: AtomicUsize,
+    probe_calls: AtomicUsize,
+    first_started: Semaphore,
+    release_first: Semaphore,
+}
+
+impl SuspendingIdentityDeliveryGateway {
+    fn new(block_first_delivery: bool) -> Self {
+        Self {
+            block_first_delivery,
+            delivery_calls: AtomicUsize::new(0),
+            probe_calls: AtomicUsize::new(0),
+            first_started: Semaphore::new(0),
+            release_first: Semaphore::new(0),
+        }
+    }
+
+    async fn wait_for_first_attempt(&self) {
+        self.first_started.acquire().await.unwrap().forget();
+    }
+
+    fn release_first_attempt(&self) {
+        self.release_first.add_permits(1);
+    }
+}
+
+impl IdentityDeliveryGateway for SuspendingIdentityDeliveryGateway {
+    fn provider_id(&self) -> &'static str {
+        "fixture-suspending-v1"
+    }
+
+    fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move {
+            let call = self.delivery_calls.fetch_add(1, Ordering::SeqCst);
+            if call == 0 {
+                if self.block_first_delivery {
+                    self.first_started.add_permits(1);
+                    self.release_first.acquire().await.unwrap().forget();
+                }
+                IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                )
+            } else {
+                IdentityDeliveryOutcome::Delivered {
+                    provider_receipt_id: format!("fixture-recovered-{}", attempt.delivery_id),
+                }
+            }
+        })
+    }
+
+    fn probe<'a>(
+        &'a self,
+        _probe_token: Uuid,
+    ) -> api::identity_delivery::IdentityDeliveryProviderProbeFuture<'a> {
+        self.probe_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { api::identity_delivery::IdentityDeliveryProviderProbeOutcome::Available })
+    }
 }
 
 impl Default for FencedIdentityDeliveryGateway {
@@ -493,6 +612,13 @@ impl IdentityDeliveryGateway for FencedIdentityDeliveryGateway {
             }
         })
     }
+
+    fn probe<'a>(
+        &'a self,
+        _probe_token: Uuid,
+    ) -> api::identity_delivery::IdentityDeliveryProviderProbeFuture<'a> {
+        Box::pin(async { api::identity_delivery::IdentityDeliveryProviderProbeOutcome::Available })
+    }
 }
 
 impl RecoveryProofIdentityDeliveryGateway {
@@ -530,6 +656,13 @@ impl IdentityDeliveryGateway for RecoveryProofIdentityDeliveryGateway {
                 }
             }
         })
+    }
+
+    fn probe<'a>(
+        &'a self,
+        _probe_token: Uuid,
+    ) -> api::identity_delivery::IdentityDeliveryProviderProbeFuture<'a> {
+        Box::pin(async { api::identity_delivery::IdentityDeliveryProviderProbeOutcome::Available })
     }
 }
 
@@ -772,14 +905,13 @@ async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recover
     let verifier = StaticAccessTokenVerifier::new(cases.map(|(token, session_id, _)| {
         (
             token.to_string(),
-            VerifiedIdentity {
-                subject: format!("user_{token}"),
-                session_id: WorkosSessionId::parse(session_id).unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: None,
-            },
+            test_verified_workos_identity(
+                format!("user_{token}"),
+                WorkosSessionId::parse(session_id).unwrap(),
+                1,
+                4_102_444_800,
+                None,
+            ),
         )
     }));
     for (_, session_id, reason) in cases {
@@ -798,7 +930,9 @@ async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recover
         .unwrap();
     }
     let app = api::router_with_state(
-        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+        test_api_state(pool.clone())
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
 
     for (token, session_id, _) in cases {
@@ -841,25 +975,23 @@ async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recove
     let verifier = StaticAccessTokenVerifier::new([
         (
             "workos-erased-subject-only".to_string(),
-            VerifiedIdentity {
-                subject: subject.to_string(),
-                session_id: WorkosSessionId::parse(subject_only_sid).unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: None,
-            },
+            test_verified_workos_identity(
+                subject,
+                WorkosSessionId::parse(subject_only_sid).unwrap(),
+                1,
+                4_102_444_800,
+                None,
+            ),
         ),
         (
             "workos-erased-subject-and-sid".to_string(),
-            VerifiedIdentity {
-                subject: subject.to_string(),
-                session_id: WorkosSessionId::parse(subject_and_sid).unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: None,
-            },
+            test_verified_workos_identity(
+                subject,
+                WorkosSessionId::parse(subject_and_sid).unwrap(),
+                1,
+                4_102_444_800,
+                None,
+            ),
         ),
     ]);
     sqlx::query(
@@ -890,8 +1022,11 @@ async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recove
     .execute(&pool)
     .await
     .unwrap();
-    let app =
-        api::router_with_state(test_api_state(pool).with_access_token_verifier(Arc::new(verifier)));
+    let app = api::router_with_state(
+        test_api_state(pool)
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
+    );
 
     for token in [
         "workos-erased-subject-only",
@@ -912,14 +1047,13 @@ async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout
     let expired_sid = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0H").unwrap();
     let verifier = StaticAccessTokenVerifier::new([(
         "workos-expired-verified-token".to_string(),
-        VerifiedIdentity {
-            subject: "user_expired_workos_recovery".to_string(),
-            session_id: expired_sid.clone(),
-            issued_at: 0,
-            expires_at: 1,
-            signing_key_id: "test-workos-key".to_string(),
-            email: None,
-        },
+        test_verified_workos_identity(
+            "user_expired_workos_recovery",
+            expired_sid.clone(),
+            0,
+            1,
+            None,
+        ),
     )]);
     sqlx::query(
         r#"
@@ -933,8 +1067,11 @@ async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout
     .execute(&pool)
     .await
     .unwrap();
-    let app =
-        api::router_with_state(test_api_state(pool).with_access_token_verifier(Arc::new(verifier)));
+    let app = api::router_with_state(
+        test_api_state(pool)
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
+    );
 
     for token in [
         Some("not.a.valid.jwt"),
@@ -957,40 +1094,39 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
     let verifier = StaticAccessTokenVerifier::new([
         (
             "workos-access-token".to_string(),
-            VerifiedIdentity {
-                subject: "user_01HWORKOS".to_string(),
-                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: Some("player@example.test".to_string()),
-            },
+            test_verified_workos_identity(
+                "user_01HWORKOS",
+                WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                1,
+                4_102_444_800,
+                Some("player@example.test"),
+            ),
         ),
         (
             "workos-access-token-2".to_string(),
-            VerifiedIdentity {
-                subject: "user_01HWORKOS".to_string(),
-                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: Some("player@example.test".to_string()),
-            },
+            test_verified_workos_identity(
+                "user_01HWORKOS",
+                WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                1,
+                4_102_444_800,
+                Some("player@example.test"),
+            ),
         ),
         (
             "workos-access-token-3".to_string(),
-            VerifiedIdentity {
-                subject: "user_01HWORKOS".to_string(),
-                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-                issued_at: 1,
-                expires_at: 4_102_444_800,
-                signing_key_id: "test-workos-key".to_string(),
-                email: Some("player@example.test".to_string()),
-            },
+            test_verified_workos_identity(
+                "user_01HWORKOS",
+                WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                1,
+                4_102_444_800,
+                Some("player@example.test"),
+            ),
         ),
     ]);
     let app = api::router_with_state(
-        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+        test_api_state(pool.clone())
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
 
     // The WorkOS access token is exchanged exactly once for a backend session.
@@ -1202,19 +1338,20 @@ async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_co
         .map(|token| {
             (
                 token.to_string(),
-                VerifiedIdentity {
-                    subject: "user_logout".to_string(),
-                    session_id: session_id.clone(),
-                    issued_at: 1,
-                    expires_at: 4_102_444_800,
-                    signing_key_id: "test-workos-key".to_string(),
-                    email: Some("logout@example.test".to_string()),
-                },
+                test_verified_workos_identity(
+                    "user_logout",
+                    session_id.clone(),
+                    1,
+                    4_102_444_800,
+                    Some("logout@example.test"),
+                ),
             )
         }),
     );
     let app = api::router_with_state(
-        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+        test_api_state(pool.clone())
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
 
     let invitation = community_invitation_for(&pool, "logout@example.test").await;
@@ -1366,17 +1503,18 @@ async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_cor
 ) {
     let verifier = StaticAccessTokenVerifier::new([(
         "workos-tamper-token".to_string(),
-        VerifiedIdentity {
-            subject: "user_tamper".to_string(),
-            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-            issued_at: 1,
-            expires_at: 4_102_444_800,
-            signing_key_id: "test-workos-key".to_string(),
-            email: Some("tamper@example.test".to_string()),
-        },
+        test_verified_workos_identity(
+            "user_tamper",
+            WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+            1,
+            4_102_444_800,
+            Some("tamper@example.test"),
+        ),
     )]);
     let app = api::router_with_state(
-        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+        test_api_state(pool.clone())
+            .await
+            .with_access_token_verifier(Arc::new(verifier)),
     );
     let invitation = community_invitation_for(&pool, "tamper@example.test").await;
     let exchange = post_bearer_json(
@@ -3795,7 +3933,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
 
@@ -3842,7 +3980,7 @@ async fn get_endgame_summary(app: axum::Router, game: Uuid) -> api::EndgameSumma
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -4018,7 +4156,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
 
@@ -4059,7 +4197,7 @@ async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
 
@@ -4109,7 +4247,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let admin_token = issue_dev_session(&app, "host_setup_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
@@ -4280,7 +4418,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     for (id, principal, command) in [
         (
@@ -4598,7 +4736,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     for (id, principal, command) in [
         (
@@ -4800,7 +4938,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_does_not_send_initial_projection_snapshot(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
     let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
@@ -4832,7 +4970,7 @@ async fn websocket_game_connection_does_not_send_initial_projection_snapshot(poo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_streams_command_following_votecount_delta(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
     let ticket = issue_dev_websocket_ticket(&app, "user_b", game, "main").await;
@@ -4920,6 +5058,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_lag_requests_resync_and_terminates_generation(pool: sqlx::PgPool) {
     let state = test_api_state(pool)
+        .await
         .with_local_proof_auth(test_local_proof_verifier())
         .with_live_projection_capacity(1)
         .with_live_projection_delivery_delay(std::time::Duration::from_secs(2));
@@ -5002,7 +5141,7 @@ async fn websocket_lag_requests_resync_and_terminates_generation(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
     let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
@@ -5086,7 +5225,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
 async fn websocket_game_connection_streams_thread_delta_after_official_votecount(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
     let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
@@ -5157,7 +5296,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
 async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     seed_beloved_princess_ready_to_resolve(app.clone(), game).await;
     let ticket = issue_dev_websocket_ticket(&app, "host_h", game, "main").await;
@@ -5284,7 +5423,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
 async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_task(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
     expect_ack(
         post_command(
@@ -5541,7 +5680,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_player_connection_streams_scoped_private_notification_delta(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -5714,7 +5853,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -5840,7 +5979,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -6015,7 +6154,7 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     .await
     .unwrap();
 
-    let app = router(pool);
+    let app = router(pool).await;
     let public = app
         .clone()
         .oneshot(
@@ -6110,7 +6249,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         .unwrap();
     }
 
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let response = app
         .clone()
         .oneshot(
@@ -6239,7 +6378,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::PgPool) {
-    let app = router(pool);
+    let app = router(pool).await;
     let game = Uuid::new_v4();
     assert!(matches!(
         post_command(
@@ -6291,7 +6430,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
 async fn discussion_and_public_search_api_enforce_visibility_sessions_and_moderation(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let discussion_member_token = issue_dev_session(&app, "discussion_member", &[]).await;
     let discussion_moderator_token =
         issue_dev_session(&app, "discussion_moderator", &["GlobalMod"]).await;
@@ -6607,7 +6746,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_cursor_is_opaque_context_bound_and_accepts_each_group(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool);
+    let app = router_with_local_proof_auth(pool).await;
     for cursor in [
         "abc:1:discussions:key",
         "1:abc:discussions:key",
@@ -6711,7 +6850,7 @@ fn public_search_test_cursor(query: &str, filter: &str, document_type: &str) -> 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool);
+    let app = router_with_local_proof_auth(pool).await;
     let (reader_token, _) = create_media_upload_account_session(&app, "mute-reader").await;
     let (target_token, _) = create_media_upload_account_session(&app, "mute-target").await;
     for (token, handle, display_name) in [
@@ -6860,7 +6999,7 @@ async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let (author_token, author_principal) =
         create_media_upload_account_session(&app, "subscription-author").await;
     let (watcher_token, watcher_principal) =
@@ -7053,7 +7192,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .with_local_proof_auth(verifier.clone());
     let live_listener = LiveEventListenerHarness::start(state.clone()).await;
     let app = api::router_with_state(state);
-    let moderation_app = router_with_local_proof_verifier(pool.clone(), verifier);
+    let moderation_app = router_with_local_proof_verifier(pool.clone(), verifier).await;
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "moderation-member").await;
     let moderator_principal = "community_moderator";
@@ -7574,7 +7713,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool);
+    let app = router_with_local_proof_auth(pool).await;
     let (owner_token, owner_principal) =
         create_media_upload_account_session(&app, "profile-owner").await;
     let (other_token, _) = create_media_upload_account_session(&app, "profile-other").await;
@@ -7877,7 +8016,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         tx.commit().await.unwrap();
     }
 
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let main = app
         .clone()
         .oneshot(
@@ -7962,7 +8101,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
 async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or_revocation(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "private-event-member").await;
     let (replacement_token, replacement_principal) =
@@ -8305,7 +8444,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_private_channel_submit_post_requires_channel_membership(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     for (id, principal, command) in [
@@ -8426,7 +8565,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -8592,7 +8731,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -8798,7 +8937,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -8815,8 +8954,11 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
         .await,
     );
 
-    let disabled_app =
-        api::router_with_state(test_api_state(pool.clone()).without_local_proof_auth());
+    let disabled_app = api::router_with_state(
+        test_api_state(pool.clone())
+            .await
+            .without_local_proof_auth(),
+    );
     let disabled_response = disabled_app
         .clone()
         .oneshot(
@@ -8852,8 +8994,11 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
 
     let host_session_token = issue_dev_session(&app, "host_h", &[]).await;
 
-    let disabled_app =
-        api::router_with_state(test_api_state(pool.clone()).without_local_proof_auth());
+    let disabled_app = api::router_with_state(
+        test_api_state(pool.clone())
+            .await
+            .without_local_proof_auth(),
+    );
     let disabled_response = disabled_app
         .clone()
         .oneshot(
@@ -8919,10 +9064,16 @@ async fn local_proof_sessions_and_mint_credentials_are_bound_to_one_server_proce
     let second_instance_id = second_verifier.instance_id().clone();
     assert_ne!(first_instance_id, second_instance_id);
 
-    let first_app =
-        api::router_with_state(test_api_state(pool.clone()).with_local_proof_auth(first_verifier));
-    let second_app =
-        api::router_with_state(test_api_state(pool.clone()).with_local_proof_auth(second_verifier));
+    let first_app = api::router_with_state(
+        test_api_state(pool.clone())
+            .await
+            .with_local_proof_auth(first_verifier),
+    );
+    let second_app = api::router_with_state(
+        test_api_state(pool.clone())
+            .await
+            .with_local_proof_auth(second_verifier),
+    );
 
     // Both servers use the same endpoint credential and already exist before
     // either bearer is minted. Their independent process instances prevent
@@ -9107,7 +9258,7 @@ async fn local_proof_sessions_and_mint_credentials_are_bound_to_one_server_proce
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool);
+    let app = router_with_local_proof_auth(pool).await;
 
     let admin_session_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
@@ -9131,7 +9282,7 @@ async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool);
+    let app = router_with_local_proof_auth(pool).await;
     let game = Uuid::new_v4();
     expect_ack(
         post_command(
@@ -9219,7 +9370,7 @@ async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::P
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn legacy_session_grant_route_is_absent_even_for_global_admin(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     let response = app
@@ -9282,12 +9433,511 @@ async fn legacy_session_grant_route_is_absent_even_for_global_admin(pool: sqlx::
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_suspension_fences_retry_until_dedicated_probe_recovers_provider(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(SuspendingIdentityDeliveryGateway::new(false));
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token = issue_dev_session(&app, "provider_probe_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "provider-probe@example.test",
+        "correct horse battery",
+        "provider_probe_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "provider-probe@example.test",
+        "provider_probe_user",
+        "provider-probe-delivery-token",
+    )
+    .await;
+
+    let unavailable = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("the first provider observation is persisted");
+    assert_eq!(unavailable.status, "retryable_failed");
+    assert_eq!(
+        unavailable.outcome_code.as_deref(),
+        Some("provider_unavailable")
+    );
+    assert_eq!(gateway.delivery_calls.load(Ordering::SeqCst), 1);
+
+    let queue = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/auth-deliveries")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(queue.status(), StatusCode::OK);
+    let queue: serde_json::Value =
+        serde_json::from_slice(&to_bytes(queue.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(queue["delivery_operable"], false);
+    assert_eq!(queue["suspension_code"], "provider_unavailable");
+    assert_eq!(queue["deliveries"][0]["retry_eligible"], false);
+
+    let fenced_retry = app
+        .clone()
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(fenced_retry.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(gateway.delivery_calls.load(Ordering::SeqCst), 1);
+
+    let probe = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/admin/auth-delivery-provider/probe")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(probe.status(), StatusCode::OK);
+    let probe: serde_json::Value =
+        serde_json::from_slice(&to_bytes(probe.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(probe["status"], "available");
+    assert_eq!(probe["provider_generation"], "fixture-suspending-v1");
+    assert_eq!(probe["provider_operable"], true);
+    assert_eq!(probe["circuit_version"], 3);
+    assert_eq!(gateway.probe_calls.load(Ordering::SeqCst), 1);
+
+    let recovered_retry = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(recovered_retry.status(), StatusCode::OK);
+    assert_eq!(gateway.delivery_calls.load(Ordering::SeqCst), 2);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_lost_cas_preserves_provider_observation_and_anonymous_fence(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(SuspendingIdentityDeliveryGateway::new(true));
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token = issue_dev_session(&app, "lost_cas_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "lost-cas@example.test",
+        "correct horse battery",
+        "lost_cas_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "lost-cas@example.test",
+        "lost_cas_user",
+        "lost-cas-delivery-token",
+    )
+    .await;
+
+    let attempt_pool = pool.clone();
+    let attempt_gateway = gateway.clone();
+    let attempt = tokio::spawn(async move {
+        process_next_identity_delivery(&attempt_pool, attempt_gateway.as_ref()).await
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let live_fence = sqlx::query_as::<_, (String, i64)>(
+        "SELECT generation_id, expires_at - started_at \
+         FROM auth_delivery_provider_attempt_fence",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("claim publishes a provider-generation fence without subject identity");
+    assert_eq!(live_fence.0, "fixture-suspending-v1");
+    assert!(live_fence.1 > 0);
+    let cutover_error =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect_err("a live anonymous provider attempt fences generation cutover");
+    assert!(cutover_error
+        .to_string()
+        .contains("provider attempts to quiesce"));
+
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'cancelled',
+            outcome_kind = 'cancelled',
+            outcome_code = 'member_erasure_pending',
+            next_attempt_at = NULL,
+            delivered_at = NULL,
+            last_error = 'member_erasure_pending',
+            provider_receipt_id = NULL,
+            claim_token = NULL,
+            claim_expires_at = NULL,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL,
+            credential_envelope = NULL,
+            updated_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .expect("privacy cancellation wins the delivery claim CAS during provider I/O");
+    let fence_after_cancellation =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_provider_attempt_fence")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        fence_after_cancellation, 1,
+        "subject erasure cannot remove the anonymous in-flight provider fence"
+    );
+    gateway.release_first_attempt();
+
+    assert!(
+        attempt.await.unwrap().unwrap().is_none(),
+        "the erased delivery claim cannot be finalized"
+    );
+    let provider = sqlx::query_as::<_, (Option<String>, Option<Uuid>, i64)>(
+        "SELECT suspension_code, suspension_observation_id, circuit_version \
+         FROM auth_delivery_provider_authority WHERE retired_at IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider.0.as_deref(), Some("provider_unavailable"));
+    assert_eq!(provider.1, Some(delivery_id));
+    assert_eq!(provider.2, 1);
+    let remaining_fences =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_provider_attempt_fence")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        remaining_fences, 0,
+        "the anonymous fence remains through erasure but clears after bounded provider I/O"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence(
+    pool: sqlx::PgPool,
+) {
+    const PROVIDER_CLOCK_LAG_SECONDS: i64 = 1;
+    const PROVIDER_CLOCK_SKEW_MARGIN_SECONDS: i64 = 3;
+    let (request_sender, mut request_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<serde_json::Value>();
+    let (quiesced_sender, mut quiesced_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let provider_app = axum::Router::new().route(
+        "/delivery",
+        axum::routing::post(move |axum::Json(payload): axum::Json<serde_json::Value>| {
+            let request_sender = request_sender.clone();
+            let quiesced_sender = quiesced_sender.clone();
+            async move {
+                let attempt_token = payload["attempt_token"]
+                    .as_str()
+                    .expect("timeout provider attempt token")
+                    .to_string();
+                let lease_expires_at = payload["lease_expires_at"]
+                    .as_i64()
+                    .expect("timeout provider effect deadline");
+                let clock_skew_margin_seconds = payload["clock_skew_margin_seconds"]
+                    .as_i64()
+                    .expect("timeout provider clock-skew margin");
+                assert_eq!(
+                    clock_skew_margin_seconds, PROVIDER_CLOCK_SKEW_MARGIN_SECONDS,
+                    "provider rejects a safety window below its declared clock bound"
+                );
+                request_sender
+                    .send(payload)
+                    .expect("timeout provider request receiver remains live");
+                loop {
+                    // This provider clock deliberately lags the database. The
+                    // earlier effect deadline absorbs that lag; the provider
+                    // performs no side effect and acknowledges quiescence
+                    // before the later generation fence may expire.
+                    let provider_now =
+                        unix_now_seconds().saturating_sub(PROVIDER_CLOCK_LAG_SECONDS);
+                    if provider_now >= lease_expires_at {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                quiesced_sender
+                    .send(attempt_token)
+                    .expect("provider quiescence receiver remains live");
+                StatusCode::GONE
+            }
+        }),
+    );
+    let provider_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let provider_address = provider_listener.local_addr().unwrap();
+    let provider_server = tokio::spawn(async move {
+        axum::serve(provider_listener, provider_app).await.unwrap();
+    });
+    let http_timeouts = IdentityDeliveryHttpTimeouts::new(
+        std::time::Duration::from_millis(100),
+        std::time::Duration::from_millis(350),
+        std::time::Duration::from_millis(50),
+        std::time::Duration::from_millis(400),
+        1_024,
+    )
+    .unwrap();
+    let gateway = Arc::new(
+        HttpJsonIdentityDeliveryGateway::new(
+            "fixture-http-timeout-v1",
+            reqwest::Url::parse(&format!("http://{provider_address}/delivery")).unwrap(),
+            None,
+            reqwest::Client::new(),
+        )
+        .with_timeouts(http_timeouts),
+    );
+    let retry_policy = IdentityDeliveryRetryPolicy::new(
+        std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(2),
+        8,
+    )
+    .unwrap();
+    let config = IdentityDeliveryWorkerConfig::new(
+        1,
+        1,
+        std::time::Duration::from_millis(10),
+        std::time::Duration::from_secs(6),
+        std::time::Duration::from_secs(PROVIDER_CLOCK_SKEW_MARGIN_SECONDS as u64),
+        std::time::Duration::from_millis(500),
+        std::time::Duration::from_millis(250),
+        retry_policy,
+    )
+    .unwrap();
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_worker_config(config),
+    );
+    let admin_token = issue_dev_session(&app, "timeout_fence_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "timeout-fence@example.test",
+        "correct horse battery",
+        "timeout_fence_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "timeout-fence@example.test",
+        "timeout_fence_user",
+        "timeout-fence-delivery-token",
+    )
+    .await;
+
+    let attempt_pool = pool.clone();
+    let attempt_gateway = gateway.clone();
+    let admission = IdentityDeliveryAdmission::new(config);
+    let attempt = tokio::spawn(async move {
+        process_next_identity_delivery_with_config(
+            &attempt_pool,
+            attempt_gateway.as_ref(),
+            config,
+            &admission,
+        )
+        .await
+    });
+    let provider_request =
+        tokio::time::timeout(std::time::Duration::from_secs(2), request_receiver.recv())
+            .await
+            .expect("provider accepted the request before its local deadline")
+            .expect("provider request channel remains open");
+    assert_eq!(provider_request["schema"], "fmarch.identity-delivery.v2");
+    assert_eq!(
+        provider_request["provider_generation"],
+        "fixture-http-timeout-v1"
+    );
+    assert_eq!(provider_request["delivery_id"], delivery_id.to_string());
+    assert_eq!(provider_request["idempotency_key"], delivery_id.to_string());
+    let attempt_token = Uuid::parse_str(
+        provider_request["attempt_token"]
+            .as_str()
+            .expect("provider attempt token"),
+    )
+    .unwrap();
+    assert_ne!(attempt_token, Uuid::nil());
+    let effect_deadline_at = provider_request["lease_expires_at"]
+        .as_i64()
+        .expect("provider effect deadline");
+    let wire_clock_skew_margin_seconds = provider_request["clock_skew_margin_seconds"]
+        .as_i64()
+        .expect("provider clock-skew margin");
+    assert_eq!(
+        wire_clock_skew_margin_seconds,
+        PROVIDER_CLOCK_SKEW_MARGIN_SECONDS
+    );
+    let fence = sqlx::query_as::<_, (Uuid, String, i64, i64)>(
+        "SELECT attempt_token, generation_id, started_at, expires_at \
+         FROM auth_delivery_provider_attempt_fence",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(fence.0, attempt_token);
+    assert_eq!(fence.1, "fixture-http-timeout-v1");
+    let generation_fence_expires_at = effect_deadline_at + wire_clock_skew_margin_seconds;
+    assert_eq!(fence.3, generation_fence_expires_at);
+    assert_eq!(fence.3 - fence.2, 6);
+
+    let erased = sqlx::query("DELETE FROM auth_delivery_intent WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .expect("privacy erasure removes the intent while provider completion is uncertain");
+    assert_eq!(erased.rows_affected(), 1);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), attempt)
+            .await
+            .expect("bounded provider timeout finishes the attempt")
+            .unwrap()
+            .unwrap()
+            .is_none(),
+        "an erased delivery claim cannot be finalized"
+    );
+    let retained_fence = sqlx::query_as::<_, (Uuid, String, i64)>(
+        "SELECT attempt_token, generation_id, expires_at \
+         FROM auth_delivery_provider_attempt_fence",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("uncertain remote execution retains its anonymous fence");
+    assert_eq!(retained_fence, (attempt_token, fence.1, fence.3));
+    let database_now =
+        sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(database_now < effect_deadline_at);
+    let live_cutover =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect_err("an uncertain old-generation handler fences provider cutover");
+    assert!(live_cutover
+        .to_string()
+        .contains("provider attempts to quiesce"));
+
+    let mut effect_deadline_elapsed = false;
+    for _ in 0..80 {
+        let database_now = sqlx::query_scalar::<_, i64>(
+            "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if database_now >= effect_deadline_at {
+            effect_deadline_elapsed = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        effect_deadline_elapsed,
+        "provider effect deadline elapses within the test bound"
+    );
+    let skew_guarded_cutover =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect_err("the generation fence outlives the provider effect deadline");
+    assert!(skew_guarded_cutover
+        .to_string()
+        .contains("provider attempts to quiesce"));
+    let quiesced_attempt =
+        tokio::time::timeout(std::time::Duration::from_secs(2), quiesced_receiver.recv())
+            .await
+            .expect("lagging provider terminates by the skew-adjusted safety window")
+            .expect("provider quiescence channel remains open");
+    assert_eq!(quiesced_attempt, attempt_token.to_string());
+    let database_now =
+        sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(database_now < generation_fence_expires_at);
+    let quiesced_but_fenced_cutover =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect_err("provider quiescence alone cannot shorten the durable safety fence");
+    assert!(quiesced_but_fenced_cutover
+        .to_string()
+        .contains("provider attempts to quiesce"));
+    let mut generation_fence_expired = false;
+    for _ in 0..80 {
+        let database_now = sqlx::query_scalar::<_, i64>(
+            "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if database_now >= generation_fence_expires_at {
+            generation_fence_expired = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        generation_fence_expired,
+        "generation safety fence expires within the test bound"
+    );
+    let switched =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect("cutover proceeds only after the safety-adjusted fence expires");
+    assert_eq!(
+        switched.active_generation.as_deref(),
+        Some("fixture-permanent")
+    );
+    let remaining_fences =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_provider_attempt_fence")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining_fences, 0);
+    provider_server.abort();
+    let _ = provider_server.await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_two_workers_never_share_a_live_claim(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "fenced_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -9335,9 +9985,9 @@ async fn identity_delivery_two_workers_never_share_a_live_claim(pool: sqlx::PgPo
 async fn identity_delivery_next_due_claim_excludes_explicit_http_retry(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "mixed_auto_winner_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -9407,9 +10057,9 @@ async fn identity_delivery_next_due_claim_excludes_explicit_http_retry(pool: sql
 async fn identity_delivery_explicit_http_retry_excludes_next_due_claim(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_label = "mixed_explicit_winner_admin";
     let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
@@ -9485,9 +10135,9 @@ async fn identity_delivery_explicit_http_retry_excludes_next_due_claim(pool: sql
 async fn identity_delivery_explicit_retry_rejects_stale_attempt_generation(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token =
         issue_dev_session(&app, "stale_retry_generation_admin", &["GlobalAdmin"]).await;
@@ -9543,9 +10193,9 @@ async fn identity_delivery_explicit_retry_rejects_stale_attempt_generation(pool:
 async fn identity_delivery_retry_rejects_invalid_attempt_generations(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "invalid_retry_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -9625,9 +10275,9 @@ async fn identity_delivery_explicit_retry_cancellation_preserves_admin_provenanc
 ) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_label = "inactive_retry_admin";
     let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
@@ -9704,12 +10354,14 @@ async fn identity_delivery_explicit_retry_cancellation_preserves_admin_provenanc
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(pool: sqlx::PgPool) {
+async fn identity_delivery_expired_recovery_preserves_retry_provenance_without_resend(
+    pool: sqlx::PgPool,
+) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_label = "recovered_explicit_retry_admin";
     let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
@@ -9782,8 +10434,12 @@ async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(poo
     let recovered = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
-        .expect("expired explicit claim is recovered");
-    assert_eq!(recovered.status, "delivered");
+        .expect("expired explicit claim is terminalized by its recovery owner");
+    assert_eq!(recovered.status, "permanent_failed");
+    assert_eq!(
+        recovered.outcome_code.as_deref(),
+        Some("credential_expired")
+    );
     assert_eq!(recovered.attempt_count, 2);
 
     gateway.release_first_attempt();
@@ -9794,8 +10450,8 @@ async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(poo
     assert_eq!(original_response.status(), StatusCode::CONFLICT);
     assert_eq!(
         gateway.attempts(),
-        vec![(delivery_id, 2), (delivery_id, 2)],
-        "lease recovery repeats the same idempotent provider attempt"
+        vec![(delivery_id, 2)],
+        "lease recovery must not resend credential material after expiry"
     );
     let persisted = sqlx::query_as::<_, (String, i32, Option<String>, Option<Uuid>)>(
         r#"
@@ -9808,7 +10464,7 @@ async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(poo
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(persisted, ("delivered".to_string(), 2, None, None));
+    assert_eq!(persisted, ("permanent_failed".to_string(), 2, None, None));
     assert_eq!(
         identity_delivery_resolution_audits(&pool, delivery_id).await,
         vec![(
@@ -9823,9 +10479,9 @@ async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(poo
 async fn identity_delivery_retry_revalidates_the_exact_session_before_claim(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_label = "retry_revocation_first_admin";
     let admin_principal = PrincipalId::fixture(admin_label);
@@ -9905,9 +10561,9 @@ async fn identity_delivery_retry_revalidates_the_exact_session_before_claim(pool
 async fn identity_delivery_retry_claim_wins_before_later_session_revocation(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_label = "retry_claim_first_admin";
     let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
@@ -9982,15 +10638,16 @@ async fn identity_delivery_explicit_retries_share_process_admission(pool: sqlx::
         1,
         std::time::Duration::from_millis(10),
         std::time::Duration::from_secs(15),
+        std::time::Duration::from_secs(1),
         std::time::Duration::from_secs(5),
         std::time::Duration::from_secs(1),
         retry_policy,
     )
     .unwrap();
     let app = api::router_with_state(
-        test_api_state(pool.clone())
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
             .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone())
             .with_identity_delivery_worker_config(config),
     );
     let admin_token = issue_dev_session(&app, "retry_admission_admin", &["GlobalAdmin"]).await;
@@ -10079,9 +10736,9 @@ async fn identity_delivery_explicit_retries_share_process_admission(pool: sqlx::
 async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "claim_loss_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10150,9 +10807,9 @@ async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
 ) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "dead_letter_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10199,12 +10856,114 @@ async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_provider_suspension_before_send_preserves_final_retry_generation(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token = issue_dev_session(&app, "pre_send_suspension_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "pre-send-suspension@example.test",
+        "correct horse battery",
+        "pre_send_suspension_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "pre-send-suspension@example.test",
+        "pre_send_suspension_user",
+        "pre-send-suspension-delivery-token",
+    )
+    .await;
+    sqlx::query("UPDATE auth_delivery_intent SET attempt_count = 7 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Deterministically model a different worker observing provider outage
+    // after this worker has claimed the final generation but before it unseals
+    // the credential and invokes the provider.
+    sqlx::query(
+        r#"
+        CREATE FUNCTION test_suspend_identity_delivery_provider_after_claim()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE auth_delivery_provider_authority
+            SET circuit_version = circuit_version + 1,
+                suspended_at = NEW.updated_at,
+                suspension_code = 'provider_unavailable',
+                suspension_observation_id =
+                    '00000000-0000-0000-0000-000000000001'::uuid
+            WHERE generation_id = NEW.provider_id
+              AND retired_at IS NULL;
+            RETURN NEW;
+        END;
+        $$
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER zz_test_suspend_identity_delivery_provider_after_claim
+        AFTER UPDATE OF status
+        ON auth_delivery_intent
+        FOR EACH ROW
+        WHEN (NEW.status = 'processing' AND OLD.status <> 'processing')
+        EXECUTE FUNCTION test_suspend_identity_delivery_provider_after_claim()
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("provider suspension before send remains retryable at the attempt cap");
+    assert_eq!(receipt.status, "retryable_failed");
+    assert_eq!(receipt.attempt_count, 8);
+    assert_eq!(
+        receipt.outcome_code.as_deref(),
+        Some("provider_unavailable")
+    );
+    assert!(
+        gateway.attempts().is_empty(),
+        "the provider must not receive a credential after its authority is suspended"
+    );
+    let provider = sqlx::query_as::<_, (i64, Option<Uuid>)>(
+        "SELECT circuit_version, suspension_observation_id \
+         FROM auth_delivery_provider_authority WHERE retired_at IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider.0, 1);
+    assert_eq!(
+        provider.1,
+        Some(Uuid::from_u128(1)),
+        "the suppressed send must not overwrite the actual outage observation"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_expired_processing_at_attempt_cap_is_replayed(pool: sqlx::PgPool) {
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "cap_reclaim_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10263,6 +11022,7 @@ async fn identity_delivery_expired_processing_at_attempt_cap_is_replayed(pool: s
             provider_receipt_id = NULL,
             claim_token = $2,
             claim_expires_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 1,
+            updated_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 2,
             claim_source = 'automatic',
             claim_actor_principal_id = NULL,
             attempt_count = 8
@@ -10319,9 +11079,9 @@ async fn identity_delivery_expired_processing_at_attempt_cap_is_replayed(pool: s
 async fn identity_delivery_revocation_wins_the_post_provider_cas(pool: sqlx::PgPool) {
     let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "revocation_cas_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10388,9 +11148,9 @@ async fn identity_delivery_revocation_wins_the_post_provider_cas(pool: sqlx::PgP
 async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) {
     let gateway = Arc::new(LocalDeterministicIdentityDeliveryGateway::new(true));
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10433,6 +11193,22 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert!(invite["delivery_outcome_code"].is_null());
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
+    let authority = bind_identity_delivery_provider_authority(&pool, gateway.as_ref())
+        .await
+        .expect("the configured provider generation remains bound");
+    assert!(authority.operable);
+    assert_eq!(
+        authority.active_generation.as_deref(),
+        Some("local-deterministic")
+    );
+    let continuity_error =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect_err("a provider change must not strand queued work");
+    assert!(matches!(
+        continuity_error,
+        api::identity_delivery::IdentityDeliveryError::ProviderContinuity(_)
+    ));
     process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
@@ -10505,6 +11281,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let queue: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(queue["delivery_configured"], true);
     assert_eq!(
         queue["deliveries"][0]["delivery_id"],
         delivery_id.to_string()
@@ -10513,6 +11290,43 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert!(queue["deliveries"][0].get("credential_hash").is_none());
     assert!(queue["deliveries"][0].get("credential_envelope").is_none());
     assert!(!String::from_utf8_lossy(&bytes).contains("delivery-invite-raw-token"));
+
+    let disabled_app = api::router_with_state(
+        unbound_test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(Arc::new(
+                api::identity_delivery::DisabledIdentityDeliveryGateway,
+            )),
+    );
+    let disabled_admin_token =
+        issue_dev_session(&disabled_app, "disabled_delivery_admin", &["GlobalAdmin"]).await;
+    let response = disabled_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/auth-deliveries")
+                .header("authorization", format!("Bearer {disabled_admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let disabled_queue: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(disabled_queue["delivery_configured"], false);
+    assert_eq!(disabled_queue["deliveries"][0]["retry_eligible"], false);
+    let response = disabled_app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &disabled_admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
     let response = app
         .oneshot(retry_identity_delivery_request(
             delivery_id,
@@ -10617,15 +11431,31 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
             "provider_receipt_id": provider_receipt_id
         })
     );
+    let switched =
+        bind_identity_delivery_provider_authority(&pool, &PermanentFailureIdentityDeliveryGateway)
+            .await
+            .expect("a fresh provider generation may bind after the delivery queue drains");
+    assert_eq!(
+        switched.active_generation.as_deref(),
+        Some("fixture-permanent")
+    );
+    let retained_generation_error =
+        bind_identity_delivery_provider_authority(&pool, gateway.as_ref())
+            .await
+            .expect_err("a retired provider generation can never be reactivated");
+    assert!(matches!(
+        retained_generation_error,
+        api::identity_delivery::IdentityDeliveryError::ProviderContinuity(_)
+    ));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sqlx::PgPool) {
     let gateway = Arc::new(PermanentFailureIdentityDeliveryGateway);
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "permanent_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10759,9 +11589,9 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
 async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPool) {
     let gateway = Arc::new(UnexpectedIdentityDeliveryGateway);
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let admin_token = issue_dev_session(&app, "cancel_delivery_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
@@ -10907,10 +11737,200 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn workos_only_community_invitation_fails_closed_without_delivery_transport(
+    pool: sqlx::PgPool,
+) {
+    let app = api::router_with_state(
+        unbound_test_api_state(pool.clone())
+            .with_classic_auth(false)
+            .with_identity_delivery_gateway(Arc::new(
+                api::identity_delivery::DisabledIdentityDeliveryGateway,
+            ))
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let sponsor = PrincipalId::fixture("workos_only_disabled_delivery_sponsor");
+    let sponsor_token = issue_dev_session_for_principal(&app, sponsor, &["GlobalAdmin"]).await;
+    membership_application::ensure_founder_membership(&pool, sponsor, unix_now_seconds())
+        .await
+        .unwrap();
+
+    let diagnostics = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/auth-deliveries")
+                .header("authorization", format!("Bearer {sponsor_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(diagnostics.status(), StatusCode::OK);
+    let diagnostics: serde_json::Value =
+        serde_json::from_slice(&to_bytes(diagnostics.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(diagnostics["delivery_configured"], false);
+    assert_eq!(diagnostics["deliveries"], serde_json::json!([]));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/community/invitations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {sponsor_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "unreachable.member@example.test",
+                        "expires_at": unix_now_seconds() + 3_600
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let retry_after = response
+        .headers()
+        .get("retry-after")
+        .and_then(|value| value.to_str().ok());
+    assert_eq!(retry_after, Some("1"));
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let rejection: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rejection["retryable"], true);
+    assert_eq!(
+        rejection["message"],
+        "identity delivery is not configured; credential issuance is unavailable"
+    );
+
+    let invitation_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM community_invitation")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let credential_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM community_invitation_credential")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let delivery_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_intent")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(invitation_count, 0, "the owning transaction must roll back");
+    assert_eq!(
+        credential_count, 0,
+        "no undeliverable credential may commit"
+    );
+    assert_eq!(delivery_count, 0, "no disabled-provider intent may commit");
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn workos_only_community_invitation_queues_and_delivers_with_configured_transport(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(LocalDeterministicIdentityDeliveryGateway::new(true));
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_classic_auth(false)
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let sponsor = PrincipalId::fixture("workos_only_configured_delivery_sponsor");
+    let sponsor_token = issue_dev_session_for_principal(&app, sponsor, &["GlobalAdmin"]).await;
+    membership_application::ensure_founder_membership(&pool, sponsor, unix_now_seconds())
+        .await
+        .unwrap();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/community/invitations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {sponsor_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "deliverable.member@example.test",
+                        "expires_at": unix_now_seconds() + 3_600
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let issued: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(issued["delivery_status"], "queued");
+    assert_eq!(issued["delivery_provider_id"], "local-deterministic");
+    let delivery_id =
+        Uuid::parse_str(issued["delivery_id"].as_str().expect("delivery id")).unwrap();
+
+    let first_attempt = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("configured WorkOS-only delivery is claimable");
+    assert_eq!(first_attempt.delivery_id, delivery_id);
+    assert_eq!(first_attempt.status, "retryable_failed");
+    assert_eq!(first_attempt.attempt_count, 1);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/admin/auth-deliveries")
+                .header("authorization", format!("Bearer {sponsor_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let queue: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let queued_delivery = queue["deliveries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|delivery| delivery["delivery_id"] == delivery_id.to_string())
+        .expect("community invitation retry appears in the operator queue");
+    assert_eq!(queued_delivery["delivery_kind"], "community_invitation");
+    assert_eq!(queued_delivery["retry_eligible"], true);
+
+    let response = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &sponsor_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let retry: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(retry["status"], "delivered");
+    assert_eq!(retry["attempt_count"], 2);
+    let persisted_status = sqlx::query_scalar::<_, String>(
+        "SELECT status FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted_status, "delivered");
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn community_invitation_delivery_accepts_a_prospective_account_without_leaking_the_credential(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let sponsor = PrincipalId::fixture("community_sponsor");
     let sponsor_token = issue_dev_session_for_principal(&app, sponsor, &[]).await;
     membership_application::ensure_founder_membership(&pool, sponsor, unix_now_seconds())
@@ -10994,7 +12014,7 @@ async fn community_invitation_delivery_accepts_a_prospective_account_without_lea
 async fn community_stewardship_is_global_admin_only_and_never_returns_recipient_identity(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let now = unix_now_seconds();
     let admin = PrincipalId::fixture("community_steward_admin");
     let member = PrincipalId::fixture("community_steward_member");
@@ -11104,7 +12124,7 @@ async fn community_stewardship_is_global_admin_only_and_never_returns_recipient_
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let invitation = community_invitation_for(&pool, "New.User+One@Example.Test").await;
     let response = app
         .clone()
@@ -11209,6 +12229,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
 async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
+            .await
             .with_registration_source_limit(2)
             .with_trusted_auth_attempt_source_header(true),
     );
@@ -11277,7 +12298,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -11900,9 +12921,9 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
 async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool: sqlx::PgPool) {
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let account_id = "recovery-request@example.test";
     let admin_token = issue_dev_session(&app, "recovery_request_admin", &["GlobalAdmin"]).await;
@@ -12002,9 +13023,9 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
 async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(pool: sqlx::PgPool) {
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
-        test_api_state(pool.clone())
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_identity_delivery_gateway(gateway.clone()),
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
     );
     let account_id = "recovery-delivery@example.test";
     let admin_token = issue_dev_session(&app, "recovery_delivery_admin", &["GlobalAdmin"]).await;
@@ -12067,6 +13088,9 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
         "{:?}",
         IdentityDeliveryAttempt {
             delivery_id,
+            attempt_token: Uuid::from_u128(1),
+            lease_expires_at: expires_at - 5,
+            clock_skew_margin_seconds: 5,
             kind: api::identity_delivery::IdentityDeliveryKind::Recovery,
             account_id: account_id.to_string(),
             principal_id: PrincipalId::fixture("recovery_delivery_user"),
@@ -12191,7 +13215,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let account_id = "throttled-host@example.test";
     let password = "correct horse battery";
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
@@ -12342,6 +13366,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
 async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
+            .await
             .with_local_proof_auth(test_local_proof_verifier())
             .with_auth_attempt_limits(2, 3, 900, 900, 900),
     );
@@ -12437,6 +13462,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
 async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
+            .await
             .with_local_proof_auth(test_local_proof_verifier())
             .with_auth_attempt_limits(3, 20, 900, 900, 900)
             .with_trusted_auth_attempt_source_header(true),
@@ -12512,7 +13538,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -12662,7 +13688,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -12834,7 +13860,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let response = app
         .clone()
         .oneshot(
@@ -12974,7 +14000,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -13327,7 +14353,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -13413,7 +14439,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -13553,7 +14579,7 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -13790,7 +14816,7 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
-    let app = router(pool);
+    let app = router(pool).await;
     let ticket = issue_dev_websocket_ticket(&app, "hello-user", game, "main").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -13825,7 +14851,7 @@ async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let (author_token, _) =
         create_media_upload_account_session(&app, "mention-reject-author").await;
     let (target_token, _) =
@@ -13983,7 +15009,7 @@ async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: s
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let (author_token, _) =
         create_media_upload_account_session(&app, "mention-delivery-author").await;
     let (mentioned_token, _) =
@@ -14106,7 +15132,7 @@ async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool: sqlx::PgPool) {
-    let app = router_with_local_proof_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone()).await;
     let (author_token, _) = create_media_upload_account_session(&app, "mention-read-author").await;
     let (target_token, _) = create_media_upload_account_session(&app, "mention-read-target").await;
     let (private_token, _) =
@@ -14350,7 +15376,7 @@ async fn discussion_thread(app: &axum::Router, slug: &str, topic: Uuid) -> Discu
 async fn slot_mention_rail_resolves_occupancy_at_read_time_and_survives_replacement(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -14541,7 +15567,7 @@ async fn addressed_thread_window_reaches_beyond_latest_fifty(pool: sqlx::PgPool)
         .bind(game).bind(&pack.pack_ref.key).bind(i64::from(pack.pack_ref.version)).bind(pack.pack_ref.content_hash.as_str()).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO thread_view (game_id,source_seq,stream_seq,channel_id,author_kind,body,occurred_at) SELECT $1,n,n,'main','host_narrator','post ' || n,1781928000 FROM generate_series(1,120) n")
         .bind(game).execute(&pool).await.unwrap();
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     for (query, expected_first, expected_last) in [
         ("limit=50", 71, 120),
         ("around_seq=20&limit=50", 1, 44),
@@ -14652,7 +15678,7 @@ async fn private_attention_receipts_are_durable_idempotent_and_reader_owned(pool
 async fn private_attention_http_denies_forged_items_and_transfers_delivery_without_review(
     pool: sqlx::PgPool,
 ) {
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let token = issue_dev_session(&app, "user_a", &[]).await;
     issue_dev_session(&app, "host_h", &[]).await;
     let game = Uuid::new_v4();
@@ -14798,7 +15824,7 @@ async fn reading_checkpoints_are_reader_owned_revisioned_and_visibility_checked(
         .bind(game).bind(&pack.pack_ref.key).bind(i64::from(pack.pack_ref.version)).bind(pack.pack_ref.content_hash.as_str()).execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO thread_view (game_id,source_seq,stream_seq,channel_id,author_kind,body,occurred_at) SELECT $1,n,n,'main','host_narrator','post ' || n,1781928000 FROM generate_series(1,120) n")
         .bind(game).execute(&pool).await.unwrap();
-    let app = router(pool.clone());
+    let app = router(pool.clone()).await;
     let token = issue_dev_session(&app, "checkpoint_reader", &[]).await;
     let uri = format!("/games/{game}/channels/main/reading-checkpoint");
     let write = |revision, seq| {

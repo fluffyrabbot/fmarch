@@ -76,7 +76,7 @@ async fn media_upload(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
-    let principal_id = authorization.context.principal_id;
+    let principal_id = authorization.context.principal_id();
     let media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
@@ -619,7 +619,7 @@ async fn media_thread_variant(
     MethodAuthenticated(authorization): MethodAuthenticated,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let principal_id = authorization.context.principal_id;
+    let principal_id = authorization.context.principal_id();
     if channel != "main" {
         require_channel_thread_access(&state.pool, game, channel.as_str(), Some(principal_id))
             .await?;

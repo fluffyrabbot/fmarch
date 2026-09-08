@@ -5,11 +5,13 @@ fn assert_ordered(section: &str, contracts: &[&str], boundary: &str) {
     for (index, contract) in contracts.iter().enumerate() {
         let position = section
             .find(contract)
-            .unwrap_or_else(|| panic!("{boundary} lost contract: {contract}"));
+            .unwrap_or_else(|| panic!("{} lost contract: {}", boundary, contract));
         if index > 0 {
             assert!(
                 position > previous,
-                "{boundary} ordering changed at {contract}"
+                "{} ordering changed at {}",
+                boundary,
+                contract
             );
         }
         previous = position;
@@ -69,6 +71,14 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(authentication.contains("enforce_auth_attempt_limit"));
     assert!(authentication.contains("deliver_auth_credential"));
     assert!(identity_delivery.contains("trait IdentityDeliveryGateway"));
+    assert!(identity_delivery.contains("fn is_enabled(&self) -> bool"));
+    assert!(identity_delivery
+        .contains("impl IdentityDeliveryGateway for DisabledIdentityDeliveryGateway"));
+    assert!(authentication.contains("fn require_identity_delivery_enabled("));
+    assert!(authentication.contains("if !state.identity_delivery_gateway.is_enabled()"));
+    assert!(authentication.contains("require_identity_delivery_enabled(state)?;"));
+    assert!(authentication
+        .contains("identity delivery is not configured; credential issuance is unavailable"));
     for retry_type_contract in [
         "pub(super) struct ExpectedIdentityDeliveryAttemptCount(i32);",
         "pub(super) struct IdentityDeliveryRetryRequest<'a> {",
@@ -86,18 +96,23 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
         .nth(1)
         .and_then(|source| source.split("async fn retire_workos_signing_key(").next())
         .expect("delivery retry HTTP boundary");
+    assert!(
+        !retry_handler.contains("require_classic_enabled"),
+        "identity delivery retry must remain independent of classic auth"
+    );
     assert_ordered(
         retry_handler,
         &[
             "Json(retry): Json<RetryAuthDeliveryIntent>",
             "require_global_admin_context(&request.context, \"delivery retry\")?",
+            "require_identity_delivery_enabled(&state)?",
             "ExpectedIdentityDeliveryAttemptCount::new(",
             "retry.expected_attempt_count",
             "RejectCode::InvalidArgument",
             ".identity_delivery_admission",
             ".try_acquire_attempt()",
             "ApiError::Unavailable",
-            "let initiating_session = request.context.initiating_session()",
+            "let initiating_session = request.initiating_session",
             "retry_identity_delivery_intent_with_config(",
             "IdentityDeliveryRetryRequest {",
             "initiating_session: &initiating_session",
@@ -116,6 +131,60 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(auth_http.contains("#[serde(deny_unknown_fields)]\nstruct RetryAuthDeliveryIntent"));
     assert!(auth_http.contains("identity_delivery_admission: IdentityDeliveryAdmission"));
     assert!(auth_http.contains("IdentityDeliveryAdmission::new("));
+    let queue_handler = auth_http
+        .split("async fn admin_auth_delivery_queue(")
+        .nth(1)
+        .and_then(|source| source.split("async fn retry_auth_delivery_intent(").next())
+        .expect("delivery queue HTTP boundary");
+    assert!(
+        !queue_handler.contains("require_classic_enabled"),
+        "identity delivery queue must remain independent of classic auth"
+    );
+    assert!(queue_handler.contains("WHEN 'community_invitation' THEN EXISTS"));
+    assert!(queue_handler.contains("FROM community_invitation_credential"));
+    assert!(queue_handler.contains("consumed_at IS NULL"));
+    assert!(queue_handler.contains("revoked_at IS NULL"));
+    assert!(queue_handler.contains("delivery.provider_id = $2"));
+    assert!(queue_handler.contains("'queued'"));
+    assert!(queue_handler.contains("'processing'"));
+    assert!(queue_handler.contains("identity_delivery_provider_status("));
+    assert!(queue_handler.contains(".bind(provider.operable)"));
+    assert!(queue_handler.contains("delivery_operable: provider.operable"));
+    let provider_probe_handler = auth_http
+        .split("async fn probe_auth_delivery_provider(")
+        .nth(1)
+        .and_then(|source| source.split("async fn retry_auth_delivery_intent(").next())
+        .expect("provider recovery probe HTTP boundary");
+    for contract in [
+        "require_global_admin_context(&request.context, \"identity delivery provider probe\")?",
+        "IdentityDeliveryProviderProbeRequest {",
+        "initiating_session: &initiating_session",
+        "probe_identity_delivery_provider_with_config(",
+        "IdentityDeliveryProviderProbeResult::Conflict",
+        "IdentityDeliveryProviderProbeResult::NotSuspended",
+    ] {
+        assert!(
+            provider_probe_handler.contains(contract),
+            "provider probe boundary drifted at {contract}"
+        );
+    }
+    let public_recovery_handler = auth_http
+        .split("async fn request_auth_account_recovery(")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("async fn revoke_auth_account_recovery_credential(")
+                .next()
+        })
+        .expect("public recovery HTTP boundary");
+    assert_ordered(
+        public_recovery_handler,
+        &[
+            "require_identity_delivery_operable_now(&state).await?",
+            "discover_account_principal(&state.pool",
+        ],
+        "public recovery delivery admission",
+    );
     assert!(!auth_http.contains("authenticate_legacy_token"));
     assert!(!auth_http.contains("allow_jwt_bearer"));
     assert!(!auth_http.contains("issue_debug_session"));
@@ -150,11 +219,29 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
         .and_then(|source| source.split("async fn create_auth_account(").next())
         .expect("local-proof session handler boundary");
     assert!(local_proof_handler.contains("LOCAL_PROOF_AUTH_HEADER"));
-    assert!(local_proof_handler.contains("verifier.verifies(secret)"));
-    assert!(local_proof_handler.contains("verifier.instance_id().clone()"));
+    assert!(
+        local_proof_handler.contains(".authorize(presented_secret, global_capabilities.clone())")
+    );
+    assert!(local_proof_handler.contains("identity::issue_local_proof_session("));
+    assert!(local_proof_handler.contains("let issued = pending.activate()?"));
     assert!(local_proof_handler.contains("StatusCode::NOT_FOUND"));
     assert!(!local_proof_handler.contains("dev_auth_enabled"));
     assert!(!local_proof_handler.contains("Assurance::AdminGrant"));
+    for ceremony in [
+        "identity::issue_classic_password_session(",
+        "identity::authorize_workos_session(",
+        "identity::issue_workos_session(",
+        "identity::issue_session_after_classic_method_added(",
+        "identity::redeem_recovery_credential_and_issue_session(",
+        "identity::redeem_game_invitation_and_issue_session(",
+    ] {
+        assert!(
+            auth_http.contains(ceremony),
+            "API session issuance escaped its ceremony boundary: {ceremony}"
+        );
+    }
+    assert!(!auth_http.contains("identity::SessionSpec"));
+    assert!(!auth_http.contains("identity::session::issue_session("));
 
     let live_delivery = std::fs::read_to_string(source_root.join("live_delivery.rs")).unwrap();
     assert!(live_delivery.contains("async fn create_websocket_ticket("));
@@ -183,7 +270,10 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(!identity_session.contains("session.global_capabilities AS snapshot_globals"));
     assert!(identity_session.contains("workos_signing_key_id"));
     for initiating_session_contract in [
-        "pub fn initiating_session(&self) -> InitiatingSession",
+        "pub struct AuthenticatedSession {",
+        "fn from_bearer_authorization(authorization: AuthorizationContext) -> Self",
+        "pub fn authorization(&self) -> &AuthorizationContext",
+        "pub fn initiating_session(&self) -> &InitiatingSession",
         "pub struct InitiatingSession {",
         "principal_id: PrincipalId",
         "session_reference: String",
@@ -198,6 +288,20 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
             "exact initiating-session authority fence drifted at {initiating_session_contract}"
         );
     }
+    assert!(identity_session.contains(") -> Result<AuthenticatedSession, IdentityFlowError>"));
+    assert!(identity_session.contains("Ok(AuthenticatedSession::from_bearer_authorization("));
+    let authorization_context_definition = identity_session
+        .split("pub struct AuthorizationContext {")
+        .nth(1)
+        .and_then(|source| source.split("impl AuthorizationContext {").next())
+        .expect("authorization context definition");
+    assert!(!authorization_context_definition.contains("pub "));
+    assert!(identity_session.contains("let authority_shape_is_valid = match"));
+    assert!(identity_session.contains("let capabilities_are_valid ="));
+    assert!(identity_session.contains("!global_capabilities[..index].contains(capability)"));
+    assert!(!identity_session.contains("impl AuthorizationContext {\n    /// Capture"));
+    assert!(member_lifecycle.contains("initiating_session.require_principal(principal_id)?"));
+    assert!(auth_http.contains("initiating_session: identity::InitiatingSession"));
     let retry_service = identity_delivery
         .split("pub(super) async fn retry_identity_delivery_intent_with_config(")
         .nth(1)
@@ -217,7 +321,7 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
             "request.session_policy",
             "capability == \"GlobalAdmin\"",
             "claim_delivery_transaction(",
-            "actor_principal_id: authorization.principal_id",
+            "actor_principal_id: authorization.principal_id()",
             "tx.commit().await?",
         ],
         "commit-time delivery authority fence",

@@ -44,6 +44,14 @@ function databaseCommand(command, url, sql, { tuplesOnly = false } = {}) {
   return run(commandPath(command), args, { capture: true }).stdout.trim();
 }
 
+function rejectedDatabaseCommand(command, url, sql) {
+  return run(
+    commandPath(command),
+    ["--set", "ON_ERROR_STOP=1", "--dbname", url, "--command", sql],
+    { capture: true, allowFailure: true },
+  );
+}
+
 function migratorEnvironment(url) {
   return migrationDatabaseEnvironment({ migrationUrl: url, env: process.env });
 }
@@ -102,10 +110,10 @@ SELECT COALESCE(jsonb_agg(jsonb_build_object(
 FROM authority_rows;
 `;
 
-// Behavioral fixtures are keyed by the migration version they prove. Each
-// seed runs against the schema as it stood *before* that version, and its
-// assertions run immediately after that version is applied and again after the
-// whole chain. A single head-minus-one seed could only ever prove the newest
+// Behavioral fixtures are keyed by the migration version they prove. A seed,
+// when present, runs against the schema as it stood *before* that version, and
+// its assertions run immediately after that version is applied and again after
+// the whole chain. A single head-minus-one seed could only ever prove the newest
 // migration, so every new migration silently retired its predecessor's
 // data-cut proof; keying by version keeps all of them running.
 
@@ -349,6 +357,32 @@ VALUES
    '10000000-0000-4000-8000-000000000001', 50, repeat('c', 64), 40);
 `;
 
+const identityDeliveryClaimProvenanceSeedSql = String.raw`
+-- Behavioral fixtures for the 0010 claim-provenance cut and the following
+-- 0011 provider-authority cut. The live row proves 0010 provenance and that
+-- 0011 refuses pre-v2 in-flight work; the terminal row proves provider
+-- generations remain retained when no call can be in flight.
+INSERT INTO auth_delivery_intent
+  (delivery_id, delivery_kind, account_id, principal_id, credential_hash,
+   status, attempt_count, next_attempt_at, delivered_at, last_error,
+   created_at, updated_at, provider_id, outcome_kind, outcome_code,
+   provider_receipt_id, claim_token, claim_expires_at, credential_envelope,
+   credential_expires_at)
+VALUES
+  ('89000000-0000-4000-8000-000000000001', 'recovery',
+   'processing-upgrade@example.invalid',
+   '10000000-0000-4000-8000-000000000001', repeat('1', 64),
+   'processing', 2, NULL, NULL, NULL, 100, 130,
+   'upgrade-processing-v1', 'processing', NULL, NULL,
+   '89000000-0000-4000-8000-0000000000a1', 160, NULL, 1000),
+  ('89000000-0000-4000-8000-000000000002', 'recovery',
+   'delivered-upgrade@example.invalid',
+   '10000000-0000-4000-8000-000000000001', repeat('2', 64),
+   'delivered', 1, NULL, 120, NULL, 90, 120,
+   'upgrade-terminal-v1', 'delivered', NULL, 'upgrade-receipt-1',
+   NULL, NULL, NULL, 1000);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -550,6 +584,103 @@ const migrationFixtures = [
       },
     ],
   },
+  {
+    version: 10,
+    seed: identityDeliveryClaimProvenanceSeedSql,
+    transitionalAssertions: [
+      {
+        sql: String.raw`SELECT string_agg(
+          delivery_id::text || ':' || status || ':' ||
+          COALESCE(claim_source, '-') || ':' ||
+          COALESCE(claim_actor_principal_id::text, '-'),
+          ',' ORDER BY delivery_id)
+        FROM auth_delivery_intent
+        WHERE delivery_id IN (
+          '89000000-0000-4000-8000-000000000001',
+          '89000000-0000-4000-8000-000000000002'
+        )`,
+        expected:
+          "89000000-0000-4000-8000-000000000001:processing:automatic:-,89000000-0000-4000-8000-000000000002:delivered:-:-",
+        message:
+          "0010 must classify a legacy live claim as automatic without manufacturing authority for terminal history",
+      },
+    ],
+  },
+  {
+    version: 11,
+    failure: {
+      seed: String.raw`SELECT 1`,
+      cleanup: String.raw`DELETE FROM auth_delivery_intent
+        WHERE delivery_id = '89000000-0000-4000-8000-000000000001'`,
+      expectedError: /provider-authority migration requires a drained processing queue/iu,
+      rollbackAssertions: [
+        {
+          sql: String.raw`SELECT
+            (to_regclass('public.auth_delivery_provider_authority') IS NULL)::text || ':' ||
+            (SELECT count(*)::text FROM _sqlx_migrations WHERE version = 11)`,
+          expected: "true:0",
+          message:
+            "0011 failure must roll back its provider catalog and migration ledger entry",
+        },
+      ],
+    },
+    assertions: [
+      {
+        sql: String.raw`SELECT string_agg(
+          generation_id || ':' || activated_at::text || ':' ||
+          last_bound_at::text || ':' || retired_at::text || ':' ||
+          (configuration_fingerprint = repeat('0', 64))::text,
+          ',' ORDER BY generation_id)
+        FROM auth_delivery_provider_authority
+        WHERE generation_id = 'upgrade-terminal-v1'`,
+        expected:
+          "upgrade-terminal-v1:90:120:120:true",
+        message:
+          "0011 must retain terminal provider generations as immutable retired history after the processing queue drains",
+      },
+      {
+        sql: String.raw`SELECT
+          (SELECT count(*)::text FROM pg_constraint
+           WHERE conname IN (
+               'auth_delivery_intent_provider_generation_fkey',
+               'auth_delivery_provider_attempt_fence_generation_fkey'
+             )
+             AND contype = 'f') || ':' ||
+          (SELECT string_agg(column_name, ',' ORDER BY ordinal_position)
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'auth_delivery_provider_attempt_fence')`,
+        expected: "2:attempt_token,generation_id,started_at,expires_at",
+        message:
+          "0011 must install both provider-generation foreign keys and keep future fences anonymous",
+      },
+      {
+        rejectedSql: String.raw`DELETE FROM auth_delivery_provider_authority
+          WHERE generation_id = 'upgrade-terminal-v1'`,
+        expectedError: /auth_delivery_intent_provider_generation_fkey/iu,
+        message:
+          "0011 must prevent deletion of retained generations referenced by delivery history",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO auth_delivery_intent
+          (delivery_id, delivery_kind, account_id, principal_id, credential_hash,
+           status, attempt_count, next_attempt_at, delivered_at, last_error,
+           created_at, updated_at, provider_id, outcome_kind, outcome_code,
+           provider_receipt_id, claim_token, claim_expires_at,
+           credential_envelope, credential_expires_at, claim_source,
+           claim_actor_principal_id)
+        VALUES
+          ('89000000-0000-4000-8000-000000000004', 'recovery',
+           'nonqueued-upgrade@example.invalid',
+           '10000000-0000-4000-8000-000000000001', repeat('4', 64),
+           'delivered', 1, NULL, 180, NULL, 180, 180,
+           'upgrade-terminal-v1', 'delivered', NULL, 'upgrade-receipt-2',
+           NULL, NULL, NULL, 1000, NULL, NULL)`,
+        expectedError: /identity delivery intents must enter through queued state/iu,
+        message: "0011 must reject direct insertion into every non-queued state",
+      },
+    ],
+  },
 ];
 
 const postMigrationAuthorityInvariantSql = String.raw`
@@ -712,9 +843,23 @@ function authorityArtifact(epoch, rawFingerprint, schemaOwner) {
   }, null, 2)}\n`;
 }
 
-function assertMigrationFixture(fixture, url, context) {
+function assertMigrationFixture(fixture, url, context, { includeTransitional = false } = {}) {
   if (!fixture) return;
-  for (const check of fixture.assertions) {
+  const checks = [
+    ...(fixture.assertions ?? []),
+    ...(includeTransitional ? (fixture.transitionalAssertions ?? []) : []),
+  ];
+  for (const check of checks) {
+    if (check.rejectedSql) {
+      const rejection = rejectedDatabaseCommand("psql", url, check.rejectedSql);
+      assert.notEqual(rejection.status, 0, `${context}${check.message}`);
+      assert.match(
+        `${rejection.stdout}\n${rejection.stderr}`,
+        check.expectedError,
+        `${context}${check.message}`,
+      );
+      continue;
+    }
     assert.equal(
       databaseCommand("psql", url, check.sql, { tuplesOnly: true }),
       check.expected,
@@ -749,8 +894,50 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
         databaseCommand("psql", upgradeUrl, sharedSeedSql);
       }
       const fixture = migrationFixtures.find((candidate) => candidate.version === migration.version);
-      if (fixture) {
+      if (fixture?.seed) {
         databaseCommand("psql", upgradeUrl, fixture.seed);
+      }
+      if (fixture?.failure) {
+        databaseCommand("psql", upgradeUrl, fixture.failure.seed);
+        let failedMigration;
+        if (migration.version === headVersion) {
+          failedMigration = runMigrator(migrator, upgradeUrl, { allowFailure: true });
+        } else {
+          await writeFile(
+            path.join(stagedDirectory, migration.filename),
+            await readFile(path.join(migrationDirectory, migration.filename)),
+          );
+          failedMigration = run(
+            commandPath("sqlx"),
+            [
+              "migrate",
+              "run",
+              "--source",
+              stagedDirectory,
+              "--database-url",
+              upgradeUrl,
+            ],
+            { capture: true, allowFailure: true },
+          );
+        }
+        assert.notEqual(
+          failedMigration.status,
+          0,
+          `${migration.filename}: unsafe legacy provider work unexpectedly migrated`,
+        );
+        assert.match(
+          `${failedMigration.stdout}\n${failedMigration.stderr}`,
+          fixture.failure.expectedError,
+          `${migration.filename}: migration failure did not identify unsafe legacy provider work`,
+        );
+        for (const check of fixture.failure.rollbackAssertions) {
+          assert.equal(
+            databaseCommand("psql", upgradeUrl, check.sql, { tuplesOnly: true }),
+            check.expected,
+            `${migration.filename}: ${check.message}`,
+          );
+        }
+        databaseCommand("psql", upgradeUrl, fixture.failure.cleanup);
       }
       if (migration.version === headVersion) {
         // The shipped migrator, not sqlx, must be what upgrades a populated
@@ -771,7 +958,9 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
           upgradeUrl,
         ]);
       }
-      assertMigrationFixture(fixture, upgradeUrl, `${migration.filename}: `);
+      assertMigrationFixture(fixture, upgradeUrl, `${migration.filename}: `, {
+        includeTransitional: true,
+      });
     }
 
     // Re-run every fixture against the fully migrated database: a later
@@ -859,8 +1048,15 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       checksum_mismatch_terminal: true,
       migration_behavior_proofs: migrationFixtures.map((fixture) => ({
         version: fixture.version,
-        assertions: fixture.assertions.length,
+        assertions:
+          (fixture.assertions ?? []).length + (fixture.transitionalAssertions ?? []).length,
       })),
+      migration_failure_proofs: migrationFixtures
+        .filter((fixture) => fixture.failure)
+        .map((fixture) => ({
+          version: fixture.version,
+          rollback_assertions: fixture.failure.rollbackAssertions.length,
+        })),
       workos_signing_key_retirement_monotonic: true,
       websocket_session_reference_enforced: true,
       websocket_redundant_authority_removed: true,

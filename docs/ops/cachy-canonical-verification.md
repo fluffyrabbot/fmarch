@@ -184,12 +184,13 @@ The dedicated test accounts must already be admitted through fmarch's ordinary
 community admission. `proof:hosted:login` opens Chromium on Cachy's desktop for
 normal WorkOS sign-in and saves only its backend-issued app cookie in a new 0600
 file. It does not create provider users, invent membership, or mint local-proof
-sessions. As of the 2026-09-07 investigation, staging has WorkOS configured,
-classic authentication disabled, and no identity-delivery transport configured.
-Creating WorkOS users alone therefore cannot produce admitted test sessions.
-Configure real invitation delivery and admit two dedicated test accounts before
-attempting these commands; fresh provider login, invitation delivery, MFA, and
-human acceptance remain separate evidence boundaries.
+sessions. WorkOS sign-in and identity delivery are independent capabilities:
+creating WorkOS users alone cannot produce admitted test sessions. Hosted
+preflight now requires a real HTTPS identity-delivery transport in both staging
+and production, including WorkOS-only mode. Use that transport to invite and
+admit two dedicated test accounts before attempting these commands; fresh
+provider login, invitation delivery, MFA, and human acceptance remain separate
+evidence boundaries.
 
 ```sh
 FMARCH_HOSTED_SESSION_OUTPUT=/secure/fmarch/member.json npm run proof:hosted:login

@@ -32,8 +32,11 @@ The defaults are conservative starting points, not claims about hosted capacity:
 | Idle transaction | 10 s | `FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS` | Minimum 10 s so it cannot undercut the 5 s live-delivery fence; Postgres terminates longer-idle transactions. |
 | Admitted HTTP requests | 128 | `FMARCH_HTTP_MAX_IN_FLIGHT` | Further requests wait only for the queue deadline. |
 | HTTP admission queue | 50 ms | `FMARCH_HTTP_QUEUE_TIMEOUT_MS` | Retryable `503`. |
-| End-to-end HTTP request | 15 s | `FMARCH_HTTP_REQUEST_TIMEOUT_MS` | Retryable `503`; the request future is cancelled. |
+| End-to-end HTTP request | 40 s | `FMARCH_HTTP_REQUEST_TIMEOUT_MS` | Retryable `503`; the request future is cancelled. Startup requires this deadline to exceed one database acquisition, both authentication statements, the complete synchronous delivery-retry budget, and a 1 s response margin. |
+| Identity-delivery claim lease | 40 s | `FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS` | Must exceed provider I/O plus three database phases by the configured cross-clock margin and a 1 s database-clock quantization reserve; an invalid relation fails startup. |
+| Provider clock-skew margin | 5 s | `FMARCH_IDENTITY_DELIVERY_PROVIDER_CLOCK_SKEW_MARGIN_MS` | Advances the provider's Unix-seconds wire deadline while the anonymous generation fence remains live through the later database deadline. It covers the maximum database-clock lead over the provider clock plus provider deadline-to-no-effect quiescence lag. |
 | Retry hint | 1 s | `FMARCH_HTTP_RETRY_AFTER_SECONDS` | Sent with capacity `503` responses. |
+| Graceful shutdown drain | 45 s | `FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS` | Startup requires this to exceed the HTTP request deadline plus a 1 s process-drain margin, so a signal cannot abort an admitted provider-accepted delivery before finalization. |
 | Live WebSocket connections | 512 | `FMARCH_WS_MAX_CONNECTIONS` | Retryable `503` handshake. |
 | Authority-bearing transactions | pool − 3 | `FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT` | Retryable `503`; the ceiling accounts for LISTEN and leaves two pool connections outside this workload. |
 | Live-delivery fence transactions | min(authority − 1, 4) | `FMARCH_WS_DELIVERY_MAX_IN_FLIGHT` | Backpressure; one shared authority permit remains available to commands and cutoffs. |
@@ -71,7 +74,7 @@ that stops reading cannot pin those permits indefinitely.
 
 Identity cutoffs begin through one typed transaction constructor. It overrides the general pool
 timeouts locally: the 7 s lock budget exceeds the 5 s maximum live-delivery batch, the 10 s statement
-budget exceeds that lock budget, and both remain inside the default 15 s HTTP deadline. This lets an
+budget exceeds that lock budget, and both remain inside the default 40 s HTTP deadline. This lets an
 already-authorized final batch finish while ensuring logout, method/account disablement, erasure,
 session revocation, and signing-key retirement remain available rather than failing at the general
 1 s lock deadline. Delivery transactions join global key-retirement and principal-cutoff gates in
@@ -82,6 +85,20 @@ session, and capability acquisition, so database wait time reduces the socket-se
 of extending the authority lease. A timed-out application-frame send is terminal: the server drops the socket without
 polling it again, because a cancelled sink send may already have buffered the private frame and a later
 Close write could flush it after the authority guard is released.
+
+An explicit identity-delivery retry is synchronous: one admitted request authenticates its session,
+then may claim, prepare, call the provider, and finalize the durable intent. Startup therefore derives
+that route's maximum lifetime from one pool acquisition, both authentication statements, delivery
+database, and provider budgets and rejects an HTTP deadline that does not leave an additional one-second
+response margin. With the defaults, authentication is bounded by 10.25 s, the delivery lifecycle by
+28 s, and the strict minimum is 39.25 s; the 40 s request deadline therefore cannot cancel a
+provider-accepted attempt before its finalization budget. The 40 s claim is separately required to
+exceed the 28 s lifecycle by the 5 s provider clock-skew margin plus a 1 s quantization reserve for
+the fraction discarded by `floor(clock_timestamp())`. The safety margin satisfies
+`margin >= ceil(max(database clock - provider clock) + max(provider deadline-to-no-effect quiescence lag))`;
+the quiescence term is zero only when the final deadline check and provider
+effect are atomic. The margin and quantization reserve advance the wire deadline and delay cutover;
+they do not add executable work to the HTTP or shutdown-drain budgets.
 
 Authenticated gameplay commands use a separate five-second authority lease that starts before
 pool checkout and covers `BEGIN`, canonical stream/identity/session locking, decision persistence,

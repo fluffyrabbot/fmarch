@@ -963,7 +963,10 @@ async fn active_operator_session(
                 identity::IdentityFlowError::Db(error) => ApiError::Db(error),
                 _ => unauthorized_operator_session(),
             })?;
-    Ok((session.principal_id, session.global_capabilities))
+    Ok((
+        session.authorization().principal_id(),
+        session.authorization().global_capabilities().to_vec(),
+    ))
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {

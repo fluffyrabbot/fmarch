@@ -552,13 +552,46 @@ Identity delivery is a leased, fenced saga rather than a transaction spanning
 provider I/O. A short `FOR UPDATE SKIP LOCKED` claim commits an opaque token and
 lease using PostgreSQL `clock_timestamp()`, so replica clock skew cannot steal a
 live claim, then releases every database lock before credential preflight and
-the bounded provider request. Preparation, provider I/O, and finalization have
+the bounded provider request. Immediately before unsealing the request, one
+short delivery-row-then-provider lock pass revalidates the exact claim token,
+database-clock lease, credential activity, active generation, and circuit.
+Provider I/O still holds no database lock. Preparation, provider I/O, and finalization have
 separate deadlines; a provider response near its deadline therefore receives a
 fresh finalization budget rather than being cancelled after its external side
 effect. Finalization is a second short transaction whose CAS requires the exact
 token and immutable credential hash. Cancellation,
 revocation, claim expiry, and a newer worker therefore defeat stale completion
 without holding scarce connections across a network call.
+
+The configured provider name is a durable generation identity, not an adapter
+type. Startup fingerprints the adapter protocol and exact endpoint without
+including its rotatable bearer token, binds one active generation, and retains
+every retired name against reuse. A generation change requires a drained queue
+and no live provider-attempt fence. Provider-unavailable evidence suspends the
+active generation, and neither background delivery nor an explicit retry may
+bypass that circuit. Recovery is a separate credential-free, versioned,
+single-flight probe whose echoed nonce prevents a stale success from clearing a
+newer suspension. The delivery-v2 wire request carries the generation,
+anonymous attempt token, an earlier provider-effect `lease_expires_at` in Unix
+epoch seconds, and the configured clock-skew margin. That margin covers the maximum database-clock lead
+over the provider clock plus the provider's maximum deadline-to-no-effect
+quiescence lag; the latter is zero only for an atomic final deadline check and
+effect. The provider rejects stale or wrong-generation work and any smaller
+margin, rechecks that sole authority deadline immediately before its credential
+side effect, guarantees that no such effect commits at or after the deadline,
+and deduplicates the stable delivery id. The database-internal generation fence
+expires one declared margin later. Only a valid
+`fmarch.identity-delivery-result.v2` acknowledgement bound to the exact
+generation, delivery id, and attempt token releases the anonymous attempt fence.
+A non-success HTTP status, transport/body timeout, malformed response, unknown
+outcome, or binding mismatch retains it until the later database-clock
+generation fence expires; local cancellation and intermediary responses are not
+treated as proof that remote execution stopped.
+Startup proves every required runtime worker before performing the irreversible
+generation bind, then attaches the degradable delivery worker before serving.
+Secret-token
+rotation requires an overlap through replica drain, or a fresh generation when
+the old credential must be revoked immediately.
 
 `IdentityDeliveryAuditRecord` owns the exact event, actor, principal,
 credential, delivery, provider, outcome, and receipt fields persisted by the

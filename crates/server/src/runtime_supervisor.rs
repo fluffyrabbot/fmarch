@@ -24,14 +24,20 @@ type WorkerFactory =
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkerPolicy {
-    Fatal,
-    Restart { backoff: Duration, limit: u32 },
+    RequiredFatal,
+    RequiredRestart { backoff: Duration, limit: u32 },
+    DegradedRestart { backoff: Duration },
+}
+
+impl WorkerPolicy {
+    fn required(self) -> bool {
+        matches!(self, Self::RequiredFatal | Self::RequiredRestart { .. })
+    }
 }
 
 #[derive(Clone)]
 struct WorkerSpec {
     name: &'static str,
-    required: bool,
     policy: WorkerPolicy,
     factory: WorkerFactory,
 }
@@ -65,6 +71,7 @@ impl IdentityDeliveryWorkerBinding {
 pub(super) struct RuntimeSupervisor {
     shutdown: watch::Sender<bool>,
     fatal: mpsc::UnboundedReceiver<SupervisorFailure>,
+    startup_fatal_sender: Option<mpsc::UnboundedSender<SupervisorFailure>>,
     tasks: Vec<JoinHandle<()>>,
     health: RuntimeWorkerHealth,
     readiness_grace: Duration,
@@ -72,34 +79,28 @@ pub(super) struct RuntimeSupervisor {
 }
 
 impl RuntimeSupervisor {
-    pub(super) fn start(
+    /// Start only the workers whose readiness gates process activation.
+    ///
+    /// Identity delivery is added after these workers report ready and the
+    /// composition root has committed the durable provider-generation bind.
+    pub(super) fn start_required(
         pool: PgPool,
         api_state: ApiState,
-        identity_delivery: Option<IdentityDeliveryWorkerBinding>,
         scheduler: commands::day_scheduler::DayEventSchedulerConfig,
         budget: WorkerBudget,
         health: RuntimeWorkerHealth,
     ) -> Self {
         let (shutdown, _) = watch::channel(false);
         let (fatal_sender, fatal) = mpsc::unbounded_channel();
-        let mut specs = vec![
+        let specs = vec![
             subject_erasure_spec(pool.clone(), &budget),
             day_event_spec(pool.clone(), scheduler),
             media_reconciliation_spec(pool.clone(), api_state.clone(), &budget),
             live_listener_spec(api_state, &budget),
         ];
-        if let Some(identity_delivery) = identity_delivery {
-            specs.push(identity_delivery_spec(
-                pool,
-                identity_delivery.gateway,
-                identity_delivery.config,
-                identity_delivery.admission,
-                &budget,
-            ));
-        }
         let mut tasks = Vec::with_capacity(specs.len());
         for spec in specs {
-            health.register(spec.name, spec.required);
+            health.register(spec.name, spec.policy.required());
             tasks.push(tokio::spawn(supervise_worker(
                 spec,
                 shutdown.subscribe(),
@@ -107,15 +108,45 @@ impl RuntimeSupervisor {
                 fatal_sender.clone(),
             )));
         }
-        drop(fatal_sender);
         Self {
             shutdown,
             fatal,
+            startup_fatal_sender: Some(fatal_sender),
             tasks,
             health,
             readiness_grace: budget.readiness_grace,
             drain_timeout: budget.shutdown_drain_timeout,
         }
+    }
+
+    /// Add the degradable delivery worker after provider authority is bound.
+    ///
+    /// Taking the startup sender makes this a single-use phase transition and
+    /// restores channel-closure detection once every supervisor task exits.
+    pub(super) fn start_identity_delivery(
+        &mut self,
+        pool: PgPool,
+        identity_delivery: IdentityDeliveryWorkerBinding,
+        budget: &WorkerBudget,
+    ) {
+        let spec = identity_delivery_spec(
+            pool,
+            identity_delivery.gateway,
+            identity_delivery.config,
+            identity_delivery.admission,
+            budget,
+        );
+        self.health.register(spec.name, spec.policy.required());
+        let fatal_sender = self
+            .startup_fatal_sender
+            .take()
+            .expect("identity delivery startup phase may be completed only once");
+        self.tasks.push(tokio::spawn(supervise_worker(
+            spec,
+            self.shutdown.subscribe(),
+            self.health.clone(),
+            fatal_sender,
+        )));
     }
 
     pub(super) fn shutdown_receiver(&self) -> watch::Receiver<bool> {
@@ -235,7 +266,7 @@ async fn supervise_worker(
             Err(_) => "worker join failed".to_string(),
         };
         match spec.policy {
-            WorkerPolicy::Fatal => {
+            WorkerPolicy::RequiredFatal => {
                 health.mark_stopped(spec.name, false);
                 let _ = fatal.send(SupervisorFailure {
                     worker: spec.name,
@@ -243,7 +274,7 @@ async fn supervise_worker(
                 });
                 return;
             }
-            WorkerPolicy::Restart { backoff, limit } if restarts < limit => {
+            WorkerPolicy::RequiredRestart { backoff, limit } if restarts < limit => {
                 restarts = restarts.saturating_add(1);
                 health.mark_stopped(spec.name, true);
                 tracing::warn!(
@@ -257,13 +288,27 @@ async fn supervise_worker(
                     return;
                 }
             }
-            WorkerPolicy::Restart { .. } => {
+            WorkerPolicy::RequiredRestart { .. } => {
                 health.mark_stopped(spec.name, false);
                 let _ = fatal.send(SupervisorFailure {
                     worker: spec.name,
                     reason: format!("restart budget exhausted after {restarts} restarts: {reason}"),
                 });
                 return;
+            }
+            WorkerPolicy::DegradedRestart { backoff } => {
+                restarts = restarts.saturating_add(1);
+                health.mark_stopped(spec.name, true);
+                tracing::warn!(
+                    event = "runtime_worker_degraded_restarting",
+                    worker = spec.name,
+                    restart = restarts,
+                    failure = reason.as_str(),
+                    "degraded runtime worker exited unexpectedly; site remains available while recovery continues"
+                );
+                if wait_or_shutdown(backoff, shutdown.clone()).await {
+                    return;
+                }
             }
         }
     }
@@ -274,8 +319,7 @@ fn subject_erasure_spec(pool: PgPool, budget: &WorkerBudget) -> WorkerSpec {
     let error_backoff = budget.subject_erasure_error_backoff;
     WorkerSpec {
         name: SUBJECT_ERASURE_WORKER,
-        required: true,
-        policy: WorkerPolicy::Fatal,
+        policy: WorkerPolicy::RequiredFatal,
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             Box::pin(run_subject_erasure_worker(
@@ -295,12 +339,11 @@ fn day_event_spec(
 ) -> WorkerSpec {
     WorkerSpec {
         name: DAY_EVENT_WORKER,
-        required: true,
         // The worker contains database iteration failures and keeps polling.
         // Reaching the supervisor means invalid startup configuration or an
         // unexpected exit, which is a process-fatal condition rather than a
         // restart-budget concern.
-        policy: WorkerPolicy::Fatal,
+        policy: WorkerPolicy::RequiredFatal,
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             let config = config.clone();
@@ -318,10 +361,12 @@ fn identity_delivery_spec(
 ) -> WorkerSpec {
     WorkerSpec {
         name: IDENTITY_DELIVERY_WORKER,
-        required: true,
-        policy: WorkerPolicy::Restart {
+        // A durable provider suspension blocks new credential issuance and is
+        // visible in worker/admin diagnostics, but it must not boot-loop or
+        // withdraw the rest of the site. The HTTP and administrative recovery
+        // surfaces must remain available while delivery is degraded.
+        policy: WorkerPolicy::DegradedRestart {
             backoff: budget.worker_restart_backoff,
-            limit: budget.restart_limit,
         },
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
@@ -381,8 +426,7 @@ fn record_identity_delivery_health(
 fn live_listener_spec(api_state: ApiState, budget: &WorkerBudget) -> WorkerSpec {
     WorkerSpec {
         name: LIVE_EVENT_LISTENER,
-        required: true,
-        policy: WorkerPolicy::Restart {
+        policy: WorkerPolicy::RequiredRestart {
             backoff: budget.worker_restart_backoff,
             limit: budget.restart_limit,
         },
@@ -411,8 +455,7 @@ fn media_reconciliation_spec(
     let batch_size = budget.media_reconciliation_batch_size;
     WorkerSpec {
         name: MEDIA_RECONCILIATION_WORKER,
-        required: true,
-        policy: WorkerPolicy::Fatal,
+        policy: WorkerPolicy::RequiredFatal,
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             let state = api_state.clone();
@@ -608,7 +651,7 @@ mod tests {
     #[test]
     fn identity_delivery_failure_ignores_timer_ticks_but_clears_after_an_empty_claim() {
         let health = RuntimeWorkerHealth::default();
-        health.register(IDENTITY_DELIVERY_WORKER, true);
+        health.register(IDENTITY_DELIVERY_WORKER, false);
         let mut failure_latched = false;
         record_identity_delivery_health(
             &health,
@@ -632,7 +675,8 @@ mod tests {
                 kind: IdentityDeliveryWorkerObservationKind::AttemptFinished,
             },
         );
-        assert!(!health.required_workers_ready());
+        assert!(health.required_workers_ready());
+        assert!(!health.snapshot()[0].healthy);
 
         record_identity_delivery_health(
             &health,
@@ -644,7 +688,8 @@ mod tests {
                 kind: IdentityDeliveryWorkerObservationKind::AttemptStarted,
             },
         );
-        assert!(!health.required_workers_ready());
+        assert!(health.required_workers_ready());
+        assert!(!health.snapshot()[0].healthy);
 
         record_identity_delivery_health(
             &health,
@@ -656,7 +701,8 @@ mod tests {
                 kind: IdentityDeliveryWorkerObservationKind::TimerTick,
             },
         );
-        assert!(!health.required_workers_ready());
+        assert!(health.required_workers_ready());
+        assert!(!health.snapshot()[0].healthy);
 
         record_identity_delivery_health(
             &health,
@@ -669,6 +715,7 @@ mod tests {
             },
         );
         assert!(health.required_workers_ready());
+        assert!(health.snapshot()[0].healthy);
     }
 
     #[tokio::test]
@@ -679,8 +726,7 @@ mod tests {
         let (fatal_sender, mut fatal) = mpsc::unbounded_channel();
         let spec = WorkerSpec {
             name: "test-fatal",
-            required: true,
-            policy: WorkerPolicy::Fatal,
+            policy: WorkerPolicy::RequiredFatal,
             factory: Arc::new(|_, _| Box::pin(async { Ok(()) })),
         };
         supervise_worker(spec, receiver, health, fatal_sender).await;
@@ -704,8 +750,7 @@ mod tests {
         let factory_attempts = attempts.clone();
         let spec = WorkerSpec {
             name: "test-restart",
-            required: true,
-            policy: WorkerPolicy::Restart {
+            policy: WorkerPolicy::RequiredRestart {
                 backoff: Duration::from_millis(1),
                 limit: 2,
             },
@@ -738,5 +783,95 @@ mod tests {
         shutdown.send(true).unwrap();
         task.await.unwrap();
         assert!(fatal.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn required_restart_exhaustion_is_process_fatal() {
+        let health = RuntimeWorkerHealth::default();
+        health.register("test-required-restart", true);
+        let attempts = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let (_shutdown, receiver) = watch::channel(false);
+        let (fatal_sender, mut fatal) = mpsc::unbounded_channel();
+        let factory_attempts = attempts.clone();
+        let spec = WorkerSpec {
+            name: "test-required-restart",
+            policy: WorkerPolicy::RequiredRestart {
+                backoff: Duration::from_millis(1),
+                limit: 1,
+            },
+            factory: Arc::new(move |_, _| {
+                factory_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Box::pin(async { Err("synthetic required-worker failure".to_string()) })
+            }),
+        };
+
+        supervise_worker(spec, receiver, health.clone(), fatal_sender).await;
+
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(
+            fatal.recv().await,
+            Some(SupervisorFailure {
+                worker: "test-required-restart",
+                reason:
+                    "restart budget exhausted after 1 restarts: worker reported a bounded failure"
+                        .to_string(),
+            })
+        );
+        let worker = &health.snapshot()[0];
+        assert!(worker.required);
+        assert!(!worker.running);
+        assert!(!worker.healthy);
+        assert_eq!(worker.restart_count, 1);
+    }
+
+    #[tokio::test]
+    async fn degraded_restart_keeps_recovering_without_a_finite_budget() {
+        let health = RuntimeWorkerHealth::default();
+        health.register("test-degraded-restart", false);
+        let attempts = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let (shutdown, receiver) = watch::channel(false);
+        let (fatal_sender, mut fatal) = mpsc::unbounded_channel();
+        let factory_attempts = attempts.clone();
+        let spec = WorkerSpec {
+            name: "test-degraded-restart",
+            policy: WorkerPolicy::DegradedRestart {
+                backoff: Duration::from_millis(1),
+            },
+            factory: Arc::new(move |mut stop, health| {
+                let attempt = factory_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Box::pin(async move {
+                    if attempt < 2 {
+                        return Err("synthetic degraded-worker failure".to_string());
+                    }
+                    health.heartbeat("test-degraded-restart", 0, Some(0));
+                    let _ = stop.changed().await;
+                    Ok(())
+                })
+            }),
+        };
+
+        let task = tokio::spawn(supervise_worker(
+            spec,
+            receiver,
+            health.clone(),
+            fatal_sender,
+        ));
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while attempts.load(std::sync::atomic::Ordering::SeqCst) < 3 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        assert!(fatal.try_recv().is_err());
+        let worker = &health.snapshot()[0];
+        assert!(!worker.required);
+        assert!(worker.running);
+        assert!(worker.healthy);
+        assert_eq!(worker.restart_count, 2);
+        assert!(health.required_workers_ready());
+        shutdown.send(true).unwrap();
+        task.await.unwrap();
     }
 }

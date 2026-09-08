@@ -8,7 +8,9 @@
 use super::auth_http::{
     hash_session_token, rate_limited, unix_now_seconds, AuthDeliveryReceipt, AuthHttpState,
 };
-use super::identity_delivery::{delivery_aad, IdentityDeliveryKind};
+use super::identity_delivery::{
+    delivery_aad, require_identity_delivery_provider_operable, IdentityDeliveryKind,
+};
 use super::ApiError;
 use axum::http::{HeaderMap, StatusCode};
 use principal::PrincipalId;
@@ -555,11 +557,41 @@ async fn record_auth_attempt_rate_limited(
     Ok(())
 }
 
+pub(super) fn require_identity_delivery_enabled(state: &AuthHttpState) -> Result<(), ApiError> {
+    if !state.identity_delivery_gateway.is_enabled() {
+        return Err(ApiError::Unavailable {
+            retry_after_seconds: 1,
+            message: "identity delivery is not configured; credential issuance is unavailable"
+                .to_string(),
+        });
+    }
+    Ok(())
+}
+
+pub(super) async fn require_identity_delivery_operable_now(
+    state: &AuthHttpState,
+) -> Result<(), ApiError> {
+    require_identity_delivery_enabled(state)?;
+    super::identity_delivery::require_identity_delivery_provider_operable_now(
+        &state.pool,
+        state.identity_delivery_gateway.as_ref(),
+    )
+    .await?;
+    Ok(())
+}
+
 pub(super) async fn deliver_auth_credential(
     state: &AuthHttpState,
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     request: &AuthCredentialDeliveryRequest<'_>,
 ) -> Result<AuthDeliveryReceipt, ApiError> {
+    require_identity_delivery_enabled(state)?;
+    // Hold a shared lock on the exact active provider generation until the
+    // credential and its delivery intent commit together. A rolling cutover
+    // therefore either observes this work and refuses to switch, or wins first
+    // and makes this stale process fail before it encrypts credential material.
+    require_identity_delivery_provider_operable(tx, state.identity_delivery_gateway.as_ref())
+        .await?;
     let delivery_id = Uuid::new_v4();
     let provider_id = state.identity_delivery_gateway.provider_id().to_string();
     let credential_envelope = eventstore::encrypt_delivery_credential(

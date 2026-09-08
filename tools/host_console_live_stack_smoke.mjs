@@ -400,6 +400,8 @@ try {
         process.env.FMARCH_DB_MAX_CONNECTIONS ?? "48",
       FMARCH_HTTP_REQUEST_TIMEOUT_MS:
         process.env.FMARCH_HTTP_REQUEST_TIMEOUT_MS ?? "180000",
+      FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS:
+        process.env.FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS ?? "185000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     }),
     stdio: ["ignore", "pipe", "pipe"],

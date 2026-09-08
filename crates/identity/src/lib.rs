@@ -6,6 +6,10 @@ pub mod password;
 pub mod private_claims;
 pub mod session;
 pub mod subject_privacy;
+#[cfg(all(feature = "test-support", not(debug_assertions)))]
+compile_error!("identity test-support must not be enabled in a non-debug build");
+#[cfg(all(feature = "test-support", debug_assertions))]
+pub mod test_support;
 pub mod token;
 pub mod workos;
 
@@ -21,24 +25,29 @@ pub use data_lifecycle::{
 
 pub use error::IdentityFlowError;
 pub use member_lifecycle::{
-    apply_member_lifecycle, apply_member_lifecycle_authenticated, create_personal_export,
-    create_personal_export_authenticated, erase_member, load_personal_export,
-    load_personal_export_authenticated, rebuild_member_lifecycle, request_member_erasure,
-    request_member_erasure_authenticated, request_member_erasure_with_store,
+    apply_member_lifecycle_authenticated, create_personal_export_authenticated,
+    load_personal_export_authenticated, request_member_erasure_authenticated,
     MemberLifecycleSnapshot, PersonalExport,
 };
 pub use private_claims::{
     ensure_active_subject, insert_subject_claim, open_active_subject_claim, PrivateClaimError,
 };
-#[cfg(debug_assertions)]
-pub use session::{activate_local_proof_authorization, LocalProofAuthorization};
 pub use session::{
+    authorize_workos_session, issue_classic_password_session, issue_community_admission_session,
+    issue_session_after_classic_method_added, issue_workos_session,
+    redeem_game_invitation_and_issue_session, redeem_recovery_credential_and_issue_session,
     require_active_workos_signing_key, retire_workos_signing_key,
     revalidate_initiating_session_after_owner_lock, revoke_local_proof_sessions_for_startup,
-    validate_session_reference_for_update, AuthorizationContext, CompletedWorkosLogout,
-    InitiatingSession, IssuedSession, LocalProofInstanceId, LocalProofStartupRevocation,
-    LogoutSessionState, RotatedSession, SessionPolicy, SessionSpec, WorkosSigningKeyId,
-    WorkosSigningKeyRetirement,
+    validate_session_reference_for_update, AuthenticatedSession, AuthorizationContext,
+    ClassicPasswordProof, CompletedWorkosLogout, GameInvitationSessionIssuance, InitiatingSession,
+    IssuedSession, LocalProofInstanceId, LocalProofStartupRevocation, LogoutSessionState,
+    RecoverySessionIssuance, RotatedSession, SessionIssuance, SessionPolicy, WorkosSessionGrant,
+    WorkosSigningKeyId, WorkosSigningKeyRetirement,
+};
+#[cfg(debug_assertions)]
+pub use session::{
+    issue_local_proof_session, LocalProofSessionAuthority, LocalProofSessionGrant,
+    PendingLocalProofSession,
 };
 pub use subject_privacy::{
     active_subject_key_store, bootstrap_subject_key_authority_from_environment,
@@ -52,8 +61,8 @@ pub use subject_privacy::{
     SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 pub use workos::{
-    AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,
-    WorkosAccessTokenVerifier, WorkosSessionId,
+    AccessTokenVerifier, IdentityError, VerifiedIdentity, WorkosAccessTokenVerifier,
+    WorkosSessionId,
 };
 
 /// The two first-class sign-in methods. Wire and storage strings are the
@@ -110,15 +119,4 @@ impl Assurance {
             _ => None,
         }
     }
-}
-
-/// Produced by any successful authentication; consumed only by session
-/// issuance. Both classic and WorkOS verification end here.
-#[derive(Debug, Clone)]
-pub struct AuthenticationGrant {
-    pub principal_id: PrincipalId,
-    pub method_id: uuid::Uuid,
-    pub method_kind: MethodKind,
-    pub authenticated_at: i64,
-    pub assurance: Assurance,
 }

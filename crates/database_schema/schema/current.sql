@@ -34,6 +34,119 @@ $$;
 
 
 --
+-- Name: auth_delivery_intent_attempt_fence_insert(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.auth_delivery_intent_attempt_fence_insert() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    INSERT INTO public.auth_delivery_provider_attempt_fence (
+        attempt_token,
+        generation_id,
+        started_at,
+        expires_at
+    ) VALUES (
+        NEW.claim_token,
+        NEW.provider_id,
+        NEW.updated_at,
+        NEW.claim_expires_at
+    );
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: auth_delivery_intent_provider_authority_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.auth_delivery_intent_provider_authority_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    provider_is_operable boolean;
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.status <> 'queued' THEN
+        RAISE EXCEPTION 'identity delivery intents must enter through queued state'
+            USING ERRCODE = '23514';
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.provider_id <> OLD.provider_id THEN
+        RAISE EXCEPTION 'identity delivery provider generation is immutable'
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF TG_OP = 'INSERT'
+       OR (
+           TG_OP = 'UPDATE'
+           AND NEW.status = 'processing'
+           AND (
+               OLD.status <> 'processing'
+               OR NEW.claim_token IS DISTINCT FROM OLD.claim_token
+           )
+       )
+    THEN
+        SELECT TRUE
+        INTO provider_is_operable
+        FROM public.auth_delivery_provider_authority
+        WHERE generation_id = NEW.provider_id
+          AND retired_at IS NULL
+          AND suspended_at IS NULL
+        FOR SHARE;
+
+        IF provider_is_operable IS DISTINCT FROM TRUE THEN
+            RAISE EXCEPTION 'identity delivery provider generation is not active and operable'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: auth_delivery_provider_authority_invariant_guard(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.auth_delivery_provider_authority_invariant_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.generation_id <> OLD.generation_id
+       OR NEW.configuration_fingerprint <> OLD.configuration_fingerprint
+       OR NEW.activated_at <> OLD.activated_at
+    THEN
+        RAISE EXCEPTION 'identity delivery provider generation identity is immutable'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.last_bound_at < OLD.last_bound_at THEN
+        RAISE EXCEPTION 'identity delivery provider binding time cannot move backwards'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.circuit_version < OLD.circuit_version THEN
+        RAISE EXCEPTION 'identity delivery provider circuit version cannot move backwards'
+            USING ERRCODE = '23514';
+    END IF;
+    IF OLD.retired_at IS NOT NULL
+       AND NEW.retired_at IS DISTINCT FROM OLD.retired_at
+    THEN
+        RAISE EXCEPTION 'identity delivery provider retirement is irreversible'
+            USING ERRCODE = '23514';
+    END IF;
+    IF OLD.suspended_at IS NOT NULL
+       AND NEW.suspended_at IS NOT NULL
+       AND NEW.suspended_at < OLD.suspended_at
+    THEN
+        RAISE EXCEPTION 'identity delivery provider suspension time cannot move backwards'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: event_direct_envelope_write_guard(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -584,6 +697,44 @@ CREATE TABLE public.auth_delivery_intent (
     CONSTRAINT auth_delivery_intent_outcome_kind_check CHECK ((outcome_kind = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failure'::text, 'permanent_failure'::text, 'cancelled'::text]))),
     CONSTRAINT auth_delivery_intent_provider_id_check CHECK ((length(TRIM(BOTH FROM provider_id)) > 0)),
     CONSTRAINT auth_delivery_intent_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failed'::text, 'permanent_failed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: auth_delivery_provider_attempt_fence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_delivery_provider_attempt_fence (
+    attempt_token uuid NOT NULL,
+    generation_id text NOT NULL,
+    started_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    CONSTRAINT auth_delivery_provider_attempt_fence_time_check CHECK ((expires_at > started_at))
+);
+
+
+--
+-- Name: auth_delivery_provider_authority; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_delivery_provider_authority (
+    generation_id text NOT NULL,
+    configuration_fingerprint text NOT NULL,
+    activated_at bigint NOT NULL,
+    last_bound_at bigint NOT NULL,
+    circuit_version bigint DEFAULT 0 NOT NULL,
+    retired_at bigint,
+    suspended_at bigint,
+    suspension_code text,
+    suspension_observation_id uuid,
+    probe_token uuid,
+    probe_expires_at bigint,
+    CONSTRAINT auth_delivery_provider_authority_circuit_version_check CHECK ((circuit_version >= 0)),
+    CONSTRAINT auth_delivery_provider_authority_fingerprint_check CHECK ((configuration_fingerprint ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT auth_delivery_provider_authority_generation_check CHECK ((((octet_length(generation_id) >= 1) AND (octet_length(generation_id) <= 128)) AND (btrim(generation_id) = generation_id))),
+    CONSTRAINT auth_delivery_provider_authority_lifecycle_check CHECK ((((retired_at IS NULL) AND (((suspended_at IS NULL) AND (suspension_code IS NULL) AND (suspension_observation_id IS NULL) AND (probe_token IS NULL) AND (probe_expires_at IS NULL)) OR ((suspended_at IS NOT NULL) AND (suspension_code = 'provider_unavailable'::text) AND (suspension_observation_id IS NOT NULL)))) OR ((retired_at IS NOT NULL) AND (suspended_at IS NULL) AND (suspension_code IS NULL) AND (suspension_observation_id IS NULL) AND (probe_token IS NULL) AND (probe_expires_at IS NULL)))),
+    CONSTRAINT auth_delivery_provider_authority_probe_check CHECK ((((probe_token IS NULL) AND (probe_expires_at IS NULL)) OR ((probe_token IS NOT NULL) AND (probe_expires_at IS NOT NULL)))),
+    CONSTRAINT auth_delivery_provider_authority_time_check CHECK (((last_bound_at >= activated_at) AND ((retired_at IS NULL) OR (retired_at >= activated_at)) AND ((suspended_at IS NULL) OR (suspended_at >= activated_at)) AND ((probe_expires_at IS NULL) OR ((suspended_at IS NOT NULL) AND (probe_expires_at > suspended_at)))))
 );
 
 
@@ -2398,6 +2549,22 @@ ALTER TABLE ONLY public.auth_delivery_intent
 
 
 --
+-- Name: auth_delivery_provider_attempt_fence auth_delivery_provider_attempt_fence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_delivery_provider_attempt_fence
+    ADD CONSTRAINT auth_delivery_provider_attempt_fence_pkey PRIMARY KEY (attempt_token);
+
+
+--
+-- Name: auth_delivery_provider_authority auth_delivery_provider_authority_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_delivery_provider_authority
+    ADD CONSTRAINT auth_delivery_provider_authority_pkey PRIMARY KEY (generation_id);
+
+
+--
 -- Name: auth_registration_attempt auth_registration_attempt_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3479,6 +3646,20 @@ CREATE INDEX auth_delivery_intent_retry_idx ON public.auth_delivery_intent USING
 
 
 --
+-- Name: auth_delivery_provider_attempt_fence_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX auth_delivery_provider_attempt_fence_expiry_idx ON public.auth_delivery_provider_attempt_fence USING btree (expires_at, generation_id);
+
+
+--
+-- Name: auth_delivery_provider_authority_one_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX auth_delivery_provider_authority_one_active ON public.auth_delivery_provider_authority USING btree ((true)) WHERE (retired_at IS NULL);
+
+
+--
 -- Name: auth_registration_attempt_blocked_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4221,10 +4402,31 @@ CREATE TRIGGER auth_delivery_intent_attempt_count_guard BEFORE UPDATE OF attempt
 
 
 --
+-- Name: auth_delivery_intent auth_delivery_intent_attempt_fence_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER auth_delivery_intent_attempt_fence_insert AFTER UPDATE OF status, claim_token, claim_expires_at ON public.auth_delivery_intent FOR EACH ROW WHEN (((new.status = 'processing'::text) AND (new.claim_token IS NOT NULL) AND (new.claim_expires_at IS NOT NULL) AND ((old.status <> 'processing'::text) OR (new.claim_token IS DISTINCT FROM old.claim_token)))) EXECUTE FUNCTION public.auth_delivery_intent_attempt_fence_insert();
+
+
+--
 -- Name: auth_delivery_intent auth_delivery_intent_direct_envelope_guard; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER auth_delivery_intent_direct_envelope_guard BEFORE INSERT OR UPDATE OF credential_envelope ON public.auth_delivery_intent FOR EACH ROW EXECUTE FUNCTION public.event_direct_envelope_write_guard('credential_envelope');
+
+
+--
+-- Name: auth_delivery_intent auth_delivery_intent_provider_authority_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER auth_delivery_intent_provider_authority_guard BEFORE INSERT OR UPDATE OF status, provider_id, claim_token ON public.auth_delivery_intent FOR EACH ROW EXECUTE FUNCTION public.auth_delivery_intent_provider_authority_guard();
+
+
+--
+-- Name: auth_delivery_provider_authority auth_delivery_provider_authority_invariant_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER auth_delivery_provider_authority_invariant_guard BEFORE UPDATE ON public.auth_delivery_provider_authority FOR EACH ROW EXECUTE FUNCTION public.auth_delivery_provider_authority_invariant_guard();
 
 
 --
@@ -4488,6 +4690,22 @@ ALTER TABLE ONLY public.auth_account_recovery_credential
 
 ALTER TABLE ONLY public.auth_delivery_intent
     ADD CONSTRAINT auth_delivery_intent_credential_envelope_kid_fkey FOREIGN KEY (credential_envelope_kid) REFERENCES public.event_direct_key_sentinel(kid);
+
+
+--
+-- Name: auth_delivery_intent auth_delivery_intent_provider_generation_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_delivery_intent
+    ADD CONSTRAINT auth_delivery_intent_provider_generation_fkey FOREIGN KEY (provider_id) REFERENCES public.auth_delivery_provider_authority(generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+--
+-- Name: auth_delivery_provider_attempt_fence auth_delivery_provider_attempt_fence_generation_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_delivery_provider_attempt_fence
+    ADD CONSTRAINT auth_delivery_provider_attempt_fence_generation_fkey FOREIGN KEY (generation_id) REFERENCES public.auth_delivery_provider_authority(generation_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 --
