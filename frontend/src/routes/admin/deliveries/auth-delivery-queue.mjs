@@ -14,8 +14,9 @@ function normalizeDelivery(delivery) {
   const id = nonemptyString(delivery?.delivery_id);
   const kind = nonemptyString(delivery?.delivery_kind);
   const status = nonemptyString(delivery?.status);
-  if (id === null || kind === null || status === null) return null;
-  const retryEligible = delivery.retry_eligible === true;
+  const attemptCount = nonnegativeInt32(delivery?.attempt_count);
+  if (id === null || kind === null || status === null || attemptCount === null) return null;
+  const retryEligible = status === "retryable_failed" && delivery.retry_eligible === true;
   return Object.freeze({
     id,
     kind,
@@ -23,7 +24,7 @@ function normalizeDelivery(delivery) {
     principalId: nonemptyString(delivery.principal_id) ?? "unknown principal",
     status,
     statusLabel: status.replaceAll("_", " "),
-    attemptCount: Number.isInteger(delivery.attempt_count) ? delivery.attempt_count : 0,
+    attemptCount,
     providerId: nonemptyString(delivery.provider_id) ?? "unknown provider",
     outcomeCode: nonemptyString(delivery.outcome_code),
     nextAttemptAt: safeInteger(delivery.next_attempt_at),
@@ -40,4 +41,8 @@ function nonemptyString(value) {
 
 function safeInteger(value) {
   return Number.isSafeInteger(value) ? value : null;
+}
+
+function nonnegativeInt32(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 2_147_483_647 ? value : null;
 }

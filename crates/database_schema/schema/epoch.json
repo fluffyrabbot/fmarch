@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "5da4a34dac4b177a878ec9a2041160ee19ef38bddcf33bcc6b609bb21c105d86",
+  "current_schema_sha256": "61abd6250fdf907c4172422cd629f522171609d444209d112d742d51f4b52e03",
   "migrations": [
     {
       "version": 1,
@@ -47,6 +47,11 @@
       "version": 9,
       "filename": "0009_media_upload_operation_journal.sql",
       "sha256": "cf893f1c4f26fd8f9a99fd64f78d255af0ba52c3ce4917c04b58cdd181c3de64"
+    },
+    {
+      "version": 10,
+      "filename": "0010_identity_delivery_claim_provenance.sql",
+      "sha256": "0904777c3e55ee7d4d3f4e72e513ef578144080e39f1b5012bd0700865e452a9"
     }
   ],
   "authority_fingerprint_sha256": "5495d7e558f4067666eb3690c0e74f1bdb49368479a39f994ad35eddb85fd304"

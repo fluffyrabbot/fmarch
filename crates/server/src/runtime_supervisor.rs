@@ -1,7 +1,7 @@
 use super::{unix_now_seconds, WorkerBudget};
 use api::identity_delivery::{
-    IdentityDeliveryGateway, IdentityDeliveryWorkerConfig, IdentityDeliveryWorkerObservation,
-    IdentityDeliveryWorkerObservationKind,
+    IdentityDeliveryAdmission, IdentityDeliveryGateway, IdentityDeliveryWorkerConfig,
+    IdentityDeliveryWorkerObservation, IdentityDeliveryWorkerObservationKind,
 };
 use api::{ApiState, RuntimeWorkerHealth};
 use sqlx::PgPool;
@@ -45,14 +45,20 @@ pub(super) struct SupervisorFailure {
 pub(super) struct IdentityDeliveryWorkerBinding {
     gateway: Arc<dyn IdentityDeliveryGateway>,
     config: IdentityDeliveryWorkerConfig,
+    admission: IdentityDeliveryAdmission,
 }
 
 impl IdentityDeliveryWorkerBinding {
     pub(super) fn new(
         gateway: Arc<dyn IdentityDeliveryGateway>,
         config: IdentityDeliveryWorkerConfig,
+        admission: IdentityDeliveryAdmission,
     ) -> Self {
-        Self { gateway, config }
+        Self {
+            gateway,
+            config,
+            admission,
+        }
     }
 }
 
@@ -87,6 +93,7 @@ impl RuntimeSupervisor {
                 pool,
                 identity_delivery.gateway,
                 identity_delivery.config,
+                identity_delivery.admission,
                 &budget,
             ));
         }
@@ -306,6 +313,7 @@ fn identity_delivery_spec(
     pool: PgPool,
     gateway: Arc<dyn IdentityDeliveryGateway>,
     config: IdentityDeliveryWorkerConfig,
+    admission: IdentityDeliveryAdmission,
     budget: &WorkerBudget,
 ) -> WorkerSpec {
     WorkerSpec {
@@ -318,6 +326,7 @@ fn identity_delivery_spec(
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();
             let gateway = gateway.clone();
+            let admission = admission.clone();
             Box::pin(async move {
                 let heartbeat_health = health.clone();
                 let mut failure_latched = false;
@@ -325,6 +334,7 @@ fn identity_delivery_spec(
                     pool,
                     gateway,
                     config,
+                    admission,
                     shutdown,
                     move |observation| {
                         record_identity_delivery_health(

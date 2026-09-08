@@ -1136,6 +1136,7 @@ async fn revoke_invitation_in_tx(
                SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'community_invitation_revoked',
                    next_attempt_at = NULL, delivered_at = NULL, last_error = 'community_invitation_revoked',
                    provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL,
+                   claim_source = NULL, claim_actor_principal_id = NULL,
                    credential_envelope = NULL, updated_at = $2
                WHERE credential_hash = $1 AND status IN ('queued', 'retryable_failed', 'processing')"#,
         )

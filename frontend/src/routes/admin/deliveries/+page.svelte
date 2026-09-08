@@ -41,6 +41,7 @@
           {#if data.canRetry && item.retryEligible}
             <form method="POST" action="?/retry">
               <input type="hidden" name="deliveryId" value={item.id} />
+              <input type="hidden" name="expectedAttemptCount" value={item.attemptCount} />
               <button class="fm-touch-button" type="submit">Retry delivery</button>
             </form>
           {:else if item.status === "retryable_failed"}

@@ -1332,6 +1332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(runtime_supervisor::IdentityDeliveryWorkerBinding::new(
             gateway,
             config.api.auth.identity_delivery_worker_config,
+            api_state.identity_delivery_admission(),
         ))
     } else {
         None

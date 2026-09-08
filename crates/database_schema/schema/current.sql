@@ -18,6 +18,22 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: auth_delivery_intent_attempt_count_monotonic(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.auth_delivery_intent_attempt_count_monotonic() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.attempt_count < OLD.attempt_count THEN
+        RAISE EXCEPTION 'identity delivery attempt_count cannot decrease';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: event_direct_envelope_write_guard(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -556,7 +572,10 @@ CREATE TABLE public.auth_delivery_intent (
     credential_envelope jsonb,
     credential_expires_at bigint NOT NULL,
     credential_envelope_kid text GENERATED ALWAYS AS ((credential_envelope ->> 'kid'::text)) STORED,
+    claim_source text,
+    claim_actor_principal_id uuid,
     CONSTRAINT auth_delivery_intent_attempt_count_check CHECK ((attempt_count >= 0)),
+    CONSTRAINT auth_delivery_intent_claim_provenance_check CHECK ((((status = 'processing'::text) AND (claim_source IS NOT NULL) AND (((claim_source = 'automatic'::text) AND (claim_actor_principal_id IS NULL)) OR ((claim_source = 'explicit_retry'::text) AND (claim_actor_principal_id IS NOT NULL)))) OR ((status <> 'processing'::text) AND (claim_source IS NULL) AND (claim_actor_principal_id IS NULL)))),
     CONSTRAINT auth_delivery_intent_credential_envelope_check CHECK (((credential_envelope IS NULL) OR (jsonb_typeof(credential_envelope) = 'object'::text))),
     CONSTRAINT auth_delivery_intent_credential_envelope_kid_shape CHECK ((((credential_envelope IS NULL) AND (credential_envelope_kid IS NULL)) OR ((credential_envelope IS NOT NULL) AND (credential_envelope_kid IS NOT NULL)))),
     CONSTRAINT auth_delivery_intent_credential_expiry_check CHECK ((credential_expires_at > created_at)),
@@ -4192,6 +4211,13 @@ CREATE INDEX workos_session_exchange_expiry_idx ON public.workos_session_exchang
 --
 
 CREATE INDEX workos_session_exchange_provider_session_idx ON public.workos_session_exchange USING btree (provider_session_id);
+
+
+--
+-- Name: auth_delivery_intent auth_delivery_intent_attempt_count_guard; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER auth_delivery_intent_attempt_count_guard BEFORE UPDATE OF attempt_count ON public.auth_delivery_intent FOR EACH ROW EXECUTE FUNCTION public.auth_delivery_intent_attempt_count_monotonic();
 
 
 --

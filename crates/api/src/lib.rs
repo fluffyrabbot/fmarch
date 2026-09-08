@@ -53,7 +53,9 @@ use auth_http::{internal_auth_error, unauthorized_session, AuthHttpState};
 use live_delivery::GameEventWakeHub;
 use live_projection::LiveProjectionPublisher;
 
-use crate::identity_delivery::{IdentityDeliveryError, IdentityDeliveryGateway};
+use crate::identity_delivery::{
+    IdentityDeliveryAdmission, IdentityDeliveryError, IdentityDeliveryGateway,
+};
 use axum::extract::{FromRef, State};
 use axum::http::header::RETRY_AFTER;
 use axum::http::{HeaderValue, StatusCode};
@@ -264,7 +266,12 @@ impl ApiState {
         config: identity_delivery::IdentityDeliveryWorkerConfig,
     ) -> Self {
         self.auth.identity_delivery_worker_config = config;
+        self.auth.identity_delivery_admission = IdentityDeliveryAdmission::new(config);
         self
+    }
+
+    pub fn identity_delivery_admission(&self) -> IdentityDeliveryAdmission {
+        self.auth.identity_delivery_admission.clone()
     }
 
     pub fn with_registration_source_limit(mut self, max_registrations: i32) -> Self {
@@ -684,6 +691,12 @@ impl From<IdentityDeliveryError> for ApiError {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error: RejectCode::Internal,
                 message: format!("identity delivery credential boundary failed: {error}"),
+            },
+            IdentityDeliveryError::Identity(error) => error.into(),
+            IdentityDeliveryError::NotAuthorized => ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "delivery retry requires current GlobalAdmin authority".to_string(),
             },
             IdentityDeliveryError::Worker(_) => ApiError::Reject {
                 status: StatusCode::INTERNAL_SERVER_ERROR,

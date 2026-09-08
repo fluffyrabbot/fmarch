@@ -367,6 +367,7 @@ test("auth invite proof observes provider backoff before an explicit admin retry
     "explicitRetryBackoffSeconds >=",
     "waitForRetryableDeliveryIntent({",
     "lastDelivery.nextAttemptAt > Math.floor(Date.now() / 1000)",
+    "expected_attempt_count: delivery.attemptCount",
     "backoffOverridden: true",
     "delivery lookup requires exactly one delivery id or credential hash",
     "timeoutMs: Math.min(deliveryIntentObservationTimeoutMs, remainingMs)",

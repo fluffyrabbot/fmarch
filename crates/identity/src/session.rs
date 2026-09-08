@@ -619,6 +619,23 @@ pub async fn validate_session_for_update(
     )
 }
 
+/// Validate and lock the exact opaque session captured during request
+/// authentication. Service-layer mutations use this form so bearer material
+/// does not cross their boundary while revocation still wins before commit.
+pub async fn validate_initiating_session_for_update(
+    conn: &mut PgConnection,
+    initiating_session: &InitiatingSession,
+    policy: &SessionPolicy,
+) -> Result<AuthorizationContext, IdentityFlowError> {
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &initiating_session.principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    revalidate_initiating_session_after_owner_lock(conn, &owner, initiating_session, policy).await
+}
+
 /// Revalidate the exact initiating session after a lifecycle caller holds the
 /// canonical identity owner lock. This acquires (or reuses) that session's
 /// `FOR UPDATE` lock and reruns all principal, method, assurance, provider-key,

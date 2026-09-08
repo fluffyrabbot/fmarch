@@ -28,7 +28,7 @@ test("delivery retry delegates only a validated id from a GlobalAdmin session", 
   const result = await actions.retry({
     cookies: { get: () => "admin-session" },
     locals: { resolvedCapabilities: [{ kind: "GlobalAdmin" }] },
-    request: formRequest(deliveryId),
+    request: formRequest(deliveryId, 1),
     fetch: async (url, init) => {
       requested = { url, init };
       return response({ status: "delivered", attempt_count: 2 });
@@ -36,6 +36,8 @@ test("delivery retry delegates only a validated id from a GlobalAdmin session", 
   });
   assert.match(requested.url, new RegExp(`/auth/delivery-intents/${deliveryId}/retry$`, "u"));
   assert.equal(requested.init.method, "POST");
+  assert.equal(requested.init.headers["content-type"], "application/json");
+  assert.deepEqual(JSON.parse(requested.init.body), { expected_attempt_count: 1 });
   assert.equal(result.state, "ack");
   assert.match(result.message, /attempt 2/u);
 });
@@ -45,7 +47,7 @@ test("delivery retry rejects GlobalMod before calling the API", async () => {
   const result = await actions.retry({
     cookies: { get: () => "mod-session" },
     locals: { resolvedCapabilities: [{ kind: "GlobalMod" }] },
-    request: formRequest("11111111-1111-4111-8111-111111111111"),
+    request: formRequest("11111111-1111-4111-8111-111111111111", 1),
     fetch: async () => { called = true; },
   });
   assert.equal(called, false);
@@ -53,11 +55,32 @@ test("delivery retry rejects GlobalMod before calling the API", async () => {
   assert.equal(result.data.state, "reject");
 });
 
-function formRequest(deliveryId) {
+test("delivery retry rejects a missing or malformed expected attempt count before calling the API", async () => {
+  const deliveryId = "11111111-1111-4111-8111-111111111111";
+  for (const expectedAttemptCount of [undefined, "", "-1", "1.5", "01", "2147483648"]) {
+    let called = false;
+    const result = await actions.retry({
+      cookies: { get: () => "admin-session" },
+      locals: { resolvedCapabilities: [{ kind: "GlobalAdmin" }] },
+      request: formRequest(deliveryId, expectedAttemptCount),
+      fetch: async () => { called = true; },
+    });
+    assert.equal(called, false, `API called for ${String(expectedAttemptCount)}`);
+    assert.equal(result.status, 400);
+    assert.equal(result.data.deliveryId, deliveryId);
+    assert.match(result.data.message, /expected attempt count/u);
+  }
+});
+
+function formRequest(deliveryId, expectedAttemptCount) {
+  const body = new URLSearchParams({ deliveryId });
+  if (expectedAttemptCount !== undefined) {
+    body.set("expectedAttemptCount", String(expectedAttemptCount));
+  }
   return new Request("http://localhost/admin/deliveries?/retry", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ deliveryId }),
+    body,
   });
 }
 

@@ -152,12 +152,12 @@ async fn seed_delivery(
             credential_hash, credential_expires_at, credential_envelope,
             status, attempt_count, next_attempt_at, delivered_at, last_error,
             created_at, updated_at, provider_id, outcome_kind, outcome_code,
-            provider_receipt_id, claim_token, claim_expires_at
+            provider_receipt_id, claim_token, claim_expires_at, claim_source
         )
         VALUES (
             $1, $2, 'reseal@example.test', $3, $4, 1_000, $5,
             $6, 0, $7, NULL, $8, 10, 10, 'local-deterministic', $9, $8,
-            NULL, $10, $11
+            NULL, $10, $11, $12
         )
         "#,
     )
@@ -172,6 +172,7 @@ async fn seed_delivery(
     .bind(outcome_kind)
     .bind(claim_token)
     .bind(claim_expires_at)
+    .bind(matches!(state, DeliveryState::Processing).then_some("automatic"))
     .execute(&mut **tx)
     .await
     .unwrap();
@@ -354,7 +355,7 @@ async fn locked_claim_cancel_and_erasure_are_skipped_without_resurrection(pool: 
     sqlx::query(
         "UPDATE auth_delivery_intent \
          SET status = 'processing', outcome_kind = 'processing', next_attempt_at = NULL, \
-             claim_token = $2, claim_expires_at = 200 \
+             claim_token = $2, claim_expires_at = 200, claim_source = 'automatic' \
          WHERE delivery_id = $1",
     )
     .bind(claimed_id)
@@ -366,7 +367,9 @@ async fn locked_claim_cancel_and_erasure_are_skipped_without_resurrection(pool: 
         "UPDATE auth_delivery_intent \
          SET status = 'cancelled', outcome_kind = 'cancelled', \
              outcome_code = 'credential_inactive', next_attempt_at = NULL, \
-             last_error = 'credential_inactive', credential_envelope = NULL \
+             last_error = 'credential_inactive', claim_token = NULL, \
+             claim_expires_at = NULL, claim_source = NULL, \
+             claim_actor_principal_id = NULL, credential_envelope = NULL \
          WHERE delivery_id = $1",
     )
     .bind(cancelled_id)

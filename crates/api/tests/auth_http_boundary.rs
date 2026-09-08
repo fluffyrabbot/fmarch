@@ -1,5 +1,21 @@
 use std::path::PathBuf;
 
+fn assert_ordered(section: &str, contracts: &[&str], boundary: &str) {
+    let mut previous = 0;
+    for (index, contract) in contracts.iter().enumerate() {
+        let position = section
+            .find(contract)
+            .unwrap_or_else(|| panic!("{boundary} lost contract: {contract}"));
+        if index > 0 {
+            assert!(
+                position > previous,
+                "{boundary} ordering changed at {contract}"
+            );
+        }
+        previous = position;
+    }
+}
+
 #[test]
 fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -53,7 +69,53 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(authentication.contains("enforce_auth_attempt_limit"));
     assert!(authentication.contains("deliver_auth_credential"));
     assert!(identity_delivery.contains("trait IdentityDeliveryGateway"));
-    assert!(identity_delivery.contains("process_identity_delivery_intent"));
+    for retry_type_contract in [
+        "pub(super) struct ExpectedIdentityDeliveryAttemptCount(i32);",
+        "pub(super) struct IdentityDeliveryRetryRequest<'a> {",
+        "pub(super) enum IdentityDeliveryRetryResult {",
+        "Applied(IdentityDeliveryReceipt)",
+        "Conflict,",
+    ] {
+        assert!(
+            identity_delivery.contains(retry_type_contract),
+            "typed delivery retry API drifted at {retry_type_contract}"
+        );
+    }
+    let retry_handler = auth_http
+        .split("async fn retry_auth_delivery_intent(")
+        .nth(1)
+        .and_then(|source| source.split("async fn retire_workos_signing_key(").next())
+        .expect("delivery retry HTTP boundary");
+    assert_ordered(
+        retry_handler,
+        &[
+            "Json(retry): Json<RetryAuthDeliveryIntent>",
+            "require_global_admin_context(&request.context, \"delivery retry\")?",
+            "ExpectedIdentityDeliveryAttemptCount::new(",
+            "retry.expected_attempt_count",
+            "RejectCode::InvalidArgument",
+            ".identity_delivery_admission",
+            ".try_acquire_attempt()",
+            "ApiError::Unavailable",
+            "let initiating_session = request.context.initiating_session()",
+            "retry_identity_delivery_intent_with_config(",
+            "IdentityDeliveryRetryRequest {",
+            "initiating_session: &initiating_session",
+            "session_policy: &state.session_policy",
+            "&state.identity_delivery_admission",
+            "IdentityDeliveryRetryResult::Applied(receipt)",
+            "IdentityDeliveryRetryResult::Conflict",
+            "RejectCode::StreamConflict",
+        ],
+        "delivery retry HTTP boundary",
+    );
+    assert!(retry_handler.contains(
+        "IdentityDeliveryRetryRequest {\n            delivery_id,\n            expected_attempt_count,\n            initiating_session: &initiating_session"
+    ));
+    assert!(auth_http.contains("struct RetryAuthDeliveryIntent"));
+    assert!(auth_http.contains("#[serde(deny_unknown_fields)]\nstruct RetryAuthDeliveryIntent"));
+    assert!(auth_http.contains("identity_delivery_admission: IdentityDeliveryAdmission"));
+    assert!(auth_http.contains("IdentityDeliveryAdmission::new("));
     assert!(!auth_http.contains("authenticate_legacy_token"));
     assert!(!auth_http.contains("allow_jwt_bearer"));
     assert!(!auth_http.contains("issue_debug_session"));
@@ -120,6 +182,48 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
     assert!(identity_session.contains("expected.session_capabilities(session_reference, now)?"));
     assert!(!identity_session.contains("session.global_capabilities AS snapshot_globals"));
     assert!(identity_session.contains("workos_signing_key_id"));
+    for initiating_session_contract in [
+        "pub fn initiating_session(&self) -> InitiatingSession",
+        "pub struct InitiatingSession {",
+        "principal_id: PrincipalId",
+        "session_reference: String",
+        "pub async fn validate_initiating_session_for_update(",
+        "initiating_session: &InitiatingSession",
+        "crate::methods::lock_identity_mutation(",
+        "revalidate_initiating_session_after_owner_lock(conn, &owner, initiating_session, policy)",
+        "lock_eligible_session(conn, initiating_session.session_reference.as_str(), policy)",
+    ] {
+        assert!(
+            identity_session.contains(initiating_session_contract),
+            "exact initiating-session authority fence drifted at {initiating_session_contract}"
+        );
+    }
+    let retry_service = identity_delivery
+        .split("pub(super) async fn retry_identity_delivery_intent_with_config(")
+        .nth(1)
+        .and_then(|source| {
+            source
+                .split("pub async fn process_next_identity_delivery_with_config(")
+                .next()
+        })
+        .expect("delivery retry service boundary");
+    assert_ordered(
+        retry_service,
+        &[
+            "admission.acquire_database().await",
+            "identity::session::begin_authority_transaction(pool).await?",
+            "identity::session::validate_initiating_session_for_update(",
+            "request.initiating_session",
+            "request.session_policy",
+            "capability == \"GlobalAdmin\"",
+            "claim_delivery_transaction(",
+            "actor_principal_id: authorization.principal_id",
+            "tx.commit().await?",
+        ],
+        "commit-time delivery authority fence",
+    );
+    assert!(composition_root.contains("IdentityDeliveryError::NotAuthorized"));
+    assert!(composition_root.contains("delivery retry requires current GlobalAdmin authority"));
     assert!(!identity_methods.contains("auth_websocket_ticket"));
     for source in [&member_lifecycle, &subject_privacy] {
         assert!(source.contains("ticket.session_reference = session.token_hash"));
