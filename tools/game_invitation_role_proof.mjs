@@ -1685,6 +1685,10 @@ async function proveIdentityLifecycle({
   });
 
   const recoveryInviteToken = `recovery-host-invite-${game}`;
+  deliveryProvider.armRetryableFailure({
+    expectedKind: "invite",
+    credential: recoveryInviteToken,
+  });
   const recoveryInvite = await createInvite(apiBaseUrl, {
     inviteToken: recoveryInviteToken,
     accountId: hostAccount.accountId,
@@ -1808,6 +1812,13 @@ async function proveIdentityLifecycle({
       sessionToken: accountRecoveryLogin.sessionToken,
       returnTo: hostReturnTo,
       expectedText: game,
+    });
+    // The API generates recovery credentials during issuance, so pre-arm the
+    // next recovery delivery for this exact account. The one-shot arm becomes
+    // bound to the generated credential and delivery when the provider sees it.
+    deliveryProvider.armRetryableFailure({
+      expectedKind: "recovery",
+      expectedAccountId: hostAccount.accountId,
     });
     const activeRecoveryCredential = await driveAccountRecoveryCredentialIssuance({
       frontendBaseUrl,
@@ -4114,7 +4125,55 @@ function deliveryClockSkewMarginCoversCrossClockBound(delivery) {
 
 async function startIdentityDeliveryCapture() {
   const captures = new Map();
+  const retryableFailureArms = [];
+  const outcomesByAttempt = new Map();
+  const latestOutcomeByDelivery = new Map();
   const authToken = `local-delivery-auth-${game}`;
+  function armRetryableFailure({ expectedKind, credential, expectedAccountId }) {
+    if (
+      !new Set(["invite", "recovery", "community_invitation"]).has(expectedKind)
+    ) {
+      throw new Error(`invalid delivery fault kind: ${expectedKind}`);
+    }
+    const hasCredential = typeof credential === "string" && credential.length > 0;
+    const hasAccount =
+      typeof expectedAccountId === "string" && expectedAccountId.length > 0;
+    if (hasCredential === hasAccount) {
+      throw new Error(
+        "delivery fault injection requires exactly one credential or account target",
+      );
+    }
+    if (
+      retryableFailureArms.some(
+        (arm) =>
+          arm.expectedKind === expectedKind &&
+          arm.credential === credential &&
+          arm.expectedAccountId === expectedAccountId,
+      )
+    ) {
+      throw new Error("delivery fault injection target is already armed");
+    }
+    retryableFailureArms.push(
+      Object.freeze({
+        expectedKind,
+        credential: hasCredential ? credential : undefined,
+        expectedAccountId: hasAccount ? expectedAccountId : undefined,
+      }),
+    );
+  }
+  function consumeRetryableFailureArm(delivery) {
+    if (delivery.attempt_number !== 1) return false;
+    const index = retryableFailureArms.findIndex(
+      (arm) =>
+        arm.expectedKind === delivery.delivery_kind &&
+        (arm.credential !== undefined
+          ? arm.credential === delivery.credential
+          : arm.expectedAccountId === delivery.account_id),
+    );
+    if (index === -1) return false;
+    retryableFailureArms.splice(index, 1);
+    return true;
+  }
   const provider = createServer(async (request, response) => {
     try {
       if (
@@ -4172,26 +4231,66 @@ async function startIdentityDeliveryCapture() {
         response.writeHead(409).end();
         return;
       }
-      captures.set(delivery.delivery_id, structuredClone(delivery));
-      const outcome =
-        delivery.attempt_number === 1
-          ? {
-              schema: "fmarch.identity-delivery-result.v2",
-              provider_generation: delivery.provider_generation,
-              delivery_id: delivery.delivery_id,
+      const deliveryKey = `${delivery.provider_generation}:${delivery.delivery_id}`;
+      const attemptKey = `${deliveryKey}:${delivery.attempt_token}`;
+      let outcome = outcomesByAttempt.get(attemptKey);
+      if (outcome === undefined) {
+        const previous = latestOutcomeByDelivery.get(deliveryKey);
+        const startsDelivery = previous === undefined && delivery.attempt_number === 1;
+        const reclaimsGeneration =
+          previous !== undefined && delivery.attempt_number === previous.attemptNumber;
+        const advancesRetryableGeneration =
+          previous !== undefined &&
+          previous.status === "retryable_failure" &&
+          delivery.attempt_number === previous.attemptNumber + 1;
+        if (!startsDelivery && !reclaimsGeneration && !advancesRetryableGeneration) {
+          throw new Error(
+            `delivery attempt generation drifted: ${JSON.stringify({
+              deliveryId: delivery.delivery_id,
+              attemptNumber: delivery.attempt_number,
+              previousAttemptNumber: previous?.attemptNumber,
+              previousStatus: previous?.status,
+            })}`,
+          );
+        }
+        outcome = reclaimsGeneration
+          ? Object.freeze({
+              ...previous.outcome,
               attempt_token: delivery.attempt_token,
-              status: "retryable_failure",
-              code: "provider_unavailable",
-              retry_after_seconds: explicitRetryBackoffSeconds,
-            }
-          : {
-              schema: "fmarch.identity-delivery-result.v2",
-              provider_generation: delivery.provider_generation,
-              delivery_id: delivery.delivery_id,
-              attempt_token: delivery.attempt_token,
-              status: "delivered",
-              provider_receipt_id: `local-${delivery.delivery_id}`,
-            };
+            })
+          : Object.freeze(
+              consumeRetryableFailureArm(delivery)
+                ? {
+                    schema: "fmarch.identity-delivery-result.v2",
+                    provider_generation: delivery.provider_generation,
+                    delivery_id: delivery.delivery_id,
+                    attempt_token: delivery.attempt_token,
+                    status: "retryable_failure",
+                    code: "provider_unavailable",
+                    retry_after_seconds: explicitRetryBackoffSeconds,
+                  }
+                : {
+                    schema: "fmarch.identity-delivery-result.v2",
+                    provider_generation: delivery.provider_generation,
+                    delivery_id: delivery.delivery_id,
+                    attempt_token: delivery.attempt_token,
+                    status: "delivered",
+                    provider_receipt_id: `local-${delivery.delivery_id}`,
+                  },
+            );
+        outcomesByAttempt.set(attemptKey, outcome);
+        latestOutcomeByDelivery.set(
+          deliveryKey,
+          Object.freeze({
+            attemptNumber: delivery.attempt_number,
+            status: outcome.status,
+            outcome,
+          }),
+        );
+      }
+      if (outcome.status === "delivered") {
+        captures.set(delivery.delivery_id, structuredClone(delivery));
+      }
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(outcome));
     } catch {
@@ -4213,6 +4312,7 @@ async function startIdentityDeliveryCapture() {
     endpoint: `http://${host}:${address.port}/deliver`,
     authToken,
     captures,
+    armRetryableFailure,
     close: () =>
       new Promise((resolve, reject) => {
         provider.close((error) => (error === undefined ? resolve() : reject(error)));

@@ -375,6 +375,32 @@ test("auth invite proof observes provider backoff before an explicit admin retry
   const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
 
   for (const contract of [
+    "deliveryProvider.armRetryableFailure({",
+    "const retryableFailureArms = [];",
+    "const outcomesByAttempt = new Map();",
+    "const latestOutcomeByDelivery = new Map();",
+    "function consumeRetryableFailureArm(delivery)",
+    "credential: recoveryInviteToken",
+    "expectedAccountId: hostAccount.accountId",
+    "if (delivery.attempt_number !== 1) return false;",
+    "retryableFailureArms.splice(index, 1);",
+    "let outcome = outcomesByAttempt.get(attemptKey);",
+    "if (outcome === undefined)",
+    "const startsDelivery = previous === undefined && delivery.attempt_number === 1;",
+    "const reclaimsGeneration =",
+    "delivery.attempt_number === previous.attemptNumber",
+    "const advancesRetryableGeneration =",
+    'previous.status === "retryable_failure"',
+    "delivery.attempt_number === previous.attemptNumber + 1",
+    "outcome = reclaimsGeneration",
+    "...previous.outcome",
+    "attempt_token: delivery.attempt_token",
+    "consumeRetryableFailureArm(delivery)",
+    "outcomesByAttempt.set(attemptKey, outcome);",
+    "latestOutcomeByDelivery.set(",
+    'if (outcome.status === "delivered")',
+    "captures.set(delivery.delivery_id, structuredClone(delivery));",
+    "delivery fault injection requires exactly one credential or account target",
     "retry_after_seconds: explicitRetryBackoffSeconds",
     "2 * defaultFetchTimeoutMs",
     "explicitRetryBackoffMarginMs",
@@ -393,6 +419,26 @@ test("auth invite proof observes provider backoff before an explicit admin retry
     source,
     /await delay\(1100\)/u,
     "admin retry must wait on durable delivery state rather than a wall-clock guess",
+  );
+  assert.equal(
+    source.match(/deliveryProvider\.armRetryableFailure\(\{/gu)?.length,
+    2,
+    "only the intended invite and recovery scenarios may arm provider failure",
+  );
+  assert.doesNotMatch(
+    source,
+    /const outcome =\s*delivery\.attempt_number === 1\s*\?/u,
+    "provider failure must never be ambient for every delivery's first attempt",
+  );
+  const generationValidation = source.indexOf("const startsDelivery =");
+  const acceptedOutcomeState = source.indexOf("latestOutcomeByDelivery.set(");
+  const deliveredCapturePublication = source.indexOf(
+    "captures.set(delivery.delivery_id, structuredClone(delivery));",
+  );
+  assert.ok(
+    generationValidation < acceptedOutcomeState &&
+      acceptedOutcomeState < deliveredCapturePublication,
+    "provider capture publication must follow attempt-generation validation and accepted outcome state",
   );
 });
 
