@@ -63,6 +63,15 @@ impl LiveEventListenerHarness {
     }
 }
 
+impl Drop for LiveEventListenerHarness {
+    fn drop(&mut self) {
+        let _ = self.shutdown.send(true);
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,14 +108,5 @@ mod tests {
             dropped.load(Ordering::SeqCst),
             "listener future remained detached after the shutdown timeout"
         );
-    }
-}
-
-impl Drop for LiveEventListenerHarness {
-    fn drop(&mut self) {
-        let _ = self.shutdown.send(true);
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
     }
 }
