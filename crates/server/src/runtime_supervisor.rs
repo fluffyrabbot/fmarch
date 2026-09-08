@@ -42,6 +42,20 @@ pub(super) struct SupervisorFailure {
     pub(super) reason: String,
 }
 
+pub(super) struct IdentityDeliveryWorkerBinding {
+    gateway: Arc<dyn IdentityDeliveryGateway>,
+    config: IdentityDeliveryWorkerConfig,
+}
+
+impl IdentityDeliveryWorkerBinding {
+    pub(super) fn new(
+        gateway: Arc<dyn IdentityDeliveryGateway>,
+        config: IdentityDeliveryWorkerConfig,
+    ) -> Self {
+        Self { gateway, config }
+    }
+}
+
 pub(super) struct RuntimeSupervisor {
     shutdown: watch::Sender<bool>,
     fatal: mpsc::UnboundedReceiver<SupervisorFailure>,
@@ -55,9 +69,7 @@ impl RuntimeSupervisor {
     pub(super) fn start(
         pool: PgPool,
         api_state: ApiState,
-        identity_gateway: Arc<dyn IdentityDeliveryGateway>,
-        classic_enabled: bool,
-        identity_delivery_config: IdentityDeliveryWorkerConfig,
+        identity_delivery: Option<IdentityDeliveryWorkerBinding>,
         scheduler: commands::day_scheduler::DayEventSchedulerConfig,
         budget: WorkerBudget,
         health: RuntimeWorkerHealth,
@@ -70,11 +82,11 @@ impl RuntimeSupervisor {
             media_reconciliation_spec(pool.clone(), api_state.clone(), &budget),
             live_listener_spec(api_state, &budget),
         ];
-        if classic_enabled {
+        if let Some(identity_delivery) = identity_delivery {
             specs.push(identity_delivery_spec(
                 pool,
-                identity_gateway,
-                identity_delivery_config,
+                identity_delivery.gateway,
+                identity_delivery.config,
                 &budget,
             ));
         }

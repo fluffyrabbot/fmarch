@@ -33,7 +33,7 @@ struct RuntimeConfig {
     classic_enabled: bool,
     dev_auth_requested: bool,
     local_proof_secret: Option<String>,
-    identity_delivery: IdentityDeliveryConfig,
+    identity_delivery_gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,51 +47,6 @@ enum IdentityDeliveryMode {
     Disabled,
     HttpJson,
     LocalDeterministic,
-}
-
-#[derive(Clone)]
-enum IdentityDeliveryConfig {
-    Disabled,
-    HttpJson {
-        provider_id: String,
-        endpoint: url::Url,
-        auth_token: String,
-        timeouts: api::identity_delivery::IdentityDeliveryHttpTimeouts,
-    },
-    LocalDeterministic {
-        fail_first_attempt: bool,
-    },
-}
-
-impl IdentityDeliveryConfig {
-    fn gateway(
-        &self,
-    ) -> Result<std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway>, std::io::Error>
-    {
-        match self {
-            Self::Disabled => Ok(std::sync::Arc::new(
-                api::identity_delivery::DisabledIdentityDeliveryGateway,
-            )),
-            Self::HttpJson {
-                provider_id,
-                endpoint,
-                auth_token,
-                timeouts,
-            } => api::identity_delivery::HttpJsonIdentityDeliveryGateway::configured(
-                provider_id.clone(),
-                endpoint.clone(),
-                Some(auth_token.clone()),
-                *timeouts,
-            )
-            .map(|gateway| std::sync::Arc::new(gateway) as _)
-            .map_err(invalid_runtime_config),
-            Self::LocalDeterministic { fail_first_attempt } => Ok(std::sync::Arc::new(
-                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(
-                    *fail_first_attempt,
-                ),
-            )),
-        }
-    }
 }
 
 fn unix_now_seconds() -> i64 {
@@ -384,7 +339,7 @@ impl RuntimeConfig {
             },
         };
         api.validate(database.max_connections as usize)?;
-        let identity_delivery = identity_delivery_config_from_env(
+        let identity_delivery_gateway = identity_delivery_gateway_from_env(
             classic_enabled,
             dev_auth_requested,
             cfg!(debug_assertions),
@@ -500,7 +455,7 @@ impl RuntimeConfig {
             classic_enabled,
             dev_auth_requested,
             local_proof_secret,
-            identity_delivery,
+            identity_delivery_gateway,
         };
         config.validate_cross_budgets()?;
         Ok(config)
@@ -906,12 +861,12 @@ fn identity_delivery_mode(
     ))
 }
 
-fn identity_delivery_config_from_env(
+fn identity_delivery_gateway_from_env(
     classic_enabled: bool,
     dev_auth_requested: bool,
     debug_build: bool,
     provider_timeout: Duration,
-) -> Result<IdentityDeliveryConfig, std::io::Error> {
+) -> Result<std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway>, std::io::Error> {
     let endpoint = optional_env("FMARCH_IDENTITY_DELIVERY_ENDPOINT")?;
     let provider_id = optional_env("FMARCH_IDENTITY_DELIVERY_PROVIDER_ID")?;
     let auth_token = optional_env("FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN")?;
@@ -936,7 +891,9 @@ fn identity_delivery_config_from_env(
                     .to_string(),
             ));
         }
-        return Ok(IdentityDeliveryConfig::Disabled);
+        return Ok(std::sync::Arc::new(
+            api::identity_delivery::DisabledIdentityDeliveryGateway,
+        ));
     }
     if endpoint.is_none() && http_companion_configured {
         return Err(invalid_runtime_config(
@@ -951,14 +908,20 @@ fn identity_delivery_config_from_env(
         dev_auth_requested,
         debug_build,
     )? {
-        IdentityDeliveryMode::Disabled => Ok(IdentityDeliveryConfig::Disabled),
+        IdentityDeliveryMode::Disabled => Ok(std::sync::Arc::new(
+            api::identity_delivery::DisabledIdentityDeliveryGateway,
+        )),
         IdentityDeliveryMode::LocalDeterministic => {
             let fail_first_attempt = parse_optional_bool(
                 "FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT",
                 local_fail_first.as_deref(),
                 false,
             )?;
-            Ok(IdentityDeliveryConfig::LocalDeterministic { fail_first_attempt })
+            Ok(std::sync::Arc::new(
+                api::identity_delivery::LocalDeterministicIdentityDeliveryGateway::new(
+                    fail_first_attempt,
+                ),
+            ))
         }
         IdentityDeliveryMode::HttpJson => {
             if local_fail_first.is_some() {
@@ -1041,12 +1004,14 @@ fn identity_delivery_config_from_env(
                         .to_string(),
                 ));
             }
-            Ok(IdentityDeliveryConfig::HttpJson {
+            api::identity_delivery::HttpJsonIdentityDeliveryGateway::configured(
                 provider_id,
                 endpoint,
-                auth_token,
+                Some(auth_token),
                 timeouts,
-            })
+            )
+            .map(|gateway| std::sync::Arc::new(gateway) as _)
+            .map_err(invalid_runtime_config)
         }
     }
 }
@@ -1167,7 +1132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
 
     let config = RuntimeConfig::from_env()?;
-    let identity_delivery_gateway = config.identity_delivery.gateway()?;
+    let identity_delivery_gateway = std::sync::Arc::clone(&config.identity_delivery_gateway);
     server::validate_database_transport(&config.database_url, "DATABASE_URL")
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
     // Reject absent, malformed, or placeholder profile-index custody before
@@ -1363,12 +1328,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Claim the listener before starting managed workers so a bind failure
     // cannot detach background work from the process lifecycle.
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
+    let identity_delivery_worker = if classic_enabled {
+        Some(runtime_supervisor::IdentityDeliveryWorkerBinding::new(
+            gateway,
+            config.api.auth.identity_delivery_worker_config,
+        ))
+    } else {
+        None
+    };
     let mut supervisor = runtime_supervisor::RuntimeSupervisor::start(
         pool.clone(),
         api_state.clone(),
-        gateway,
-        classic_enabled,
-        config.api.auth.identity_delivery_worker_config,
+        identity_delivery_worker,
         config.scheduler.clone(),
         config.workers.clone(),
         worker_health,

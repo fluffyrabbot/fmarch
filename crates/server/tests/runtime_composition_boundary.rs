@@ -39,8 +39,10 @@ fn process_root_owns_runtime_budgets_and_worker_lifecycle() {
     assert!(!api.contains("spawn_listener("));
     assert!(main.contains("with_graceful_shutdown"));
     assert!(main.contains("pool.close().await"));
-    assert!(main.contains("identity_delivery_config_from_env"));
+    assert!(main.contains("identity_delivery_gateway_from_env"));
+    assert!(main.contains("dyn api::identity_delivery::IdentityDeliveryGateway"));
     assert!(!main.contains("HttpJsonIdentityDeliveryGateway::from_env"));
+    assert!(supervisor.contains("Option<IdentityDeliveryWorkerBinding>"));
     for worker in [
         "subject_erasure_spec",
         "day_event_spec",
