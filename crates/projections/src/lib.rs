@@ -3813,7 +3813,8 @@ pub async fn rebuild_discussion_stream(
     pool: &PgPool,
     stream_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, stream_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = load_fenced_rebuild_events(&mut tx, stream_id).await?;
     let is_topic_stream = events
         .iter()
         .any(|event| event.kind == forum::TOPIC_CREATED);
@@ -3821,7 +3822,6 @@ pub async fn rebuild_discussion_stream(
     if !is_topic_stream && !is_area_stream {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
     if is_topic_stream {
         sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1")
             .bind(stream_id)
@@ -4906,13 +4906,30 @@ async fn rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    // Eventstore is the only code allowed to open sealed bodies. Load and
-    // pre-lock their private subjects before taking any projection row lock.
-    // This makes rebuild and erasure share principal -> subject -> projection
-    // order and keeps the replay on one transaction snapshot.
-    let events = eventstore::load_stream_in_tx(tx, game_id).await?;
-    prelock_rebuild_subject_owners(tx, &events).await?;
+    let events = load_fenced_rebuild_events(tx, game_id).await?;
+    rebuild_game_from_events_in_tx(tx, game_id, &events).await
+}
 
+/// Share the append serialization point before reading any replay input. The
+/// lock remains owned by the caller's transaction through replacement or audit
+/// rollback. A transaction alone does not fence a READ COMMITTED stream read.
+/// Game commands use stream -> principal -> subject -> projection order;
+/// subject erasure shares the principal -> subject -> projection suffix.
+async fn load_fenced_rebuild_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    eventstore::lock_stream_in_tx(tx, stream_id).await?;
+    let events = eventstore::load_stream_in_tx(tx, stream_id).await?;
+    prelock_rebuild_subject_owners(tx, &events).await?;
+    Ok(events)
+}
+
+async fn rebuild_game_from_events_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    events: &[StoredEvent],
+) -> Result<(), ProjectionError> {
     sqlx::query("DELETE FROM game_private_citation WHERE game_id = $1")
         .bind(game_id)
         .execute(&mut **tx)
@@ -4975,7 +4992,7 @@ async fn rebuild_in_tx(
         .await?;
     }
 
-    for stored in &events {
+    for stored in events {
         fold_event(tx, game_id, stored).await?;
     }
 
@@ -5105,12 +5122,15 @@ async fn audit_rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
 ) -> Result<ProjectionAuditReport, ProjectionError> {
+    // Fence before the baseline as well as replay: otherwise an append can
+    // create a false audit mismatch between two READ COMMITTED statements.
+    let events = load_fenced_rebuild_events(tx, game_id).await?;
     let mut before = Vec::with_capacity(AUDIT_PROJECTIONS.len());
     for projection in AUDIT_PROJECTIONS {
         before.push(projection_snapshot(tx, projection, game_id).await?);
     }
 
-    rebuild_in_tx(tx, game_id).await?;
+    rebuild_game_from_events_in_tx(tx, game_id, &events).await?;
 
     let mut tables = Vec::with_capacity(AUDIT_PROJECTIONS.len());
     for (projection, before) in AUDIT_PROJECTIONS.iter().zip(before) {
