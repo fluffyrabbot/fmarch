@@ -368,6 +368,11 @@ try {
     stage: "invite-proof-listen",
   });
   if (!handled) {
+    if (deliveryProvider?.diagnostics.length > 0) {
+      error.message = `${error.message}; identity delivery provider diagnostics=${JSON.stringify(
+        deliveryProvider.diagnostics,
+      )}`;
+    }
     error.serverOutput = serverOutput.slice(-4000);
     throw error;
   }
@@ -432,24 +437,36 @@ async function seedRootAdminSession(apiBaseUrl, localProofAuth) {
 }
 
 async function createInvites(apiBaseUrl) {
-  return {
-    admin: await createInvite(apiBaseUrl, {
+  const invitations = [
+    ["admin", {
       inviteToken: inviteTokens.admin,
       accountId: accountCredentials.admin.accountId,
       principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
-    }),
-    host: await createInvite(apiBaseUrl, {
+    }],
+    ["host", {
       inviteToken: inviteTokens.host,
       accountId: accountCredentials.host.accountId,
       principalId: "host_h",
-    }),
-    player: await createInvite(apiBaseUrl, {
+    }],
+    ["player", {
       inviteToken: inviteTokens.player,
       accountId: accountCredentials.player.accountId,
       principalId: "player-mira",
-    }),
-  };
+    }],
+  ];
+  const issued = {};
+  for (const [role, invitation] of invitations) {
+    const receipt = await createInvite(apiBaseUrl, invitation);
+    await waitForDeliveredProviderCapture({
+      deliveryId: receipt.deliveryId,
+      expectedKind: "invite",
+      expectedAccountId: invitation.accountId,
+      expectedCredential: invitation.inviteToken,
+    });
+    issued[role] = receipt;
+  }
+  return issued;
 }
 
 async function createAccounts(apiBaseUrl) {
@@ -563,6 +580,86 @@ async function createInvite(
     deliveryOutcomeKind: response.delivery_outcome_kind,
     deliveryOutcomeCode: response.delivery_outcome_code,
   };
+}
+
+async function waitForDeliveredProviderCapture({
+  deliveryId,
+  expectedKind,
+  expectedAccountId,
+  expectedCredential,
+}) {
+  const deadline = Date.now() + deliveryIntentPollTimeoutMs;
+  let deliveryObservationFailureCount = 0;
+  while (Date.now() <= deadline) {
+    const capture = deliveryProvider.captures.get(deliveryId);
+    if (capture !== undefined) {
+      if (
+        capture.schema !== "fmarch.identity-delivery.v2" ||
+        capture.provider_generation !== "local-deterministic" ||
+        typeof capture.attempt_token !== "string" ||
+        !deliveryLeaseIsLive(capture) ||
+        !deliveryClockSkewMarginCoversCrossClockBound(capture) ||
+        capture.delivery_kind !== expectedKind ||
+        capture.account_id !== expectedAccountId.toLowerCase() ||
+        capture.credential !== expectedCredential
+      ) {
+        throw new Error(`identity delivery capture contract drifted for ${deliveryId}`);
+      }
+    }
+    let persisted;
+    try {
+      const remainingMs = Math.max(1, deadline - Date.now());
+      persisted = await storedDeliveryIntent({
+        deliveryId,
+        timeoutMs: Math.min(deliveryIntentObservationTimeoutMs, remainingMs),
+      });
+    } catch {
+      deliveryObservationFailureCount += 1;
+      await delay(deliveryIntentPollIntervalMs);
+      continue;
+    }
+    if (
+      capture !== undefined &&
+      persisted.deliveryKind === expectedKind &&
+      persisted.status === "delivered" &&
+      persisted.attemptCount === 1 &&
+      persisted.providerId === "local-deterministic" &&
+      persisted.outcomeKind === "delivered" &&
+      persisted.outcomeCode === null
+    ) {
+      deliveryProvider.captures.delete(deliveryId);
+      return;
+    }
+    const terminalDiagnostic = deliveryProvider.diagnostics.findLast(
+      (diagnostic) =>
+        diagnostic.deliveryId === deliveryId && diagnostic.reason !== "delivered",
+    );
+    if (
+      terminalDiagnostic !== undefined ||
+      new Set(["delivered", "retryable_failed", "permanent_failed", "cancelled"]).has(
+        persisted.status,
+      )
+    ) {
+      throw new Error(
+        `identity delivery ${deliveryId} failed before bootstrap redemption: ${JSON.stringify({
+          status: persisted.status,
+          attemptCount: persisted.attemptCount,
+          providerId: persisted.providerId,
+          outcomeKind: persisted.outcomeKind,
+          outcomeCode: persisted.outcomeCode,
+          deliveryObservationFailureCount,
+          providerDiagnostic: terminalDiagnostic ?? null,
+        })}`,
+      );
+    }
+    await delay(deliveryIntentPollIntervalMs);
+  }
+  throw new Error(
+    `identity delivery provider did not acknowledge ${deliveryId}; diagnostics=${JSON.stringify({
+      deliveryObservationFailureCount,
+      providerDiagnostics: deliveryProvider.diagnostics,
+    })}`,
+  );
 }
 
 async function issueCommunityInvitation({
@@ -4128,7 +4225,31 @@ async function startIdentityDeliveryCapture() {
   const retryableFailureArms = [];
   const outcomesByAttempt = new Map();
   const latestOutcomeByDelivery = new Map();
+  const diagnostics = [];
+  const maximumDiagnostics = 64;
+  const canonicalDeliveryIdPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
   const authToken = `local-delivery-auth-${game}`;
+  function recordDiagnostic(reason, status, delivery = undefined) {
+    diagnostics.push(
+      Object.freeze({
+        reason,
+        status,
+        deliveryId:
+          typeof delivery?.delivery_id === "string" &&
+          canonicalDeliveryIdPattern.test(delivery.delivery_id)
+            ? delivery.delivery_id
+            : null,
+        attemptNumber:
+          Number.isInteger(delivery?.attempt_number) ? delivery.attempt_number : null,
+      }),
+    );
+    if (diagnostics.length > maximumDiagnostics) diagnostics.shift();
+  }
+  function rejectProvider(response, reason, status, delivery = undefined) {
+    recordDiagnostic(reason, status, delivery);
+    response.writeHead(status).end();
+  }
   function armRetryableFailure({ expectedKind, credential, expectedAccountId }) {
     if (
       !new Set(["invite", "recovery", "community_invitation"]).has(expectedKind)
@@ -4175,12 +4296,13 @@ async function startIdentityDeliveryCapture() {
     return true;
   }
   const provider = createServer(async (request, response) => {
+    let delivery;
     try {
       if (
         request.method !== "POST" ||
         request.headers.authorization !== `Bearer ${authToken}`
       ) {
-        response.writeHead(401).end();
+        rejectProvider(response, "request_authentication_rejected", 401);
         return;
       }
       const chunks = [];
@@ -4188,20 +4310,26 @@ async function startIdentityDeliveryCapture() {
       for await (const chunk of request) {
         size += chunk.length;
         if (size > 64 * 1024) {
-          response.writeHead(413).end();
+          rejectProvider(response, "request_body_too_large", 413);
           return;
         }
         chunks.push(chunk);
       }
-      const delivery = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      try {
+        delivery = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch {
+        rejectProvider(response, "request_json_rejected", 400);
+        return;
+      }
       if (delivery.schema === "fmarch.identity-delivery-provider-probe.v1") {
         if (
           delivery.provider_generation !== "local-deterministic" ||
           typeof delivery.probe_token !== "string"
         ) {
-          response.writeHead(409).end();
+          rejectProvider(response, "probe_contract_rejected", 409);
           return;
         }
+        recordDiagnostic("probe_available", 200);
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify({
@@ -4213,22 +4341,29 @@ async function startIdentityDeliveryCapture() {
         );
         return;
       }
-      if (
-        delivery.schema !== "fmarch.identity-delivery.v2" ||
-        delivery.provider_generation !== "local-deterministic" ||
-        typeof delivery.attempt_token !== "string" ||
-        !deliveryLeaseIsLive(delivery) ||
-        !deliveryClockSkewMarginCoversCrossClockBound(delivery) ||
-        delivery.idempotency_key !== delivery.delivery_id
-      ) {
-        response.writeHead(409).end();
+      const rejectedContract = [
+        [delivery.schema !== "fmarch.identity-delivery.v2", "delivery_schema_rejected"],
+        [
+          delivery.provider_generation !== "local-deterministic",
+          "provider_generation_rejected",
+        ],
+        [typeof delivery.attempt_token !== "string", "attempt_token_rejected"],
+        [!deliveryLeaseIsLive(delivery), "effect_deadline_rejected"],
+        [
+          !deliveryClockSkewMarginCoversCrossClockBound(delivery),
+          "clock_skew_margin_rejected",
+        ],
+        [delivery.idempotency_key !== delivery.delivery_id, "idempotency_key_rejected"],
+      ].find(([rejected]) => rejected);
+      if (rejectedContract !== undefined) {
+        rejectProvider(response, rejectedContract[1], 409, delivery);
         return;
       }
       // Delivery-v2 makes the lease a hard execution/commit deadline, not
       // merely an admission check. Revalidate immediately before the simulated
       // provider effect so no credential side effect can commit at or after it.
       if (!deliveryLeaseIsLive(delivery)) {
-        response.writeHead(409).end();
+        rejectProvider(response, "effect_deadline_elapsed_before_commit", 409, delivery);
         return;
       }
       const deliveryKey = `${delivery.provider_generation}:${delivery.delivery_id}`;
@@ -4244,14 +4379,8 @@ async function startIdentityDeliveryCapture() {
           previous.status === "retryable_failure" &&
           delivery.attempt_number === previous.attemptNumber + 1;
         if (!startsDelivery && !reclaimsGeneration && !advancesRetryableGeneration) {
-          throw new Error(
-            `delivery attempt generation drifted: ${JSON.stringify({
-              deliveryId: delivery.delivery_id,
-              attemptNumber: delivery.attempt_number,
-              previousAttemptNumber: previous?.attemptNumber,
-              previousStatus: previous?.status,
-            })}`,
-          );
+          rejectProvider(response, "attempt_generation_rejected", 409, delivery);
+          return;
         }
         outcome = reclaimsGeneration
           ? Object.freeze({
@@ -4291,10 +4420,17 @@ async function startIdentityDeliveryCapture() {
       if (outcome.status === "delivered") {
         captures.set(delivery.delivery_id, structuredClone(delivery));
       }
+      recordDiagnostic(
+        outcome.status === "delivered"
+          ? "delivered"
+          : "fault_injected_provider_unavailable",
+        200,
+        delivery,
+      );
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(outcome));
     } catch {
-      response.writeHead(400).end();
+      rejectProvider(response, "provider_handler_exception", 400, delivery);
     }
   });
   await new Promise((resolve, reject) => {
@@ -4312,6 +4448,7 @@ async function startIdentityDeliveryCapture() {
     endpoint: `http://${host}:${address.port}/deliver`,
     authToken,
     captures,
+    diagnostics,
     armRetryableFailure,
     close: () =>
       new Promise((resolve, reject) => {

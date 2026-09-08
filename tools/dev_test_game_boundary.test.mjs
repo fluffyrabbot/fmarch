@@ -440,6 +440,136 @@ test("auth invite proof observes provider backoff before an explicit admin retry
       acceptedOutcomeState < deliveredCapturePublication,
     "provider capture publication must follow attempt-generation validation and accepted outcome state",
   );
+  const retryStart = source.indexOf("async function retryFailedDelivery({");
+  const retryEnd = source.indexOf("async function retryFailedDeliveryForCredential", retryStart);
+  const retrySource = source.slice(retryStart, retryEnd);
+  assert.ok(
+    retrySource.indexOf("waitForRetryableDeliveryIntent({") <
+      retrySource.indexOf("/admin/auth-delivery-provider/probe") &&
+      retrySource.indexOf("/admin/auth-delivery-provider/probe") <
+        retrySource.indexOf("/retry"),
+    "every deliberately failed delivery must be observed, recovered by GlobalAdmin probe, and only then retried",
+  );
+  const recoveryInviteArm = source.indexOf("credential: recoveryInviteToken");
+  const recoveryInviteRetry = source.indexOf("const inviteDelivery = await retryFailedDelivery({");
+  const recoveryCredentialArm = source.indexOf("expectedAccountId: hostAccount.accountId");
+  const recoveryCredentialRetry = source.indexOf(
+    "const recoveryDelivery = await retryFailedDeliveryForCredential({",
+  );
+  assert.ok(
+    recoveryInviteArm < recoveryInviteRetry &&
+      recoveryInviteRetry < recoveryCredentialArm &&
+      recoveryCredentialArm < recoveryCredentialRetry,
+    "each explicit one-shot outage must terminate at its own probe-and-retry recovery boundary",
+  );
+});
+
+test("auth invite provider diagnostics are bounded, sanitized, and bootstrap delivery is serialized", async () => {
+  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
+
+  for (const reason of [
+    "request_authentication_rejected",
+    "request_body_too_large",
+    "request_json_rejected",
+    "probe_contract_rejected",
+    "delivery_schema_rejected",
+    "provider_generation_rejected",
+    "attempt_token_rejected",
+    "effect_deadline_rejected",
+    "clock_skew_margin_rejected",
+    "idempotency_key_rejected",
+    "effect_deadline_elapsed_before_commit",
+    "attempt_generation_rejected",
+    "provider_handler_exception",
+    "fault_injected_provider_unavailable",
+    "delivered",
+  ]) {
+    assert.ok(source.includes(`"${reason}"`), `missing sanitized provider diagnostic ${reason}`);
+  }
+  const diagnosticStart = source.indexOf("function recordDiagnostic(");
+  const diagnosticEnd = source.indexOf("function rejectProvider(", diagnosticStart);
+  const diagnosticShape = source.slice(diagnosticStart, diagnosticEnd);
+  assert.match(source, /const maximumDiagnostics = 64;/u);
+  assert.match(
+    source,
+    /const canonicalDeliveryIdPattern =\s*\/\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{12\}\$\/u;/u,
+  );
+  assert.match(
+    diagnosticShape,
+    /diagnostics\.length > maximumDiagnostics\) diagnostics\.shift\(\)/u,
+  );
+  assert.match(diagnosticShape, /reason,[\s\S]*status,[\s\S]*deliveryId:[\s\S]*attemptNumber:/u);
+  assert.match(
+    diagnosticShape,
+    /canonicalDeliveryIdPattern\.test\(delivery\.delivery_id\)[\s\S]*\? delivery\.delivery_id[\s\S]*: null/u,
+    "diagnostic delivery ids must be fixed-width canonical UUIDs",
+  );
+  assert.doesNotMatch(
+    diagnosticShape,
+    /credential|account_id|principal_id|authorization|authToken|probe_token/u,
+    "provider diagnostics must never retain credential, account, principal, auth, or probe-token material",
+  );
+  assert.match(
+    source,
+    /error\.message = `\$\{error\.message\}; identity delivery provider diagnostics=/u,
+  );
+
+  const bootstrapStart = source.indexOf("async function createInvites(");
+  const bootstrapEnd = source.indexOf("async function createAccounts(", bootstrapStart);
+  const bootstrapSource = source.slice(bootstrapStart, bootstrapEnd);
+  assert.match(
+    bootstrapSource,
+    /for \(const \[role, invitation\] of invitations\)[\s\S]*await createInvite\([\s\S]*await waitForDeliveredProviderCapture\([\s\S]*issued\[role\] = receipt/u,
+    "bootstrap invitations must prove one delivery before the next credential is issued",
+  );
+  const deliveryAcknowledgementStart = source.indexOf(
+    "async function waitForDeliveredProviderCapture(",
+  );
+  const deliveryAcknowledgementEnd = source.indexOf(
+    "async function issueCommunityInvitation(",
+    deliveryAcknowledgementStart,
+  );
+  const deliveryAcknowledgement = source.slice(
+    deliveryAcknowledgementStart,
+    deliveryAcknowledgementEnd,
+  );
+  assert.match(deliveryAcknowledgement, /let deliveryObservationFailureCount = 0;/u);
+  assert.match(
+    deliveryAcknowledgement,
+    /try \{[\s\S]*persisted = await storedDeliveryIntent\(\{[\s\S]*timeoutMs: Math\.min\(deliveryIntentObservationTimeoutMs, remainingMs\)[\s\S]*\} catch \{[\s\S]*deliveryObservationFailureCount \+= 1;[\s\S]*continue;/u,
+    "transient delivery-observation failures must retry within the existing deadline",
+  );
+  assert.doesNotMatch(
+    deliveryAcknowledgement,
+    /catch \(error\)|error\.message|error\.stack|String\(error\)|DATABASE_(?:MIGRATION_)?URL/u,
+    "bootstrap diagnostics must not retain database error text or connection URLs",
+  );
+  assert.match(
+    deliveryAcknowledgement,
+    /new Set\(\["delivered", "retryable_failed", "permanent_failed", "cancelled"\]\)/u,
+    "every terminal persisted delivery state must fail closed unless the delivered contract matched",
+  );
+  assert.match(
+    deliveryAcknowledgement,
+    /diagnostics=\$\{JSON\.stringify\(\{[\s\S]*deliveryObservationFailureCount,[\s\S]*providerDiagnostics:/u,
+  );
+  for (const durableContract of [
+    'persisted.status === "delivered"',
+    "persisted.attemptCount === 1",
+    'persisted.providerId === "local-deterministic"',
+    'persisted.outcomeKind === "delivered"',
+    "persisted.outcomeCode === null",
+  ]) {
+    assert.ok(
+      deliveryAcknowledgement.includes(durableContract),
+      `bootstrap delivery acknowledgement omits ${durableContract}`,
+    );
+  }
+  assert.ok(
+    deliveryAcknowledgement.indexOf("persisted = await storedDeliveryIntent({") <
+      deliveryAcknowledgement.indexOf("deliveryProvider.captures.delete(deliveryId)"),
+    "provider capture must remain pending until the durable delivered receipt is observed",
+  );
 });
 
 test("auth invite provider enforces one skew-guarded side-effect deadline", async () => {
