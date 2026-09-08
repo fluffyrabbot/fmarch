@@ -328,6 +328,17 @@ and secondary read models scale independently.
 
 ### Rebuild
 
+Game and discussion rebuilds acquire the event journal's transaction-scoped
+stream lock before loading events and retain it through projection replacement.
+The game audit acquires the same fence before its baseline snapshot and retains
+it until rollback. Private subject owners are locked before projection rows,
+preserving the principal/subject order shared with erasure. Consequently a
+concurrent append either commits before the replay input is read or waits until
+replacement finishes; it cannot be silently omitted from the rebuilt stream.
+This fence covers same-stream appends, not independently written streams that
+contribute to shared read models. Other replay families retain their own
+transaction contracts and require separate concurrency qualification.
+
 A rebuild replays the selected stream through its projectors under the owned
 transaction boundary. Use the rebuild/audit tooling rather than manually
 truncating shared tables. Replay supports:

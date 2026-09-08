@@ -9,6 +9,8 @@
 mod public_search_model;
 #[path = "e2e/publication_replay_contract.rs"]
 mod publication_replay_contract;
+#[path = "e2e/rebuild_fencing.rs"]
+mod rebuild_fencing;
 
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
