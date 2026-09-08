@@ -1346,19 +1346,67 @@ pub struct AuthorizationContext {
     idle_expires_at: i64,
 }
 
+/// Principal-owned authority recovered from the durable session projection.
+/// Keeping the subject and its grants together prevents construction sites
+/// from interleaving identity authority with authentication provenance.
+#[derive(Debug)]
+struct SessionSubjectAuthority {
+    principal_id: PrincipalId,
+    global_capabilities: Vec<String>,
+}
+
+/// Authentication evidence that justifies one session's assurance level.
+/// WorkOS provenance therefore travels with the method that requires it.
+#[derive(Debug)]
+struct SessionAuthenticationProvenance {
+    method: Option<(Uuid, MethodKind)>,
+    assurance: Assurance,
+    workos_session_id: Option<WorkosSessionId>,
+    authenticated_at: i64,
+}
+
+/// Opaque session identity and the complete window in which it may authorize.
+#[derive(Debug)]
+struct SessionValidity {
+    session_reference: String,
+    created_at: i64,
+    expires_at: i64,
+    idle_expires_at: i64,
+}
+
+/// Typed construction boundary for an authorization context. Callers must
+/// provide coherent subject authority, authentication provenance, and session
+/// validity instead of relying on a long positional argument list.
+#[derive(Debug)]
+struct SessionAuthoritySnapshot {
+    subject: SessionSubjectAuthority,
+    authentication: SessionAuthenticationProvenance,
+    validity: SessionValidity,
+}
+
 impl AuthorizationContext {
-    fn new(
-        principal_id: PrincipalId,
-        global_capabilities: Vec<String>,
-        method: Option<(Uuid, MethodKind)>,
-        assurance: Assurance,
-        workos_session_id: Option<WorkosSessionId>,
-        session_reference: String,
-        created_at: i64,
-        authenticated_at: i64,
-        expires_at: i64,
-        idle_expires_at: i64,
-    ) -> Result<Self, IdentityFlowError> {
+    fn new(snapshot: SessionAuthoritySnapshot) -> Result<Self, IdentityFlowError> {
+        let SessionAuthoritySnapshot {
+            subject,
+            authentication,
+            validity,
+        } = snapshot;
+        let SessionSubjectAuthority {
+            principal_id,
+            global_capabilities,
+        } = subject;
+        let SessionAuthenticationProvenance {
+            method,
+            assurance,
+            workos_session_id,
+            authenticated_at,
+        } = authentication;
+        let SessionValidity {
+            session_reference,
+            created_at,
+            expires_at,
+            idle_expires_at,
+        } = validity;
         let authority_shape_is_valid = match (&method, assurance, &workos_session_id) {
             (Some((_, MethodKind::ClassicPassword)), Assurance::Password, None)
             | (Some((_, MethodKind::Workos)), Assurance::ExternalSso, Some(_)) => true,
@@ -1972,18 +2020,24 @@ pub async fn rotate_session(
         expires_at: eligible.context.expires_at,
         idle_expires_at,
     };
-    let context = AuthorizationContext::new(
-        eligible.context.principal_id,
-        eligible.context.global_capabilities,
-        eligible.context.method,
-        eligible.context.assurance,
-        eligible.context.workos_session_id,
-        token_hash,
-        now,
-        eligible.context.authenticated_at,
-        eligible.context.expires_at,
-        idle_expires_at,
-    )?;
+    let context = AuthorizationContext::new(SessionAuthoritySnapshot {
+        subject: SessionSubjectAuthority {
+            principal_id: eligible.context.principal_id,
+            global_capabilities: eligible.context.global_capabilities,
+        },
+        authentication: SessionAuthenticationProvenance {
+            method: eligible.context.method,
+            assurance: eligible.context.assurance,
+            workos_session_id: eligible.context.workos_session_id,
+            authenticated_at: eligible.context.authenticated_at,
+        },
+        validity: SessionValidity {
+            session_reference: token_hash,
+            created_at: now,
+            expires_at: eligible.context.expires_at,
+            idle_expires_at,
+        },
+    })?;
     tx.commit().await?;
     #[cfg(debug_assertions)]
     if context.assurance == Assurance::Dev {
@@ -2215,18 +2269,24 @@ async fn load_eligible_session(
     }
 
     Ok(EligibleSession {
-        context: AuthorizationContext::new(
-            principal_id,
-            global_capabilities,
-            method,
-            assurance,
-            workos_session_id,
-            session_reference.to_string(),
-            created_at,
-            authenticated_at,
-            expires_at,
-            effective_idle_expires_at,
-        )?,
+        context: AuthorizationContext::new(SessionAuthoritySnapshot {
+            subject: SessionSubjectAuthority {
+                principal_id,
+                global_capabilities,
+            },
+            authentication: SessionAuthenticationProvenance {
+                method,
+                assurance,
+                workos_session_id,
+                authenticated_at,
+            },
+            validity: SessionValidity {
+                session_reference: session_reference.to_string(),
+                created_at,
+                expires_at,
+                idle_expires_at: effective_idle_expires_at,
+            },
+        })?,
         local_proof_capabilities,
         workos_signing_key_id,
     })
