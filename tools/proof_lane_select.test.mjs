@@ -14,10 +14,12 @@ import {
   gitChangedFiles,
   laneCommand,
   laneExecutionKey,
+  lockedCargoMetadata,
   loadManifest,
   mergeTimings,
   orderedExecutionPlan,
   planReceiptResume,
+  proofAdmissionMetadata,
   pathMatches,
   reverseCrateClosure,
   regenerateArtifact,
@@ -37,6 +39,7 @@ import {
   usesRunnerOwnedPostgres,
   warmupCommand,
   workspaceCrateGraph,
+  workspacePackagesFromMetadata,
 } from './proof_lane_select.mjs';
 
 const manifest = loadManifest(MANIFEST_PATH);
@@ -47,12 +50,11 @@ const packageScripts = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 
 const timingBaseline = JSON.parse(
   readFileSync(join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json'), 'utf8'),
 );
-const cargoMetadata = JSON.parse(
-  execFileSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-  }),
-);
+const resolvedCargoMetadata = lockedCargoMetadata();
+const cargoMetadata = {
+  ...resolvedCargoMetadata,
+  packages: workspacePackagesFromMetadata(resolvedCargoMetadata),
+};
 
 function cargoTestArguments(lane) {
   const argv = lane.execution.argv;
@@ -133,6 +135,45 @@ test('execution-bearing proof modes acquire the host-wide heavyweight-build lock
   }
   assert.equal(requiresHostHeavyBuildLock(['--mode', 'full', '--list']), false);
   assert.equal(requiresHostHeavyBuildLock(['--changed', 'crates/api/src/lib.rs', '--json']), false);
+});
+
+test('proof admission resolves the complete locked Cargo graph before execution', () => {
+  const calls = [];
+  const metadata = { packages: [{ name: 'domain', dependencies: [] }] };
+  const options = {
+    root: '/tmp/fmarch-locked-metadata-fixture',
+    execute(command, argv, executionOptions) {
+      calls.push({ command, argv, executionOptions });
+      return Buffer.from(JSON.stringify(metadata));
+    },
+  };
+
+  for (const operation of ['--run', '--record', '--measure', '--measure-all', '--regenerate', '--resume']) {
+    assert.deepEqual(proofAdmissionMetadata([operation], options), metadata, operation);
+  }
+  assert.equal(proofAdmissionMetadata(['--list'], options), null);
+  assert.equal(calls.length, 6);
+  for (const call of calls) {
+    assert.equal(call.command, 'cargo');
+    assert.deepEqual(call.argv, ['metadata', '--locked', '--format-version', '1']);
+    assert.equal(call.argv.includes('--no-deps'), false);
+    assert.equal(call.executionOptions.cwd, options.root);
+  }
+});
+
+test('locked Cargo metadata fails closed with recovery guidance', () => {
+  const staleLock = Object.assign(new Error('cargo metadata failed'), {
+    stderr: Buffer.from('the lock file needs to be updated but --locked was passed'),
+  });
+  assert.throws(
+    () => lockedCargoMetadata({ execute: () => { throw staleLock; } }),
+    (error) => {
+      assert.match(error.message, /Cargo\.lock admission failed/);
+      assert.match(error.message, /cargo metadata --format-version 1/);
+      assert.match(error.message, /lock file needs to be updated/);
+      return true;
+    },
+  );
 });
 
 test('resume retries failures and their artifact producers while reusing unrelated successes', () => {
@@ -341,6 +382,25 @@ test('workspace crate graph excludes test-only reverse dependencies', () => {
   });
   assert.deepEqual(graph.commands, ['domain']);
   assert.deepEqual(graph.operator_proof, ['commands']);
+});
+
+test('workspace crate graph excludes registry packages from full locked metadata', () => {
+  const graph = crateGraphFromMetadata({
+    workspace_members: ['path+file:///workspace/domain#0.1.0'],
+    packages: [
+      {
+        id: 'path+file:///workspace/domain#0.1.0',
+        name: 'domain',
+        dependencies: [{ name: 'serde', kind: null }],
+      },
+      {
+        id: 'registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0',
+        name: 'serde',
+        dependencies: [],
+      },
+    ],
+  });
+  assert.deepEqual(graph, { domain: [] });
 });
 
 test('every area lane and push sentinel is defined in the lane table', () => {

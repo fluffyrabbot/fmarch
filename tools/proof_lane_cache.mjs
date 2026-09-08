@@ -92,10 +92,10 @@ export function workspaceFiles(root) {
   return output.toString('utf8').split('\0').filter(Boolean).sort();
 }
 
-export function workspaceMetadata(root) {
-  return JSON.parse(execFileSync(
+export function workspaceMetadata(root, { execute = execFileSync } = {}) {
+  return JSON.parse(execute(
     'cargo',
-    ['metadata', '--no-deps', '--format-version', '1'],
+    ['metadata', '--locked', '--format-version', '1'],
     { cwd: root, maxBuffer: 64 * 1024 * 1024 },
   ).toString('utf8'));
 }
@@ -125,7 +125,11 @@ export function proofToolchain() {
 }
 
 function transitivePackageRoots(laneIds, manifest, metadata, root) {
-  const packages = new Map(metadata.packages.map((pkg) => [pkg.name, pkg]));
+  const workspaceMemberIds = new Set(metadata.workspace_members ?? []);
+  const workspacePackages = workspaceMemberIds.size === 0
+    ? metadata.packages
+    : metadata.packages.filter((pkg) => workspaceMemberIds.has(pkg.id));
+  const packages = new Map(workspacePackages.map((pkg) => [pkg.name, pkg]));
   const selectedLaneIds = new Set(laneIds);
   // The selector's reverse-Cargo closure only lands on canonical `crate`
   // areas. Specialized `closure_crate` and proof-source areas intentionally

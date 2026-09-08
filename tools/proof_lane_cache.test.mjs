@@ -9,6 +9,7 @@ import {
   frozenLaneIds,
   loadProofCacheHits,
   persistProofCacheEntries,
+  workspaceMetadata,
 } from './proof_lane_cache.mjs';
 
 const toolchain = {
@@ -16,6 +17,25 @@ const toolchain = {
   cargo: 'test', rustc: 'test', psql: 'test',
   postgres: 'test', pg_config: 'test',
 };
+
+test('proof cache metadata resolves the complete locked workspace graph', () => {
+  const calls = [];
+  const metadata = { packages: [], workspace_members: [] };
+  assert.deepEqual(workspaceMetadata('/tmp/fmarch-cache-metadata-fixture', {
+    execute(command, argv, options) {
+      calls.push({ command, argv, options });
+      return Buffer.from(JSON.stringify(metadata));
+    },
+  }), metadata);
+  assert.deepEqual(calls, [{
+    command: 'cargo',
+    argv: ['metadata', '--locked', '--format-version', '1'],
+    options: {
+      cwd: '/tmp/fmarch-cache-metadata-fixture',
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  }]);
+});
 
 function lane(command, assertionTargets = []) {
   return {
@@ -112,6 +132,27 @@ test('specialized proof keys exclude unrelated compile closure while canonical c
   assert.notEqual(computeLaneProofKey('canonical', manifest(), {
     root, files, metadata: metadata(root), toolchain,
   }).proofKey, canonical);
+});
+
+test('canonical proof keys exclude registry packages from full locked metadata', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const fullMetadata = metadata(root);
+  for (const pkg of fullMetadata.packages) pkg.id = `path+file://${pkg.name}#0.1.0`;
+  fullMetadata.workspace_members = fullMetadata.packages.map((pkg) => pkg.id);
+  fullMetadata.packages.find((pkg) => pkg.name === 'commands').dependencies.push({
+    name: 'serde', kind: null,
+  });
+  fullMetadata.packages.push({
+    id: 'registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0',
+    name: 'serde',
+    manifest_path: '/registry/serde/Cargo.toml',
+    dependencies: [],
+  });
+
+  const result = computeLaneProofKey('canonical', manifest(), {
+    root, files, metadata: fullMetadata, toolchain,
+  });
+  assert.equal(result.payload.matchers.some((path) => path.includes('registry/serde')), false);
 });
 
 test('proof keys bind migrations, dependency locks, toolchains, commands, and fixtures', (t) => {

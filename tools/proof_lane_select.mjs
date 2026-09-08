@@ -106,6 +106,34 @@ export function requiresHostHeavyBuildLock(argv) {
 // than a proof result.
 const GIT_READ_MAX_BUFFER = 64 * 1024 * 1024;
 
+export function lockedCargoMetadata({
+  root = REPO_ROOT,
+  execute = execFileSync,
+} = {}) {
+  try {
+    const raw = execute(
+      'cargo',
+      ['metadata', '--locked', '--format-version', '1'],
+      { cwd: root, maxBuffer: GIT_READ_MAX_BUFFER },
+    );
+    return JSON.parse(Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw));
+  } catch (error) {
+    const stderr = Buffer.isBuffer(error?.stderr)
+      ? error.stderr.toString('utf8').trim()
+      : String(error?.stderr ?? '').trim();
+    const detail = stderr || error?.message;
+    throw new Error(
+      'Cargo.lock admission failed: cargo metadata --locked could not resolve the complete workspace dependency graph. ' +
+      'Regenerate Cargo.lock with `cargo metadata --format-version 1` and commit it before running proof.' +
+      (detail ? `\n${detail}` : ''),
+    );
+  }
+}
+
+export function proofAdmissionMetadata(argv, options = {}) {
+  return requiresHostHeavyBuildLock(argv) ? lockedCargoMetadata(options) : null;
+}
+
 function gitFile(args, options = {}) {
   return execFileSync('git', args, {
     cwd: REPO_ROOT,
@@ -348,19 +376,22 @@ export function reverseCrateClosure(graph) {
   return dependents;
 }
 
-export function workspaceCrateGraph() {
-  const raw = execFileSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
-    cwd: REPO_ROOT,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const metadata = JSON.parse(raw.toString('utf8'));
+export function workspaceCrateGraph(metadata = lockedCargoMetadata()) {
   return crateGraphFromMetadata(metadata);
 }
 
+export function workspacePackagesFromMetadata(metadata) {
+  const workspaceMemberIds = new Set(metadata.workspace_members ?? []);
+  return workspaceMemberIds.size === 0
+    ? metadata.packages
+    : metadata.packages.filter((pkg) => workspaceMemberIds.has(pkg.id));
+}
+
 export function crateGraphFromMetadata(metadata) {
-  const names = new Set(metadata.packages.map((p) => p.name));
+  const packages = workspacePackagesFromMetadata(metadata);
+  const names = new Set(packages.map((p) => p.name));
   const graph = {};
-  for (const pkg of metadata.packages) {
+  for (const pkg of packages) {
     graph[pkg.name] = pkg.dependencies
       .filter((dependency) => dependency.kind !== 'dev' && names.has(dependency.name))
       .map((dependency) => dependency.name);
@@ -856,6 +887,7 @@ async function main(argv) {
     throw new Error('--regenerate must be used without selection or recording options');
   }
 
+  const admissionMetadata = proofAdmissionMetadata(argv);
   const manifest = loadManifest();
   validateExecutionManifest(manifest);
   if (measuring) {
@@ -920,10 +952,14 @@ async function main(argv) {
   const touchesCrates = changed.some((f) => f.startsWith('crates/'));
   let crateGraph = null;
   if (touchesCrates) {
-    try {
-      crateGraph = workspaceCrateGraph();
-    } catch {
-      console.error('warning: cargo metadata unavailable; arming all crate lanes conservatively');
+    if (admissionMetadata) {
+      crateGraph = workspaceCrateGraph(admissionMetadata);
+    } else {
+      try {
+        crateGraph = workspaceCrateGraph();
+      } catch {
+        console.error('warning: locked Cargo metadata unavailable; arming all crate lanes conservatively');
+      }
     }
   }
 
@@ -957,7 +993,7 @@ async function main(argv) {
       const sharedInputs = {
         root: REPO_ROOT,
         files: workspaceFiles(REPO_ROOT),
-        metadata: workspaceMetadata(REPO_ROOT),
+        metadata: admissionMetadata ?? workspaceMetadata(REPO_ROOT),
         toolchain: proofToolchain(),
         fingerprints: new Map(),
       };
