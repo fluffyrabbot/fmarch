@@ -164,6 +164,28 @@ async function contract() {
   assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
   assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);
   assert.match(source["tools/release_git_authority.mjs"], /CANONICAL_RELEASE_REMOTE_URL/);
+  assert.match(
+    source["tools/release_git_authority.mjs"],
+    /STAGING_RELEASE_MUTATION_LOCK_REF = "refs\/heads\/release-locks\/staging"/,
+  );
+  for (const leaseOperation of [
+    "createStagingReleaseMutationLeaseIntent",
+    "assertStagingReleaseMutationLease",
+    "acquireStagingReleaseMutationLease",
+    "resumeStagingReleaseMutationLease",
+    "releaseStagingReleaseMutationLease",
+    "withStagingReleaseMutationLease",
+  ]) {
+    assert.match(source["tools/release_git_authority.mjs"], new RegExp(`export (?:async )?function ${leaseOperation}`));
+  }
+  assert.match(
+    source["tools/release_git_authority.mjs"],
+    /--force-with-lease=\$\{STAGING_RELEASE_MUTATION_LOCK_REF}:\$\{expected}/,
+  );
+  assert.match(
+    source["tools/release_git_authority.mjs"],
+    /staging release mutation lease \$\{token} remains held/,
+  );
   assert.match(source["tools/release_git_authority.mjs"], /GIT_CONFIG_NOSYSTEM: "1"/);
   assert.match(source["tools/release_git_authority.mjs"], /GIT_CONFIG_GLOBAL: "\/dev\/null"/);
   assert.match(source["tools/release_git_authority.mjs"], /!gh auth git-credential/);
@@ -308,6 +330,13 @@ async function contract() {
     /deployment\(id: \$id\).*id status projectId environmentId serviceId meta/,
   );
   assert.match(source["tools/release_coordinator.mjs"], /fmarch-database-one-shot-intent/);
+  assert.match(source["tools/release_coordinator.mjs"], /--resume-lease/);
+  assert.match(source["tools/release_coordinator.mjs"], /withStagingReleaseMutationLease/);
+  assert.match(source["tools/release_coordinator.mjs"], /withReleaseMutationAuthority/);
+  assert.match(
+    source["tools/release_coordinator.mjs"],
+    /--output is production-only for mutating releases/,
+  );
   assert.match(source["tools/release_coordinator.mjs"], /start_command: `\$\{startCommand\} --operation-id/);
   assert.match(source["tools/release_coordinator.mjs"], /succeeded without exact operation completion evidence/);
   const coordinatorDisarm = source["tools/release_coordinator.mjs"].slice(
@@ -329,12 +358,29 @@ async function contract() {
   assert.match(source["tools/release_gameday.mjs"], /findMatchingGameDayOneShotDeployments/);
   assert.match(source["tools/release_gameday.mjs"], /fmarch-game-day-active-database-one-shot/);
   assert.match(source["tools/release_gameday.mjs"], /active_receipt_sha256/);
+  assert.match(source["tools/release_gameday.mjs"], /--resume-lease/);
+  assert.match(source["tools/release_gameday.mjs"], /withStagingReleaseMutationLease/);
+  assert.match(source["tools/release_gameday.mjs"], /withGameDayMutationAuthority/);
+  assert.match(source["tools/release_gameday.mjs"], /does not accept --output/);
   assert.ok(
-    source["tools/release_gameday.mjs"].indexOf("await publishActive(specification.receipt, expected)") <
+    source["tools/release_gameday.mjs"].indexOf("await publishActive(specification.receipt, expected, stagingMutationLease)") <
       source["tools/release_gameday.mjs"].indexOf("return await resume(specification.receipt, expected)"),
     "game-day active one-shot fence must be durable before dispatch recovery begins",
   );
-  assert.match(source["tools/release_gameday.mjs"], /await oneShots\.resumePending\(receipt\);[\s\S]*?deployCanonicalMigrator/);
+  const gameDayRecovery = source["tools/release_gameday.mjs"].slice(
+    source["tools/release_gameday.mjs"].indexOf("export async function recoverCurrentRelease"),
+    source["tools/release_gameday.mjs"].indexOf("export function gameDayOutputPath"),
+  );
+  assert.ok(
+    gameDayRecovery.indexOf("await restoreApplication(receipt, stagingMutationLease)") <
+      gameDayRecovery.indexOf("await oneShots.resumePending(receipt)"),
+    "game-day recovery must restore the serving application before one-shot reconciliation",
+  );
+  assert.ok(
+    gameDayRecovery.indexOf("await oneShots.resumePending(receipt)") <
+      gameDayRecovery.indexOf('await restoreMigrator(receipt, "interrupted-restore", oneShots)'),
+    "game-day recovery must reconcile pending one-shots before the canonical restore migrator",
+  );
   assert.match(
     source["tools/release_gameday.mjs"],
     /startCommand: "\/bin\/false",[\s\S]*?statuses: \["FAILED", "CRASHED"\]/,
@@ -910,6 +956,11 @@ async function contract() {
     "--bootstrap-subject-authority",
     "npm run promote:production -- --check",
     "--fleet-receipt",
+    "refs/heads/release-locks/staging",
+    "--resume-lease",
+    "Mutating staging releases do not accept `--output`",
+    "A staging failure never deletes the lease.",
+    "outcome-unknown",
     "Local proof-lane cache output is never release authority.",
     "--force-with-lease",
     "fmarch-frontend-staging.up.railway.app",

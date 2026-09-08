@@ -8,6 +8,7 @@ export {
 } from "./database_one_shot_policy.mjs";
 
 export const RELEASE_RECEIPT_VERSION = 7;
+export const STAGING_RELEASE_RECEIPT_VERSION = 8;
 export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 export const CANONICAL_RELEASE_TOPOLOGY = Object.freeze({
@@ -457,6 +458,7 @@ export function bindReleaseAttempt({
   fleetProof,
   topology = canonicalReleaseTopology(environment),
   promotionLeaseCommit = null,
+  stagingMutationLeaseCommit = null,
   createdAt = new Date(),
   existing = null,
 }) {
@@ -468,13 +470,19 @@ export function bindReleaseAttempt({
   assertCanonicalReleaseTopology(topology, environment);
   if (environment === "production") {
     assertFullCommit(promotionLeaseCommit, "production promotion lease commit");
+    assert.equal(
+      stagingMutationLeaseCommit,
+      null,
+      "production must not claim a staging release mutation lease",
+    );
   } else {
     assert.equal(promotionLeaseCommit, null, "staging must not claim a production promotion lease");
+    assertFullCommit(stagingMutationLeaseCommit, "staging release mutation lease commit");
   }
   const createdAtValue = existing?.created_at ?? createdAt.toISOString();
   canonicalInstant(createdAtValue, "release attempt creation time");
   const base = {
-    version: 3,
+    version: environment === "staging" ? 4 : 3,
     kind: "fmarch-release-attempt",
     environment,
     commit,
@@ -482,6 +490,9 @@ export function bindReleaseAttempt({
     images: { runtime: runtimeDigest, frontend: frontendDigest },
     topology,
     promotion_lease_commit: promotionLeaseCommit,
+    ...(environment === "staging"
+      ? { staging_mutation_lease_commit: stagingMutationLeaseCommit }
+      : {}),
     fleet_job_id: fleetProof.job_id,
     fleet_receipt_sha256: fleetProof.receipt_sha256,
   };
@@ -539,6 +550,7 @@ export function buildReleaseReceipt({
       fleetProof,
       topology,
       promotionLeaseCommit: attemptReceipt?.promotion_lease_commit ?? null,
+      stagingMutationLeaseCommit: attemptReceipt?.staging_mutation_lease_commit ?? null,
       existing: attemptReceipt,
     }).receipt_sha256,
     "release receipt requires its exact artifact attempt binding",
@@ -554,13 +566,17 @@ export function buildReleaseReceipt({
     assert.equal(hostedAcceptance, null, "production must not run synthetic staging acceptance");
   }
   const base = {
-    version: RELEASE_RECEIPT_VERSION,
+    version:
+      environment === "staging" ? STAGING_RELEASE_RECEIPT_VERSION : RELEASE_RECEIPT_VERSION,
     kind: "fmarch-exact-commit-release",
     environment,
     commit,
     generated_at: generatedAt.toISOString(),
     topology,
     promotion_lease_commit: attemptReceipt.promotion_lease_commit,
+    ...(environment === "staging"
+      ? { staging_mutation_lease_commit: attemptReceipt.staging_mutation_lease_commit }
+      : {}),
     images: {
       runtime: runtimeDigest,
       frontend: frontendDigest,
@@ -586,7 +602,10 @@ export function buildReleaseReceipt({
 }
 
 export function assertReleaseReceipt(receipt) {
-  assert.equal(receipt?.version, RELEASE_RECEIPT_VERSION, "release receipt version drifted");
+  const expectedVersion = receipt?.environment === "staging"
+    ? STAGING_RELEASE_RECEIPT_VERSION
+    : RELEASE_RECEIPT_VERSION;
+  assert.equal(receipt?.version, expectedVersion, "release receipt version drifted");
   assert.equal(receipt.kind, "fmarch-exact-commit-release", "release receipt kind drifted");
   assert.ok(["staging", "production"].includes(receipt.environment), "unsupported release environment");
   assertFullCommit(receipt.commit);
@@ -609,6 +628,7 @@ export function assertReleaseReceipt(receipt) {
     fleetProof: receipt.fleet_proof,
     topology: receipt.topology,
     promotionLeaseCommit: receipt.promotion_lease_commit,
+    stagingMutationLeaseCommit: receipt.staging_mutation_lease_commit ?? null,
     existing: receipt.attempt,
   });
   assert.equal(
@@ -616,6 +636,13 @@ export function assertReleaseReceipt(receipt) {
     attempt.promotion_lease_commit,
     "release receipt promotion lease binding is invalid",
   );
+  if (receipt.environment === "staging") {
+    assert.equal(
+      receipt.staging_mutation_lease_commit,
+      attempt.staging_mutation_lease_commit,
+      "release receipt staging mutation lease binding is invalid",
+    );
+  }
   assert.equal(
     receipt.attempt_receipt_sha256,
     attempt.receipt_sha256,

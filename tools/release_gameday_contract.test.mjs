@@ -9,7 +9,12 @@ import {
 } from "./release_gameday_contract.mjs";
 import {
   createGameDayDatabaseOneShotRunner,
+  gameDayOutputPath,
+  parseArguments,
+  recoverCurrentRelease,
+  revalidateCompletedGameDayState,
   gameDayOneShotVariables,
+  withGameDayMutationAuthority,
 } from "./release_gameday.mjs";
 import {
   bindReleaseAttempt,
@@ -23,6 +28,27 @@ const priorRuntimeDigest = `sha256:${"c".repeat(64)}`;
 const priorFrontendDigest = `sha256:${"d".repeat(64)}`;
 const currentCommit = "1".repeat(40);
 const priorCommit = "2".repeat(40);
+const currentReleaseLease = "7".repeat(40);
+const priorReleaseLease = "8".repeat(40);
+const gameDayLeaseToken = "9".repeat(40);
+const gameDayLease = {
+  token: gameDayLeaseToken,
+  releaseCommit: currentCommit,
+  operationKind: "release-game-day",
+  bindings: {},
+  resumed: false,
+};
+
+test("game-day receipts always use the canonical lease-scoped output path", () => {
+  assert.throws(
+    () => parseArguments(["--output", "custom-game-day.json"]),
+    /does not accept --output/,
+  );
+  assert.match(
+    gameDayOutputPath({ commit: currentCommit }, gameDayLease),
+    new RegExp(`${currentCommit}\\.${gameDayLeaseToken}\\.game-day\\.json$`, "u"),
+  );
+});
 
 test("game-day cleanup resolves an outcome-unknown exact one-shot before restore dispatch", async () => {
   const events = [];
@@ -45,6 +71,7 @@ test("game-day cleanup resolves an outcome-unknown exact one-shot before restore
     },
   };
   const interruptedProcess = createGameDayDatabaseOneShotRunner({
+    stagingMutationLease: gameDayLease,
     ...activeOperations,
     runOneShot: async () => {
       events.push("v2-response-lost");
@@ -59,6 +86,7 @@ test("game-day cleanup resolves an outcome-unknown exact one-shot before restore
   assert.ok(active, "hard-crash recovery requires a durable active-operation fence");
 
   const restartedProcess = createGameDayDatabaseOneShotRunner({
+    stagingMutationLease: { ...gameDayLease, resumed: true },
     ...activeOperations,
     runOneShot: async () => {
       events.push("exact-operation-adopted");
@@ -93,6 +121,50 @@ test("game-day one-shots inject canonical database identity and maintenance dead
     FMARCH_DB_STATEMENT_TIMEOUT_MS: "300000",
     FMARCH_DB_OPERATION_TIMEOUT_MS: "600000",
   });
+});
+
+test("game-day recovery restores serving applications before one-shot reconciliation", async () => {
+  const events = [];
+  const oneShots = {
+    resumePending: async () => {
+      events.push("resume-pending-one-shot");
+      throw new Error("outcome unknown");
+    },
+  };
+  await assert.rejects(
+    recoverCurrentRelease(
+      { commit: currentCommit },
+      oneShots,
+      gameDayLease,
+      {
+        restoreApplication: async () => events.push("restore-application"),
+        restoreMigrator: async () => events.push("restore-migrator"),
+      },
+    ),
+    /outcome unknown/,
+  );
+  assert.deepEqual(events, ["restore-application", "resume-pending-one-shot"]);
+});
+
+test("game-day mutations revalidate the exact shared lease before every write", async () => {
+  const events = [];
+  const verification = {
+    assertLease: async (lease) => {
+      assert.equal(lease, gameDayLease);
+      events.push("lease");
+    },
+  };
+  await withGameDayMutationAuthority(
+    gameDayLease,
+    async () => events.push("mutation-1"),
+    verification,
+  );
+  await withGameDayMutationAuthority(
+    gameDayLease,
+    async () => events.push("mutation-2"),
+    verification,
+  );
+  assert.deepEqual(events, ["lease", "mutation-1", "lease", "mutation-2"]);
 });
 
 function fleetProof(commit, id) {
@@ -175,6 +247,8 @@ function releaseReceipt(commit, runtime, frontend, id) {
       runtimeDigest: runtime,
       frontendDigest: frontend,
       fleetProof: proof,
+      stagingMutationLeaseCommit:
+        id === "current" ? currentReleaseLease : priorReleaseLease,
       createdAt: new Date("2026-08-26T23:58:00.000Z"),
     }),
     hostedAcceptance: {status: 'passed', generatedAt: '2026-08-26T23:59:00.000Z', checkerCommit: commit, target: {commit, api: 'https://fmarch-staging.up.railway.app', frontend: 'https://fmarch-frontend-staging.up.railway.app'}, authenticatedJourneys: {status: 'passed', scope: 'live-authenticated-staging', commandAcknowledged: true, socketReconnected: true, missedUpdateRecovered: true, durableFreshContext: true, authenticatedPrivateDenial: true}},
@@ -242,6 +316,7 @@ test("game-day receipt binds every scenario, final restoration, and its own dige
       search_sentinel: "passed",
       schema_head: "0002_profile_mute_durable_target.sql",
     },
+    stagingMutationLeaseCommit: gameDayLeaseToken,
     generatedAt: new Date("2026-08-27T01:00:00.000Z"),
   });
   assert.equal(assertGameDayReceipt(receipt), receipt);
@@ -264,7 +339,102 @@ test("game-day receipt binds every scenario, final restoration, and its own dige
         search_sentinel: "passed",
         schema_head: "0002_profile_mute_durable_target.sql",
       },
+      stagingMutationLeaseCommit: gameDayLeaseToken,
     }),
     /failed_migrator did not pass/,
+  );
+});
+
+test("completed game-day resume revalidates exact live restoration", async () => {
+  const finalState = {
+    environment: "staging",
+    release_commit: currentCommit,
+    runtime_digest: runtimeDigest,
+    frontend_digest: frontendDigest,
+    migrator_deployment_id: "final-migrator",
+    api_deployment_id: "final-api",
+    frontend_deployment_id: "final-frontend",
+    api_ready: true,
+    frontend_healthy: true,
+    search_sentinel: "passed",
+    search_sentinel_receipt_sha256: "6".repeat(64),
+    schema_head: "0002_profile_mute_durable_target.sql",
+  };
+  const receipt = buildGameDayReceipt({
+    currentReceipt: current,
+    rollbackReceipt: prior,
+    scenarios: scenarios(),
+    finalState,
+    stagingMutationLeaseCommit: gameDayLeaseToken,
+    generatedAt: new Date("2026-08-27T01:00:00.000Z"),
+  });
+  const serviceIds = {
+    migrator: "7c2c2665-2be2-4938-84e5-7580a964d610",
+    api: "18b6f450-3739-4f21-8e01-f58c63cec834",
+    frontend: "23787c98-db56-4ccc-869a-42dca74d7bc7",
+  };
+  const deploymentIds = {
+    [serviceIds.migrator]: finalState.migrator_deployment_id,
+    [serviceIds.api]: finalState.api_deployment_id,
+    [serviceIds.frontend]: finalState.frontend_deployment_id,
+  };
+  const digests = {
+    [serviceIds.migrator]: runtimeDigest,
+    [serviceIds.api]: runtimeDigest,
+    [serviceIds.frontend]: frontendDigest,
+  };
+  const repositories = {
+    [serviceIds.migrator]: "ghcr.io/fluffyrabbot/fmarch-runtime",
+    [serviceIds.api]: "ghcr.io/fluffyrabbot/fmarch-runtime",
+    [serviceIds.frontend]: "ghcr.io/fluffyrabbot/fmarch-frontend",
+  };
+  const services = Object.values(serviceIds).map((serviceId) => ({
+    id: serviceId,
+    deploymentId: deploymentIds[serviceId],
+    source: { repo: null, image: `${repositories[serviceId]}@${digests[serviceId]}` },
+  }));
+  const verification = {
+    assertAuthority: async () => {},
+    loadDeployment: async (deploymentId, serviceId) => ({
+      id: deploymentId,
+      status: "SUCCESS",
+      meta: { imageDigest: digests[serviceId] },
+    }),
+    loadServices: async () => services,
+    loadDomains: async (serviceId) => ({
+      domains: [{
+        domain: serviceId === serviceIds.api
+          ? "fmarch-staging.up.railway.app"
+          : "fmarch-frontend-staging.up.railway.app",
+        syncStatus: "ACTIVE",
+      }],
+    }),
+    loadServingHealth: async () => {},
+  };
+  assert.equal(
+    await revalidateCompletedGameDayState(
+      receipt,
+      current,
+      prior,
+      gameDayLease,
+      verification,
+    ),
+    true,
+  );
+  await assert.rejects(
+    revalidateCompletedGameDayState(
+      receipt,
+      current,
+      prior,
+      gameDayLease,
+      {
+        ...verification,
+        loadServices: async () => services.map((service) =>
+          service.id === serviceIds.api
+            ? { ...service, deploymentId: "drifted-api" }
+            : service),
+      },
+    ),
+    /completed game-day api deployment is stale/,
   );
 });

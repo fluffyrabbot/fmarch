@@ -16,18 +16,27 @@ import test from "node:test";
 import {
   CANONICAL_RELEASE_REMOTE_URL,
   PRODUCTION_PROMOTION_LOCK_REF,
+  STAGING_RELEASE_MUTATION_LOCK_REF,
   RELEASE_GIT_ASKPASS,
   RELEASE_GIT_CREDENTIAL_HELPER,
   assertCanonicalReleaseRemote,
   assertReleaseGitPosture,
   assertProductionPromotionLease,
+  assertStagingReleaseMutationLease,
+  acquireStagingReleaseMutationLease,
   canonicalReleaseFetchArguments,
   createProductionPromotionLockIntent,
+  createStagingReleaseMutationLeaseIntent,
   isForbiddenReleaseGitConfigKey,
   productionPointerPushArgumentsForAuthority,
+  reconcileStagingReleaseMutationLease,
+  releaseStagingReleaseMutationLease,
   releaseGitEnvironment,
+  resumeStagingReleaseMutationLease,
   validateReleaseGitPosture,
   validateCanonicalReleaseRemote,
+  validateStagingReleaseMutationLeaseIntent,
+  withStagingReleaseMutationLease,
 } from "./release_git_authority.mjs";
 
 const commit = "a".repeat(40);
@@ -36,6 +45,11 @@ const token = "c".repeat(40);
 const fleetReceiptSha256 = "d".repeat(64);
 const stagingReceiptSha256 = "e".repeat(64);
 const fleetJobId = "job-123";
+const stagingBindings = {
+  fleet_job_id: fleetJobId,
+  fleet_receipt_sha256: fleetReceiptSha256,
+  schema_epoch_reset: null,
+};
 
 test("release Git authority pins singular fetch and push URLs", () => {
   const authority = {
@@ -111,6 +125,279 @@ test("production lease binds exact remote token and complete release intent", ()
     /fleet job drifted/,
   );
   assert.equal(PRODUCTION_PROMOTION_LOCK_REF, "refs/heads/release-locks/production");
+});
+
+test("staging lease binds the shared remote token, parent tree, and complete operation", () => {
+  const document = createStagingReleaseMutationLeaseIntent({
+    operationKind: "release-coordinator",
+    operationIdentity: "fmarch-staging-release-00000000-0000-4000-8000-000000000000",
+    releaseCommit: commit,
+    bindings: stagingBindings,
+    createdAt: new Date("2026-09-07T12:00:00.000Z"),
+  });
+  const expected = {
+    token,
+    releaseCommit: commit,
+    operationKind: "release-coordinator",
+    bindings: stagingBindings,
+  };
+  const snapshot = {
+    remoteToken: token,
+    fetchedToken: token,
+    message: JSON.stringify(document),
+    parent: commit,
+    tree: "f".repeat(40),
+    expectedTree: "f".repeat(40),
+  };
+  assert.deepEqual(assertStagingReleaseMutationLease(expected, { inspect: () => snapshot }), document);
+  assert.deepEqual(
+    validateStagingReleaseMutationLeaseIntent(document, {
+      releaseCommit: commit,
+      operationKind: "release-coordinator",
+      bindings: stagingBindings,
+    }),
+    document,
+  );
+  assert.throws(
+    () => assertStagingReleaseMutationLease(expected, {
+      inspect: () => ({ ...snapshot, remoteToken: prior }),
+    }),
+    /not held remotely/,
+  );
+  assert.throws(
+    () => assertStagingReleaseMutationLease(expected, {
+      inspect: () => ({ ...snapshot, parent: prior }),
+    }),
+    /parent drifted/,
+  );
+  assert.throws(
+    () => assertStagingReleaseMutationLease(expected, {
+      inspect: () => ({ ...snapshot, tree: prior }),
+    }),
+    /tree drifted/,
+  );
+  assert.equal(STAGING_RELEASE_MUTATION_LOCK_REF, "refs/heads/release-locks/staging");
+});
+
+test("staging lease acquisition is exclusive and reconciles a lost CAS response", () => {
+  const intent = createStagingReleaseMutationLeaseIntent({
+    operationKind: "release-coordinator",
+    releaseCommit: commit,
+    bindings: stagingBindings,
+  });
+  let remote = null;
+  let inspections = 0;
+  const acquired = acquireStagingReleaseMutationLease(intent, {
+    inspect: () => {
+      inspections += 1;
+      return remote;
+    },
+    createToken: () => token,
+    mutate: (candidate) => {
+      assert.equal(remote, null, "CAS requires an absent shared ref");
+      remote = candidate;
+      throw new Error("injected lost push response");
+    },
+    assertLease: (lease) => assert.equal(lease.token, remote),
+  });
+  assert.equal(acquired.token, token);
+  assert.equal(acquired.resumed, false);
+  assert.equal(inspections, 2, "lost acquire response must perform one reconciliation read");
+  assert.throws(
+    () => acquireStagingReleaseMutationLease(intent, {
+      inspect: () => remote,
+      createToken: () => prior,
+      mutate: () => assert.fail("contender must not attempt a CAS while the ref exists"),
+      assertLease: () => {},
+    }),
+    /already leased.*resume that exact operation/,
+  );
+});
+
+test("staging acquire reports its exact candidate token after post-CAS ambiguity", () => {
+  const intent = createStagingReleaseMutationLeaseIntent({
+    operationKind: "release-coordinator",
+    releaseCommit: commit,
+    bindings: stagingBindings,
+  });
+  assert.throws(
+    () => acquireStagingReleaseMutationLease(intent, {
+      inspect: () => null,
+      createToken: () => token,
+      mutate: () => {},
+      assertLease: () => { throw new Error("lease snapshot unavailable"); },
+    }),
+    new RegExp(`acquisition may have committed as ${token}.*--resume-lease ${token}`, "u"),
+  );
+});
+
+test("staging release CAS avoids post-success races and classifies lost responses", () => {
+  let inspected = false;
+  assert.equal(
+    reconcileStagingReleaseMutationLease({
+      operation: "release",
+      token,
+      mutate: () => {},
+      inspect: () => {
+        inspected = true;
+        return prior;
+      },
+    }),
+    null,
+  );
+  assert.equal(inspected, false, "successful delete must not inspect after another owner can acquire");
+
+  assert.equal(
+    reconcileStagingReleaseMutationLease({
+      operation: "release",
+      token,
+      mutate: () => { throw new Error("lost delete response"); },
+      inspect: () => null,
+    }),
+    null,
+  );
+  assert.throws(
+    () => releaseStagingReleaseMutationLease(token, {
+      mutate: () => { throw new Error("delete rejected"); },
+      inspect: () => token,
+    }),
+    /delete rejected/,
+  );
+  assert.throws(
+    () => releaseStagingReleaseMutationLease(token, {
+      mutate: () => { throw new Error("lost delete response"); },
+      inspect: () => prior,
+    }),
+    (error) => {
+      assert.equal(error.code, "STAGING_RELEASE_LEASE_AUTHORITY_VIOLATION");
+      assert.equal(error.releaseMutationLeaseToken, token);
+      assert.equal(error.observedReleaseMutationLeaseToken, prior);
+      assert.doesNotMatch(error.message, /remains held/u);
+      return true;
+    },
+  );
+  assert.throws(
+    () => releaseStagingReleaseMutationLease(token, {
+      mutate: () => { throw new Error("lost delete response"); },
+      inspect: () => { throw new Error("lease read timed out"); },
+    }),
+    (error) => {
+      assert.equal(error.code, "STAGING_RELEASE_LEASE_RELEASE_AMBIGUOUS");
+      assert.equal(error.releaseMutationLeaseToken, token);
+      assert.match(error.message, /release outcome is unknown/);
+      assert.doesNotMatch(error.message, /remains held/u);
+      return true;
+    },
+  );
+});
+
+test("staging lease resumes exactly and classifies action-failure ownership", async () => {
+  const resumed = resumeStagingReleaseMutationLease(
+    {
+      token,
+      releaseCommit: commit,
+      operationKind: "release-coordinator",
+      bindings: stagingBindings,
+    },
+    { assertLease: (lease) => assert.equal(lease.token, token) },
+  );
+  assert.equal(resumed.resumed, true);
+  assert.throws(
+    () => resumeStagingReleaseMutationLease(
+      {
+        token: prior,
+        releaseCommit: commit,
+        operationKind: "release-coordinator",
+        bindings: stagingBindings,
+      },
+      { assertLease: () => { throw new Error("remote token mismatch"); } },
+    ),
+    /remote token mismatch/,
+  );
+
+  let releases = 0;
+  await assert.rejects(
+    withStagingReleaseMutationLease(
+      {
+        acquire: async () => resumed,
+        release: async () => { releases += 1; },
+        inspect: async () => token,
+      },
+      async () => { throw new Error("live state drifted"); },
+    ),
+    new RegExp(`live state drifted.*lease ${token} remains held.*--resume-lease ${token}`, "u"),
+  );
+  assert.equal(releases, 0, "failed actions retain the shared lease");
+
+  for (const observed of [null, prior]) {
+    await assert.rejects(
+      withStagingReleaseMutationLease(
+        {
+          acquire: async () => resumed,
+          release: async () => assert.fail("authority-lost actions must not release"),
+          inspect: async () => observed,
+        },
+        async () => { throw new Error("mutation authority revalidation failed"); },
+      ),
+      (error) => {
+        assert.equal(error.code, "STAGING_RELEASE_LEASE_AUTHORITY_VIOLATION");
+        assert.equal(error.releaseMutationLeaseToken, token);
+        assert.equal(error.observedReleaseMutationLeaseToken, observed);
+        assert.doesNotMatch(error.message, /remains held/u);
+        return true;
+      },
+    );
+  }
+
+  await assert.rejects(
+    withStagingReleaseMutationLease(
+      {
+        acquire: async () => resumed,
+        release: async () => assert.fail("ambiguous actions must not release"),
+        inspect: async () => { throw new Error("lease inspection timed out"); },
+      },
+      async () => { throw new Error("mutation failed"); },
+    ),
+    (error) => {
+      assert.equal(error.code, "STAGING_RELEASE_LEASE_ACTION_AMBIGUOUS");
+      assert.equal(error.releaseMutationLeaseToken, token);
+      assert.match(error.message, /ownership is unknown/);
+      assert.doesNotMatch(error.message, /remains held/u);
+      return true;
+    },
+  );
+
+  const value = await withStagingReleaseMutationLease(
+    {
+      acquire: async () => resumed,
+      release: async (released) => {
+        assert.equal(released, token);
+        releases += 1;
+      },
+    },
+    async () => "completed-after-immutable-receipt",
+  );
+  assert.equal(value, "completed-after-immutable-receipt");
+  assert.equal(releases, 1);
+
+  await assert.rejects(
+    withStagingReleaseMutationLease(
+      {
+        acquire: async () => resumed,
+        release: async () => {
+          const error = new Error("release outcome is unknown");
+          error.code = "STAGING_RELEASE_LEASE_RELEASE_AMBIGUOUS";
+          throw error;
+        },
+      },
+      async () => "receipt-is-durable",
+    ),
+    (error) => {
+      assert.equal(error.code, "STAGING_RELEASE_LEASE_RELEASE_AMBIGUOUS");
+      assert.doesNotMatch(error.message, /remains held/u);
+      return true;
+    },
+  );
 });
 
 test("release Git rejects ambient authority, replacements, grafts, sparse state, and index concealment", () => {

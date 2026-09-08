@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 
 import {
   assertImageDigest,
+  assertFullCommit,
   assertReleaseReceipt,
   receiptDigest,
 } from "./release_coordinator_contract.mjs";
 
-export const RELEASE_GAMEDAY_VERSION = 1;
+export const RELEASE_GAMEDAY_VERSION = 2;
 export const REQUIRED_RELEASE_GAMEDAY_SCENARIOS = Object.freeze([
   "delayed_migrator",
   "failed_migrator",
@@ -57,10 +58,12 @@ export function buildGameDayReceipt({
   rollbackReceipt,
   scenarios,
   finalState,
+  stagingMutationLeaseCommit,
   generatedAt = new Date(),
 }) {
   assertReleaseReceipt(currentReceipt);
   assertReleaseReceipt(rollbackReceipt);
+  assertFullCommit(stagingMutationLeaseCommit, "game-day staging mutation lease token");
   for (const name of REQUIRED_RELEASE_GAMEDAY_SCENARIOS) {
     validateGameDayScenario(scenarios[name], name);
   }
@@ -84,6 +87,7 @@ export function buildGameDayReceipt({
     version: RELEASE_GAMEDAY_VERSION,
     kind: "fmarch-staging-release-game-day",
     environment: "staging",
+    staging_mutation_lease_commit: stagingMutationLeaseCommit,
     generated_at: generatedAt.toISOString(),
     current_release: {
       commit: currentReceipt.commit,
@@ -112,6 +116,10 @@ export function assertGameDayReceipt(receipt) {
   assert.equal(receipt?.version, RELEASE_GAMEDAY_VERSION, "game-day receipt version drifted");
   assert.equal(receipt.kind, "fmarch-staging-release-game-day", "game-day receipt kind drifted");
   assert.equal(receipt.environment, "staging", "game-day receipt is not staging-scoped");
+  assertFullCommit(
+    receipt.staging_mutation_lease_commit,
+    "game-day staging mutation lease token",
+  );
   const { receipt_sha256: actual, ...base } = receipt;
   assert.equal(actual, receiptDigest(base), "game-day receipt digest does not match its contents");
   for (const name of REQUIRED_RELEASE_GAMEDAY_SCENARIOS) {
@@ -122,4 +130,37 @@ export function assertGameDayReceipt(receipt) {
     assert.equal(serialized.includes(forbidden), false, `game-day receipt contains forbidden ${forbidden}`);
   }
   return receipt;
+}
+
+export function validateCompletedGameDayReceipt(
+  receipt,
+  { currentReceipt, rollbackReceipt, stagingMutationLeaseCommit },
+) {
+  const completed = assertGameDayReceipt(receipt);
+  assert.equal(
+    completed.staging_mutation_lease_commit,
+    stagingMutationLeaseCommit,
+    "completed game-day lease drifted",
+  );
+  assert.deepEqual(
+    completed.current_release,
+    {
+      commit: currentReceipt.commit,
+      receipt_sha256: currentReceipt.receipt_sha256,
+      runtime_digest: currentReceipt.images.runtime,
+      frontend_digest: currentReceipt.images.frontend,
+    },
+    "completed game-day current release drifted",
+  );
+  assert.deepEqual(
+    completed.rollback_release,
+    {
+      commit: rollbackReceipt.commit,
+      receipt_sha256: rollbackReceipt.receipt_sha256,
+      runtime_digest: rollbackReceipt.images.runtime,
+      frontend_digest: rollbackReceipt.images.frontend,
+    },
+    "completed game-day rollback release drifted",
+  );
+  return completed;
 }

@@ -83,6 +83,49 @@ disable hooks, fsmonitor, replacement objects, and external attributes. Posture 
 replace refs, grafts, sparse checkout, and any tracked assume-unchanged or
 skip-worktree flag before trusting the checkout.
 
+All staging release mutations share the remote compare-and-swap lease
+`refs/heads/release-locks/staging`. The lease commit preserves the release
+commit and tree plus an immutable operation intent. Coordinator intents bind
+the signed fleet job and receipt and the nullable schema-reset decision;
+game-day intents bind both staging receipt digests, rollback commit, and delay.
+The coordinator acquires this lease before authenticated preparation, image
+publication, or any Railway mutation. The game day acquires the same lease
+before its first mutation, so a release and a rehearsal cannot race. Every
+control-plane write re-reads and validates the exact remote token, intent,
+parent, tree, canonical Git URL, and Railway topology immediately before the
+write.
+
+A staging failure never deletes the lease. Resume is explicit and exact:
+append `--resume-lease <40-hex-lease>` to the original command with identical
+inputs. The token scopes artifact attempts, database and epoch-reset journals,
+game-day active/resolution records, operation IDs, and final receipt paths.
+Mutating staging releases do not accept `--output`; the immutable receipt is
+always `target/releases/staging/<commit>.<lease>.json`, so resume cannot redirect
+discovery away from an already-published final receipt. Production retains its
+explicit output-path option under its independent promotion lease.
+When an immutable final receipt already exists, resume performs no deployment,
+sentinel, or acceptance replay: it revalidates the receipt's exact current
+deployment IDs and digests, digest-pinned sources with no Git source, active
+domains, API/frontend health and commit, and the remote lease, then releases
+the lease. Live drift retains it. A successful delete is authoritative and is
+not followed by a racy read. If a delete response is lost, a later read
+classifies no ref as completed, the same token as retained, another token as an
+authority violation, and an unreadable ref as outcome-unknown.
+An action failure never attempts deletion and performs its own ownership read:
+only the same observed token is reported as retained and resumable; an absent
+or different token is an authority violation, while an unreadable ref leaves
+ownership outcome-unknown. Operators must not follow an exact-resume hint unless
+the error positively observed that exact token.
+
+An explicit resume treats every absent lease-scoped database intent as a
+possible lost local journal. It may adopt one exact operation-command/image
+history match, but zero matches are outcome-unknown and are never redispatched.
+This deliberately means a failure before a first database dispatch can retain
+the lease without an automatic continuation, especially from another
+worktree. Recovery then requires a separate, future abandonment procedure that
+independently proves the exact Railway job was never created or was cancelled;
+generic lock clearing is forbidden.
+
 Production mutation is serialized by the remote
 `refs/heads/release-locks/production` lease. Its commit binds the release
 commit and tree, expected prior production pointer, signed fleet job and
@@ -132,8 +175,10 @@ builds runtime and frontend images from one temporary `git archive` of that
 commit, never from the live worktree. Every new attempt uses a unique registry
 tag, records the push-returned digest, then pulls and validates the exact
 `repository@digest`; a pre-existing commit tag is never release provenance.
-An already-published staging attempt resumes only from its receipt-bound
-immutable digests after identity/content revalidation. It then
+An already-published staging attempt resumes only from its lease-scoped,
+receipt-bound immutable digests after identity/content revalidation. Attempt
+and final receipt filenames include the exact staging lease token, so another
+lease for the same source commit cannot adopt or collide with them. It then
 first disconnects the canonical Git source without stopping the last successful
 deployment, then
 restores the complete service policy that source cutover would otherwise clear
@@ -146,7 +191,7 @@ triggering another deployment. Error and outcome-unknown paths perform the same
 idempotent disarm before returning. Before every
 reset audit, reset execution, and ordinary or post-reset migration, the
 coordinator publishes a tamper-evident intent keyed by environment, release
-commit, production lease when applicable, phase and generation, exact image,
+commit, staging or production lease, phase and generation, exact image,
 start command, and credential-free variable hash. The intent's deterministic
 64-hex operation ID is passed on the binary command line and must reappear with
 the exact commit in structured logs. A lost V2 response may adopt one unique

@@ -21,6 +21,7 @@ import {
   RELEASE_EVIDENCE_MAX_AGE_MS,
   assertFullCommit,
   assertImageDigest,
+  assertReleaseReceipt,
   assertRuntimeValidationAttestation,
   assertFreshStagingReleaseReceipt,
   assertFreshReleaseEvidence,
@@ -38,8 +39,14 @@ import { validateRuntimeImage } from "./exact_image_content_smoke.mjs";
 import {
   assertCanonicalReleaseRemote,
   assertProductionPromotionLease,
+  assertStagingReleaseMutationLease,
+  acquireStagingReleaseMutationLease,
   canonicalReleaseFetchArguments,
+  createStagingReleaseMutationLeaseIntent,
+  releaseStagingReleaseMutationLease,
   releaseGitEnvironment,
+  resumeStagingReleaseMutationLease,
+  withStagingReleaseMutationLease,
 } from "./release_git_authority.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -68,6 +75,7 @@ export function parseArguments(argv) {
     else if (argument === "--fleet-job") result.fleetJob = requiredValue(argv, ++index, argument);
     else if (argument === "--reuse-staging-receipt") result.reuseStagingReceipt = requiredValue(argv, ++index, argument);
     else if (argument === "--production-lock") result.productionLock = requiredValue(argv, ++index, argument);
+    else if (argument === "--resume-lease") result.resumeLease = requiredValue(argv, ++index, argument);
     else if (argument === "--schema-epoch-reset") result.schemaEpochReset = Number.parseInt(requiredValue(argv, ++index, argument), 10);
     else if (argument === "--output") result.output = requiredValue(argv, ++index, argument);
     else if (argument === "--check") result.check = true;
@@ -75,6 +83,16 @@ export function parseArguments(argv) {
     else throw new Error(`unknown release coordinator argument: ${argument}`);
   }
   assert.ok(["staging", "production"].includes(result.environment), "--environment must be staging or production");
+  assert.equal(
+    result.environment === "production" && result.resumeLease !== undefined,
+    false,
+    "--resume-lease is staging-only",
+  );
+  assert.equal(
+    result.environment === "staging" && result.output !== undefined && !result.check,
+    false,
+    "--output is production-only for mutating releases; staging receipts use the canonical lease-scoped path",
+  );
   if (result.schemaEpochReset !== undefined) {
     assert.ok(Number.isSafeInteger(result.schemaEpochReset) && result.schemaEpochReset > 0, "--schema-epoch-reset must be a positive epoch");
   }
@@ -126,6 +144,15 @@ export function runtimeConfig(environment, env = process.env) {
     frontendImage: imageRepositories.frontend,
     apiUrl: topology.origins.api,
     frontendUrl: topology.origins.frontend,
+  };
+}
+
+export function stagingCoordinatorMutationLeaseBindings({ fleetProof, schemaEpochReset = null }) {
+  assert.ok(fleetProof && typeof fleetProof === "object", "staging lease requires fleet proof");
+  return {
+    fleet_job_id: fleetProof.job_id,
+    fleet_receipt_sha256: fleetProof.receipt_sha256,
+    schema_epoch_reset: schemaEpochReset,
   };
 }
 
@@ -272,15 +299,21 @@ export async function publishFreshImage(
   return digest;
 }
 
-function releaseAttemptPath(environment, commit, promotionLeaseCommit = null) {
+function releaseAttemptPath(
+  environment,
+  commit,
+  promotionLeaseCommit = null,
+  stagingMutationLeaseCommit = null,
+) {
+  const leaseCommit = environment === "production"
+    ? assertFullCommit(promotionLeaseCommit, "production promotion lock token")
+    : assertFullCommit(stagingMutationLeaseCommit, "staging release mutation lease token");
   return path.join(
     repoRoot,
     "target",
     "releases",
     environment,
-    environment === "production"
-      ? `${commit}.${promotionLeaseCommit}.attempt.json`
-      : `${commit}.attempt.json`,
+    `${commit}.${leaseCommit}.attempt.json`,
   );
 }
 
@@ -339,7 +372,9 @@ async function resolveArtifacts(
     };
   }
   assert.equal(args.environment, "staging", "production must reuse exact staging image digests");
-  const priorAttempt = await optionalJson(releaseAttemptPath("staging", commit));
+  const priorAttempt = await optionalJson(
+    releaseAttemptPath("staging", commit, null, config.stagingMutationLease?.token),
+  );
   if (priorAttempt) {
     const attempt = bindReleaseAttempt({
       environment: "staging",
@@ -348,6 +383,7 @@ async function resolveArtifacts(
       frontendDigest: priorAttempt.images?.frontend,
       fleetProof,
       topology: config.topology,
+      stagingMutationLeaseCommit: config.stagingMutationLease?.token,
       existing: priorAttempt,
     });
     assertFreshReleaseEvidence(attempt.created_at, "staging release intent time");
@@ -411,9 +447,15 @@ async function bindAttempt(
   fleetProof,
   topology,
   promotionLeaseCommit = null,
+  stagingMutationLeaseCommit = null,
 ) {
   const attemptPath = path.join(
-    releaseAttemptPath(environment, commit, promotionLeaseCommit),
+    releaseAttemptPath(
+      environment,
+      commit,
+      promotionLeaseCommit,
+      stagingMutationLeaseCommit,
+    ),
   );
   let existing = null;
   try {
@@ -429,6 +471,7 @@ async function bindAttempt(
     fleetProof,
     topology,
     promotionLeaseCommit,
+    stagingMutationLeaseCommit,
     existing,
   });
   assertFreshReleaseEvidence(attempt.created_at, `${environment} release intent time`);
@@ -647,6 +690,29 @@ export async function withProductionMutationAuthority(
   return result;
 }
 
+export async function assertStagingMutationAuthority(
+  config,
+  { assertLease = assertStagingReleaseMutationLease } = {},
+) {
+  if (config.environment !== "staging") return true;
+  assert.ok(
+    config.stagingMutationLease,
+    "staging Railway mutation requires the shared release mutation lease",
+  );
+  assert.equal(config.stagingMutationLease.operationKind, "release-coordinator");
+  await assertLease(config.stagingMutationLease);
+  return true;
+}
+
+export async function withReleaseMutationAuthority(config, mutation, verification = {}) {
+  assert.equal(typeof mutation, "function", "release mutation must be callable");
+  if (config.environment === "production") {
+    return await withProductionMutationAuthority(config, mutation, verification);
+  }
+  await assertStagingMutationAuthority(config, verification);
+  return await mutation();
+}
+
 export function serviceSourceCutoverAction(source, expectedImage = null) {
   if (source == null) return "connect";
   if (source?.repo === "fluffyrabbot/fmarch" && source.image == null) return "disconnect";
@@ -667,7 +733,7 @@ async function detachGitSource(config, serviceId, imageReference) {
   let service = railwayService(config, serviceId);
   let action = serviceSourceCutoverAction(service.source, imageReference);
   if (action === "disconnect") {
-    await withProductionMutationAuthority(config, () =>
+    await withReleaseMutationAuthority(config, () =>
       railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]),
     );
     service = railwayService(config, serviceId);
@@ -719,7 +785,7 @@ async function configureAndDispatchImage(
   const imageReference = `${image}@${digest}`;
   await detachGitSource(config, serviceId, imageReference);
   if (variables && Object.keys(variables).length > 0) {
-    const variablesData = await withProductionMutationAuthority(config, () =>
+    const variablesData = await withReleaseMutationAuthority(config, () =>
       railwayApi(
         "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
         {
@@ -736,7 +802,7 @@ async function configureAndDispatchImage(
     );
     assert.equal(variablesData.variableCollectionUpsert, true, `${label} variables were not updated`);
   }
-  const updateData = await withProductionMutationAuthority(config, () =>
+  const updateData = await withReleaseMutationAuthority(config, () =>
     railwayApi(
       "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
       {
@@ -752,7 +818,7 @@ async function configureAndDispatchImage(
     ),
   );
   assert.equal(updateData.serviceInstanceUpdate, true, `${label} service configuration was not updated`);
-  const deployData = await withProductionMutationAuthority(
+  const deployData = await withReleaseMutationAuthority(
     config,
     () => railwayApi(
       "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) }",
@@ -925,6 +991,12 @@ export function bindDatabaseOneShotIntent({
   const promotionLeaseCommit = config.environment === "production"
     ? assertFullCommit(config.productionLease?.token, "production promotion lock token")
     : null;
+  const stagingMutationLeaseCommit = config.environment === "staging"
+    ? assertFullCommit(
+      config.stagingMutationLease?.token,
+      "staging release mutation lease token",
+    )
+    : null;
   const identity = {
     version: 1,
     kind: "fmarch-database-one-shot-operation-id",
@@ -934,6 +1006,9 @@ export function bindDatabaseOneShotIntent({
     service_id: config.migratorServiceId,
     release_commit: commit,
     promotion_lease_commit: promotionLeaseCommit,
+    ...(config.environment === "staging"
+      ? { staging_mutation_lease_commit: stagingMutationLeaseCommit }
+      : {}),
     phase,
     generation,
     repository,
@@ -1050,7 +1125,7 @@ export function databaseOneShotDisarmInput() {
 }
 
 async function disarmConfiguredDatabaseOneShot(config, label) {
-  const updateData = await withProductionMutationAuthority(config, () =>
+  const updateData = await withReleaseMutationAuthority(config, () =>
     railwayApi(
       "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
       {
@@ -1112,6 +1187,7 @@ async function runJournaledDatabaseOneShotGenerations({
   readCompletion,
   label,
   maxGenerations = MAX_ONE_SHOT_GENERATIONS,
+  recoverMissingIntent = false,
 }) {
   assert.equal(typeof intentForGeneration, "function");
   assert.ok(Number.isSafeInteger(maxGenerations) && maxGenerations > 0);
@@ -1133,7 +1209,8 @@ async function runJournaledDatabaseOneShotGenerations({
     let dispatchRecord = await loadRecord(generation, "dispatch");
     if (dispatchRecord) validateDatabaseOneShotDispatch(dispatchRecord, intent);
     else {
-      let matches = await findMatchingDeployments(intent, { recovering: existingIntent });
+      const recovering = existingIntent || recoverMissingIntent;
+      let matches = await findMatchingDeployments(intent, { recovering });
       assert.ok(Array.isArray(matches), `${label} deployment history is invalid`);
       for (const match of matches) {
         validateDatabaseOneShotDeployment(match, intent, { allowMissingDigest: true });
@@ -1144,7 +1221,7 @@ async function runJournaledDatabaseOneShotGenerations({
       );
       let deploymentId;
       if (matches.length === 1) deploymentId = matches[0].id;
-      else if (existingIntent) {
+      else if (recovering) {
         throw new Error(
           `${label} has a durable intent but no exact deployment; outcome is unknown and must not be redispatched`,
         );
@@ -1250,11 +1327,13 @@ async function deployImage(config, serviceId, image, digest, startCommand, label
 
 function releaseJournalScope(config, commit) {
   assertFullCommit(commit);
-  if (config.environment !== "production") return commit;
-  return `${commit}-${assertFullCommit(
-    config.productionLease?.token,
-    "production promotion lock token",
-  )}`;
+  const token = config.environment === "production"
+    ? assertFullCommit(config.productionLease?.token, "production promotion lock token")
+    : assertFullCommit(
+      config.stagingMutationLease?.token,
+      "staging release mutation lease token",
+    );
+  return `${commit}-${token}`;
 }
 
 function oneShotJournalDirectory(config, commit, phase) {
@@ -1378,6 +1457,8 @@ async function coordinateDatabaseOneShot({
     disarm: () => disarmConfiguredDatabaseOneShot(config, label),
     readCompletion,
     label,
+    recoverMissingIntent:
+      config.environment === "staging" && config.stagingMutationLease?.resumed === true,
   });
 }
 
@@ -1532,6 +1613,14 @@ function epochResetOperation(config, digest, commit, epoch) {
     epoch,
     commit,
     promotion_lease_commit: config.productionLease?.token ?? null,
+    ...(config.environment === "staging"
+      ? {
+        staging_mutation_lease_commit: assertFullCommit(
+          config.stagingMutationLease?.token,
+          "staging release mutation lease token",
+        ),
+      }
+      : {}),
     runtime_digest: digest,
     topology: config.topology,
   };
@@ -1878,6 +1967,7 @@ function parseLastJsonLine(output, label) {
 }
 
 async function runStagingSentinel(config, commit, runtimeDigest) {
+  await assertStagingMutationAuthority(config);
   const corpusOutput = commandText("railway", [
     "ssh",
     "--project",
@@ -1895,6 +1985,7 @@ async function runStagingSentinel(config, commit, runtimeDigest) {
   assert.equal(corpus.projected_public_game, true);
   assert.equal(corpus.projected_search_match, true);
   const hostedEnvironment = scrubHostedEnvironment(process.env);
+  await assertStagingMutationAuthority(config);
   run("node", ["tools/public_search_staging_canary.mjs"], {
     env: hostedEnvironment,
   });
@@ -1976,10 +2067,111 @@ export function validateRequestedSchemaEpoch(requestedEpoch, checkedInEpoch) {
   return requestedEpoch;
 }
 
+export function releaseOutputPath(config, commit, requestedPath = null) {
+  assertFullCommit(commit);
+  if (requestedPath) return path.resolve(requestedPath);
+  const filename = config.environment === "staging"
+    ? `${commit}.${assertFullCommit(
+      config.stagingMutationLease?.token,
+      "staging release mutation lease token",
+    )}.json`
+    : `${commit}.json`;
+  return path.join(repoRoot, "target", "releases", config.environment, filename);
+}
+
+export function validateCompletedStagingReleaseReceipt(
+  receipt,
+  { commit, lease, fleetProof, schemaEpochReset = null },
+) {
+  const completed = assertReleaseReceipt(receipt);
+  assert.equal(completed.environment, "staging", "completed receipt is not staging-scoped");
+  assert.equal(completed.commit, commit, "completed staging receipt commit drifted");
+  assert.equal(
+    completed.staging_mutation_lease_commit,
+    lease.token,
+    "completed staging receipt lease drifted",
+  );
+  assert.deepEqual(completed.fleet_proof, fleetProof, "completed staging fleet proof drifted");
+  assert.equal(
+    completed.schema_epoch_reset?.epoch ?? null,
+    schemaEpochReset,
+    "completed staging schema epoch reset decision drifted",
+  );
+  return completed;
+}
+
+export async function revalidateCompletedStagingRelease(
+  config,
+  receipt,
+  {
+    assertAuthority = assertStagingMutationAuthority,
+    loadDeployment = (serviceId, deploymentId) =>
+      deploymentById(config, serviceId, deploymentId),
+    loadServices = () => railwayJson(config, ["service", "list"]),
+    loadDomains = (serviceId) =>
+      railwayJson(config, ["domain", "list", "--service", serviceId]),
+    loadHealth = async (url, commit, kind, topology) =>
+      fetchHealth(url, commit, kind, topology),
+  } = {},
+) {
+  assertReleaseReceipt(receipt);
+  assert.equal(receipt.environment, "staging");
+  await assertAuthority(config);
+  const deploymentSpecifications = [
+    ["migrator", config.migratorServiceId, receipt.images.runtime],
+    ["api", config.apiServiceId, receipt.images.runtime],
+    ["frontend", config.frontendServiceId, receipt.images.frontend],
+  ];
+  for (const [label, serviceId, digest] of deploymentSpecifications) {
+    const deployment = await loadDeployment(serviceId, receipt.deployments[label]);
+    validateDeploymentArtifact(deployment, digest, `${label} completed receipt`);
+  }
+  const services = await loadServices();
+  assert.ok(Array.isArray(services), "staging service inventory is invalid");
+  for (const [label, serviceId, digest] of deploymentSpecifications) {
+    const service = services.find((candidate) => candidate.id === serviceId);
+    assert.ok(service, `${label} staging service is missing`);
+    assert.equal(
+      service.source?.repo ?? null,
+      null,
+      `${label} staging service retained a racing Git source`,
+    );
+    assert.equal(
+      service.deploymentId,
+      receipt.deployments[label],
+      `${label} serving deployment drifted from completed receipt`,
+    );
+    const repository = label === "frontend" ? config.frontendImage : config.runtimeImage;
+    assert.equal(
+      service.source?.image,
+      `${repository}@${digest}`,
+      `${label} serving image drifted from completed receipt`,
+    );
+  }
+  for (const [label, serviceId, expectedUrl] of [
+    ["api", config.apiServiceId, config.apiUrl],
+    ["frontend", config.frontendServiceId, config.frontendUrl],
+  ]) {
+    const domainInventory = await loadDomains(serviceId);
+    const expectedDomain = new URL(expectedUrl).host;
+    const domain = domainInventory?.domains?.find(
+      (candidate) => candidate.domain === expectedDomain,
+    );
+    assert.ok(domain, `${label} staging domain ${expectedDomain} is missing`);
+    assert.equal(domain.syncStatus, "ACTIVE", `${label} staging domain is not active`);
+  }
+  await Promise.all([
+    loadHealth(`${config.apiUrl}/readyz`, receipt.commit, "api", config.topology),
+    loadHealth(`${config.frontendUrl}/healthz`, receipt.commit, "frontend", null),
+  ]);
+  await assertAuthority(config);
+  return true;
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArguments(argv);
   if (args.help) {
-    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--production-lock <lease-commit>] [--schema-epoch-reset N] [--check]");
+    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--production-lock <lease-commit>] [--resume-lease <staging-lease-commit>] [--schema-epoch-reset N] [--output <production-receipt-path>] [--check]");
     return;
   }
   const commit = assertFullCommit(args.commit ?? commandText("git", ["rev-parse", "HEAD"]));
@@ -2051,90 +2243,192 @@ export async function main(argv = process.argv.slice(2)) {
       fleetProof,
     });
     assertProductionPromotionLease(config.productionLease);
-  } else {
-    await prepareAuthenticatedAcceptance(acceptanceEnv, {api: config.apiUrl, frontend: config.frontendUrl});
   }
-  const artifacts = await resolveArtifacts(args, config, commit, fleetProof, {
-    reusableStagingReceipt,
-  });
-  const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } = artifacts;
-  const runtimeValidation = releaseRuntimeValidation({
-    environment: args.environment,
-    runtimeRepository: config.runtimeImage,
-    runtimeDigest,
-    reusedRuntimeValidation,
-  });
-  const attemptReceipt = await bindAttempt(
-    args.environment,
-    commit,
-    runtimeDigest,
-    frontendDigest,
-    fleetProof,
-    config.topology,
-    promotionLeaseCommit,
-  );
-  let schemaEpochReset = null;
-  let migrator;
-  if (args.schemaEpochReset !== undefined) {
-    const reset = await coordinateEpochReset(
+
+  const coordinateRelease = async () => {
+    const output = releaseOutputPath(
       config,
-      runtimeDigest,
       commit,
-      args.schemaEpochReset,
+      args.environment === "production" ? args.output ?? null : null,
     );
-    schemaEpochReset = reset.schemaEpochReset;
-    migrator = reset.migrator;
-  } else {
-    migrator = (await deployOrRecoverMigrator(
-      config,
+    if (args.environment === "staging") {
+      const completed = await optionalJson(output);
+      if (completed) {
+        assert.equal(
+          config.stagingMutationLease.resumed,
+          true,
+          `staging release output already exists; resume its exact lease with --resume-lease ${completed.staging_mutation_lease_commit ?? "<unknown>"}`,
+        );
+        validateCompletedStagingReleaseReceipt(completed, {
+          commit,
+          lease: config.stagingMutationLease,
+          fleetProof,
+          schemaEpochReset: args.schemaEpochReset ?? null,
+        });
+        await revalidateCompletedStagingRelease(config, completed);
+        return {
+          receipt: completed,
+          output,
+          replay: "completed-receipt",
+          runtimeDigest: completed.images.runtime,
+          frontendDigest: completed.images.frontend,
+        };
+      }
+      await assertStagingMutationAuthority(config);
+      await prepareAuthenticatedAcceptance(acceptanceEnv, {
+        api: config.apiUrl,
+        frontend: config.frontendUrl,
+      });
+    }
+
+    const artifacts = await resolveArtifacts(args, config, commit, fleetProof, {
+      reusableStagingReceipt,
+    });
+    const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } = artifacts;
+    const runtimeValidation = releaseRuntimeValidation({
+      environment: args.environment,
+      runtimeRepository: config.runtimeImage,
       runtimeDigest,
+      reusedRuntimeValidation,
+    });
+    const attemptReceipt = await bindAttempt(
+      args.environment,
       commit,
-      "migrate",
-    )).deployment;
-  }
-  const [api, frontend] = await Promise.all([
-    deployImage(
-      config,
-      config.apiServiceId,
-      config.runtimeImage,
       runtimeDigest,
-      "fmarch-server",
-      `${args.environment} API`,
-      "api",
-      databaseIdentityVariables(config),
-    ),
-    deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, "node build", `${args.environment} frontend`, "frontend"),
-  ]);
-  const [apiHealth, frontendHealth] = await Promise.all([
-    fetchHealth(`${config.apiUrl}/readyz`, commit, "api", config.topology),
-    fetchHealth(`${config.frontendUrl}/healthz`, commit, "frontend"),
-  ]);
-  const sentinel = args.environment === "staging"
-    ? await runStagingSentinel(config, commit, runtimeDigest)
-    : null;
-  const hostedAcceptance = args.environment === 'staging' ? await runHostedAcceptance(acceptanceEnv) : null;
-  const receipt = buildReleaseReceipt({
-    environment: args.environment,
-    commit,
-    runtimeDigest,
-    frontendDigest,
-    deployments: { migrator, api, frontend },
-    health: { api: apiHealth, frontend: frontendHealth },
-    schemaHead: schemaHead(commit),
+      frontendDigest,
+      fleetProof,
+      config.topology,
+      promotionLeaseCommit,
+      config.stagingMutationLease?.token ?? null,
+    );
+    let schemaEpochReset = null;
+    let migrator;
+    if (args.schemaEpochReset !== undefined) {
+      const reset = await coordinateEpochReset(
+        config,
+        runtimeDigest,
+        commit,
+        args.schemaEpochReset,
+      );
+      schemaEpochReset = reset.schemaEpochReset;
+      migrator = reset.migrator;
+    } else {
+      migrator = (await deployOrRecoverMigrator(
+        config,
+        runtimeDigest,
+        commit,
+        "migrate",
+      )).deployment;
+    }
+    const [api, frontend] = await Promise.all([
+      deployImage(
+        config,
+        config.apiServiceId,
+        config.runtimeImage,
+        runtimeDigest,
+        "fmarch-server",
+        `${args.environment} API`,
+        "api",
+        databaseIdentityVariables(config),
+      ),
+      deployImage(
+        config,
+        config.frontendServiceId,
+        config.frontendImage,
+        frontendDigest,
+        "node build",
+        `${args.environment} frontend`,
+        "frontend",
+      ),
+    ]);
+    const [apiHealth, frontendHealth] = await Promise.all([
+      fetchHealth(`${config.apiUrl}/readyz`, commit, "api", config.topology),
+      fetchHealth(`${config.frontendUrl}/healthz`, commit, "frontend"),
+    ]);
+    const sentinel = args.environment === "staging"
+      ? await runStagingSentinel(config, commit, runtimeDigest)
+      : null;
+    if (args.environment === "staging") await assertStagingMutationAuthority(config);
+    const hostedAcceptance = args.environment === "staging"
+      ? await runHostedAcceptance(acceptanceEnv)
+      : null;
+    const receipt = buildReleaseReceipt({
+      environment: args.environment,
+      commit,
+      runtimeDigest,
+      frontendDigest,
+      deployments: { migrator, api, frontend },
+      health: { api: apiHealth, frontend: frontendHealth },
+      schemaHead: schemaHead(commit),
+      fleetProof,
+      attemptReceipt,
+      runtimeValidation,
+      releaseReadiness,
+      sentinel,
+      hostedAcceptance,
+      schemaEpochReset,
+      topology: config.topology,
+    });
+    await withReleaseMutationAuthority(config, () => publishImmutableJson(output, receipt));
+    return {
+      receipt,
+      output,
+      replay: null,
+      runtimeDigest,
+      frontendDigest,
+    };
+  };
+
+  if (args.environment === "production") {
+    const result = await coordinateRelease();
+    console.log(JSON.stringify({
+      status: "passed",
+      environment: "production",
+      commit,
+      runtimeDigest: result.runtimeDigest,
+      frontendDigest: result.frontendDigest,
+      receipt: result.output,
+    }, null, 2));
+    return result.receipt;
+  }
+
+  const bindings = stagingCoordinatorMutationLeaseBindings({
     fleetProof,
-    attemptReceipt,
-    runtimeValidation,
-    releaseReadiness,
-    sentinel,
-    hostedAcceptance,
-    schemaEpochReset,
-    topology: config.topology,
+    schemaEpochReset: args.schemaEpochReset ?? null,
   });
-  const output = path.resolve(
-    args.output ?? path.join(repoRoot, "target", "releases", args.environment, `${commit}.json`),
+  const result = await withStagingReleaseMutationLease(
+    {
+      acquire: async () => args.resumeLease
+        ? resumeStagingReleaseMutationLease({
+          token: args.resumeLease,
+          releaseCommit: commit,
+          operationKind: "release-coordinator",
+          bindings,
+        })
+        : acquireStagingReleaseMutationLease(
+          createStagingReleaseMutationLeaseIntent({
+            operationKind: "release-coordinator",
+            releaseCommit: commit,
+            bindings,
+          }),
+        ),
+      release: async (token) => releaseStagingReleaseMutationLease(token),
+    },
+    async (lease) => {
+      config.stagingMutationLease = lease;
+      return await coordinateRelease();
+    },
   );
-  await withProductionMutationAuthority(config, () => publishImmutableJson(output, receipt));
-  console.log(JSON.stringify({ status: "passed", environment: args.environment, commit, runtimeDigest, frontendDigest, receipt: output }, null, 2));
+  console.log(JSON.stringify({
+    status: "passed",
+    replay: result.replay,
+    environment: "staging",
+    commit,
+    runtimeDigest: result.runtimeDigest,
+    frontendDigest: result.frontendDigest,
+    receipt: result.output,
+  }, null, 2));
+  return result.receipt;
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

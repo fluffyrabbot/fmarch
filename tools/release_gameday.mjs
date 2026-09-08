@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -19,6 +19,7 @@ import {
 import {
   assertGameDayReceipt,
   buildGameDayReceipt,
+  validateCompletedGameDayReceipt,
   validateGameDayInputs,
 } from "./release_gameday_contract.mjs";
 import {
@@ -26,6 +27,14 @@ import {
   DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
 } from "./database_one_shot_policy.mjs";
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
+import {
+  acquireStagingReleaseMutationLease,
+  assertStagingReleaseMutationLease,
+  createStagingReleaseMutationLeaseIntent,
+  releaseStagingReleaseMutationLease,
+  resumeStagingReleaseMutationLease,
+  withStagingReleaseMutationLease,
+} from "./release_git_authority.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const railwayEnvironment = Object.freeze({
@@ -53,7 +62,7 @@ const terminalStates = new Set([
 const gameDayOneShotHistoryLimit = 50;
 const gameDayOneShotRecoveryTimeoutMilliseconds = 60_000;
 
-function parseArguments(argv) {
+export function parseArguments(argv) {
   const result = { execute: false, delaySeconds: 15 };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -62,11 +71,17 @@ function parseArguments(argv) {
     else if (argument === "--confirm") result.confirmation = requiredValue(argv, ++index, argument);
     else if (argument === "--delay-seconds") result.delaySeconds = Number(requiredValue(argv, ++index, argument));
     else if (argument === "--output") result.output = requiredValue(argv, ++index, argument);
+    else if (argument === "--resume-lease") result.resumeLease = requiredValue(argv, ++index, argument);
     else if (argument === "--execute") result.execute = true;
     else if (argument === "--help" || argument === "-h") result.help = true;
     else throw new Error(`unknown release game-day argument: ${argument}`);
   }
   assert.ok(Number.isInteger(result.delaySeconds) && result.delaySeconds >= 10 && result.delaySeconds <= 60);
+  assert.equal(
+    result.output,
+    undefined,
+    "release game day does not accept --output; receipts use the canonical lease-scoped path",
+  );
   return result;
 }
 
@@ -85,7 +100,7 @@ function hostedEnvironment() {
   }
   return {
     ...env,
-    RAILWAY_CALLER: "skill:use-railway@1.3.7",
+    RAILWAY_CALLER: "skill:use-railway@1.4.0",
     RAILWAY_AGENT_SESSION: `fmarch-release-gameday-${process.pid}`,
   };
 }
@@ -215,9 +230,29 @@ function exactImage(repository, digest) {
   return `${repository}@${digest}`;
 }
 
-function updateAndStart({ serviceId, image, digest, startCommand, policy, variables = null }) {
+export async function withGameDayMutationAuthority(
+  stagingMutationLease,
+  mutation,
+  { assertLease = assertStagingReleaseMutationLease } = {},
+) {
+  assert.equal(typeof mutation, "function", "game-day mutation must be callable");
+  assert.ok(stagingMutationLease, "game-day mutation requires the shared staging lease");
+  assert.equal(stagingMutationLease.operationKind, "release-game-day");
+  await assertLease(stagingMutationLease);
+  return await mutation();
+}
+
+async function updateAndStart({
+  stagingMutationLease,
+  serviceId,
+  image,
+  digest,
+  startCommand,
+  policy,
+  variables = null,
+}) {
   if (variables && Object.keys(variables).length > 0) {
-    const variableUpdate = railwayApi(
+    const variableUpdate = await withGameDayMutationAuthority(stagingMutationLease, () => railwayApi(
       "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
       {
         input: {
@@ -229,10 +264,10 @@ function updateAndStart({ serviceId, image, digest, startCommand, policy, variab
           skipDeploys: true,
         },
       },
-    );
+    ));
     assert.equal(variableUpdate.variableCollectionUpsert, true, "Railway game-day variables were not updated");
   }
-  const updated = railwayApi(
+  const updated = await withGameDayMutationAuthority(stagingMutationLease, () => railwayApi(
     "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
     {
       serviceId,
@@ -244,12 +279,12 @@ function updateAndStart({ serviceId, image, digest, startCommand, policy, variab
         ...policy,
       },
     },
-  );
+  ));
   assert.equal(updated.serviceInstanceUpdate, true, "Railway service policy update failed");
-  const deployed = railwayApi(
+  const deployed = await withGameDayMutationAuthority(stagingMutationLease, () => railwayApi(
     "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) }",
     { serviceId, environmentId: railwayEnvironment.environmentId },
-  );
+  ));
   assert.match(
     deployed.serviceInstanceDeployV2 ?? "",
     /\S/u,
@@ -258,15 +293,15 @@ function updateAndStart({ serviceId, image, digest, startCommand, policy, variab
   return deployed.serviceInstanceDeployV2;
 }
 
-function disarmOneShotService(serviceId) {
-  const updated = railwayApi(
+async function disarmOneShotService(stagingMutationLease, serviceId) {
+  const updated = await withGameDayMutationAuthority(stagingMutationLease, () => railwayApi(
     "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
     {
       serviceId,
       environmentId: railwayEnvironment.environmentId,
       input: { startCommand: "/bin/false", railwayConfigFile: null },
     },
-  );
+  ));
   assert.equal(updated.serviceInstanceUpdate, true, "Railway game-day one-shot could not be disarmed");
 }
 
@@ -279,7 +314,17 @@ export function gameDayOneShotVariables() {
   };
 }
 
-function gameDayOneShotRecordPath(commit, scenario, generation, record) {
+export function gameDayMutationLeaseBindings({ currentReceipt, rollbackReceipt, delaySeconds }) {
+  return {
+    current_receipt_sha256: currentReceipt.receipt_sha256,
+    delay_seconds: delaySeconds,
+    rollback_commit: rollbackReceipt.commit,
+    rollback_receipt_sha256: rollbackReceipt.receipt_sha256,
+  };
+}
+
+function gameDayOneShotRecordPath(leaseToken, commit, scenario, generation, record) {
+  assert.match(leaseToken, /^[0-9a-f]{40}$/u, "game-day staging lease token is invalid");
   assert.match(commit, /^[0-9a-f]{40}$/u, "game-day one-shot commit is invalid");
   assert.match(scenario, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u, "game-day one-shot scenario is invalid");
   assert.ok(Number.isSafeInteger(generation) && generation >= 0);
@@ -290,7 +335,7 @@ function gameDayOneShotRecordPath(commit, scenario, generation, record) {
     "releases",
     "staging",
     "game-day-one-shots",
-    commit,
+    `${commit}-${leaseToken}`,
     scenario,
     `generation-${String(generation).padStart(2, "0")}-${record}.json`,
   );
@@ -349,10 +394,16 @@ async function findMatchingGameDayOneShotDeployments(
   return [];
 }
 
-async function coordinateGameDayDatabaseOneShot({ receipt, scenario, startCommand }) {
+async function coordinateGameDayDatabaseOneShot({
+  receipt,
+  scenario,
+  startCommand,
+  stagingMutationLease,
+}) {
   const config = {
     ...railwayEnvironment,
     productionLease: null,
+    stagingMutationLease,
   };
   const variables = gameDayOneShotVariables();
   const intentForGeneration = (generation) => bindDatabaseOneShotIntent({
@@ -368,15 +419,28 @@ async function coordinateGameDayDatabaseOneShot({ receipt, scenario, startComman
   return await runJournaledDatabaseOneShot({
     intentForGeneration,
     loadRecord: (generation, record) =>
-      loadOptionalJson(gameDayOneShotRecordPath(receipt.commit, scenario, generation, record)),
+      loadOptionalJson(gameDayOneShotRecordPath(
+        stagingMutationLease.token,
+        receipt.commit,
+        scenario,
+        generation,
+        record,
+      )),
     publishRecord: (generation, record, value) =>
       publishImmutableJson(
-        gameDayOneShotRecordPath(receipt.commit, scenario, generation, record),
+        gameDayOneShotRecordPath(
+          stagingMutationLease.token,
+          receipt.commit,
+          scenario,
+          generation,
+          record,
+        ),
         value,
       ),
     findMatchingDeployments: (intent, options) =>
       findMatchingGameDayOneShotDeployments(intent, options),
     dispatch: (intent) => updateAndStart({
+      stagingMutationLease,
       serviceId: railwayEnvironment.migratorServiceId,
       image: railwayEnvironment.runtimeImage,
       digest: receipt.images.runtime,
@@ -390,7 +454,10 @@ async function coordinateGameDayDatabaseOneShot({ receipt, scenario, startComman
       digest: receipt.images.runtime,
       statuses: ["SUCCESS", "FAILED", "CRASHED"],
     }),
-    disarm: () => disarmOneShotService(railwayEnvironment.migratorServiceId),
+    disarm: () => disarmOneShotService(
+      stagingMutationLease,
+      railwayEnvironment.migratorServiceId,
+    ),
     readCompletion: async (deployment, intent, { allowMissing }) => {
       try {
         return await waitForMigrationEvidence(
@@ -404,27 +471,29 @@ async function coordinateGameDayDatabaseOneShot({ receipt, scenario, startComman
       }
     },
     label: `game-day ${scenario} migrator`,
+    recoverMissingIntent: stagingMutationLease.resumed === true,
   });
 }
 
-function gameDayActiveOneShotPath(receipt) {
+function gameDayActiveOneShotPath(receipt, stagingMutationLease) {
   return path.join(
     repoRoot,
     "target",
     "releases",
     "staging",
     "game-day-one-shots",
-    receipt.commit,
+    `${receipt.commit}-${stagingMutationLease.token}`,
     "active.json",
   );
 }
 
-function bindGameDayActiveOneShot({ receipt, scenario, startCommand }) {
+function bindGameDayActiveOneShot({ receipt, scenario, startCommand, stagingMutationLease }) {
   const base = {
     version: 1,
     kind: "fmarch-game-day-active-database-one-shot",
     release_commit: receipt.commit,
     staging_receipt_sha256: receipt.receipt_sha256,
+    staging_mutation_lease_commit: stagingMutationLease.token,
     runtime_digest: receipt.images.runtime,
     scenario,
     start_command: startCommand,
@@ -432,7 +501,7 @@ function bindGameDayActiveOneShot({ receipt, scenario, startCommand }) {
   return { ...base, receipt_sha256: receiptDigest(base) };
 }
 
-function validateGameDayActiveOneShot(active, receipt) {
+function validateGameDayActiveOneShot(active, receipt, stagingMutationLease) {
   const { receipt_sha256: actual, ...base } = active ?? {};
   assert.equal(actual, receiptDigest(base), "game-day active one-shot fence was tampered with");
   assert.equal(active.kind, "fmarch-game-day-active-database-one-shot");
@@ -443,21 +512,26 @@ function validateGameDayActiveOneShot(active, receipt) {
     "game-day active one-shot staging receipt drifted",
   );
   assert.equal(active.runtime_digest, receipt.images.runtime, "game-day active one-shot digest drifted");
+  assert.equal(
+    active.staging_mutation_lease_commit,
+    stagingMutationLease.token,
+    "game-day active one-shot lease drifted",
+  );
   assert.match(active.scenario ?? "", /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
   assert.equal(typeof active.start_command, "string");
   assert.ok(active.start_command.length > 0);
   return active;
 }
 
-async function loadGameDayActiveOneShot(receipt) {
-  return await loadOptionalJson(gameDayActiveOneShotPath(receipt));
+async function loadGameDayActiveOneShot(receipt, stagingMutationLease) {
+  return await loadOptionalJson(gameDayActiveOneShotPath(receipt, stagingMutationLease));
 }
 
-async function publishGameDayActiveOneShot(receipt, active) {
-  await publishImmutableJson(gameDayActiveOneShotPath(receipt), active);
+async function publishGameDayActiveOneShot(receipt, active, stagingMutationLease) {
+  await publishImmutableJson(gameDayActiveOneShotPath(receipt, stagingMutationLease), active);
 }
 
-async function finishGameDayActiveOneShot(receipt, active, result) {
+async function finishGameDayActiveOneShot(receipt, active, result, stagingMutationLease) {
   const base = {
     version: 1,
     kind: "fmarch-game-day-resolved-database-one-shot",
@@ -467,58 +541,62 @@ async function finishGameDayActiveOneShot(receipt, active, result) {
   };
   const resolution = { ...base, receipt_sha256: receiptDigest(base) };
   const resolutionPath = path.join(
-    path.dirname(gameDayActiveOneShotPath(receipt)),
+    path.dirname(gameDayActiveOneShotPath(receipt, stagingMutationLease)),
     "resolved",
     `${active.receipt_sha256}.json`,
   );
   await publishImmutableJson(resolutionPath, resolution);
   const current = validateGameDayActiveOneShot(
-    await loadGameDayActiveOneShot(receipt),
+    await loadGameDayActiveOneShot(receipt, stagingMutationLease),
     receipt,
+    stagingMutationLease,
   );
   assert.equal(
     current.receipt_sha256,
     active.receipt_sha256,
     "game-day active one-shot changed before its exact resolution",
   );
-  await unlink(gameDayActiveOneShotPath(receipt));
+  await unlink(gameDayActiveOneShotPath(receipt, stagingMutationLease));
 }
 
 export function createGameDayDatabaseOneShotRunner({
+  stagingMutationLease,
   runOneShot = coordinateGameDayDatabaseOneShot,
   loadActive = loadGameDayActiveOneShot,
   publishActive = publishGameDayActiveOneShot,
   finishActive = finishGameDayActiveOneShot,
 } = {}) {
+  assert.ok(stagingMutationLease, "game-day one-shot runner requires the staging lease");
   assert.equal(typeof runOneShot, "function");
   assert.equal(typeof loadActive, "function");
   assert.equal(typeof publishActive, "function");
   assert.equal(typeof finishActive, "function");
 
   const resume = async (receipt, active) => {
-    validateGameDayActiveOneShot(active, receipt);
+    validateGameDayActiveOneShot(active, receipt, stagingMutationLease);
     const result = await runOneShot({
       receipt,
       scenario: active.scenario,
       startCommand: active.start_command,
+      stagingMutationLease,
     });
-    await finishActive(receipt, active, result);
+    await finishActive(receipt, active, result, stagingMutationLease);
     return result;
   };
 
   return {
     async run(specification) {
-      const expected = bindGameDayActiveOneShot(specification);
-      const active = await loadActive(specification.receipt);
+      const expected = bindGameDayActiveOneShot({ ...specification, stagingMutationLease });
+      const active = await loadActive(specification.receipt, stagingMutationLease);
       if (active) {
         const recovered = await resume(specification.receipt, active);
         if (active.receipt_sha256 === expected.receipt_sha256) return recovered;
       }
-      await publishActive(specification.receipt, expected);
+      await publishActive(specification.receipt, expected, stagingMutationLease);
       return await resume(specification.receipt, expected);
     },
     async resumePending(receipt) {
-      const active = await loadActive(receipt);
+      const active = await loadActive(receipt, stagingMutationLease);
       if (!active) return null;
       return await resume(receipt, active);
     },
@@ -548,6 +626,7 @@ async function waitForDeployment({
 }
 
 async function deployAndWait({
+  stagingMutationLease,
   serviceId,
   image,
   digest,
@@ -558,7 +637,8 @@ async function deployAndWait({
   statuses = ["SUCCESS"],
 }) {
   try {
-    const deploymentId = updateAndStart({
+    const deploymentId = await updateAndStart({
+      stagingMutationLease,
       serviceId,
       image,
       digest,
@@ -566,10 +646,10 @@ async function deployAndWait({
       policy,
       variables,
     });
-    if (disarmOneShot) disarmOneShotService(serviceId);
+    if (disarmOneShot) await disarmOneShotService(stagingMutationLease, serviceId);
     return await waitForDeployment({ serviceId, deploymentId, digest, statuses });
   } finally {
-    if (disarmOneShot) disarmOneShotService(serviceId);
+    if (disarmOneShot) await disarmOneShotService(stagingMutationLease, serviceId);
   }
 }
 
@@ -627,9 +707,10 @@ async function deployCanonicalMigrator(receipt, scenario, oneShots) {
   return outcome.deployment;
 }
 
-async function deployApplication(receipt) {
+async function deployApplication(receipt, stagingMutationLease) {
   const [api, frontend] = await Promise.all([
     deployAndWait({
+      stagingMutationLease,
       serviceId: railwayEnvironment.apiServiceId,
       image: railwayEnvironment.runtimeImage,
       digest: receipt.images.runtime,
@@ -637,6 +718,7 @@ async function deployApplication(receipt) {
       policy: canonicalDeploymentPolicy("api"),
     }),
     deployAndWait({
+      stagingMutationLease,
       serviceId: railwayEnvironment.frontendServiceId,
       image: railwayEnvironment.frontendImage,
       digest: receipt.images.frontend,
@@ -648,7 +730,8 @@ async function deployApplication(receipt) {
   return { api, frontend };
 }
 
-async function runSearchSentinel(receipt) {
+async function runSearchSentinel(receipt, stagingMutationLease) {
+  await withGameDayMutationAuthority(stagingMutationLease, async () => {});
   commandText("node", ["tools/public_search_staging_canary.mjs"]);
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
@@ -675,22 +758,117 @@ function verifyPlatformSources(receipt) {
   const migrator = serviceById(services, railwayEnvironment.migratorServiceId);
   const api = serviceById(services, railwayEnvironment.apiServiceId);
   const frontend = serviceById(services, railwayEnvironment.frontendServiceId);
+  assert.equal(migrator.source?.repo ?? null, null, "migrator retained a racing Git source");
+  assert.equal(api.source?.repo ?? null, null, "API retained a racing Git source");
+  assert.equal(frontend.source?.repo ?? null, null, "frontend retained a racing Git source");
   assert.equal(migrator.source?.image, exactImage(railwayEnvironment.runtimeImage, receipt.images.runtime));
   assert.equal(api.source?.image, exactImage(railwayEnvironment.runtimeImage, receipt.images.runtime));
   assert.equal(frontend.source?.image, exactImage(railwayEnvironment.frontendImage, receipt.images.frontend));
   return { migrator, api, frontend };
 }
 
-async function recoverCurrentRelease(receipt, oneShots) {
+export async function recoverCurrentRelease(
+  receipt,
+  oneShots,
+  stagingMutationLease,
+  {
+    restoreApplication = deployApplication,
+    restoreMigrator = deployCanonicalMigrator,
+  } = {},
+) {
+  await restoreApplication(receipt, stagingMutationLease);
   await oneShots.resumePending(receipt);
-  await deployCanonicalMigrator(receipt, "interrupted-restore", oneShots);
-  await deployApplication(receipt);
+  await restoreMigrator(receipt, "interrupted-restore", oneShots);
+}
+
+export function gameDayOutputPath(currentReceipt, stagingMutationLease) {
+  return path.join(
+    repoRoot,
+    "target",
+    "releases",
+    "staging",
+    `${currentReceipt.commit}.${stagingMutationLease.token}.game-day.json`,
+  );
+}
+
+export async function revalidateCompletedGameDayState(
+  receipt,
+  currentReceipt,
+  rollbackReceipt,
+  stagingMutationLease,
+  {
+    assertAuthority = (lease) => assertStagingReleaseMutationLease(lease),
+    loadDeployment = (deploymentId, serviceId) => deploymentById(deploymentId, serviceId),
+    loadServices = serviceSnapshot,
+    loadDomains = (serviceId) => railwayJson(["domain", "list", "--service", serviceId]),
+    loadServingHealth = () => assertServing(currentReceipt.commit),
+  } = {},
+) {
+  validateCompletedGameDayReceipt(receipt, {
+    currentReceipt,
+    rollbackReceipt,
+    stagingMutationLeaseCommit: stagingMutationLease.token,
+  });
+  await assertAuthority(stagingMutationLease);
+  const specifications = [
+    [
+      "migrator",
+      railwayEnvironment.migratorServiceId,
+      receipt.final_state.migrator_deployment_id,
+      currentReceipt.images.runtime,
+      railwayEnvironment.runtimeImage,
+    ],
+    [
+      "api",
+      railwayEnvironment.apiServiceId,
+      receipt.final_state.api_deployment_id,
+      currentReceipt.images.runtime,
+      railwayEnvironment.runtimeImage,
+    ],
+    [
+      "frontend",
+      railwayEnvironment.frontendServiceId,
+      receipt.final_state.frontend_deployment_id,
+      currentReceipt.images.frontend,
+      railwayEnvironment.frontendImage,
+    ],
+  ];
+  const services = await loadServices();
+  for (const [label, serviceId, deploymentId, digest, repository] of specifications) {
+    const deployment = await loadDeployment(deploymentId, serviceId);
+    validateDeploymentArtifact(deployment, digest, `completed game-day ${label}`);
+    const service = serviceById(services, serviceId);
+    assert.equal(
+      service.deploymentId,
+      deploymentId,
+      `completed game-day ${label} deployment is stale`,
+    );
+    assert.equal(service.source?.repo ?? null, null, `${label} retained a racing Git source`);
+    assert.equal(
+      service.source?.image,
+      exactImage(repository, digest),
+      `completed game-day ${label} image drifted`,
+    );
+  }
+  for (const [label, serviceId, expectedUrl] of [
+    ["api", railwayEnvironment.apiServiceId, railwayEnvironment.apiHealthUrl],
+    ["frontend", railwayEnvironment.frontendServiceId, railwayEnvironment.frontendHealthUrl],
+  ]) {
+    const inventory = await loadDomains(serviceId);
+    const expectedDomain = new URL(expectedUrl).host;
+    const domain = inventory?.domains?.find((candidate) => candidate.domain === expectedDomain);
+    assert.ok(domain, `completed game-day ${label} domain is missing`);
+    assert.equal(domain.syncStatus, "ACTIVE", `completed game-day ${label} domain is not active`);
+  }
+  await loadServingHealth();
+  await assertAuthority(stagingMutationLease);
+  return true;
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArguments(argv);
   if (args.help) {
-    console.log("Usage: node tools/release_gameday.mjs --current-receipt PATH --rollback-receipt PATH --confirm staging:<current-sha> [--delay-seconds 15] [--output PATH] [--execute]");
+    console.log("Usage: node tools/release_gameday.mjs --current-receipt PATH --rollback-receipt PATH --confirm staging:<current-sha> [--delay-seconds 15] [--resume-lease <lease-commit>] [--execute]");
     return;
   }
   assert.ok(args.currentReceipt, "--current-receipt is required");
@@ -698,9 +876,10 @@ export async function main(argv = process.argv.slice(2)) {
   const currentReceipt = JSON.parse(await readFile(path.resolve(args.currentReceipt), "utf8"));
   const rollbackReceipt = JSON.parse(await readFile(path.resolve(args.rollbackReceipt), "utf8"));
   validateGameDayInputs({ currentReceipt, rollbackReceipt, confirmation: args.confirmation });
-  verifyPlatformSources(currentReceipt);
-  await assertServing(currentReceipt.commit);
   if (!args.execute) {
+    assert.equal(args.resumeLease, undefined, "--resume-lease requires --execute");
+    verifyPlatformSources(currentReceipt);
+    await assertServing(currentReceipt.commit);
     console.log(JSON.stringify({
       status: "checked",
       environment: "staging",
@@ -711,150 +890,238 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const initialServices = serviceSnapshot();
-  const servingBeforeMigratorDrills = {
-    api: serviceById(initialServices, railwayEnvironment.apiServiceId).deploymentId,
-    frontend: serviceById(initialServices, railwayEnvironment.frontendServiceId).deploymentId,
-  };
-  const scenarios = {};
-  const oneShots = createGameDayDatabaseOneShotRunner();
-  let restored = false;
-  try {
-    scenarios.delayed_migrator = await measureScenario("delayed_migrator", async () => {
-      const outcome = await oneShots.run({
-        receipt: currentReceipt,
-        scenario: "delayed-migrator",
-        startCommand: `/bin/sh -c 'sleep ${args.delaySeconds}; exec fmarch-migrate "$@"' _`,
-      });
-      const deployment = outcome.deployment;
-      assertUnchangedServingDeployments(servingBeforeMigratorDrills);
+  const bindings = gameDayMutationLeaseBindings({
+    currentReceipt,
+    rollbackReceipt,
+    delaySeconds: args.delaySeconds,
+  });
+  const result = await withStagingReleaseMutationLease(
+    {
+      acquire: async () => args.resumeLease
+        ? resumeStagingReleaseMutationLease({
+          token: args.resumeLease,
+          releaseCommit: currentReceipt.commit,
+          operationKind: "release-game-day",
+          bindings,
+        })
+        : acquireStagingReleaseMutationLease(
+          createStagingReleaseMutationLeaseIntent({
+            operationKind: "release-game-day",
+            releaseCommit: currentReceipt.commit,
+            bindings,
+          }),
+        ),
+      release: async (token) => releaseStagingReleaseMutationLease(token),
+    },
+    async (stagingMutationLease) => {
+      const output = gameDayOutputPath(currentReceipt, stagingMutationLease);
+      const completed = await loadOptionalJson(output);
+      if (completed) {
+        assert.equal(
+          stagingMutationLease.resumed,
+          true,
+          `game-day output already exists; resume its exact lease with --resume-lease ${completed.staging_mutation_lease_commit ?? "<unknown>"}`,
+        );
+        validateCompletedGameDayReceipt(completed, {
+          currentReceipt,
+          rollbackReceipt,
+          stagingMutationLeaseCommit: stagingMutationLease.token,
+        });
+        await revalidateCompletedGameDayState(
+          completed,
+          currentReceipt,
+          rollbackReceipt,
+          stagingMutationLease,
+        );
+        return { receipt: completed, output, replay: "completed-receipt" };
+      }
+
+      const oneShots = createGameDayDatabaseOneShotRunner({ stagingMutationLease });
+      if (stagingMutationLease.resumed) {
+        console.error("resumed game day is restoring the exact current release before preflight");
+        await recoverCurrentRelease(currentReceipt, oneShots, stagingMutationLease);
+      }
+      verifyPlatformSources(currentReceipt);
       await assertServing(currentReceipt.commit);
-      return { deployment_id: deployment.id, injected_delay_seconds: args.delaySeconds };
-    });
-
-    scenarios.failed_migrator = await measureScenario("failed_migrator", async () => {
-      const deployment = await deployAndWait({
-        serviceId: railwayEnvironment.migratorServiceId,
-        image: railwayEnvironment.runtimeImage,
-        digest: currentReceipt.images.runtime,
-        startCommand: "/bin/false",
-        policy: canonicalDeploymentPolicy("migrator"),
-        disarmOneShot: true,
-        statuses: ["FAILED", "CRASHED"],
-      });
-      await assertNoMigrationEvidence(deployment.id);
-      assertUnchangedServingDeployments(servingBeforeMigratorDrills);
-      await assertServing(currentReceipt.commit);
-      return {
-        deployment_id: deployment.id,
-        platform_terminal_status: deployment.status,
-        completion_record_observed: false,
+      const initialServices = serviceSnapshot();
+      const servingBeforeMigratorDrills = {
+        api: serviceById(initialServices, railwayEnvironment.apiServiceId).deploymentId,
+        frontend: serviceById(initialServices, railwayEnvironment.frontendServiceId).deploymentId,
       };
-    });
+      const scenarios = {};
+      let restored = false;
+      try {
+        scenarios.delayed_migrator = await measureScenario("delayed_migrator", async () => {
+          const outcome = await oneShots.run({
+            receipt: currentReceipt,
+            scenario: "delayed-migrator",
+            startCommand: `/bin/sh -c 'sleep ${args.delaySeconds}; exec fmarch-migrate "$@"' _`,
+          });
+          const deployment = outcome.deployment;
+          assertUnchangedServingDeployments(servingBeforeMigratorDrills);
+          await assertServing(currentReceipt.commit);
+          return { deployment_id: deployment.id, injected_delay_seconds: args.delaySeconds };
+        });
 
-    scenarios.exact_digest_retry = await measureScenario("exact_digest_retry", async () => {
-      const deployment = await deployCanonicalMigrator(currentReceipt, "exact-digest-retry", oneShots);
-      return { deployment_id: deployment.id, runtime_digest: currentReceipt.images.runtime };
-    });
+        scenarios.failed_migrator = await measureScenario("failed_migrator", async () => {
+          const deployment = await deployAndWait({
+            stagingMutationLease,
+            serviceId: railwayEnvironment.migratorServiceId,
+            image: railwayEnvironment.runtimeImage,
+            digest: currentReceipt.images.runtime,
+            startCommand: "/bin/false",
+            policy: canonicalDeploymentPolicy("migrator"),
+            disarmOneShot: true,
+            statuses: ["FAILED", "CRASHED"],
+          });
+          await assertNoMigrationEvidence(deployment.id);
+          assertUnchangedServingDeployments(servingBeforeMigratorDrills);
+          await assertServing(currentReceipt.commit);
+          return {
+            deployment_id: deployment.id,
+            platform_terminal_status: deployment.status,
+            completion_record_observed: false,
+          };
+        });
 
-    scenarios.api_readiness_failure = await measureScenario("api_readiness_failure", async () => {
-      const policy = {
-        ...canonicalDeploymentPolicy("api"),
-        healthcheckTimeout: 20,
-        restartPolicyType: "NEVER",
-        restartPolicyMaxRetries: 0,
-      };
-      const deployment = await deployAndWait({
-        serviceId: railwayEnvironment.apiServiceId,
-        image: railwayEnvironment.runtimeImage,
-        digest: currentReceipt.images.runtime,
-        startCommand: "sleep 300",
-        policy,
-        statuses: ["FAILED", "CRASHED"],
-      });
-      await assertServing(currentReceipt.commit);
-      return { deployment_id: deployment.id, terminal_status: deployment.status, healthcheck_path: "/readyz" };
-    });
+        scenarios.exact_digest_retry = await measureScenario("exact_digest_retry", async () => {
+          const deployment = await deployCanonicalMigrator(
+            currentReceipt,
+            "exact-digest-retry",
+            oneShots,
+          );
+          return { deployment_id: deployment.id, runtime_digest: currentReceipt.images.runtime };
+        });
 
-    let wrongDigestDeployment;
-    scenarios.wrong_digest_detection = await measureScenario("wrong_digest_detection", async () => {
-      wrongDigestDeployment = await deployAndWait({
-        serviceId: railwayEnvironment.apiServiceId,
-        image: railwayEnvironment.runtimeImage,
-        digest: rollbackReceipt.images.runtime,
-        startCommand: "fmarch-server",
-        policy: canonicalDeploymentPolicy("api"),
-      });
-      assert.throws(
-        () => validateDeploymentArtifact(wrongDigestDeployment, currentReceipt.images.runtime, "game-day API"),
-        /expected OCI digest/,
-      );
-      return {
-        deployment_id: wrongDigestDeployment.id,
-        expected_digest: currentReceipt.images.runtime,
-        observed_digest: deploymentImageDigest(wrongDigestDeployment),
-      };
-    });
+        scenarios.api_readiness_failure = await measureScenario("api_readiness_failure", async () => {
+          const policy = {
+            ...canonicalDeploymentPolicy("api"),
+            healthcheckTimeout: 20,
+            restartPolicyType: "NEVER",
+            restartPolicyMaxRetries: 0,
+          };
+          const deployment = await deployAndWait({
+            stagingMutationLease,
+            serviceId: railwayEnvironment.apiServiceId,
+            image: railwayEnvironment.runtimeImage,
+            digest: currentReceipt.images.runtime,
+            startCommand: "sleep 300",
+            policy,
+            statuses: ["FAILED", "CRASHED"],
+          });
+          await assertServing(currentReceipt.commit);
+          return {
+            deployment_id: deployment.id,
+            terminal_status: deployment.status,
+            healthcheck_path: "/readyz",
+          };
+        });
 
-    scenarios.application_rollback = await measureScenario("application_rollback", async () => {
-      const frontend = await deployAndWait({
-        serviceId: railwayEnvironment.frontendServiceId,
-        image: railwayEnvironment.frontendImage,
-        digest: rollbackReceipt.images.frontend,
-        startCommand: "node build",
-        policy: canonicalDeploymentPolicy("frontend"),
-      });
-      await assertServing(rollbackReceipt.commit);
-      return {
-        api_deployment_id: wrongDigestDeployment.id,
-        frontend_deployment_id: frontend.id,
-        release_commit: rollbackReceipt.commit,
-        migration_reversal_attempted: false,
-        schema_head: currentReceipt.schema_head,
-      };
-    });
+        let wrongDigestDeployment;
+        scenarios.wrong_digest_detection = await measureScenario(
+          "wrong_digest_detection",
+          async () => {
+            wrongDigestDeployment = await deployAndWait({
+              stagingMutationLease,
+              serviceId: railwayEnvironment.apiServiceId,
+              image: railwayEnvironment.runtimeImage,
+              digest: rollbackReceipt.images.runtime,
+              startCommand: "fmarch-server",
+              policy: canonicalDeploymentPolicy("api"),
+            });
+            assert.throws(
+              () => validateDeploymentArtifact(
+                wrongDigestDeployment,
+                currentReceipt.images.runtime,
+                "game-day API",
+              ),
+              /expected OCI digest/,
+            );
+            return {
+              deployment_id: wrongDigestDeployment.id,
+              expected_digest: currentReceipt.images.runtime,
+              observed_digest: deploymentImageDigest(wrongDigestDeployment),
+            };
+          },
+        );
 
-    scenarios.current_release_restore = await measureScenario("current_release_restore", async () => {
-      const deployments = await deployApplication(currentReceipt);
-      return {
-        api_deployment_id: deployments.api.id,
-        frontend_deployment_id: deployments.frontend.id,
-        release_commit: currentReceipt.commit,
-      };
-    });
-    const sentinel = await runSearchSentinel(currentReceipt);
-    const finalServices = verifyPlatformSources(currentReceipt);
-    await assertServing(currentReceipt.commit);
-    restored = true;
-    const finalState = {
-      environment: "staging",
-      release_commit: currentReceipt.commit,
-      runtime_digest: currentReceipt.images.runtime,
-      frontend_digest: currentReceipt.images.frontend,
-      migrator_deployment_id: finalServices.migrator.deploymentId,
-      api_deployment_id: finalServices.api.deploymentId,
-      frontend_deployment_id: finalServices.frontend.deploymentId,
-      api_ready: true,
-      frontend_healthy: true,
-      search_sentinel: sentinel.status,
-      search_sentinel_receipt_sha256: sentinel.receipt_sha256,
-      schema_head: currentReceipt.schema_head,
-    };
-    const receipt = buildGameDayReceipt({ currentReceipt, rollbackReceipt, scenarios, finalState });
-    assertGameDayReceipt(receipt);
-    const output = path.resolve(
-      args.output ?? path.join(repoRoot, "target", "releases", "staging", `${currentReceipt.commit}.game-day.json`),
-    );
-    await mkdir(path.dirname(output), { recursive: true });
-    await writeFile(output, `${JSON.stringify(receipt, null, 2)}\n`);
-    console.log(JSON.stringify({ status: "passed", environment: "staging", receipt: output, receipt_sha256: receipt.receipt_sha256 }, null, 2));
-  } finally {
-    if (!restored) {
-      console.error("release game day interrupted; restoring the exact current staging release");
-      await recoverCurrentRelease(currentReceipt, oneShots);
-      console.error("exact current staging release restored");
-    }
-  }
+        scenarios.application_rollback = await measureScenario("application_rollback", async () => {
+          const frontend = await deployAndWait({
+            stagingMutationLease,
+            serviceId: railwayEnvironment.frontendServiceId,
+            image: railwayEnvironment.frontendImage,
+            digest: rollbackReceipt.images.frontend,
+            startCommand: "node build",
+            policy: canonicalDeploymentPolicy("frontend"),
+          });
+          await assertServing(rollbackReceipt.commit);
+          return {
+            api_deployment_id: wrongDigestDeployment.id,
+            frontend_deployment_id: frontend.id,
+            release_commit: rollbackReceipt.commit,
+            migration_reversal_attempted: false,
+            schema_head: currentReceipt.schema_head,
+          };
+        });
+
+        scenarios.current_release_restore = await measureScenario(
+          "current_release_restore",
+          async () => {
+            const deployments = await deployApplication(currentReceipt, stagingMutationLease);
+            return {
+              api_deployment_id: deployments.api.id,
+              frontend_deployment_id: deployments.frontend.id,
+              release_commit: currentReceipt.commit,
+            };
+          },
+        );
+        const sentinel = await runSearchSentinel(currentReceipt, stagingMutationLease);
+        const finalServices = verifyPlatformSources(currentReceipt);
+        await assertServing(currentReceipt.commit);
+        restored = true;
+        const finalState = {
+          environment: "staging",
+          release_commit: currentReceipt.commit,
+          runtime_digest: currentReceipt.images.runtime,
+          frontend_digest: currentReceipt.images.frontend,
+          migrator_deployment_id: finalServices.migrator.deploymentId,
+          api_deployment_id: finalServices.api.deploymentId,
+          frontend_deployment_id: finalServices.frontend.deploymentId,
+          api_ready: true,
+          frontend_healthy: true,
+          search_sentinel: sentinel.status,
+          search_sentinel_receipt_sha256: sentinel.receipt_sha256,
+          schema_head: currentReceipt.schema_head,
+        };
+        const receipt = buildGameDayReceipt({
+          currentReceipt,
+          rollbackReceipt,
+          scenarios,
+          finalState,
+          stagingMutationLeaseCommit: stagingMutationLease.token,
+        });
+        assertGameDayReceipt(receipt);
+        await withGameDayMutationAuthority(
+          stagingMutationLease,
+          () => publishImmutableJson(output, receipt),
+        );
+        return { receipt, output, replay: null };
+      } finally {
+        if (!restored) {
+          console.error("release game day interrupted; restoring the exact current staging release");
+          await recoverCurrentRelease(currentReceipt, oneShots, stagingMutationLease);
+          console.error("exact current staging release restored");
+        }
+      }
+    },
+  );
+  console.log(JSON.stringify({
+    status: "passed",
+    replay: result.replay,
+    environment: "staging",
+    receipt: result.output,
+    receipt_sha256: result.receipt.receipt_sha256,
+  }, null, 2));
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

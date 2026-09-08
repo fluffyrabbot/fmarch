@@ -32,16 +32,21 @@ import {
   databaseOneShotDisarmInput,
   databaseIdentityVariables,
   oneShotDatabaseVariables,
+  parseArguments,
   publishFreshImage,
   parseMigrationCompletion,
   serviceSourceCutoverAction,
   parseResetLogRows,
   releaseRuntimeValidation,
+  revalidateCompletedStagingRelease,
+  releaseOutputPath,
   runEpochResetJournal,
   runJournaledDatabaseOneShot,
   runtimeConfig,
   validateEpochResetAudit,
   validateRequestedSchemaEpoch,
+  validateCompletedStagingReleaseReceipt,
+  withReleaseMutationAuthority,
   withProductionMutationAuthority,
   waitForDeployment,
   waitForMigrationCompletion,
@@ -53,6 +58,7 @@ const commit = "a".repeat(40);
 const runtimeDigest = `sha256:${"b".repeat(64)}`;
 const frontendDigest = `sha256:${"c".repeat(64)}`;
 const promotionLeaseCommit = "d".repeat(40);
+const stagingMutationLeaseCommit = "f".repeat(40);
 const fleetJobId = "20260907T120000Z-release";
 const fleetCompletedAt = "2026-09-07T12:30:00.000Z";
 const releaseNow = new Date("2026-09-07T13:00:00.000Z");
@@ -99,6 +105,32 @@ const fleetPublicKeyPem = fleetPublicKey.export({ type: "spki", format: "pem" })
 const fleetTrustRootSha256 = createHash("sha256")
   .update(fleetPublicKey.export({ type: "spki", format: "der" }))
   .digest("hex");
+
+test("mutating staging releases reserve the canonical lease-scoped output path", () => {
+  assert.throws(
+    () => parseArguments(["--output", "custom-staging.json"]),
+    /--output is production-only for mutating releases/,
+  );
+  assert.equal(
+    parseArguments([
+      "--environment",
+      "production",
+      "--output",
+      "custom-production.json",
+    ]).output,
+    "custom-production.json",
+  );
+  const stagingConfig = runtimeConfig("staging", {});
+  stagingConfig.stagingMutationLease = { token: stagingMutationLeaseCommit };
+  assert.match(
+    releaseOutputPath(stagingConfig, commit),
+    new RegExp(`${commit}\\.${stagingMutationLeaseCommit}\\.json$`, "u"),
+  );
+  assert.equal(
+    releaseOutputPath(runtimeConfig("production", {}), commit, "custom-production.json"),
+    path.resolve("custom-production.json"),
+  );
+});
 
 function signedFleetReceipt({
   releaseCommit = commit,
@@ -194,8 +226,11 @@ const attemptReceipt = bindReleaseAttempt({
   runtimeDigest,
   frontendDigest,
   fleetProof,
+  stagingMutationLeaseCommit,
   createdAt: new Date("2026-09-07T12:35:00.000Z"),
 });
+assert.equal(attemptReceipt.version, 4);
+assert.equal(attemptReceipt.staging_mutation_lease_commit, stagingMutationLeaseCommit);
 
 function redigestReleaseReceipt(receipt) {
   const { receipt_sha256: _digest, ...base } = structuredClone(receipt);
@@ -406,6 +441,150 @@ test("production mutations reject replaced staging and fleet evidence between wr
     /signed fleet proof changed from staging/,
   );
   assert.equal(fleetReplacementMutations, 0);
+});
+
+test("staging mutations revalidate the exact remote lease before every write", async () => {
+  const lease = {
+    token: stagingMutationLeaseCommit,
+    releaseCommit: commit,
+    operationKind: "release-coordinator",
+    bindings: {
+      fleet_job_id: fleetProof.job_id,
+      fleet_receipt_sha256: fleetProof.receipt_sha256,
+      schema_epoch_reset: null,
+    },
+    resumed: false,
+  };
+  const config = { environment: "staging", stagingMutationLease: lease };
+  const events = [];
+  const verification = {
+    assertLease: async (actual) => {
+      assert.equal(actual, lease);
+      events.push("remote-lease");
+    },
+  };
+  await withReleaseMutationAuthority(
+    config,
+    async () => events.push("first-mutation"),
+    verification,
+  );
+  await withReleaseMutationAuthority(
+    config,
+    async () => events.push("second-mutation"),
+    verification,
+  );
+  assert.deepEqual(events, [
+    "remote-lease",
+    "first-mutation",
+    "remote-lease",
+    "second-mutation",
+  ]);
+
+  let mutations = 0;
+  await assert.rejects(
+    withReleaseMutationAuthority(
+      config,
+      async () => { mutations += 1; },
+      { assertLease: async () => { throw new Error("remote staging lease changed"); } },
+    ),
+    /remote staging lease changed/,
+  );
+  assert.equal(mutations, 0);
+});
+
+test("a completed staging receipt resumes only under its exact lease without replay", () => {
+  const receipt = stagingReleaseReceiptFixture();
+  const lease = {
+    token: stagingMutationLeaseCommit,
+    releaseCommit: commit,
+    operationKind: "release-coordinator",
+    bindings: {},
+    resumed: true,
+  };
+  assert.equal(
+    validateCompletedStagingReleaseReceipt(receipt, {
+      commit,
+      lease,
+      fleetProof,
+    }),
+    receipt,
+  );
+  assert.throws(
+    () => validateCompletedStagingReleaseReceipt(receipt, {
+      commit,
+      lease: { ...lease, token: "0".repeat(40) },
+      fleetProof,
+    }),
+    /receipt lease drifted/,
+  );
+});
+
+test("completed staging resume revalidates exact live state before lease release", async () => {
+  const receipt = stagingReleaseReceiptFixture();
+  const config = runtimeConfig("staging", {});
+  config.stagingMutationLease = {
+    token: stagingMutationLeaseCommit,
+    releaseCommit: commit,
+    operationKind: "release-coordinator",
+    bindings: {},
+    resumed: true,
+  };
+  const serviceDigests = new Map([
+    [config.migratorServiceId, receipt.images.runtime],
+    [config.apiServiceId, receipt.images.runtime],
+    [config.frontendServiceId, receipt.images.frontend],
+  ]);
+  const deploymentIds = new Map([
+    [config.migratorServiceId, receipt.deployments.migrator],
+    [config.apiServiceId, receipt.deployments.api],
+    [config.frontendServiceId, receipt.deployments.frontend],
+  ]);
+  const services = [...serviceDigests].map(([serviceId, digest]) => ({
+    id: serviceId,
+    deploymentId: deploymentIds.get(serviceId),
+    source: {
+      image: `${serviceId === config.frontendServiceId ? config.frontendImage : config.runtimeImage}@${digest}`,
+    },
+  }));
+  const events = [];
+  const verification = {
+    assertAuthority: async () => events.push("lease"),
+    loadDeployment: async (serviceId, deploymentId) => {
+      events.push(`deployment:${serviceId}`);
+      return deployment(deploymentId, serviceDigests.get(serviceId));
+    },
+    loadServices: async () => services,
+    loadDomains: async (serviceId) => ({
+      domains: [{
+        domain: serviceId === config.apiServiceId
+          ? new URL(config.apiUrl).host
+          : new URL(config.frontendUrl).host,
+        syncStatus: "ACTIVE",
+      }],
+    }),
+    loadHealth: async (_url, expectedCommit, kind) => {
+      assert.equal(expectedCommit, commit);
+      events.push(`health:${kind}`);
+    },
+  };
+  assert.equal(await revalidateCompletedStagingRelease(config, receipt, verification), true);
+  assert.equal(events[0], "lease");
+  assert.deepEqual(
+    events.filter((event) => event.startsWith("health:")).sort(),
+    ["health:api", "health:frontend"],
+  );
+  assert.equal(events.at(-1), "lease");
+
+  await assert.rejects(
+    revalidateCompletedStagingRelease(config, receipt, {
+      ...verification,
+      loadServices: async () => services.map((service) =>
+        service.id === config.apiServiceId
+          ? { ...service, deploymentId: "replacement-api" }
+          : service),
+    }),
+    /API serving deployment drifted|api serving deployment drifted/iu,
+  );
 });
 
 test("repository validation rejects dirty, stale, or unpointed releases", () => {
@@ -764,6 +943,7 @@ test("release retries are bound to the original commit and exact image digests",
       runtimeDigest,
       frontendDigest,
       fleetProof,
+      stagingMutationLeaseCommit,
       existing: attemptReceipt,
     }),
     attemptReceipt,
@@ -775,6 +955,7 @@ test("release retries are bound to the original commit and exact image digests",
       runtimeDigest,
       frontendDigest: `sha256:${"e".repeat(64)}`,
       fleetProof,
+      stagingMutationLeaseCommit,
       existing: attemptReceipt,
     }),
     /exact commit, proof, topology, and image digests/,
@@ -786,6 +967,7 @@ test("release retries are bound to the original commit and exact image digests",
       runtimeDigest,
       frontendDigest,
       fleetProof,
+      stagingMutationLeaseCommit,
       existing: { ...attemptReceipt, receipt_sha256: "0".repeat(64) },
     }),
     /tampered/,
@@ -870,6 +1052,13 @@ test("schema reset request must equal the immutable release epoch", () => {
 
 test("journaled one-shots adopt exact IDs, retry only exact failure, and refuse ambiguity", async () => {
   const config = runtimeConfig("staging", {});
+  config.stagingMutationLease = {
+    token: stagingMutationLeaseCommit,
+    releaseCommit: commit,
+    operationKind: "release-coordinator",
+    bindings: {},
+    resumed: false,
+  };
   const intentForGeneration = (generation) => bindDatabaseOneShotIntent({
     config,
     commit,
@@ -967,6 +1156,27 @@ test("journaled one-shots adopt exact IDs, retry only exact failure, and refuse 
     /durable intent but no exact deployment.*must not be redispatched/,
   );
   assert.deepEqual(unknownDisarms, [null], "outcome-unknown intent must still disarm the service");
+
+  const crossWorktreeResumeRecords = new Map();
+  let crossWorktreeDispatches = 0;
+  let crossWorktreeHistoryReads = 0;
+  await assert.rejects(
+    run(crossWorktreeResumeRecords, {
+      recoverMissingIntent: true,
+      findMatchingDeployments: async (_intent, options) => {
+        assert.equal(options.recovering, true);
+        crossWorktreeHistoryReads += 1;
+        return [];
+      },
+      dispatch: async () => {
+        crossWorktreeDispatches += 1;
+        return "unsafe-redispatch";
+      },
+    }),
+    /durable intent but no exact deployment.*must not be redispatched/,
+  );
+  assert.equal(crossWorktreeHistoryReads, 1);
+  assert.equal(crossWorktreeDispatches, 0);
 
   const ambiguousRecords = new Map();
   let ambiguousDispatches = 0;
@@ -1471,6 +1681,18 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     releaseReadiness,
     generatedAt: new Date("2026-09-07T12:55:00.000Z"),
   });
+  assert.equal(productionAttempt.version, 3);
+  assert.equal(
+    Object.hasOwn(productionAttempt, "staging_mutation_lease_commit"),
+    false,
+    "production attempt schema must remain byte-compatible",
+  );
+  assert.equal(productionReceipt.version, 7);
+  assert.equal(
+    Object.hasOwn(productionReceipt, "staging_mutation_lease_commit"),
+    false,
+    "production receipt schema must remain byte-compatible",
+  );
   assert.equal(
     validateReusableProductionReceipt(productionReceipt, {
       commit,

@@ -10,6 +10,7 @@ import { CANONICAL_RELEASE_TOPOLOGY, assertFullCommit } from "./release_coordina
 export const CANONICAL_RELEASE_REMOTE_NAME = "origin";
 export const CANONICAL_RELEASE_REMOTE_URL = "https://github.com/fluffyrabbot/fmarch.git";
 export const PRODUCTION_PROMOTION_LOCK_REF = "refs/heads/release-locks/production";
+export const STAGING_RELEASE_MUTATION_LOCK_REF = "refs/heads/release-locks/staging";
 export const RELEASE_GIT_TIMEOUT_MS = 2 * 60 * 1_000;
 export const RELEASE_GIT_CREDENTIAL_HELPER = "!gh auth git-credential";
 export const RELEASE_GIT_ASKPASS = "/usr/bin/false";
@@ -69,7 +70,12 @@ function lines(value) {
 
 function gitText(
   args,
-  { root = repoRoot, environment = process.env, postureInspection = false } = {},
+  {
+    root = repoRoot,
+    environment = process.env,
+    postureInspection = false,
+    input = undefined,
+  } = {},
 ) {
   return execFileSync("git", args, {
     cwd: root,
@@ -77,9 +83,132 @@ function gitText(
       ? isolatedReleaseGitEnvironment(environment, { commandConfig: false })
       : releaseGitEnvironment(environment),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    input,
+    stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     timeout: RELEASE_GIT_TIMEOUT_MS,
   }).trim();
+}
+
+function assertSha256(value, label) {
+  assert.match(value ?? "", digestPattern, `${label} is invalid`);
+  return value;
+}
+
+function assertCanonicalInstant(value, label) {
+  assert.equal(new Date(value).toISOString(), value, `${label} is invalid`);
+  return value;
+}
+
+function assertStagingReleaseMutationBindings(operationKind, bindings) {
+  assert.ok(bindings && typeof bindings === "object" && !Array.isArray(bindings));
+  if (operationKind === "release-coordinator") {
+    assert.deepEqual(
+      Object.keys(bindings).sort(),
+      ["fleet_job_id", "fleet_receipt_sha256", "schema_epoch_reset"],
+      "staging coordinator lease bindings drifted",
+    );
+    assert.match(bindings.fleet_job_id ?? "", /\S/u, "staging coordinator fleet job is invalid");
+    assertSha256(bindings.fleet_receipt_sha256, "staging coordinator fleet receipt digest");
+    assert.ok(
+      bindings.schema_epoch_reset === null ||
+        (Number.isSafeInteger(bindings.schema_epoch_reset) && bindings.schema_epoch_reset > 0),
+      "staging coordinator schema epoch reset decision is invalid",
+    );
+  } else if (operationKind === "release-game-day") {
+    assert.deepEqual(
+      Object.keys(bindings).sort(),
+      [
+        "current_receipt_sha256",
+        "delay_seconds",
+        "rollback_commit",
+        "rollback_receipt_sha256",
+      ],
+      "staging game-day lease bindings drifted",
+    );
+    assertSha256(bindings.current_receipt_sha256, "game-day current receipt digest");
+    assertFullCommit(bindings.rollback_commit, "game-day rollback commit");
+    assertSha256(bindings.rollback_receipt_sha256, "game-day rollback receipt digest");
+    assert.ok(
+      Number.isSafeInteger(bindings.delay_seconds) && bindings.delay_seconds > 0,
+      "game-day delay is invalid",
+    );
+  } else {
+    assert.fail(`unsupported staging release mutation operation ${operationKind}`);
+  }
+  return bindings;
+}
+
+export function createStagingReleaseMutationLeaseIntent({
+  operationKind,
+  operationIdentity = `fmarch-staging-release-${randomUUID()}`,
+  releaseCommit,
+  bindings,
+  createdAt = new Date(),
+}) {
+  assert.match(
+    operationIdentity ?? "",
+    /^fmarch-staging-release-[0-9a-f-]+$/u,
+    "staging release mutation identity is invalid",
+  );
+  assertFullCommit(releaseCommit);
+  assertStagingReleaseMutationBindings(operationKind, bindings);
+  return {
+    version: 1,
+    kind: "fmarch-staging-release-mutation-lease",
+    operation_kind: operationKind,
+    operation_identity: operationIdentity,
+    created_at: createdAt.toISOString(),
+    release_commit: releaseCommit,
+    environment: "staging",
+    project_id: CANONICAL_RELEASE_TOPOLOGY.project_id,
+    environment_id: CANONICAL_RELEASE_TOPOLOGY.environments.staging.id,
+    git_remote_url: CANONICAL_RELEASE_REMOTE_URL,
+    topology: CANONICAL_RELEASE_TOPOLOGY,
+    bindings: structuredClone(bindings),
+  };
+}
+
+function validateStagingReleaseMutationLeaseIntentShape(document) {
+  assert.equal(document?.version, 1, "staging release mutation lease version drifted");
+  assert.equal(
+    document?.kind,
+    "fmarch-staging-release-mutation-lease",
+    "staging release mutation lease kind drifted",
+  );
+  assert.match(
+    document.operation_identity ?? "",
+    /^fmarch-staging-release-[0-9a-f-]+$/u,
+    "staging release mutation identity is invalid",
+  );
+  assertCanonicalInstant(document.created_at, "staging release mutation creation time");
+  assertFullCommit(document.release_commit);
+  assert.equal(document.environment, "staging");
+  assert.equal(document.project_id, CANONICAL_RELEASE_TOPOLOGY.project_id);
+  assert.equal(document.environment_id, CANONICAL_RELEASE_TOPOLOGY.environments.staging.id);
+  assert.equal(document.git_remote_url, CANONICAL_RELEASE_REMOTE_URL);
+  assert.deepEqual(document.topology, CANONICAL_RELEASE_TOPOLOGY);
+  assertStagingReleaseMutationBindings(document.operation_kind, document.bindings);
+  return document;
+}
+
+export function validateStagingReleaseMutationLeaseIntent(document, expected) {
+  validateStagingReleaseMutationLeaseIntentShape(document);
+  assert.equal(
+    document.operation_kind,
+    expected.operationKind,
+    "staging release mutation operation kind drifted",
+  );
+  assert.equal(
+    document.release_commit,
+    expected.releaseCommit,
+    "staging release mutation commit drifted",
+  );
+  assert.deepEqual(
+    document.bindings,
+    expected.bindings,
+    "staging release mutation inputs drifted",
+  );
+  return document;
 }
 
 export function validateReleaseGitPosture({
@@ -392,4 +521,287 @@ export function assertProductionPromotionLease(
     stagingReceiptSha256,
     schemaEpochReset,
   });
+}
+
+function remoteReleaseMutationLease(ref = STAGING_RELEASE_MUTATION_LOCK_REF) {
+  assert.equal(ref, STAGING_RELEASE_MUTATION_LOCK_REF, "unsupported release mutation lease ref");
+  assertCanonicalReleaseRemote();
+  const output = gitText(["ls-remote", "--refs", CANONICAL_RELEASE_REMOTE_URL, ref]);
+  if (!output) return null;
+  const [token, observedRef, ...extra] = output.split(/\s+/u);
+  assert.equal(observedRef, ref, "staging release mutation lease ref drifted");
+  assert.equal(extra.length, 0, "staging release mutation lease returned ambiguous state");
+  return assertFullCommit(token, "staging release mutation lease token");
+}
+
+function defaultStagingLeaseSnapshot(token, releaseCommit) {
+  const remoteToken = remoteReleaseMutationLease();
+  const localRef = `refs/fmarch-release-leases/staging-${token}-${randomUUID()}`;
+  gitText([
+    "fetch",
+    "--quiet",
+    "--no-tags",
+    CANONICAL_RELEASE_REMOTE_URL,
+    `+${STAGING_RELEASE_MUTATION_LOCK_REF}:${localRef}`,
+  ]);
+  const fetchedToken = gitText(["rev-parse", localRef]);
+  try {
+    return {
+      remoteToken,
+      fetchedToken,
+      message: gitText(["show", "-s", "--format=%B", localRef]),
+      parent: gitText(["show", "-s", "--format=%P", localRef]),
+      tree: gitText(["show", "-s", "--format=%T", localRef]),
+      expectedTree: gitText(["show", "-s", "--format=%T", releaseCommit]),
+    };
+  } finally {
+    gitText(["update-ref", "-d", localRef, fetchedToken]);
+  }
+}
+
+export function readStagingReleaseMutationLease(
+  { token, releaseCommit },
+  { inspect = defaultStagingLeaseSnapshot } = {},
+) {
+  assertFullCommit(token, "staging release mutation lease token");
+  assertFullCommit(releaseCommit);
+  const snapshot = inspect(token, releaseCommit);
+  assert.equal(snapshot.remoteToken, token, "staging release mutation lease is not held remotely");
+  assert.equal(snapshot.fetchedToken, token, "fetched staging release mutation lease drifted");
+  assert.equal(snapshot.parent, releaseCommit, "staging release mutation lease parent drifted");
+  assert.equal(snapshot.tree, snapshot.expectedTree, "staging release mutation lease tree drifted");
+  let document;
+  try {
+    document = JSON.parse(snapshot.message);
+  } catch {
+    assert.fail("staging release mutation lease intent is not valid JSON");
+  }
+  validateStagingReleaseMutationLeaseIntentShape(document);
+  assert.equal(document.release_commit, releaseCommit, "staging lease intent parent drifted");
+  return document;
+}
+
+export function assertStagingReleaseMutationLease(
+  { token, releaseCommit, operationKind, bindings },
+  options = {},
+) {
+  return validateStagingReleaseMutationLeaseIntent(
+    readStagingReleaseMutationLease({ token, releaseCommit }, options),
+    { releaseCommit, operationKind, bindings },
+  );
+}
+
+function defaultStagingLeaseToken(intent) {
+  const result = execFileSync(
+    "git",
+    ["commit-tree", `${intent.release_commit}^{tree}`, "-p", intent.release_commit],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      input: `${JSON.stringify(intent)}\n`,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: RELEASE_GIT_TIMEOUT_MS,
+      env: {
+        ...releaseGitEnvironment(),
+        GIT_AUTHOR_NAME: "fmarch staging release coordinator",
+        GIT_AUTHOR_EMAIL: "release@fmarch.invalid",
+        GIT_COMMITTER_NAME: "fmarch staging release coordinator",
+        GIT_COMMITTER_EMAIL: "release@fmarch.invalid",
+      },
+    },
+  ).trim();
+  return assertFullCommit(result, "staging release mutation lease token");
+}
+
+function mutateStagingLease(operation, token) {
+  const refspec = operation === "acquire"
+    ? `${token}:${STAGING_RELEASE_MUTATION_LOCK_REF}`
+    : `:${STAGING_RELEASE_MUTATION_LOCK_REF}`;
+  const expected = operation === "acquire" ? "" : token;
+  gitText([
+    "push",
+    `--force-with-lease=${STAGING_RELEASE_MUTATION_LOCK_REF}:${expected}`,
+    CANONICAL_RELEASE_REMOTE_URL,
+    refspec,
+  ]);
+}
+
+export function reconcileStagingReleaseMutationLease({ operation, token, mutate, inspect }) {
+  assert.ok(["acquire", "release"].includes(operation), "unknown staging lease mutation");
+  assertFullCommit(token, "staging release mutation lease token");
+  try {
+    mutate();
+    return operation === "acquire" ? token : null;
+  } catch (error) {
+    let observed;
+    try {
+      observed = inspect();
+    } catch (inspectionError) {
+      if (operation === "release") {
+        const ambiguous = new AggregateError(
+          [error, inspectionError],
+          `staging release mutation lease ${token} release outcome is unknown; inspect ` +
+            `${STAGING_RELEASE_MUTATION_LOCK_REF} before attempting resume or abandonment`,
+        );
+        ambiguous.code = "STAGING_RELEASE_LEASE_RELEASE_AMBIGUOUS";
+        ambiguous.releaseMutationLeaseToken = token;
+        throw ambiguous;
+      }
+      throw inspectionError;
+    }
+    const expected = operation === "acquire" ? token : null;
+    if (observed === expected) return expected;
+    if (operation === "release" && observed !== token) {
+      const authorityError = new Error(
+        `staging release mutation lease release lost authority to ${observed ?? "no token"}`,
+        { cause: error },
+      );
+      authorityError.code = "STAGING_RELEASE_LEASE_AUTHORITY_VIOLATION";
+      authorityError.releaseMutationLeaseToken = token;
+      authorityError.observedReleaseMutationLeaseToken = observed;
+      throw authorityError;
+    }
+    throw error;
+  }
+}
+
+export function acquireStagingReleaseMutationLease(
+  intent,
+  {
+    inspect = () => remoteReleaseMutationLease(),
+    createToken = defaultStagingLeaseToken,
+    mutate = (token) => mutateStagingLease("acquire", token),
+    assertLease = assertStagingReleaseMutationLease,
+  } = {},
+) {
+  validateStagingReleaseMutationLeaseIntentShape(intent);
+  const existing = inspect();
+  assert.equal(
+    existing,
+    null,
+    `staging release mutations are already leased by ${existing}; resume that exact operation`,
+  );
+  const token = assertFullCommit(createToken(intent), "staging release mutation lease token");
+  try {
+    reconcileStagingReleaseMutationLease({
+      operation: "acquire",
+      token,
+      mutate: () => mutate(token, intent),
+      inspect,
+    });
+    const lease = {
+      token,
+      releaseCommit: intent.release_commit,
+      operationKind: intent.operation_kind,
+      bindings: structuredClone(intent.bindings),
+      resumed: false,
+    };
+    assertLease(lease);
+    return lease;
+  } catch (error) {
+    throw ambiguousStagingLeaseAcquisitionError(error, token);
+  }
+}
+
+export function resumeStagingReleaseMutationLease(
+  { token, releaseCommit, operationKind, bindings },
+  { assertLease = assertStagingReleaseMutationLease } = {},
+) {
+  const lease = {
+    token: assertFullCommit(token, "staging release mutation resume lease"),
+    releaseCommit: assertFullCommit(releaseCommit),
+    operationKind,
+    bindings: structuredClone(bindings),
+    resumed: true,
+  };
+  assertLease(lease);
+  return lease;
+}
+
+export function releaseStagingReleaseMutationLease(
+  token,
+  {
+    inspect = () => remoteReleaseMutationLease(),
+    mutate = (leaseToken) => mutateStagingLease("release", leaseToken),
+  } = {},
+) {
+  reconcileStagingReleaseMutationLease({
+    operation: "release",
+    token,
+    mutate: () => mutate(token),
+    inspect,
+  });
+}
+
+function retainedStagingLeaseError(error, token) {
+  const retained = new Error(
+    `${error?.message ?? error}; staging release mutation lease ${token} remains held; ` +
+      `resume only with --resume-lease ${token}`,
+    { cause: error },
+  );
+  retained.code = error?.code;
+  retained.releaseMutationLeaseToken = token;
+  return retained;
+}
+
+function ambiguousStagingLeaseAcquisitionError(error, token) {
+  const ambiguous = new Error(
+    `${error?.message ?? error}; staging release mutation lease acquisition may have committed ` +
+      `as ${token}; inspect ${STAGING_RELEASE_MUTATION_LOCK_REF} and, only when it equals this ` +
+      `token, resume with --resume-lease ${token}`,
+    { cause: error },
+  );
+  ambiguous.code = error?.code;
+  ambiguous.releaseMutationLeaseToken = token;
+  return ambiguous;
+}
+
+async function classifyStagingLeaseActionFailure(error, token, inspect) {
+  let observed;
+  try {
+    observed = await inspect();
+  } catch (inspectionError) {
+    const ambiguous = new AggregateError(
+      [error, inspectionError],
+      `staging release mutation action failed and lease ${token} ownership is unknown; ` +
+        `inspect ${STAGING_RELEASE_MUTATION_LOCK_REF} before attempting resume or abandonment`,
+    );
+    ambiguous.code = "STAGING_RELEASE_LEASE_ACTION_AMBIGUOUS";
+    ambiguous.releaseMutationLeaseToken = token;
+    return ambiguous;
+  }
+  if (observed === token) return retainedStagingLeaseError(error, token);
+  const authorityError = new Error(
+    `${error?.message ?? error}; staging release mutation action lost lease authority: ` +
+      `${STAGING_RELEASE_MUTATION_LOCK_REF} now holds ${observed ?? "no token"}`,
+    { cause: error },
+  );
+  authorityError.code = "STAGING_RELEASE_LEASE_AUTHORITY_VIOLATION";
+  authorityError.releaseMutationLeaseToken = token;
+  authorityError.observedReleaseMutationLeaseToken = observed;
+  return authorityError;
+}
+
+export async function withStagingReleaseMutationLease(
+  { acquire, release, inspect = () => remoteReleaseMutationLease() },
+  action,
+) {
+  const lease = await acquire();
+  let result;
+  try {
+    result = await action(lease);
+  } catch (error) {
+    throw await classifyStagingLeaseActionFailure(error, lease.token, inspect);
+  }
+  try {
+    await release(lease.token);
+  } catch (error) {
+    if (
+      error?.code === "STAGING_RELEASE_LEASE_AUTHORITY_VIOLATION" ||
+      error?.code === "STAGING_RELEASE_LEASE_RELEASE_AMBIGUOUS" ||
+      error?.code === "STAGING_RELEASE_LEASE_ACTION_AMBIGUOUS"
+    ) throw error;
+    throw retainedStagingLeaseError(error, lease.token);
+  }
+  return result;
 }

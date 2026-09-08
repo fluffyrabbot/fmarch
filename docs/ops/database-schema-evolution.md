@@ -53,7 +53,7 @@ The coordinator journals the high-level epoch reset and every database one-shot
 as immutable files under `target/releases/<environment>/`. Before reset audit,
 reset execution, and post-reset migration, it records an exact intent containing
 the environment, epoch/phase, commit, runtime repository and digest, canonical
-variable hash, production lease when applicable, generation, start command,
+variable hash, exact staging or production release lease, generation, start command,
 and deterministic operation ID. Railway returns the exact deployment ID through
 `serviceInstanceDeployV2`; the coordinator durably binds and waits for that ID.
 If the V2 response is lost, bounded history may recover one exact command/image
@@ -62,6 +62,14 @@ match, while zero or multiple matches remain outcome-unknown. `FAILED` or
 without the exact operation-and-commit log is ambiguous and is never
 redispatched. Ordinary migration uses this same protocol rather than relying on
 mutable latest-deployment state.
+
+Staging one-shot paths and operation IDs include the shared
+`refs/heads/release-locks/staging` token. An explicit `--resume-lease` from a
+worktree without the corresponding local intent therefore performs bounded
+exact-command/image history recovery only. It never interprets zero matches as
+permission to dispatch. That fail-closed case retains the lease until a
+separate recovery can independently prove that the exact Railway operation was
+never created or has been cancelled.
 
 The requested reset epoch must equal `schema/epoch.json` at the exact release
 Git commit, and `fmarch-schema-epoch-reset` independently requires the same
