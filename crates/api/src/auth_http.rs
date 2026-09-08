@@ -2918,7 +2918,6 @@ async fn recover_auth_account(
     let revoked_session_count = i64::try_from(recovery.revoked_session_count()).map_err(|_| {
         internal_auth_error("revoked session count exceeds the HTTP response range".to_string())
     })?;
-    let issued = recovery.session().issued();
     cancel_auth_delivery_intent(
         &mut tx,
         recovery.credential_hash(),

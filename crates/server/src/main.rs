@@ -789,15 +789,18 @@ fn identity_delivery_worker_config_from_env(
                     .to_string(),
             )
         })?;
-    api::identity_delivery::IdentityDeliveryWorkerConfig::new(
+    let capacity = api::identity_delivery::IdentityDeliveryWorkerCapacity::new(
         max_concurrency,
         max_concurrency.min(database_headroom),
-        Duration::from_millis(bounded_env(
-            "FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS",
-            100,
-            1,
-            60_000,
-        )?),
+    )
+    .map_err(invalid_runtime_config)?;
+    let poll_interval = Duration::from_millis(bounded_env(
+        "FMARCH_IDENTITY_DELIVERY_POLL_INTERVAL_MS",
+        100,
+        1,
+        60_000,
+    )?);
+    let attempt_budget = api::identity_delivery::IdentityDeliveryAttemptBudget::new(
         Duration::from_millis(bounded_env(
             "FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS",
             40_000,
@@ -822,6 +825,12 @@ fn identity_delivery_worker_config_from_env(
             1,
             120_000,
         )?),
+    )
+    .map_err(invalid_runtime_config)?;
+    api::identity_delivery::IdentityDeliveryWorkerConfig::new(
+        capacity,
+        poll_interval,
+        attempt_budget,
         retry,
     )
     .map_err(invalid_runtime_config)
@@ -1583,13 +1592,15 @@ mod tests {
         )
         .unwrap();
         let delivery = api::identity_delivery::IdentityDeliveryWorkerConfig::new(
-            4,
-            2,
+            api::identity_delivery::IdentityDeliveryWorkerCapacity::new(4, 2).unwrap(),
             Duration::from_millis(100),
-            Duration::from_secs(40),
-            Duration::from_secs(5),
-            Duration::from_secs(10),
-            Duration::from_secs(6),
+            api::identity_delivery::IdentityDeliveryAttemptBudget::new(
+                Duration::from_secs(40),
+                Duration::from_secs(5),
+                Duration::from_secs(10),
+                Duration::from_secs(6),
+            )
+            .unwrap(),
             retry,
         )
         .unwrap();

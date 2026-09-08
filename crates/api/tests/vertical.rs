@@ -4,10 +4,10 @@ use api::{
     identity_delivery::{
         bind_identity_delivery_provider_authority, process_next_identity_delivery_with_config,
         unix_now_seconds, HttpJsonIdentityDeliveryGateway, IdentityDeliveryAdmission,
-        IdentityDeliveryAttempt, IdentityDeliveryFailureCode, IdentityDeliveryFuture,
-        IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts, IdentityDeliveryOutcome,
-        IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerConfig,
-        LocalDeterministicIdentityDeliveryGateway,
+        IdentityDeliveryAttempt, IdentityDeliveryAttemptBudget, IdentityDeliveryFailureCode,
+        IdentityDeliveryFuture, IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts,
+        IdentityDeliveryOutcome, IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerCapacity,
+        IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostConsoleStateResponse, HostSetupStateResponse, MediaUploadResponse,
     WebsocketTicketResponse,
@@ -9732,13 +9732,15 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
     )
     .unwrap();
     let config = IdentityDeliveryWorkerConfig::new(
-        1,
-        1,
+        IdentityDeliveryWorkerCapacity::new(1, 1).unwrap(),
         std::time::Duration::from_millis(10),
-        std::time::Duration::from_secs(6),
-        std::time::Duration::from_secs(PROVIDER_CLOCK_SKEW_MARGIN_SECONDS as u64),
-        std::time::Duration::from_millis(500),
-        std::time::Duration::from_millis(250),
+        IdentityDeliveryAttemptBudget::new(
+            std::time::Duration::from_secs(6),
+            std::time::Duration::from_secs(PROVIDER_CLOCK_SKEW_MARGIN_SECONDS as u64),
+            std::time::Duration::from_millis(500),
+            std::time::Duration::from_millis(250),
+        )
+        .unwrap(),
         retry_policy,
     )
     .unwrap();
@@ -10640,13 +10642,15 @@ async fn identity_delivery_explicit_retries_share_process_admission(pool: sqlx::
     )
     .unwrap();
     let config = IdentityDeliveryWorkerConfig::new(
-        1,
-        1,
+        IdentityDeliveryWorkerCapacity::new(1, 1).unwrap(),
         std::time::Duration::from_millis(10),
-        std::time::Duration::from_secs(15),
-        std::time::Duration::from_secs(1),
-        std::time::Duration::from_secs(5),
-        std::time::Duration::from_secs(1),
+        IdentityDeliveryAttemptBudget::new(
+            std::time::Duration::from_secs(15),
+            std::time::Duration::from_secs(1),
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap(),
         retry_policy,
     )
     .unwrap();

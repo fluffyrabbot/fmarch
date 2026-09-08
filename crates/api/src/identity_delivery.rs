@@ -1,6 +1,6 @@
 use eventstore::decrypt_delivery_credential;
 use principal::PrincipalId;
-use reqwest::{header::RETRY_AFTER, Client, StatusCode, Url};
+use reqwest::{header::RETRY_AFTER, Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -126,42 +126,49 @@ impl IdentityDeliveryRetryPolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdentityDeliveryWorkerConfig {
-    max_concurrency: usize,
+pub struct IdentityDeliveryWorkerCapacity {
+    max_attempts_in_flight: usize,
     max_database_in_flight: usize,
-    poll_interval: Duration,
+}
+
+impl IdentityDeliveryWorkerCapacity {
+    pub fn new(
+        max_attempts_in_flight: usize,
+        max_database_in_flight: usize,
+    ) -> Result<Self, String> {
+        if !(1..=64).contains(&max_attempts_in_flight) {
+            return Err(
+                "identity delivery attempt concurrency must be between 1 and 64".to_string(),
+            );
+        }
+        if !(1..=max_attempts_in_flight).contains(&max_database_in_flight) {
+            return Err(
+                "identity delivery database concurrency must be positive and must not exceed attempt concurrency"
+                    .to_string(),
+            );
+        }
+        Ok(Self {
+            max_attempts_in_flight,
+            max_database_in_flight,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryAttemptBudget {
     claim_lease: Duration,
     provider_clock_skew_margin: Duration,
     provider_timeout: Duration,
     database_timeout: Duration,
-    retry_base: Duration,
-    retry_max: Duration,
-    max_attempts: i32,
 }
 
-impl IdentityDeliveryWorkerConfig {
+impl IdentityDeliveryAttemptBudget {
     pub fn new(
-        max_concurrency: usize,
-        max_database_in_flight: usize,
-        poll_interval: Duration,
         claim_lease: Duration,
         provider_clock_skew_margin: Duration,
         provider_timeout: Duration,
         database_timeout: Duration,
-        retry: IdentityDeliveryRetryPolicy,
     ) -> Result<Self, String> {
-        if !(1..=64).contains(&max_concurrency) {
-            return Err("identity delivery concurrency must be between 1 and 64".to_string());
-        }
-        if !(1..=max_concurrency).contains(&max_database_in_flight) {
-            return Err(
-                "identity delivery database concurrency must be positive and must not exceed provider concurrency"
-                    .to_string(),
-            );
-        }
-        if poll_interval.is_zero() || poll_interval > Duration::from_secs(60) {
-            return Err("identity delivery poll interval must be in (0ms, 60s]".to_string());
-        }
         if provider_timeout.is_zero() || provider_timeout > Duration::from_secs(120) {
             return Err("identity delivery provider timeout must be in (0ms, 120s]".to_string());
         }
@@ -176,15 +183,18 @@ impl IdentityDeliveryWorkerConfig {
                     .to_string(),
             );
         }
-        let post_claim_timeout = provider_timeout
-            .saturating_add(database_timeout)
-            .saturating_add(database_timeout);
-        let lease_coverage_timeout = post_claim_timeout.saturating_add(database_timeout);
+        let budget = Self {
+            claim_lease,
+            provider_clock_skew_margin,
+            provider_timeout,
+            database_timeout,
+        };
         if claim_lease.subsec_nanos() != 0
             || claim_lease.as_secs() < 2
             || claim_lease > Duration::from_secs(300)
             || claim_lease
-                <= lease_coverage_timeout
+                <= budget
+                    .lease_coverage_timeout()
                     .saturating_add(provider_clock_skew_margin)
                     .saturating_add(DATABASE_CLOCK_QUANTIZATION_RESERVE)
         {
@@ -193,26 +203,52 @@ impl IdentityDeliveryWorkerConfig {
                     .to_string(),
             );
         }
+        Ok(budget)
+    }
+
+    fn total_timeout(self) -> Duration {
+        self.provider_timeout
+            .saturating_add(self.database_timeout)
+            .saturating_add(self.database_timeout)
+    }
+
+    fn lease_coverage_timeout(self) -> Duration {
+        self.total_timeout().saturating_add(self.database_timeout)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityDeliveryWorkerConfig {
+    capacity: IdentityDeliveryWorkerCapacity,
+    poll_interval: Duration,
+    attempt_budget: IdentityDeliveryAttemptBudget,
+    retry: IdentityDeliveryRetryPolicy,
+}
+
+impl IdentityDeliveryWorkerConfig {
+    pub fn new(
+        capacity: IdentityDeliveryWorkerCapacity,
+        poll_interval: Duration,
+        attempt_budget: IdentityDeliveryAttemptBudget,
+        retry: IdentityDeliveryRetryPolicy,
+    ) -> Result<Self, String> {
+        if poll_interval.is_zero() || poll_interval > Duration::from_secs(60) {
+            return Err("identity delivery poll interval must be in (0ms, 60s]".to_string());
+        }
         Ok(Self {
-            max_concurrency,
-            max_database_in_flight,
+            capacity,
             poll_interval,
-            claim_lease,
-            provider_clock_skew_margin,
-            provider_timeout,
-            database_timeout,
-            retry_base: retry.base,
-            retry_max: retry.max,
-            max_attempts: retry.max_attempts,
+            attempt_budget,
+            retry,
         })
     }
 
     pub fn max_concurrency(self) -> usize {
-        self.max_concurrency
+        self.capacity.max_attempts_in_flight
     }
 
     pub fn max_database_in_flight(self) -> usize {
-        self.max_database_in_flight
+        self.capacity.max_database_in_flight
     }
 
     pub fn poll_interval(self) -> Duration {
@@ -220,49 +256,48 @@ impl IdentityDeliveryWorkerConfig {
     }
 
     pub fn claim_lease(self) -> Duration {
-        self.claim_lease
+        self.attempt_budget.claim_lease
     }
 
     pub fn provider_clock_skew_margin(self) -> Duration {
-        self.provider_clock_skew_margin
+        self.attempt_budget.provider_clock_skew_margin
     }
 
     fn provider_effect_deadline_at(self, generation_fence_expires_at: i64) -> i64 {
-        generation_fence_expires_at.saturating_sub(self.provider_clock_skew_margin.as_secs() as i64)
+        generation_fence_expires_at
+            .saturating_sub(self.provider_clock_skew_margin().as_secs() as i64)
     }
 
     pub fn provider_timeout(self) -> Duration {
-        self.provider_timeout
+        self.attempt_budget.provider_timeout
     }
 
     pub fn database_timeout(self) -> Duration {
-        self.database_timeout
+        self.attempt_budget.database_timeout
     }
 
     /// Maximum post-claim lifetime drained during shutdown: one preparation
     /// database phase, one provider phase, and one finalization database phase.
     pub fn total_timeout(self) -> Duration {
-        self.provider_timeout
-            .saturating_add(self.database_timeout)
-            .saturating_add(self.database_timeout)
+        self.attempt_budget.total_timeout()
     }
 
     /// Maximum authority lifetime measured from the claim mutation clock. The
     /// extra database phase reserves a full budget for the claim commit itself.
     pub fn lease_coverage_timeout(self) -> Duration {
-        self.total_timeout().saturating_add(self.database_timeout)
+        self.attempt_budget.lease_coverage_timeout()
     }
 
     pub fn retry_base(self) -> Duration {
-        self.retry_base
+        self.retry.base
     }
 
     pub fn retry_max(self) -> Duration {
-        self.retry_max
+        self.retry.max
     }
 
     pub fn max_attempts(self) -> i32 {
-        self.max_attempts
+        self.retry.max_attempts
     }
 
     fn retry_delay_seconds(
@@ -274,10 +309,10 @@ impl IdentityDeliveryWorkerConfig {
         let exponent = u32::try_from(attempt_number.saturating_sub(1))
             .unwrap_or_default()
             .min(62);
-        let base = self.retry_base.as_secs();
+        let base = self.retry.base.as_secs();
         let exponential_cap = base
             .saturating_mul(1_u64 << exponent)
-            .min(self.retry_max.as_secs());
+            .min(self.retry.max.as_secs());
         // PostgreSQL persists second-resolution scheduling. Keep the lower bound
         // at one second while sampling every other point in the full-jitter
         // interval uniformly.
@@ -285,25 +320,28 @@ impl IdentityDeliveryWorkerConfig {
         let provider_floor = provider_retry_after_seconds
             .and_then(|seconds| u64::try_from(seconds).ok())
             .unwrap_or_default()
-            .min(self.retry_max.as_secs());
+            .min(self.retry.max.as_secs());
         i64::try_from(jittered.max(provider_floor)).unwrap_or(i64::MAX)
     }
 }
 
 impl Default for IdentityDeliveryWorkerConfig {
     fn default() -> Self {
-        Self {
-            max_concurrency: 4,
-            max_database_in_flight: 2,
-            poll_interval: Duration::from_millis(100),
-            claim_lease: Duration::from_secs(40),
-            provider_clock_skew_margin: Duration::from_secs(5),
-            provider_timeout: Duration::from_secs(10),
-            database_timeout: Duration::from_secs(5),
-            retry_base: Duration::from_secs(2),
-            retry_max: Duration::from_secs(300),
-            max_attempts: 8,
-        }
+        Self::new(
+            IdentityDeliveryWorkerCapacity::new(4, 2)
+                .expect("default identity delivery capacity is valid"),
+            Duration::from_millis(100),
+            IdentityDeliveryAttemptBudget::new(
+                Duration::from_secs(40),
+                Duration::from_secs(5),
+                Duration::from_secs(10),
+                Duration::from_secs(5),
+            )
+            .expect("default identity delivery attempt budget is valid"),
+            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(300), 8)
+                .expect("default identity delivery retry policy is valid"),
+        )
+        .expect("default identity delivery worker configuration is valid")
     }
 }
 
@@ -3320,11 +3358,11 @@ pub fn unix_now_seconds() -> i64 {
 mod tests {
     use super::{
         bounded_delivery_database_operation, bounded_provider_delivery,
-        DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryCancellationCode,
-        IdentityDeliveryError, IdentityDeliveryFailureCode, IdentityDeliveryGateway,
-        IdentityDeliveryHttpTimeouts, IdentityDeliveryKind, IdentityDeliveryOutcome,
-        IdentityDeliveryPreInvocationFailure, IdentityDeliveryResolution,
-        IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerConfig,
+        DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryAttemptBudget,
+        IdentityDeliveryCancellationCode, IdentityDeliveryError, IdentityDeliveryFailureCode,
+        IdentityDeliveryGateway, IdentityDeliveryHttpTimeouts, IdentityDeliveryKind,
+        IdentityDeliveryOutcome, IdentityDeliveryPreInvocationFailure, IdentityDeliveryResolution,
+        IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerCapacity, IdentityDeliveryWorkerConfig,
         LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
         LOCAL_DETERMINISTIC_PROVIDER_ID,
     };
@@ -3714,46 +3752,50 @@ mod tests {
 
     #[test]
     fn worker_config_rejects_an_attempt_deadline_that_can_outlive_its_claim() {
-        let retry =
-            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
-                .unwrap();
-        assert!(IdentityDeliveryWorkerConfig::new(
-            4,
-            2,
-            Duration::from_millis(100),
+        assert!(IdentityDeliveryAttemptBudget::new(
             Duration::from_secs(10),
             Duration::from_secs(1),
             Duration::from_secs(9),
             Duration::from_secs(1),
-            retry,
         )
         .is_err());
     }
 
     #[test]
+    fn worker_capacity_keeps_database_work_within_attempt_admission() {
+        assert!(IdentityDeliveryWorkerCapacity::new(0, 0).is_err());
+        assert!(IdentityDeliveryWorkerCapacity::new(4, 0).is_err());
+        assert!(IdentityDeliveryWorkerCapacity::new(4, 5).is_err());
+        assert!(IdentityDeliveryWorkerCapacity::new(65, 1).is_err());
+
+        let capacity = IdentityDeliveryWorkerCapacity::new(4, 2).unwrap();
+        assert_eq!(capacity.max_attempts_in_flight, 4);
+        assert_eq!(capacity.max_database_in_flight, 2);
+    }
+
+    #[test]
     fn worker_config_reserves_claim_commit_time_outside_the_post_claim_budget() {
-        let retry =
-            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
-                .unwrap();
-        assert!(IdentityDeliveryWorkerConfig::new(
-            4,
-            2,
-            Duration::from_millis(100),
+        assert!(IdentityDeliveryAttemptBudget::new(
             Duration::from_secs(13),
             Duration::from_secs(1),
             Duration::from_secs(5),
             Duration::from_secs(2),
-            retry,
         )
         .is_err());
-        let config = IdentityDeliveryWorkerConfig::new(
-            4,
-            2,
-            Duration::from_millis(100),
+        let attempt_budget = IdentityDeliveryAttemptBudget::new(
             Duration::from_secs(14),
             Duration::from_secs(1),
             Duration::from_secs(5),
             Duration::from_secs(2),
+        )
+        .unwrap();
+        let retry =
+            IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
+                .unwrap();
+        let config = IdentityDeliveryWorkerConfig::new(
+            IdentityDeliveryWorkerCapacity::new(4, 2).unwrap(),
+            Duration::from_millis(100),
+            attempt_budget,
             retry,
         )
         .unwrap();
@@ -3767,13 +3809,15 @@ mod tests {
             IdentityDeliveryRetryPolicy::new(Duration::from_secs(2), Duration::from_secs(60), 8)
                 .unwrap();
         let config = IdentityDeliveryWorkerConfig::new(
-            4,
-            2,
+            IdentityDeliveryWorkerCapacity::new(4, 2).unwrap(),
             Duration::from_millis(100),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            Duration::from_secs(2),
+            IdentityDeliveryAttemptBudget::new(
+                Duration::from_secs(30),
+                Duration::from_secs(1),
+                Duration::from_secs(5),
+                Duration::from_secs(2),
+            )
+            .unwrap(),
             retry,
         )
         .unwrap();
