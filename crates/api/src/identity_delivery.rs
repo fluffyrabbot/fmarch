@@ -549,6 +549,109 @@ impl IdentityDeliveryOutcome {
     }
 }
 
+/// Orchestration-owned resolution of a claimed delivery. Provider gateways can
+/// construct only `IdentityDeliveryOutcome`; pre-invocation failures are
+/// deliberately private because only orchestration-proven absence of provider
+/// I/O may reuse an attempt generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdentityDeliveryPreInvocationFailure {
+    ProviderSuspended,
+    PreparationTransient,
+}
+
+impl IdentityDeliveryPreInvocationFailure {
+    fn code(self) -> &'static str {
+        match self {
+            Self::ProviderSuspended => "provider_suspended_before_invocation",
+            Self::PreparationTransient => "local_transient_before_provider_invocation",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum IdentityDeliveryResolution {
+    Outcome(IdentityDeliveryOutcome),
+    RetryableBeforeProviderInvocation(IdentityDeliveryPreInvocationFailure),
+}
+
+impl IdentityDeliveryResolution {
+    fn status(&self) -> &'static str {
+        match self {
+            Self::Outcome(outcome) => outcome.status(),
+            Self::RetryableBeforeProviderInvocation(_) => "retryable_failed",
+        }
+    }
+
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Outcome(outcome) => outcome.kind(),
+            Self::RetryableBeforeProviderInvocation(_) => "retryable_failure",
+        }
+    }
+
+    fn code(&self) -> Option<&'static str> {
+        match self {
+            Self::Outcome(outcome) => outcome.code(),
+            Self::RetryableBeforeProviderInvocation(failure) => Some(failure.code()),
+        }
+    }
+
+    fn retry_after_seconds(&self) -> Option<i64> {
+        match self {
+            Self::Outcome(outcome) => outcome.retry_after_seconds(),
+            Self::RetryableBeforeProviderInvocation(_) => Some(1),
+        }
+    }
+
+    fn provider_receipt_id(&self) -> Option<&str> {
+        match self {
+            Self::Outcome(outcome) => outcome.provider_receipt_id(),
+            Self::RetryableBeforeProviderInvocation(_) => None,
+        }
+    }
+
+    fn provider_unavailable(&self) -> bool {
+        match self {
+            Self::Outcome(outcome) => outcome.provider_unavailable(),
+            Self::RetryableBeforeProviderInvocation(_) => false,
+        }
+    }
+
+    fn provider_completion_uncertain(&self) -> bool {
+        match self {
+            Self::Outcome(outcome) => outcome.provider_completion_uncertain(),
+            Self::RetryableBeforeProviderInvocation(_) => false,
+        }
+    }
+
+    fn preserves_attempt_generation(&self) -> bool {
+        matches!(self, Self::RetryableBeforeProviderInvocation(_))
+    }
+
+    fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Outcome(IdentityDeliveryOutcome::Cancelled(_)))
+    }
+
+    fn is_delivered(&self) -> bool {
+        matches!(
+            self,
+            Self::Outcome(IdentityDeliveryOutcome::Delivered { .. })
+        )
+    }
+
+    fn is_retryable(&self) -> bool {
+        matches!(
+            self,
+            Self::RetryableBeforeProviderInvocation(_)
+                | Self::Outcome(
+                    IdentityDeliveryOutcome::RetryableFailure(_)
+                        | IdentityDeliveryOutcome::RetryableFailureAfter { .. }
+                        | IdentityDeliveryOutcome::UncertainFailure { .. }
+                )
+        )
+    }
+}
+
 pub type IdentityDeliveryFuture<'a> =
     Pin<Box<dyn Future<Output = IdentityDeliveryOutcome> + Send + 'a>>;
 pub type IdentityDeliveryProviderProbeFuture<'a> =
@@ -1596,22 +1699,18 @@ impl IdentityDeliveryClaimProvenance {
         }
     }
 
-    fn audit_event_kind(self, outcome: &IdentityDeliveryOutcome) -> &'static str {
-        match (self, outcome) {
-            (_, IdentityDeliveryOutcome::Cancelled(_)) => "auth_delivery_cancelled",
-            (Self::ExplicitRetry { .. }, _) => "auth_delivery_retried",
-            (Self::Automatic, IdentityDeliveryOutcome::Delivered { .. }) => {
-                "auth_delivery_delivered"
-            }
-            (
-                Self::Automatic,
-                IdentityDeliveryOutcome::RetryableFailure(_)
-                | IdentityDeliveryOutcome::RetryableFailureAfter { .. }
-                | IdentityDeliveryOutcome::UncertainFailure { .. },
-            ) => "auth_delivery_retryable_failed",
-            (Self::Automatic, IdentityDeliveryOutcome::PermanentFailure(_)) => {
-                "auth_delivery_permanent_failed"
-            }
+    fn audit_event_kind(self, resolution: &IdentityDeliveryResolution) -> &'static str {
+        if resolution.is_cancelled() {
+            return "auth_delivery_cancelled";
+        }
+        if matches!(self, Self::ExplicitRetry { .. }) {
+            return "auth_delivery_retried";
+        }
+        match resolution.status() {
+            "delivered" => "auth_delivery_delivered",
+            "retryable_failed" => "auth_delivery_retryable_failed",
+            "permanent_failed" => "auth_delivery_permanent_failed",
+            status => unreachable!("identity delivery resolution has invalid status {status}"),
         }
     }
 }
@@ -2442,9 +2541,21 @@ async fn claim_delivery_transaction(
         }
         Err(error) => return Err(error),
     }
-    let provider_attempt_permitted = reclaiming
-        || row.attempt_count < config.max_attempts()
-        || row.outcome_code.as_deref() == Some("provider_unavailable");
+    // A pre-invocation circuit transition or local preparation failure proves
+    // that this generation never reached the provider. Recovery may therefore
+    // reuse the same generation, including the final configured generation,
+    // while every actual provider invocation remains bounded by max_attempts.
+    let persisted_resolution_preserves_attempt_generation = matches!(
+        row.outcome_code.as_deref(),
+        Some("provider_suspended_before_invocation" | "local_transient_before_provider_invocation")
+    );
+    let reusing_attempt_generation =
+        reclaiming || persisted_resolution_preserves_attempt_generation;
+    let provider_attempt_permitted = if reusing_attempt_generation {
+        (1..=config.max_attempts()).contains(&row.attempt_count)
+    } else {
+        row.attempt_count < config.max_attempts()
+    };
     let claim_token = Uuid::new_v4();
     let claim_lease_seconds = config.claim_lease().as_secs() as i64;
     let claim_source = provenance.persisted_source();
@@ -2466,10 +2577,11 @@ async fn claim_delivery_transaction(
             claim_expires_at = mutation_clock.claimed_at + $3,
             attempt_count = attempt_count + CASE
                 WHEN delivery.status <> 'processing'
-                     AND (
-                         attempt_count < $4
-                         OR delivery.outcome_code = 'provider_unavailable'
-                     ) THEN 1
+                     AND delivery.outcome_code IS DISTINCT FROM
+                         'provider_suspended_before_invocation'
+                     AND delivery.outcome_code IS DISTINCT FROM
+                         'local_transient_before_provider_invocation'
+                     AND attempt_count < $4 THEN 1
                 ELSE 0
             END,
             claim_source = $5,
@@ -2727,39 +2839,39 @@ async fn delivery_outcome(
     gateway: &dyn IdentityDeliveryGateway,
     config: IdentityDeliveryWorkerConfig,
     admission: &IdentityDeliveryAdmission,
-) -> IdentityDeliveryOutcome {
+) -> IdentityDeliveryResolution {
     if !claim.provider_attempt_permitted {
-        return IdentityDeliveryOutcome::PermanentFailure(
+        return IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::AttemptsExhausted,
-        );
+        ));
     }
     match revalidate_identity_delivery_invocation(pool, gateway, claim, config, admission).await {
         Ok(IdentityDeliveryInvocationPermission::Permitted) => {}
         Ok(IdentityDeliveryInvocationPermission::CredentialInactive) => {
-            return IdentityDeliveryOutcome::Cancelled(
+            return IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::Cancelled(
                 IdentityDeliveryCancellationCode::CredentialInactive,
-            )
+            ))
         }
         Ok(IdentityDeliveryInvocationPermission::CredentialExpired) => {
-            return IdentityDeliveryOutcome::PermanentFailure(
+            return IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::CredentialExpired,
-            )
+            ))
         }
         Ok(IdentityDeliveryInvocationPermission::ProviderSuspended) => {
-            return IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::ProviderUnavailable,
+            return IdentityDeliveryResolution::RetryableBeforeProviderInvocation(
+                IdentityDeliveryPreInvocationFailure::ProviderSuspended,
             )
         }
         Ok(IdentityDeliveryInvocationPermission::ClaimLost) | Err(_) => {
-            return IdentityDeliveryOutcome::RetryableFailure(
-                IdentityDeliveryFailureCode::LocalTransient,
+            return IdentityDeliveryResolution::RetryableBeforeProviderInvocation(
+                IdentityDeliveryPreInvocationFailure::PreparationTransient,
             )
         }
     }
     let Some(envelope) = claim.credential_envelope.as_ref() else {
-        return IdentityDeliveryOutcome::PermanentFailure(
+        return IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialUnavailable,
-        );
+        ));
     };
     let credential_material = match decrypt_delivery_credential(
         envelope,
@@ -2767,13 +2879,15 @@ async fn delivery_outcome(
     ) {
         Ok(material) => material,
         Err(_) => {
-            return IdentityDeliveryOutcome::PermanentFailure(
+            return IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
                 IdentityDeliveryFailureCode::CredentialUnavailable,
-            )
+            ))
         }
     };
     claim.attempt.credential_material = Some(credential_material);
-    bounded_provider_delivery(config.provider_timeout(), gateway.deliver(&claim.attempt)).await
+    IdentityDeliveryResolution::Outcome(
+        bounded_provider_delivery(config.provider_timeout(), gateway.deliver(&claim.attempt)).await,
+    )
 }
 
 async fn bounded_provider_delivery<F>(timeout: Duration, delivery: F) -> IdentityDeliveryOutcome
@@ -2847,7 +2961,7 @@ async fn finalize_delivery(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     gateway: &dyn IdentityDeliveryGateway,
     claim: ClaimedIdentityDelivery,
-    outcome: IdentityDeliveryOutcome,
+    outcome: IdentityDeliveryResolution,
     now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
@@ -2856,33 +2970,31 @@ async fn finalize_delivery(
     let provider_unavailability_was_observed = provider_was_invoked && provider_is_unavailable;
     let provider_completion_was_uncertain =
         provider_was_invoked && outcome.provider_completion_uncertain();
+    let preserves_attempt_generation = outcome.preserves_attempt_generation();
     let mut outcome = outcome;
     // Once the provider confirms delivery, persist that external fact even if
     // the credential expires while the already-authorized request is in
     // flight. Pre-send revalidation prevents a fresh call after expiry; expiry
     // cannot undo an external effect that already completed.
     if now >= claim.attempt.credential_expires_at
-        && !matches!(
-            &outcome,
-            IdentityDeliveryOutcome::Cancelled(_) | IdentityDeliveryOutcome::Delivered { .. }
-        )
+        && !outcome.is_cancelled()
+        && !outcome.is_delivered()
     {
-        outcome = IdentityDeliveryOutcome::PermanentFailure(
+        outcome = IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialExpired,
-        );
+        ));
     }
-    if !provider_is_unavailable
-        && matches!(
-            &outcome,
-            IdentityDeliveryOutcome::RetryableFailure(_)
-                | IdentityDeliveryOutcome::RetryableFailureAfter { .. }
-                | IdentityDeliveryOutcome::UncertainFailure { .. }
-        )
+    // Retryable pre-invocation resolutions preserve their generation because
+    // no provider call occurred. Every outcome from a provider invocation,
+    // including a provider-unavailable acknowledgement or uncertain timeout,
+    // exhausts the final configured generation.
+    if !preserves_attempt_generation
+        && outcome.is_retryable()
         && claim.attempt.attempt_number >= config.max_attempts()
     {
-        outcome = IdentityDeliveryOutcome::PermanentFailure(
+        outcome = IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::AttemptsExhausted,
-        );
+        ));
     }
     let entropy = u64::from_le_bytes(
         Uuid::new_v4().as_bytes()[..8]
@@ -2897,9 +3009,9 @@ async fn finalize_delivery(
         ))
     });
     if next_attempt_at.is_some_and(|retry_at| retry_at >= claim.attempt.credential_expires_at) {
-        outcome = IdentityDeliveryOutcome::PermanentFailure(
+        outcome = IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialExpired,
-        );
+        ));
         next_attempt_at = None;
     }
     let event_kind = claim.provenance.audit_event_kind(&outcome);
@@ -3007,9 +3119,9 @@ async fn finalize_delivery(
             (
                 attempt_count,
                 "auth_delivery_cancelled",
-                IdentityDeliveryOutcome::Cancelled(
+                IdentityDeliveryResolution::Outcome(IdentityDeliveryOutcome::Cancelled(
                     IdentityDeliveryCancellationCode::CredentialInactive,
-                ),
+                )),
             )
         })
     };
@@ -3211,6 +3323,7 @@ mod tests {
         DisabledIdentityDeliveryGateway, IdentityDeliveryAttempt, IdentityDeliveryCancellationCode,
         IdentityDeliveryError, IdentityDeliveryFailureCode, IdentityDeliveryGateway,
         IdentityDeliveryHttpTimeouts, IdentityDeliveryKind, IdentityDeliveryOutcome,
+        IdentityDeliveryPreInvocationFailure, IdentityDeliveryResolution,
         IdentityDeliveryRetryPolicy, IdentityDeliveryWorkerConfig,
         LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
         LOCAL_DETERMINISTIC_PROVIDER_ID,
@@ -3553,6 +3666,12 @@ mod tests {
         let retryable = IdentityDeliveryOutcome::RetryableFailure(
             IdentityDeliveryFailureCode::ProviderUnavailable,
         );
+        let suppressed = IdentityDeliveryResolution::RetryableBeforeProviderInvocation(
+            IdentityDeliveryPreInvocationFailure::ProviderSuspended,
+        );
+        let preparation_transient = IdentityDeliveryResolution::RetryableBeforeProviderInvocation(
+            IdentityDeliveryPreInvocationFailure::PreparationTransient,
+        );
         let uncertain = IdentityDeliveryOutcome::UncertainFailure {
             code: IdentityDeliveryFailureCode::ProviderUnavailable,
             retry_after_seconds: None,
@@ -3567,6 +3686,17 @@ mod tests {
         assert_eq!(retryable.kind(), "retryable_failure");
         assert_eq!(retryable.code(), Some("provider_unavailable"));
         assert_eq!(retryable.retry_after_seconds(), Some(1));
+        assert_eq!(
+            suppressed.code(),
+            Some("provider_suspended_before_invocation")
+        );
+        assert!(suppressed.preserves_attempt_generation());
+        assert!(!suppressed.provider_unavailable());
+        assert_eq!(
+            preparation_transient.code(),
+            Some("local_transient_before_provider_invocation")
+        );
+        assert!(preparation_transient.preserves_attempt_generation());
         assert_eq!(uncertain.status(), "retryable_failed");
         assert_eq!(uncertain.kind(), "retryable_failure");
         assert_eq!(uncertain.code(), Some("provider_unavailable"));

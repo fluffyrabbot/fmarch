@@ -9651,7 +9651,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
     pool: sqlx::PgPool,
 ) {
     const PROVIDER_CLOCK_LAG_SECONDS: i64 = 1;
-    const PROVIDER_CLOCK_SKEW_MARGIN_SECONDS: i64 = 3;
+    const PROVIDER_CLOCK_SKEW_MARGIN_SECONDS: i64 = 5;
     let (request_sender, mut request_receiver) =
         tokio::sync::mpsc::unbounded_channel::<serde_json::Value>();
     let (quiesced_sender, mut quiesced_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -9729,7 +9729,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         1,
         1,
         std::time::Duration::from_millis(10),
-        std::time::Duration::from_secs(6),
+        std::time::Duration::from_secs(8),
         std::time::Duration::from_secs(PROVIDER_CLOCK_SKEW_MARGIN_SECONDS as u64),
         std::time::Duration::from_millis(500),
         std::time::Duration::from_millis(250),
@@ -9812,7 +9812,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
     assert_eq!(fence.1, "fixture-http-timeout-v1");
     let generation_fence_expires_at = effect_deadline_at + wire_clock_skew_margin_seconds;
     assert_eq!(fence.3, generation_fence_expires_at);
-    assert_eq!(fence.3 - fence.2, 6);
+    assert_eq!(fence.3 - fence.2, 8);
 
     let erased = sqlx::query("DELETE FROM auth_delivery_intent WHERE delivery_id = $1")
         .bind(delivery_id)
@@ -9852,7 +9852,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .contains("provider attempts to quiesce"));
 
     let mut effect_deadline_elapsed = false;
-    for _ in 0..80 {
+    for _ in 0..160 {
         let database_now = sqlx::query_scalar::<_, i64>(
             "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
         )
@@ -9877,7 +9877,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .to_string()
         .contains("provider attempts to quiesce"));
     let quiesced_attempt =
-        tokio::time::timeout(std::time::Duration::from_secs(2), quiesced_receiver.recv())
+        tokio::time::timeout(std::time::Duration::from_secs(5), quiesced_receiver.recv())
             .await
             .expect("lagging provider terminates by the skew-adjusted safety window")
             .expect("provider quiescence channel remains open");
@@ -9896,7 +9896,7 @@ async fn identity_delivery_http_timeout_lost_cas_retains_generation_safety_fence
         .to_string()
         .contains("provider attempts to quiesce"));
     let mut generation_fence_expired = false;
-    for _ in 0..80 {
+    for _ in 0..160 {
         let database_now = sqlx::query_scalar::<_, i64>(
             "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
         )
@@ -10805,7 +10805,7 @@ async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(poo
 async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
     pool: sqlx::PgPool,
 ) {
-    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
         test_api_state_with_gateway(pool.clone(), gateway.clone())
             .await
@@ -10853,13 +10853,229 @@ async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
     assert_eq!(receipt.attempt_count, 8);
     assert_eq!(receipt.outcome_code.as_deref(), Some("attempts_exhausted"));
     assert!(gateway.attempts().is_empty());
+
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'retryable_failed',
+            outcome_kind = 'retryable_failure',
+            outcome_code = 'provider_suspended_before_invocation',
+            last_error = 'provider_suspended_before_invocation',
+            delivered_at = NULL,
+            provider_receipt_id = NULL,
+            attempt_count = 9,
+            next_attempt_at = 0
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let corrupt_marker = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("an out-of-range suppression marker is dead-lettered");
+    assert_eq!(corrupt_marker.status, "permanent_failed");
+    assert_eq!(corrupt_marker.attempt_count, 9);
+    assert_eq!(
+        corrupt_marker.outcome_code.as_deref(),
+        Some("attempts_exhausted")
+    );
+    assert!(
+        gateway.attempts().is_empty(),
+        "an out-of-range suppression marker cannot create a provider attempt"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_preparation_failure_preserves_final_retry_generation(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token =
+        issue_dev_session(&app, "final_preparation_failure_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "final-preparation-failure@example.test",
+        "correct horse battery",
+        "final_preparation_failure_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "final-preparation-failure@example.test",
+        "final_preparation_failure_user",
+        "final-preparation-failure-token",
+    )
+    .await;
+    sqlx::query("UPDATE auth_delivery_intent SET attempt_count = 7 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Shift the persisted lease after the claim statement has returned its
+    // fence. Revalidation observes the mismatch and exercises the real local
+    // preparation-failure path before credential unsealing or provider I/O.
+    sqlx::query(
+        r#"
+        CREATE FUNCTION test_shift_identity_delivery_claim_expiry()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE auth_delivery_intent
+            SET claim_expires_at = NEW.claim_expires_at + 1
+            WHERE delivery_id = NEW.delivery_id;
+            RETURN NEW;
+        END;
+        $$
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER zz_test_shift_identity_delivery_claim_expiry
+        AFTER UPDATE OF status
+        ON auth_delivery_intent
+        FOR EACH ROW
+        WHEN (NEW.status = 'processing' AND OLD.status <> 'processing')
+        EXECUTE FUNCTION test_shift_identity_delivery_claim_expiry()
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let interrupted = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("the preparation failure is persisted for retry");
+    assert_eq!(interrupted.status, "retryable_failed");
+    assert_eq!(interrupted.attempt_count, 8);
+    assert_eq!(
+        interrupted.outcome_code.as_deref(),
+        Some("local_transient_before_provider_invocation")
+    );
+    assert!(
+        gateway.attempts().is_empty(),
+        "preparation failure must occur before credential-bearing provider I/O"
+    );
+    let retained_fences =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_provider_attempt_fence")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        retained_fences, 0,
+        "a definitively suppressed invocation releases its anonymous fence"
+    );
+
+    sqlx::query(
+        "DROP TRIGGER zz_test_shift_identity_delivery_claim_expiry ON auth_delivery_intent",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("DROP FUNCTION test_shift_identity_delivery_claim_expiry()")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let recovered = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            8,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(recovered.status(), StatusCode::OK);
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&to_bytes(recovered.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(recovered["status"], "delivered");
+    assert_eq!(recovered["attempt_count"], 8);
+    assert_eq!(
+        gateway.attempts(),
+        vec![(
+            delivery_id,
+            8,
+            "final-preparation-failure-token".to_string()
+        )],
+        "recovery reuses the final generation proven not to have reached the provider"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_final_provider_attempt_is_terminal_and_still_suspends_the_circuit(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(SuspendingIdentityDeliveryGateway::new(false));
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token =
+        issue_dev_session(&app, "final_provider_attempt_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "final-provider-attempt@example.test",
+        "correct horse battery",
+        "final_provider_attempt_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "final-provider-attempt@example.test",
+        "final_provider_attempt_user",
+        "final-provider-attempt-token",
+    )
+    .await;
+    sqlx::query("UPDATE auth_delivery_intent SET attempt_count = 7 WHERE delivery_id = $1")
+        .bind(delivery_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("the final provider attempt is persisted terminally");
+    assert_eq!(receipt.status, "permanent_failed");
+    assert_eq!(receipt.attempt_count, 8);
+    assert_eq!(receipt.outcome_code.as_deref(), Some("attempts_exhausted"));
+    assert_eq!(gateway.delivery_calls.load(Ordering::SeqCst), 1);
+
+    let provider = sqlx::query_as::<_, (Option<String>, Option<Uuid>)>(
+        "SELECT suspension_code, suspension_observation_id \
+         FROM auth_delivery_provider_authority WHERE retired_at IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider.0.as_deref(), Some("provider_unavailable"));
+    assert_eq!(provider.1, Some(delivery_id));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_provider_suspension_before_send_preserves_final_retry_generation(
     pool: sqlx::PgPool,
 ) {
-    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
         test_api_state_with_gateway(pool.clone(), gateway.clone())
             .await
@@ -10936,11 +11152,20 @@ async fn identity_delivery_provider_suspension_before_send_preserves_final_retry
     assert_eq!(receipt.attempt_count, 8);
     assert_eq!(
         receipt.outcome_code.as_deref(),
-        Some("provider_unavailable")
+        Some("provider_suspended_before_invocation")
     );
     assert!(
         gateway.attempts().is_empty(),
         "the provider must not receive a credential after its authority is suspended"
+    );
+    let retained_fences =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_delivery_provider_attempt_fence")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        retained_fences, 0,
+        "a definitively suppressed provider invocation must release its anonymous fence"
     );
     let provider = sqlx::query_as::<_, (i64, Option<Uuid>)>(
         "SELECT circuit_version, suspension_observation_id \
@@ -10955,6 +11180,114 @@ async fn identity_delivery_provider_suspension_before_send_preserves_final_retry
         Some(Uuid::from_u128(1)),
         "the suppressed send must not overwrite the actual outage observation"
     );
+
+    sqlx::query(
+        "DROP TRIGGER zz_test_suspend_identity_delivery_provider_after_claim \
+         ON auth_delivery_intent",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("DROP FUNCTION test_suspend_identity_delivery_provider_after_claim()")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let probe = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/admin/auth-delivery-provider/probe")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(probe.status(), StatusCode::OK);
+
+    let recovered = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            8,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(recovered.status(), StatusCode::OK);
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&to_bytes(recovered.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(recovered["status"], "delivered");
+    assert_eq!(recovered["attempt_count"], 8);
+    assert_eq!(
+        gateway.attempts(),
+        vec![(
+            delivery_id,
+            8,
+            "pre-send-suspension-delivery-token".to_string()
+        )],
+        "recovery reuses the final provider-attempt generation instead of exceeding the cap"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_expired_processing_with_zero_generation_fails_closed(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state_with_gateway(pool.clone(), gateway.clone())
+            .await
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
+    let admin_token = issue_dev_session(&app, "zero_reclaim_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "zero-reclaim@example.test",
+        "correct horse battery",
+        "zero_reclaim_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "zero-reclaim@example.test",
+        "zero_reclaim_user",
+        "zero-reclaim-delivery-token",
+    )
+    .await;
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'processing',
+            outcome_kind = 'processing',
+            outcome_code = NULL,
+            next_attempt_at = NULL,
+            claim_token = $2,
+            claim_expires_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 1,
+            updated_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 2,
+            claim_source = 'automatic',
+            claim_actor_principal_id = NULL,
+            attempt_count = 0
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("a zero-generation processing row is terminalized without provider I/O");
+    assert_eq!(receipt.status, "permanent_failed");
+    assert_eq!(receipt.attempt_count, 0);
+    assert_eq!(receipt.outcome_code.as_deref(), Some("attempts_exhausted"));
+    assert!(gateway.attempts().is_empty());
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

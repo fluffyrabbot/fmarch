@@ -335,9 +335,10 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "WITH mutation_clock AS MATERIALIZED",
             "claim_expires_at = mutation_clock.claimed_at + $3",
             "WHEN delivery.status <> 'processing'",
-            "attempt_count < $4",
-            "delivery.outcome_code = 'provider_unavailable'",
-            ") THEN 1",
+            "delivery.outcome_code IS DISTINCT FROM",
+            "'provider_suspended_before_invocation'",
+            "'local_transient_before_provider_invocation'",
+            "attempt_count < $4 THEN 1",
             "claim_source = $5",
             "claim_actor_principal_id = $6",
             "updated_at = mutation_clock.claimed_at",
@@ -369,9 +370,14 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "row.claim_source.as_deref().unwrap_or_default()",
         "row.claim_actor_principal_id",
         "target.provenance()",
-        "let provider_attempt_permitted = reclaiming",
+        "let persisted_resolution_preserves_attempt_generation = matches!(",
+        "\"provider_suspended_before_invocation\"",
+        "\"local_transient_before_provider_invocation\"",
+        "let reusing_attempt_generation =",
+        "reclaiming || persisted_resolution_preserves_attempt_generation",
+        "let provider_attempt_permitted = if reusing_attempt_generation",
+        "(1..=config.max_attempts()).contains(&row.attempt_count)",
         "row.attempt_count < config.max_attempts()",
-        "row.outcome_code.as_deref() == Some(\"provider_unavailable\")",
         "let claim_source = provenance.persisted_source()",
         "let claim_actor_principal_id = provenance.persisted_actor_principal_id()",
         ".bind(claim_source)",
@@ -427,6 +433,10 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     let outcome = &source[outcome_start..delivery_start];
     assert!(outcome.contains("IdentityDeliveryInvocationPermission::CredentialExpired"));
     assert!(outcome.contains("IdentityDeliveryFailureCode::CredentialExpired"));
+    assert!(outcome.contains("IdentityDeliveryResolution::RetryableBeforeProviderInvocation"));
+    assert!(outcome.contains("IdentityDeliveryPreInvocationFailure::ProviderSuspended"));
+    assert!(outcome.contains("IdentityDeliveryPreInvocationFailure::PreparationTransient"));
+    assert!(!source.contains("IdentityDeliveryFailureCode::ProviderSuspendedBeforeInvocation"));
     assert_ordered(
         outcome,
         &[
@@ -477,14 +487,14 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     );
 
     let finalization = &source[finalize_start..audit_start];
-    assert!(finalization.contains(
-        "IdentityDeliveryOutcome::Cancelled(_) | IdentityDeliveryOutcome::Delivered { .. }"
-    ));
+    assert!(finalization.contains("&& !outcome.is_cancelled()"));
+    assert!(finalization.contains("&& !outcome.is_delivered()"));
     for provider_unavailable_contract in [
         "let provider_is_unavailable = outcome.provider_unavailable();",
         "let provider_unavailability_was_observed = provider_was_invoked && provider_is_unavailable;",
         "provider_was_invoked && outcome.provider_completion_uncertain();",
-        "if !provider_is_unavailable",
+        "let preserves_attempt_generation = outcome.preserves_attempt_generation();",
+        "if !preserves_attempt_generation",
         "if provider_unavailability_was_observed",
         "attempt_token = $2 AND generation_id = $3 AND NOT $4",
         "WHERE expires_at <= $1",
@@ -645,8 +655,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "(\"explicit_retry\", Some(actor_principal_id))",
         "fn persisted_source(self) -> &'static str",
         "fn persisted_actor_principal_id(self) -> Option<Uuid>",
-        "fn audit_event_kind(self, outcome: &IdentityDeliveryOutcome)",
-        "Self::ExplicitRetry { .. }, _) => \"auth_delivery_retried\"",
+        "fn audit_event_kind(self, resolution: &IdentityDeliveryResolution)",
+        "if matches!(self, Self::ExplicitRetry { .. })",
+        "return \"auth_delivery_retried\"",
         "let event_kind = claim.provenance.audit_event_kind(&outcome)",
         ".actor_principal_id(claim.attempt.principal_id)",
     ] {
