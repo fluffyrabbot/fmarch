@@ -25,10 +25,9 @@ use operator_proof::{
     TRACE_INSPECTION_REPORT_ARTIFACT_VERSION,
 };
 use principal::PrincipalId;
-use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::process::Command as ProcessCommand;
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::OnceLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -37,18 +36,19 @@ use wire::{
     RejectMsg, ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
 
-const LOCAL_PROOF_INSTANCE_ID: &str =
-    "2222222222222222222222222222222222222222222222222222222222222222";
+const LOCAL_PROOF_SECRET: &str = "2222222222222222222222222222222222222222222222222222222222222222";
 
-fn local_proof_instance_id() -> identity::LocalProofInstanceId {
-    static INSTANCE: std::sync::OnceLock<identity::LocalProofInstanceId> =
-        std::sync::OnceLock::new();
-    INSTANCE
-        .get_or_init(|| {
-            identity::LocalProofInstanceId::parse(LOCAL_PROOF_INSTANCE_ID)
-                .expect("operator vertical local-proof instance is canonical")
-        })
-        .clone()
+fn local_proof_authority() -> &'static identity::LocalProofSessionAuthority {
+    static AUTHORITY: OnceLock<identity::LocalProofSessionAuthority> = OnceLock::new();
+    AUTHORITY.get_or_init(|| {
+        identity::LocalProofSessionAuthority::from_secret(LOCAL_PROOF_SECRET)
+            .expect("operator vertical local-proof secret is canonical")
+    })
+}
+
+fn local_proof_session_policy() -> identity::SessionPolicy {
+    identity::SessionPolicy::default()
+        .with_local_proof_instance(local_proof_authority().instance_id().clone())
 }
 
 macro_rules! seat_persona {
@@ -71,9 +71,7 @@ struct CommandRouteState {
 
 fn router(pool: sqlx::PgPool) -> Router {
     let operator = operator_api::router_with_state(
-        operator_api::OperatorApiState::new(pool.clone(), identity::SessionPolicy::default(), 1)
-            .unwrap()
-            .with_local_proof_instance(local_proof_instance_id()),
+        operator_api::OperatorApiState::new(pool.clone(), local_proof_session_policy(), 1).unwrap(),
     )
     .layer(middleware::from_fn_with_state(
         pool.clone(),
@@ -102,49 +100,7 @@ async fn authenticate_operator_fixture(
     };
 
     let principal_id = PrincipalId::fixture(&principal_label);
-    let token_seed = format!("vertical-operator-session:{principal_label}");
-    let token = format!("fmss_{}", session_token_hash(token_seed.as_str()));
-    sqlx::query(
-        "INSERT INTO platform_principal \
-         (principal_id, status, global_capabilities, created_at) \
-         VALUES ($1, 'active', ARRAY[]::TEXT[], 0) \
-         ON CONFLICT (principal_id) DO NOTHING",
-    )
-    .bind(principal_id.as_uuid())
-    .execute(&pool)
-    .await
-    .expect("insert vertical operator fixture principal");
-    sqlx::query(
-        "INSERT INTO auth_session \
-         (token_hash, principal_id, created_at, expires_at, idle_expires_at, assurance, authenticated_at, local_proof_instance_id) \
-         VALUES ($1, $2, 0, 4102444800, 4102444800, 'dev', 0, $3) \
-         ON CONFLICT (token_hash) DO UPDATE SET \
-           principal_id = EXCLUDED.principal_id, \
-           expires_at = EXCLUDED.expires_at, \
-           idle_expires_at = EXCLUDED.idle_expires_at, \
-           local_proof_instance_id = EXCLUDED.local_proof_instance_id, \
-           revoked_at = NULL",
-    )
-    .bind(session_token_hash(&token))
-    .bind(principal_id.as_uuid())
-    .bind(LOCAL_PROOF_INSTANCE_ID)
-    .execute(&pool)
-    .await
-    .expect("insert vertical operator fixture session");
-    let instance_id = local_proof_instance_id();
-    let authorization = identity::LocalProofAuthorization::new(&instance_id, Vec::new())
-        .expect("vertical operator fixture local-proof authorization");
-    identity::activate_local_proof_authorization(
-        &identity::IssuedSession {
-            session_token: token.clone(),
-            token_hash: session_token_hash(&token),
-            principal_id,
-            expires_at: 4_102_444_800,
-            idle_expires_at: 4_102_444_800,
-        },
-        authorization,
-    )
-    .expect("activate vertical operator fixture local-proof authorization");
+    let token = create_operator_fixture_session(&pool, &principal_id).await;
     request.headers_mut().insert(
         AUTHORIZATION,
         HeaderValue::from_str(&format!("Bearer {token}"))
@@ -153,16 +109,45 @@ async fn authenticate_operator_fixture(
     next.run(request).await
 }
 
+async fn create_operator_fixture_session(
+    pool: &sqlx::PgPool,
+    principal_id: &PrincipalId,
+) -> String {
+    let policy = local_proof_session_policy();
+    let grant = local_proof_authority()
+        .authorize(LOCAL_PROOF_SECRET, Vec::new())
+        .expect("authorize vertical operator fixture local-proof session");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("vertical operator fixture clock is after the Unix epoch")
+        .as_secs() as i64;
+    let mut tx = identity::session::begin_authority_transaction(pool)
+        .await
+        .expect("begin vertical operator fixture authority transaction");
+    let pending = identity::issue_local_proof_session(
+        &mut tx,
+        principal_id,
+        grant,
+        4_102_444_800,
+        &policy,
+        now,
+    )
+    .await
+    .expect("issue vertical operator fixture local-proof session");
+    tx.commit()
+        .await
+        .expect("commit vertical operator fixture local-proof session");
+    pending
+        .activate()
+        .expect("activate vertical operator fixture local-proof session")
+        .session_token
+}
+
 fn fixture_principal_label(query: &str) -> Option<&str> {
     query
         .split('&')
         .find_map(|part| part.strip_prefix("fixture_principal="))
         .filter(|principal| !principal.is_empty())
-}
-
-fn session_token_hash(token: &str) -> String {
-    let digest = Sha256::digest(token.as_bytes());
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn command_router(pool: sqlx::PgPool) -> Router {

@@ -7,29 +7,24 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{RejectCode, RejectMsg};
 
-const HOST_TOKEN: &str = "fmss_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const COHOST_TOKEN: &str = "fmss_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const OUTSIDER_TOKEN: &str =
-    "fmss_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-const ADMIN_TOKEN: &str = "fmss_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-const LOCAL_PROOF_INSTANCE_ID: &str =
-    "1111111111111111111111111111111111111111111111111111111111111111";
+const LOCAL_PROOF_SECRET: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
-fn local_proof_instance_id() -> identity::LocalProofInstanceId {
-    static INSTANCE: OnceLock<identity::LocalProofInstanceId> = OnceLock::new();
-    INSTANCE
-        .get_or_init(|| {
-            identity::LocalProofInstanceId::parse(LOCAL_PROOF_INSTANCE_ID)
-                .expect("operator fixture local-proof instance is canonical")
-        })
-        .clone()
+fn local_proof_authority() -> &'static identity::LocalProofSessionAuthority {
+    static AUTHORITY: OnceLock<identity::LocalProofSessionAuthority> = OnceLock::new();
+    AUTHORITY.get_or_init(|| {
+        identity::LocalProofSessionAuthority::from_secret(LOCAL_PROOF_SECRET)
+            .expect("operator fixture local-proof secret is canonical")
+    })
+}
+
+fn local_proof_session_policy() -> identity::SessionPolicy {
+    identity::SessionPolicy::default()
+        .with_local_proof_instance(local_proof_authority().instance_id().clone())
 }
 
 fn app(pool: sqlx::PgPool) -> axum::Router {
     operator_api::router_with_state(
-        operator_api::OperatorApiState::new(pool, identity::SessionPolicy::default(), 1)
-            .unwrap()
-            .with_local_proof_instance(local_proof_instance_id()),
+        operator_api::OperatorApiState::new(pool, local_proof_session_policy(), 1).unwrap(),
     )
 }
 
@@ -38,7 +33,7 @@ fn token_hash(token: &str) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &[&str]) {
+async fn create_session(pool: &sqlx::PgPool, user: &str, globals: &[&str]) -> String {
     let principal_id = PrincipalId::fixture(user);
     sqlx::query(
         "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) \
@@ -49,31 +44,34 @@ async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &
     .execute(pool)
     .await
     .expect("insert operator principal");
-    sqlx::query(
-        "INSERT INTO auth_session \
-         (token_hash, principal_id, created_at, expires_at, idle_expires_at, assurance, authenticated_at, local_proof_instance_id) \
-         VALUES ($1, $2, 0, 4102444800, 4102444800, 'dev', 0, $3)",
+    let policy = local_proof_session_policy();
+    let grant = local_proof_authority()
+        .authorize(LOCAL_PROOF_SECRET, Vec::new())
+        .expect("authorize operator fixture local-proof session");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("operator fixture clock is after the Unix epoch")
+        .as_secs() as i64;
+    let mut tx = identity::session::begin_authority_transaction(pool)
+        .await
+        .expect("begin operator fixture authority transaction");
+    let pending = identity::issue_local_proof_session(
+        &mut tx,
+        &principal_id,
+        grant,
+        4_102_444_800,
+        &policy,
+        now,
     )
-    .bind(token_hash(token))
-    .bind(principal_id.as_uuid())
-    .bind(LOCAL_PROOF_INSTANCE_ID)
-    .execute(pool)
     .await
-    .expect("insert operator session");
-    let instance_id = local_proof_instance_id();
-    let authorization = identity::LocalProofAuthorization::new(&instance_id, Vec::new())
-        .expect("operator fixture local-proof authorization");
-    identity::activate_local_proof_authorization(
-        &identity::IssuedSession {
-            session_token: token.to_string(),
-            token_hash: token_hash(token),
-            principal_id,
-            expires_at: 4_102_444_800,
-            idle_expires_at: 4_102_444_800,
-        },
-        authorization,
-    )
-    .expect("activate operator fixture local-proof authorization");
+    .expect("issue operator fixture local-proof session");
+    tx.commit()
+        .await
+        .expect("commit operator fixture local-proof session");
+    pending
+        .activate()
+        .expect("activate operator fixture local-proof session")
+        .session_token
 }
 
 async fn grant_game_authority(pool: &sqlx::PgPool, game: Uuid, user: &str, role: &str) {
@@ -89,14 +87,14 @@ async fn grant_game_authority(pool: &sqlx::PgPool, game: Uuid, user: &str, role:
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn default_operator_composition_rejects_methodless_local_proof_sessions(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
-    create_session(&pool, ADMIN_TOKEN, "admin", &["GlobalAdmin"]).await;
+    let admin_token = create_session(&pool, "admin", &["GlobalAdmin"]).await;
     let response = operator_api::router(pool.clone(), identity::SessionPolicy::default(), 1)
         .unwrap()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!("/games/{game}/operator"))
-                .header(AUTHORIZATION, format!("Bearer {ADMIN_TOKEN}"))
+                .header(AUTHORIZATION, format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -113,7 +111,7 @@ async fn default_operator_composition_rejects_methodless_local_proof_sessions(po
     .await
     .unwrap();
     sqlx::query("UPDATE auth_session SET local_proof_instance_id = NULL WHERE token_hash = $1")
-        .bind(token_hash(ADMIN_TOKEN))
+        .bind(token_hash(&admin_token))
         .execute(&pool)
         .await
         .unwrap();
@@ -123,7 +121,7 @@ async fn default_operator_composition_rejects_methodless_local_proof_sessions(po
             Request::builder()
                 .method("GET")
                 .uri(format!("/games/{game}/operator"))
-                .header(AUTHORIZATION, format!("Bearer {ADMIN_TOKEN}"))
+                .header(AUTHORIZATION, format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -138,9 +136,9 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     grant_game_authority(&pool, game, "host_h", "host").await;
     grant_game_authority(&pool, game, "cohost_c", "cohost").await;
-    create_session(&pool, HOST_TOKEN, "host_h", &[]).await;
-    create_session(&pool, COHOST_TOKEN, "cohost_c", &[]).await;
-    create_session(&pool, OUTSIDER_TOKEN, "outsider", &[]).await;
+    let host_token = create_session(&pool, "host_h", &[]).await;
+    let cohost_token = create_session(&pool, "cohost_c", &[]).await;
+    let outsider_token = create_session(&pool, "outsider", &[]).await;
 
     let response = app
         .clone()
@@ -151,7 +149,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
                     "/games/{game}/operator?principal_id={}",
                     PrincipalId::fixture("outsider")
                 ))
-                .header(AUTHORIZATION, format!("Bearer {HOST_TOKEN}"))
+                .header(AUTHORIZATION, format!("Bearer {host_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -173,7 +171,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
                     "/games/{game}/operator/proof-runs/status?principal_id={}",
                     PrincipalId::fixture("host_h")
                 ))
-                .header(AUTHORIZATION, format!("Bearer {COHOST_TOKEN}"))
+                .header(AUTHORIZATION, format!("Bearer {cohost_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -191,7 +189,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(path)
-                    .header(AUTHORIZATION, format!("Bearer {OUTSIDER_TOKEN}"))
+                    .header(AUTHORIZATION, format!("Bearer {outsider_token}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -207,7 +205,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn active_global_operator_session_can_read_status_without_dev_auth(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
-    create_session(&pool, ADMIN_TOKEN, "admin_a", &["GlobalAdmin"]).await;
+    let admin_token = create_session(&pool, "admin_a", &["GlobalAdmin"]).await;
 
     let operator = app(pool);
     let response = operator
@@ -219,7 +217,7 @@ async fn active_global_operator_session_can_read_status_without_dev_auth(pool: s
                     "/games/{game}/operator/proof-runs/status?principal_id={}",
                     PrincipalId::fixture("outsider")
                 ))
-                .header(AUTHORIZATION, format!("Bearer {ADMIN_TOKEN}"))
+                .header(AUTHORIZATION, format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
