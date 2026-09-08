@@ -272,6 +272,44 @@ impl Default for IdentityDeliveryWorkerConfig {
     }
 }
 
+/// Process-wide admission shared by the supervised worker and synchronous
+/// operator retries. One budget therefore bounds provider and database load
+/// regardless of which claim path wins.
+#[derive(Clone)]
+pub struct IdentityDeliveryAdmission {
+    attempt_slots: Arc<Semaphore>,
+    database_slots: Arc<Semaphore>,
+}
+
+impl IdentityDeliveryAdmission {
+    pub fn new(config: IdentityDeliveryWorkerConfig) -> Self {
+        Self {
+            attempt_slots: Arc::new(Semaphore::new(config.max_concurrency())),
+            database_slots: Arc::new(Semaphore::new(config.max_database_in_flight())),
+        }
+    }
+
+    pub(super) fn try_acquire_attempt(&self) -> Option<OwnedSemaphorePermit> {
+        self.attempt_slots.clone().try_acquire_owned().ok()
+    }
+
+    async fn acquire_attempt(&self) -> OwnedSemaphorePermit {
+        self.attempt_slots
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("identity delivery attempt admission remains open")
+    }
+
+    async fn acquire_database(&self) -> OwnedSemaphorePermit {
+        self.database_slots
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("identity delivery database admission remains open")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityDeliveryKind {
     Invite,
@@ -448,6 +486,10 @@ pub type IdentityDeliveryFuture<'a> =
 pub trait IdentityDeliveryGateway: Send + Sync {
     fn provider_id(&self) -> &str;
 
+    /// A live database claim permits at most one invocation, but a process can
+    /// fail after provider acceptance and before claim finalization. Gateways
+    /// must therefore use `attempt.delivery_id` as the stable idempotency key
+    /// across lease recovery and later attempts.
     fn deliver<'a>(&'a self, attempt: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a>;
 }
 
@@ -773,6 +815,31 @@ pub struct IdentityDeliveryReceipt {
     pub provider_receipt_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ExpectedIdentityDeliveryAttemptCount(i32);
+
+impl ExpectedIdentityDeliveryAttemptCount {
+    pub(super) fn new(value: i32) -> Option<Self> {
+        (value >= 0).then_some(Self(value))
+    }
+
+    fn get(self) -> i32 {
+        self.0
+    }
+}
+
+pub(super) struct IdentityDeliveryRetryRequest<'a> {
+    pub(super) delivery_id: Uuid,
+    pub(super) expected_attempt_count: ExpectedIdentityDeliveryAttemptCount,
+    pub(super) initiating_session: &'a identity::InitiatingSession,
+    pub(super) session_policy: &'a identity::SessionPolicy,
+}
+
+pub(super) enum IdentityDeliveryRetryResult {
+    Applied(IdentityDeliveryReceipt),
+    Conflict,
+}
+
 type IdentityDeliveryTaskOutput = Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError>;
 type JoinedIdentityDeliveryTask = Result<IdentityDeliveryTaskOutput, tokio::task::JoinError>;
 
@@ -798,6 +865,10 @@ pub enum IdentityDeliveryError {
     Database(#[from] sqlx::Error),
     #[error("delivery credential envelope error: {0}")]
     Credential(String),
+    #[error(transparent)]
+    Identity(#[from] identity::IdentityFlowError),
+    #[error("identity delivery retry requires current GlobalAdmin authority")]
+    NotAuthorized,
     #[error("identity delivery worker task failed: {0}")]
     Worker(String),
 }
@@ -818,20 +889,123 @@ struct ClaimedIdentityDelivery {
     provider_id: String,
     claim_token: Uuid,
     claimed_at: i64,
+    provenance: IdentityDeliveryClaimProvenance,
+    recovered: bool,
     provider_attempt_permitted: bool,
+}
+
+enum IdentityDeliveryClaimResult {
+    Claimed(ClaimedIdentityDelivery),
+    Reconciled(IdentityDeliveryReceipt),
+    Empty,
+}
+
+#[derive(sqlx::FromRow)]
+struct IdentityDeliveryClaimRow {
+    delivery_id: Uuid,
+    delivery_kind: String,
+    account_id: String,
+    principal_id: Uuid,
+    credential_hash: String,
+    credential_expires_at: i64,
+    attempt_count: i32,
+    credential_envelope: Option<Value>,
+    status: String,
+    claim_source: Option<String>,
+    claim_actor_principal_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum IdentityDeliveryClaimTarget {
     NextDue,
-    ExplicitRetry(Uuid),
+    ExplicitRetry {
+        delivery_id: Uuid,
+        actor_principal_id: PrincipalId,
+        expected_attempt_count: ExpectedIdentityDeliveryAttemptCount,
+    },
 }
 
 impl IdentityDeliveryClaimTarget {
     fn delivery_id(self) -> Option<Uuid> {
         match self {
             Self::NextDue => None,
-            Self::ExplicitRetry(delivery_id) => Some(delivery_id),
+            Self::ExplicitRetry { delivery_id, .. } => Some(delivery_id),
+        }
+    }
+
+    fn expected_attempt_count(self) -> Option<i32> {
+        match self {
+            Self::NextDue => None,
+            Self::ExplicitRetry {
+                expected_attempt_count,
+                ..
+            } => Some(expected_attempt_count.get()),
+        }
+    }
+
+    fn provenance(self) -> IdentityDeliveryClaimProvenance {
+        match self {
+            Self::NextDue => IdentityDeliveryClaimProvenance::Automatic,
+            Self::ExplicitRetry {
+                actor_principal_id, ..
+            } => IdentityDeliveryClaimProvenance::ExplicitRetry { actor_principal_id },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IdentityDeliveryClaimProvenance {
+    Automatic,
+    ExplicitRetry { actor_principal_id: PrincipalId },
+}
+
+impl IdentityDeliveryClaimProvenance {
+    fn from_persisted(source: &str, actor_principal_id: Option<Uuid>) -> Option<Self> {
+        match (source, actor_principal_id) {
+            ("automatic", None) => Some(Self::Automatic),
+            ("explicit_retry", Some(actor_principal_id)) => Some(Self::ExplicitRetry {
+                actor_principal_id: PrincipalId::from_uuid(actor_principal_id),
+            }),
+            _ => None,
+        }
+    }
+
+    fn persisted_source(self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::ExplicitRetry { .. } => "explicit_retry",
+        }
+    }
+
+    fn persisted_actor_principal_id(self) -> Option<Uuid> {
+        match self {
+            Self::Automatic => None,
+            Self::ExplicitRetry { actor_principal_id } => Some(actor_principal_id.as_uuid()),
+        }
+    }
+
+    fn actor_principal_id(self, subject_principal_id: PrincipalId) -> PrincipalId {
+        match self {
+            Self::Automatic => subject_principal_id,
+            Self::ExplicitRetry { actor_principal_id } => actor_principal_id,
+        }
+    }
+
+    fn audit_event_kind(self, outcome: &IdentityDeliveryOutcome) -> &'static str {
+        match (self, outcome) {
+            (_, IdentityDeliveryOutcome::Cancelled(_)) => "auth_delivery_cancelled",
+            (Self::ExplicitRetry { .. }, _) => "auth_delivery_retried",
+            (Self::Automatic, IdentityDeliveryOutcome::Delivered { .. }) => {
+                "auth_delivery_delivered"
+            }
+            (
+                Self::Automatic,
+                IdentityDeliveryOutcome::RetryableFailure(_)
+                | IdentityDeliveryOutcome::RetryableFailureAfter { .. },
+            ) => "auth_delivery_retryable_failed",
+            (Self::Automatic, IdentityDeliveryOutcome::PermanentFailure(_)) => {
+                "auth_delivery_permanent_failed"
+            }
         }
     }
 }
@@ -841,6 +1015,7 @@ struct IdentityDeliveryCancellationRequest<'a> {
     delivery_id: Uuid,
     kind: IdentityDeliveryKind,
     account_id: &'a str,
+    actor_principal_id: &'a PrincipalId,
     principal_id: &'a PrincipalId,
     credential_hash: &'a str,
     provider_id: &'a str,
@@ -866,76 +1041,100 @@ struct IdentityDeliveryAuditRecord<'a> {
 struct IdentityDeliveryExecution<'a> {
     pool: &'a PgPool,
     gateway: &'a dyn IdentityDeliveryGateway,
-    actor_principal_id: &'a PrincipalId,
-    requested_event_kind: Option<&'a str>,
-    claimed_at: i64,
     config: IdentityDeliveryWorkerConfig,
-    database_slots: Option<&'a Arc<Semaphore>>,
+    admission: &'a IdentityDeliveryAdmission,
 }
 
-pub(super) async fn process_identity_delivery_intent_with_config(
+pub(super) async fn retry_identity_delivery_intent_with_config(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    delivery_id: Uuid,
-    actor_principal_id: &PrincipalId,
-    event_kind: &str,
-    _caller_now: i64,
+    request: IdentityDeliveryRetryRequest<'_>,
     config: IdentityDeliveryWorkerConfig,
-) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(
-        pool,
-        gateway.provider_id(),
-        IdentityDeliveryClaimTarget::ExplicitRetry(delivery_id),
-        config,
-    )
-    .await?
-    else {
-        return Ok(None);
-    };
-    let claimed_at = claim.claimed_at;
-    deliver_and_finalize(
-        claim,
-        IdentityDeliveryExecution {
-            pool,
-            gateway,
-            actor_principal_id,
-            requested_event_kind: Some(event_kind),
-            claimed_at,
+    admission: &IdentityDeliveryAdmission,
+) -> Result<IdentityDeliveryRetryResult, IdentityDeliveryError> {
+    let claim = bounded_delivery_database_operation(config.database_timeout(), "claim", async {
+        let _database_permit = admission.acquire_database().await;
+        let mut tx = identity::session::begin_authority_transaction(pool).await?;
+        let authorization = identity::session::validate_initiating_session_for_update(
+            &mut tx,
+            request.initiating_session,
+            request.session_policy,
+        )
+        .await?;
+        if !authorization
+            .global_capabilities
+            .iter()
+            .any(|capability| capability == "GlobalAdmin")
+        {
+            return Err(IdentityDeliveryError::NotAuthorized);
+        }
+        let claim = claim_delivery_transaction(
+            &mut tx,
+            gateway.provider_id(),
+            IdentityDeliveryClaimTarget::ExplicitRetry {
+                delivery_id: request.delivery_id,
+                actor_principal_id: authorization.principal_id,
+                expected_attempt_count: request.expected_attempt_count,
+            },
             config,
-            database_slots: None,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(claim)
+    })
+    .await?;
+    let claim = match claim {
+        IdentityDeliveryClaimResult::Claimed(claim) => claim,
+        IdentityDeliveryClaimResult::Reconciled(receipt) => {
+            return Ok(IdentityDeliveryRetryResult::Applied(receipt))
+        }
+        IdentityDeliveryClaimResult::Empty => return Ok(IdentityDeliveryRetryResult::Conflict),
+    };
+    Ok(
+        match deliver_and_finalize(
+            claim,
+            IdentityDeliveryExecution {
+                pool,
+                gateway,
+                config,
+                admission,
+            },
+        )
+        .await?
+        {
+            Some(receipt) => IdentityDeliveryRetryResult::Applied(receipt),
+            None => IdentityDeliveryRetryResult::Conflict,
         },
     )
-    .await
 }
 
 pub async fn process_next_identity_delivery_with_config(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    _caller_now: i64,
     config: IdentityDeliveryWorkerConfig,
+    admission: &IdentityDeliveryAdmission,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(
+    let _attempt_permit = admission.acquire_attempt().await;
+    let claim = claim_delivery(
         pool,
         gateway.provider_id(),
         IdentityDeliveryClaimTarget::NextDue,
         config,
+        admission,
     )
-    .await?
-    else {
-        return Ok(None);
+    .await?;
+    let claim = match claim {
+        IdentityDeliveryClaimResult::Claimed(claim) => claim,
+        IdentityDeliveryClaimResult::Reconciled(receipt) => return Ok(Some(receipt)),
+        IdentityDeliveryClaimResult::Empty => return Ok(None),
     };
-    let actor_principal_id = claim.attempt.principal_id;
-    let claimed_at = claim.claimed_at;
     deliver_and_finalize(
         claim,
         IdentityDeliveryExecution {
             pool,
             gateway,
-            actor_principal_id: &actor_principal_id,
-            requested_event_kind: None,
-            claimed_at,
             config,
-            database_slots: None,
+            admission,
         },
     )
     .await
@@ -945,6 +1144,7 @@ pub async fn run_identity_delivery_worker_observed<F>(
     pool: PgPool,
     gateway: Arc<dyn IdentityDeliveryGateway>,
     config: IdentityDeliveryWorkerConfig,
+    admission: IdentityDeliveryAdmission,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
     mut observe_progress: F,
 ) -> Result<(), IdentityDeliveryError>
@@ -952,7 +1152,6 @@ where
     F: FnMut(IdentityDeliveryWorkerObservation) + Send,
 {
     let mut attempts = JoinSet::new();
-    let database_slots = Arc::new(Semaphore::new(config.max_database_in_flight()));
     'worker: loop {
         if *shutdown.borrow() {
             break;
@@ -960,6 +1159,16 @@ where
 
         let mut found_work = false;
         while attempts.len() < config.max_concurrency() {
+            let attempt_permit = tokio::select! {
+                biased;
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break 'worker;
+                    }
+                    continue;
+                }
+                permit = admission.acquire_attempt() => permit,
+            };
             let claim = tokio::select! {
                 biased;
                 changed = shutdown.changed() => {
@@ -973,16 +1182,32 @@ where
                     gateway.provider_id(),
                     IdentityDeliveryClaimTarget::NextDue,
                     config,
+                    &admission,
                 ) => claim?,
             };
-            let Some(claim) = claim else {
-                observe_progress(IdentityDeliveryWorkerObservation {
-                    completed: 0,
-                    attempt_errors: 0,
-                    in_flight: attempts.len(),
-                    kind: IdentityDeliveryWorkerObservationKind::EmptyClaim,
-                });
-                break;
+            let claim = match claim {
+                IdentityDeliveryClaimResult::Claimed(claim) => claim,
+                IdentityDeliveryClaimResult::Reconciled(_) => {
+                    found_work = true;
+                    drop(attempt_permit);
+                    observe_progress(IdentityDeliveryWorkerObservation {
+                        completed: 1,
+                        attempt_errors: 0,
+                        in_flight: attempts.len(),
+                        kind: IdentityDeliveryWorkerObservationKind::AttemptFinished,
+                    });
+                    continue;
+                }
+                IdentityDeliveryClaimResult::Empty => {
+                    drop(attempt_permit);
+                    observe_progress(IdentityDeliveryWorkerObservation {
+                        completed: 0,
+                        attempt_errors: 0,
+                        in_flight: attempts.len(),
+                        kind: IdentityDeliveryWorkerObservationKind::EmptyClaim,
+                    });
+                    break;
+                }
             };
             if *shutdown.borrow() {
                 // The exact claim token remains safely fenced and becomes
@@ -993,20 +1218,16 @@ where
             found_work = true;
             let attempt_pool = pool.clone();
             let attempt_gateway = gateway.clone();
-            let attempt_database_slots = database_slots.clone();
-            let actor_principal_id = claim.attempt.principal_id;
-            let claimed_at = claim.claimed_at;
+            let attempt_admission = admission.clone();
             attempts.spawn(async move {
+                let _attempt_permit = attempt_permit;
                 deliver_and_finalize(
                     claim,
                     IdentityDeliveryExecution {
                         pool: &attempt_pool,
                         gateway: attempt_gateway.as_ref(),
-                        actor_principal_id: &actor_principal_id,
-                        requested_event_kind: None,
-                        claimed_at,
                         config,
-                        database_slots: Some(&attempt_database_slots),
+                        admission: &attempt_admission,
                     },
                 )
                 .await
@@ -1221,28 +1442,43 @@ async fn claim_delivery(
     provider_id: &str,
     target: IdentityDeliveryClaimTarget,
     config: IdentityDeliveryWorkerConfig,
-) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
+    admission: &IdentityDeliveryAdmission,
+) -> Result<IdentityDeliveryClaimResult, IdentityDeliveryError> {
     bounded_delivery_database_operation(config.database_timeout(), "claim", async {
-        claim_delivery_transaction(pool, provider_id, target, config).await
+        let _database_permit = admission.acquire_database().await;
+        let mut tx = pool.begin().await?;
+        let claim = claim_delivery_transaction(&mut tx, provider_id, target, config).await?;
+        tx.commit().await?;
+        Ok(claim)
     })
     .await
 }
 
 async fn claim_delivery_transaction(
-    pool: &PgPool,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     provider_id: &str,
     target: IdentityDeliveryClaimTarget,
     config: IdentityDeliveryWorkerConfig,
-) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
-    let mut tx = pool.begin().await?;
+) -> Result<IdentityDeliveryClaimResult, IdentityDeliveryError> {
     let database_now =
         sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
     let delivery_id = target.delivery_id();
-    let row = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, i64, i32, Option<Value>)>(
+    let expected_attempt_count = target.expected_attempt_count();
+    let row = sqlx::query_as::<_, IdentityDeliveryClaimRow>(
         r#"
-        SELECT delivery_id, delivery_kind, account_id, principal_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
+        SELECT delivery_id,
+               delivery_kind,
+               account_id,
+               principal_id,
+               credential_hash,
+               credential_expires_at,
+               attempt_count,
+               credential_envelope,
+               status,
+               claim_source,
+               claim_actor_principal_id
         FROM auth_delivery_intent
         WHERE provider_id = $1
           AND (
@@ -1258,6 +1494,7 @@ async fn claim_delivery_transaction(
                   $2::UUID IS NOT NULL
                   AND delivery_id = $2
                   AND status = 'retryable_failed'
+                  AND attempt_count = $4
               )
           )
         ORDER BY created_at, delivery_id
@@ -1268,42 +1505,49 @@ async fn claim_delivery_transaction(
     .bind(provider_id)
     .bind(delivery_id)
     .bind(database_now)
-    .fetch_optional(&mut *tx)
+    .bind(expected_attempt_count)
+    .fetch_optional(&mut **tx)
     .await?;
-    let Some((
-        delivery_id,
-        delivery_kind,
-        account_id,
-        principal_id,
-        credential_hash,
-        credential_expires_at,
-        attempt_count,
-        credential_envelope,
-    )) = row
-    else {
-        tx.commit().await?;
-        return Ok(None);
+    let Some(row) = row else {
+        return Ok(IdentityDeliveryClaimResult::Empty);
     };
-    let kind = IdentityDeliveryKind::parse(&delivery_kind).expect("validated delivery kind");
-    let principal_id = PrincipalId::from_uuid(principal_id);
-    if !credential_is_active(&mut tx, kind, credential_hash.as_str()).await? {
+    let reclaiming = row.status == "processing";
+    let provenance = if reclaiming {
+        IdentityDeliveryClaimProvenance::from_persisted(
+            row.claim_source.as_deref().unwrap_or_default(),
+            row.claim_actor_principal_id,
+        )
+        .ok_or_else(|| {
+            IdentityDeliveryError::Worker(
+                "processing identity delivery has invalid persisted claim provenance".to_string(),
+            )
+        })?
+    } else {
+        target.provenance()
+    };
+    let kind = IdentityDeliveryKind::parse(&row.delivery_kind).expect("validated delivery kind");
+    let principal_id = PrincipalId::from_uuid(row.principal_id);
+    if !credential_is_active(tx, kind, row.credential_hash.as_str()).await? {
+        let actor_principal_id = provenance.actor_principal_id(principal_id);
         let request = IdentityDeliveryCancellationRequest {
-            delivery_id,
+            delivery_id: row.delivery_id,
             kind,
-            account_id: account_id.as_str(),
+            account_id: row.account_id.as_str(),
+            actor_principal_id: &actor_principal_id,
             principal_id: &principal_id,
-            credential_hash: credential_hash.as_str(),
+            credential_hash: row.credential_hash.as_str(),
             provider_id,
             cancelled_at: database_now,
         };
-        cancel_claimed_delivery(&mut tx, request).await?;
-        tx.commit().await?;
-        return Ok(None);
+        let receipt = cancel_claimed_delivery(tx, request).await?;
+        return Ok(IdentityDeliveryClaimResult::Reconciled(receipt));
     }
-    let provider_attempt_permitted = attempt_count < config.max_attempts();
+    let provider_attempt_permitted = reclaiming || row.attempt_count < config.max_attempts();
     let claim_token = Uuid::new_v4();
     let claim_lease_seconds = config.claim_lease().as_secs() as i64;
-    let (claimed_at, claim_expires_at) = sqlx::query_as::<_, (i64, i64)>(
+    let claim_source = provenance.persisted_source();
+    let claim_actor_principal_id = provenance.persisted_actor_principal_id();
+    let (claimed_at, claim_expires_at, attempt_number) = sqlx::query_as::<_, (i64, i64, i32)>(
         r#"
         WITH mutation_clock AS MATERIALIZED (
             SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT AS claimed_at
@@ -1318,42 +1562,54 @@ async fn claim_delivery_transaction(
             provider_receipt_id = NULL,
             claim_token = $2,
             claim_expires_at = mutation_clock.claimed_at + $3,
-            attempt_count = attempt_count + CASE WHEN attempt_count < $4 THEN 1 ELSE 0 END,
+            attempt_count = attempt_count + CASE
+                WHEN delivery.status <> 'processing' AND attempt_count < $4 THEN 1
+                ELSE 0
+            END,
+            claim_source = $5,
+            claim_actor_principal_id = $6,
             updated_at = mutation_clock.claimed_at
         FROM mutation_clock
         WHERE delivery.delivery_id = $1
-        RETURNING mutation_clock.claimed_at, delivery.claim_expires_at
+        RETURNING mutation_clock.claimed_at,
+                  delivery.claim_expires_at,
+                  delivery.attempt_count
         "#,
     )
-    .bind(delivery_id)
+    .bind(row.delivery_id)
     .bind(claim_token)
     .bind(claim_lease_seconds)
     .bind(config.max_attempts())
-    .fetch_one(&mut *tx)
+    .bind(claim_source)
+    .bind(claim_actor_principal_id)
+    .fetch_one(&mut **tx)
     .await?;
     if claim_expires_at != claimed_at.saturating_add(claim_lease_seconds) {
         return Err(IdentityDeliveryError::Worker(
             "identity delivery claim lease did not match its mutation clock".to_string(),
         ));
     }
-    tx.commit().await?;
-    Ok(Some(ClaimedIdentityDelivery {
-        attempt: IdentityDeliveryAttempt {
-            delivery_id,
-            kind,
-            account_id,
-            principal_id,
-            credential_hash,
-            credential_expires_at,
-            credential_material: None,
-            attempt_number: attempt_count + if provider_attempt_permitted { 1 } else { 0 },
+    Ok(IdentityDeliveryClaimResult::Claimed(
+        ClaimedIdentityDelivery {
+            attempt: IdentityDeliveryAttempt {
+                delivery_id: row.delivery_id,
+                kind,
+                account_id: row.account_id,
+                principal_id,
+                credential_hash: row.credential_hash,
+                credential_expires_at: row.credential_expires_at,
+                credential_material: None,
+                attempt_number,
+            },
+            credential_envelope: row.credential_envelope,
+            provider_id: provider_id.to_string(),
+            claim_token,
+            claimed_at,
+            provenance,
+            recovered: reclaiming,
+            provider_attempt_permitted,
         },
-        credential_envelope,
-        provider_id: provider_id.to_string(),
-        claim_token,
-        claimed_at,
-        provider_attempt_permitted,
-    }))
+    ))
 }
 
 async fn credential_is_active(
@@ -1464,8 +1720,8 @@ async fn credential_is_active_now(
 async fn cancel_claimed_delivery(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     request: IdentityDeliveryCancellationRequest<'_>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
+) -> Result<IdentityDeliveryReceipt, sqlx::Error> {
+    let attempt_count = sqlx::query_scalar::<_, i32>(
         r#"
         UPDATE auth_delivery_intent
         SET status = 'cancelled',
@@ -1477,21 +1733,24 @@ async fn cancel_claimed_delivery(
             provider_receipt_id = NULL,
             claim_token = NULL,
             claim_expires_at = NULL,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL,
             credential_envelope = NULL,
             updated_at = $2
         WHERE delivery_id = $1
+        RETURNING attempt_count
         "#,
     )
     .bind(request.delivery_id)
     .bind(request.cancelled_at)
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await?;
     record_delivery_audit(
         tx,
         IdentityDeliveryAuditRecord {
             event_at: request.cancelled_at,
             event_kind: "auth_delivery_cancelled",
-            actor_principal_id: request.principal_id,
+            actor_principal_id: request.actor_principal_id,
             principal_id: request.principal_id,
             credential_hash: request.credential_hash,
             delivery_id: request.delivery_id,
@@ -1503,17 +1762,27 @@ async fn cancel_claimed_delivery(
             provider_receipt_id: None,
         },
     )
-    .await
+    .await?;
+    Ok(IdentityDeliveryReceipt {
+        delivery_id: request.delivery_id,
+        delivery_kind: request.kind.as_str().to_string(),
+        status: "cancelled".to_string(),
+        attempt_count,
+        provider_id: request.provider_id.to_string(),
+        outcome_kind: "cancelled".to_string(),
+        outcome_code: Some("credential_inactive".to_string()),
+        provider_receipt_id: None,
+    })
 }
 
 async fn delivery_outcome(
     claim: &mut ClaimedIdentityDelivery,
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    claimed_at: i64,
     config: IdentityDeliveryWorkerConfig,
-    database_slots: Option<&Arc<Semaphore>>,
+    admission: &IdentityDeliveryAdmission,
 ) -> IdentityDeliveryOutcome {
+    let claimed_at = claim.claimed_at;
     if !claim.provider_attempt_permitted {
         return IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::AttemptsExhausted,
@@ -1521,7 +1790,7 @@ async fn delivery_outcome(
     }
     let credential_active =
         match bounded_delivery_database_operation(config.database_timeout(), "preparation", async {
-            let _database_permit = acquire_delivery_database_slot(database_slots).await;
+            let _database_permit = admission.acquire_database().await;
             credential_is_active_now(
                 pool,
                 claim.attempt.kind,
@@ -1544,7 +1813,11 @@ async fn delivery_outcome(
             IdentityDeliveryCancellationCode::CredentialInactive,
         );
     }
-    if claim.attempt.credential_expires_at <= claimed_at {
+    // An expired live lease is an uncertain provider side effect, not a new
+    // delivery. Replaying the stable idempotency key must remain possible even
+    // after credential expiry so recovery can learn whether the provider
+    // already accepted the original attempt.
+    if !claim.recovered && claim.attempt.credential_expires_at <= claimed_at {
         return IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialExpired,
         );
@@ -1595,42 +1868,22 @@ async fn deliver_and_finalize(
     let IdentityDeliveryExecution {
         pool,
         gateway,
-        actor_principal_id,
-        requested_event_kind,
-        claimed_at,
         config,
-        database_slots,
+        admission,
     } = execution;
     // The provider is deliberately outside every database transaction. The
     // claim token and immutable credential hash fence completion; source
     // revocation/consumption wins through the conditional finalization CAS.
-    let outcome = delivery_outcome(
-        &mut claim,
-        pool,
-        gateway,
-        claimed_at,
-        config,
-        database_slots,
-    )
-    .await;
+    let outcome = delivery_outcome(&mut claim, pool, gateway, config, admission).await;
     bounded_delivery_database_operation(config.database_timeout(), "finalization", async {
-        let _database_permit = acquire_delivery_database_slot(database_slots).await;
+        let _database_permit = admission.acquire_database().await;
         let mut tx = pool.begin().await?;
         let finalized_at = sqlx::query_scalar::<_, i64>(
             "SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT",
         )
         .fetch_one(&mut *tx)
         .await?;
-        let receipt = finalize_delivery(
-            &mut tx,
-            claim,
-            outcome,
-            actor_principal_id,
-            requested_event_kind,
-            finalized_at,
-            config,
-        )
-        .await?;
+        let receipt = finalize_delivery(&mut tx, claim, outcome, finalized_at, config).await?;
         tx.commit().await?;
         Ok(receipt)
     })
@@ -1654,33 +1907,22 @@ where
         })?
 }
 
-async fn acquire_delivery_database_slot(
-    slots: Option<&Arc<Semaphore>>,
-) -> Option<OwnedSemaphorePermit> {
-    match slots {
-        Some(slots) => Some(
-            slots
-                .clone()
-                .acquire_owned()
-                .await
-                .expect("identity delivery database admission remains open"),
-        ),
-        None => None,
-    }
-}
-
 async fn finalize_delivery(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     claim: ClaimedIdentityDelivery,
     outcome: IdentityDeliveryOutcome,
-    actor_principal_id: &PrincipalId,
-    requested_event_kind: Option<&str>,
     now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
     let mut outcome = outcome;
+    // Once the provider confirms delivery, persist that external fact even if
+    // the credential expires while the request or recovery replay is in
+    // flight. Expiry prevents a fresh provider call; it cannot undo one.
     if now >= claim.attempt.credential_expires_at
-        && !matches!(&outcome, IdentityDeliveryOutcome::Cancelled(_))
+        && !matches!(
+            &outcome,
+            IdentityDeliveryOutcome::Cancelled(_) | IdentityDeliveryOutcome::Delivered { .. }
+        )
     {
         outcome = IdentityDeliveryOutcome::PermanentFailure(
             IdentityDeliveryFailureCode::CredentialExpired,
@@ -1714,17 +1956,7 @@ async fn finalize_delivery(
         );
         next_attempt_at = None;
     }
-    let event_kind = match (&outcome, requested_event_kind) {
-        (IdentityDeliveryOutcome::Cancelled(_), _) => "auth_delivery_cancelled",
-        (_, Some(event_kind)) => event_kind,
-        (IdentityDeliveryOutcome::Delivered { .. }, None) => "auth_delivery_delivered",
-        (
-            IdentityDeliveryOutcome::RetryableFailure(_)
-            | IdentityDeliveryOutcome::RetryableFailureAfter { .. },
-            None,
-        ) => "auth_delivery_retryable_failed",
-        (IdentityDeliveryOutcome::PermanentFailure(_), None) => "auth_delivery_permanent_failed",
-    };
+    let event_kind = claim.provenance.audit_event_kind(&outcome);
     let outcome_code = outcome.code().map(str::to_string);
     let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
     let delivered_at = (outcome.status() == "delivered").then_some(now);
@@ -1740,6 +1972,8 @@ async fn finalize_delivery(
             provider_receipt_id = $8,
             claim_token = NULL,
             claim_expires_at = NULL,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL,
             credential_envelope = CASE WHEN $3 = 'cancelled' THEN NULL ELSE credential_envelope END,
             updated_at = $9
         WHERE delivery_id = $1
@@ -1791,6 +2025,8 @@ async fn finalize_delivery(
                 provider_receipt_id = NULL,
                 claim_token = NULL,
                 claim_expires_at = NULL,
+                claim_source = NULL,
+                claim_actor_principal_id = NULL,
                 credential_envelope = NULL,
                 updated_at = $3
             WHERE delivery_id = $1
@@ -1841,12 +2077,15 @@ async fn finalize_delivery(
     };
     let outcome_code = outcome.code().map(str::to_string);
     let provider_receipt_id = outcome.provider_receipt_id().map(str::to_string);
+    let actor_principal_id = claim
+        .provenance
+        .actor_principal_id(claim.attempt.principal_id);
     record_delivery_audit(
         tx,
         IdentityDeliveryAuditRecord {
             event_at: now,
             event_kind,
-            actor_principal_id,
+            actor_principal_id: &actor_principal_id,
             principal_id: &claim.attempt.principal_id,
             credential_hash: claim.attempt.credential_hash.as_str(),
             delivery_id: claim.attempt.delivery_id,

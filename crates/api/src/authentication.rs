@@ -654,6 +654,8 @@ pub(super) async fn cancel_auth_delivery_intent(
             provider_receipt_id = NULL,
             claim_token = NULL,
             claim_expires_at = NULL,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL,
             credential_envelope = NULL,
             updated_at = $3
         WHERE credential_hash = $1

@@ -426,7 +426,7 @@ async fn disable_auth_for_erasure(
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     sqlx::query("UPDATE game_invitation SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_id = $1 AND redeemed_at IS NULL")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
+    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, claim_source = NULL, claim_actor_principal_id = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     crate::session::lock_websocket_ticket_mutations_for_principal(tx, principal_id).await?;
     sqlx::query(

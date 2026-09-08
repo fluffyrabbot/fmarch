@@ -38,6 +38,14 @@ export const actions = {
     if (typeof deliveryId !== "string" || !UUID_PATTERN.test(deliveryId)) {
       return fail(400, { state: "reject", message: "A valid delivery id is required" });
     }
+    const expectedAttemptCount = parseExpectedAttemptCount(formData.get("expectedAttemptCount"));
+    if (expectedAttemptCount === null) {
+      return fail(400, {
+        state: "reject",
+        deliveryId,
+        message: "A valid expected attempt count is required",
+      });
+    }
     const sessionToken = accessTokenForRequest({ locals, cookies });
     if (!sessionToken) {
       return fail(401, { state: "reject", message: "Missing authenticated admin session" });
@@ -46,7 +54,12 @@ export const actions = {
       `${serverApiBaseUrl()}/auth/delivery-intents/${encodeURIComponent(deliveryId)}/retry`,
       {
         method: "POST",
-        headers: { accept: "application/json", authorization: `Bearer ${sessionToken}` },
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${sessionToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ expected_attempt_count: expectedAttemptCount }),
       },
     );
     const body = await response.json();
@@ -72,6 +85,15 @@ function classicAuthEnabled(env) {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const MAX_ATTEMPT_COUNT = 2_147_483_647;
+
+function parseExpectedAttemptCount(value) {
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]*)$/u.test(value)) return null;
+  const attemptCount = Number(value);
+  return Number.isSafeInteger(attemptCount) && attemptCount <= MAX_ATTEMPT_COUNT
+    ? attemptCount
+    : null;
+}
 
 function capabilityKinds(capabilities) {
   return new Set(

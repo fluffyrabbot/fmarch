@@ -35,7 +35,34 @@ test("delivery queue exposes only server-authorized retry actions", () => {
 });
 
 test("delivery queue rejects malformed rows instead of inventing actions", () => {
-  const view = buildAuthDeliveryQueueView([{ status: "retryable_failed", retry_eligible: true }]);
+  const otherwiseValid = {
+    delivery_id: "11111111-1111-4111-8111-111111111111",
+    delivery_kind: "recovery",
+    status: "retryable_failed",
+    retry_eligible: true,
+  };
+  const view = buildAuthDeliveryQueueView([
+    { status: "retryable_failed", retry_eligible: true },
+    otherwiseValid,
+    { ...otherwiseValid, attempt_count: -1 },
+    { ...otherwiseValid, attempt_count: 2_147_483_648 },
+    { ...otherwiseValid, attempt_count: 1.5 },
+  ]);
   assert.equal(view.empty, true);
+  assert.equal(view.retryCount, 0);
+});
+
+test("delivery queue never exposes retries outside retryable failure state", () => {
+  const view = buildAuthDeliveryQueueView([
+    {
+      delivery_id: "11111111-1111-4111-8111-111111111111",
+      delivery_kind: "recovery",
+      status: "cancelled",
+      attempt_count: 1,
+      retry_eligible: true,
+    },
+  ]);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0].retryEligible, false);
   assert.equal(view.retryCount, 0);
 });

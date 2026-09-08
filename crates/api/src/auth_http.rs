@@ -8,8 +8,10 @@ use crate::authentication::{
     AuthCredentialDeliveryRequest,
 };
 use crate::identity_delivery::{
-    process_identity_delivery_intent_with_config, DisabledIdentityDeliveryGateway,
-    IdentityDeliveryGateway, IdentityDeliveryKind, IdentityDeliveryWorkerConfig,
+    retry_identity_delivery_intent_with_config, DisabledIdentityDeliveryGateway,
+    ExpectedIdentityDeliveryAttemptCount, IdentityDeliveryAdmission, IdentityDeliveryGateway,
+    IdentityDeliveryKind, IdentityDeliveryRetryRequest, IdentityDeliveryRetryResult,
+    IdentityDeliveryWorkerConfig,
 };
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
@@ -88,6 +90,7 @@ pub(super) struct AuthHttpState {
     pub(super) auth_attempt_policy: AuthAttemptPolicy,
     pub(super) identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
     pub(super) identity_delivery_worker_config: IdentityDeliveryWorkerConfig,
+    pub(super) identity_delivery_admission: IdentityDeliveryAdmission,
     pub(super) password_slots: Arc<Semaphore>,
     pub(super) workos_verification_slots: Arc<Semaphore>,
     pub(super) workos_verification_max_per_source: i32,
@@ -120,6 +123,9 @@ impl AuthHttpState {
             },
             identity_delivery_gateway: Arc::new(DisabledIdentityDeliveryGateway),
             identity_delivery_worker_config: budget.identity_delivery_worker_config,
+            identity_delivery_admission: IdentityDeliveryAdmission::new(
+                budget.identity_delivery_worker_config,
+            ),
             password_slots: Arc::new(Semaphore::new(budget.password_max_in_flight)),
             workos_verification_slots: Arc::new(Semaphore::new(
                 budget.workos_verification_max_in_flight,
@@ -791,6 +797,12 @@ struct AuthDeliveryRetryResponse {
     delivery_provider_id: String,
     delivery_outcome_kind: String,
     delivery_outcome_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetryAuthDeliveryIntent {
+    expected_attempt_count: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -4016,27 +4028,50 @@ async fn retry_auth_delivery_intent(
     State(state): State<AuthHttpState>,
     request: AuthenticatedRequest,
     Path(delivery_id): Path<Uuid>,
+    Json(retry): Json<RetryAuthDeliveryIntent>,
 ) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let actor_principal_id =
-        require_global_admin(&state, &request.bearer, "delivery retry").await?;
-    let now = unix_now_seconds();
-    let receipt = process_identity_delivery_intent_with_config(
+    require_global_admin_context(&request.context, "delivery retry")?;
+    let expected_attempt_count = ExpectedIdentityDeliveryAttemptCount::new(
+        retry.expected_attempt_count,
+    )
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::BAD_REQUEST,
+        error: RejectCode::InvalidArgument,
+        message: "expected_attempt_count must be non-negative".to_string(),
+    })?;
+    let _attempt_permit = state
+        .identity_delivery_admission
+        .try_acquire_attempt()
+        .ok_or_else(|| ApiError::Unavailable {
+            retry_after_seconds: 1,
+            message: "identity delivery capacity is exhausted; retry shortly".to_string(),
+        })?;
+    let initiating_session = request.context.initiating_session();
+    let result = retry_identity_delivery_intent_with_config(
         &state.pool,
         state.identity_delivery_gateway.as_ref(),
-        delivery_id,
-        &actor_principal_id,
-        "auth_delivery_retried",
-        now,
+        IdentityDeliveryRetryRequest {
+            delivery_id,
+            expected_attempt_count,
+            initiating_session: &initiating_session,
+            session_policy: &state.session_policy,
+        },
         state.identity_delivery_worker_config,
+        &state.identity_delivery_admission,
     )
-    .await?
-    .ok_or_else(|| ApiError::Reject {
-        status: StatusCode::CONFLICT,
-        error: RejectCode::StreamConflict,
-        message: "delivery intent is not retryable; refresh delivery status and try again"
-            .to_string(),
-    })?;
+    .await?;
+    let receipt = match result {
+        IdentityDeliveryRetryResult::Applied(receipt) => receipt,
+        IdentityDeliveryRetryResult::Conflict => {
+            return Err(ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::StreamConflict,
+                message: "delivery intent is not retryable; refresh delivery status and try again"
+                    .to_string(),
+            })
+        }
+    };
     Ok(Json(AuthDeliveryRetryResponse {
         status: receipt.status,
         delivery_id,

@@ -65,8 +65,8 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0009_media_upload_operation_journal.sql");
-  assert.equal(report.migration_file_count, 9);
+  assert.equal(report.migration_head, "0010_identity_delivery_claim_provenance.sql");
+  assert.equal(report.migration_file_count, 10);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
   assert.equal(report.table_count, 101);
@@ -116,6 +116,53 @@ test("checked-in database schema is append-only with a generated current snapsho
   assert.match(
     mediaJournal,
     /CREATE INDEX media_upload_ledger_active_lease_idx[\s\S]*WHERE state IN \('installing', 'reclaiming'\)/u,
+  );
+});
+
+test("identity delivery claims persist one valid provenance shape", () => {
+  const provenanceMigration =
+    checkedMigrations["0010_identity_delivery_claim_provenance.sql"];
+  assert.equal(typeof provenanceMigration, "string");
+  assert.match(
+    provenanceMigration,
+    /ADD COLUMN claim_source text,[\s\S]*ADD COLUMN claim_actor_principal_id uuid/u,
+  );
+  assert.match(
+    provenanceMigration,
+    /UPDATE public\.auth_delivery_intent[\s\S]*SET claim_source = 'automatic'[\s\S]*WHERE status = 'processing'/u,
+  );
+  assert.match(
+    provenanceMigration,
+    /ADD CONSTRAINT auth_delivery_intent_claim_provenance_check[\s\S]*status = 'processing'[\s\S]*claim_source IS NOT NULL[\s\S]*claim_source = 'automatic' AND claim_actor_principal_id IS NULL[\s\S]*claim_source = 'explicit_retry' AND claim_actor_principal_id IS NOT NULL[\s\S]*status <> 'processing'[\s\S]*claim_source IS NULL[\s\S]*claim_actor_principal_id IS NULL/u,
+  );
+  assert.match(
+    provenanceMigration,
+    /CREATE FUNCTION public\.auth_delivery_intent_attempt_count_monotonic\(\)[\s\S]*NEW\.attempt_count < OLD\.attempt_count[\s\S]*CREATE TRIGGER auth_delivery_intent_attempt_count_guard[\s\S]*BEFORE UPDATE OF attempt_count/u,
+  );
+
+  const deliveryTableStart = checkedSnapshot.indexOf(
+    "CREATE TABLE public.auth_delivery_intent (",
+  );
+  const deliveryTableEnd = checkedSnapshot.indexOf("\n);", deliveryTableStart);
+  assert.notEqual(deliveryTableStart, -1);
+  assert.notEqual(deliveryTableEnd, -1);
+  const deliveryTable = checkedSnapshot.slice(
+    deliveryTableStart,
+    deliveryTableEnd,
+  );
+  assert.match(deliveryTable, /\bclaim_source text\b/u);
+  assert.match(deliveryTable, /\bclaim_actor_principal_id uuid\b/u);
+  assert.match(
+    deliveryTable,
+    /CONSTRAINT auth_delivery_intent_claim_provenance_check CHECK \([\s\S]*status = 'processing'::text[\s\S]*claim_source IS NOT NULL[\s\S]*claim_source = 'automatic'::text[\s\S]*claim_actor_principal_id IS NULL[\s\S]*claim_source = 'explicit_retry'::text[\s\S]*claim_actor_principal_id IS NOT NULL[\s\S]*status <> 'processing'::text[\s\S]*claim_source IS NULL[\s\S]*claim_actor_principal_id IS NULL/u,
+  );
+  assert.match(
+    checkedSnapshot,
+    /CREATE FUNCTION public\.auth_delivery_intent_attempt_count_monotonic\(\)[\s\S]*NEW\.attempt_count < OLD\.attempt_count/u,
+  );
+  assert.match(
+    checkedSnapshot,
+    /CREATE TRIGGER auth_delivery_intent_attempt_count_guard BEFORE UPDATE OF attempt_count ON public\.auth_delivery_intent[\s\S]*auth_delivery_intent_attempt_count_monotonic\(\)/u,
   );
 });
 

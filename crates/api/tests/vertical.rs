@@ -2,10 +2,10 @@ mod support;
 
 use api::{
     identity_delivery::{
-        process_next_identity_delivery_with_config, unix_now_seconds, IdentityDeliveryAttempt,
-        IdentityDeliveryFailureCode, IdentityDeliveryFuture, IdentityDeliveryGateway,
-        IdentityDeliveryOutcome, IdentityDeliveryWorkerConfig,
-        LocalDeterministicIdentityDeliveryGateway,
+        process_next_identity_delivery_with_config, unix_now_seconds, IdentityDeliveryAdmission,
+        IdentityDeliveryAttempt, IdentityDeliveryFailureCode, IdentityDeliveryFuture,
+        IdentityDeliveryGateway, IdentityDeliveryOutcome, IdentityDeliveryRetryPolicy,
+        IdentityDeliveryWorkerConfig, LocalDeterministicIdentityDeliveryGateway,
     },
     ApiState, HostConsoleStateResponse, HostSetupStateResponse, MediaUploadResponse,
     WebsocketTicketResponse,
@@ -41,18 +41,13 @@ use wire::{
 async fn process_next_identity_delivery(
     pool: &sqlx::PgPool,
     gateway: &dyn IdentityDeliveryGateway,
-    now: i64,
 ) -> Result<
     Option<api::identity_delivery::IdentityDeliveryReceipt>,
     api::identity_delivery::IdentityDeliveryError,
 > {
-    process_next_identity_delivery_with_config(
-        pool,
-        gateway,
-        now,
-        IdentityDeliveryWorkerConfig::default(),
-    )
-    .await
+    let config = IdentityDeliveryWorkerConfig::default();
+    let admission = IdentityDeliveryAdmission::new(config);
+    process_next_identity_delivery_with_config(pool, gateway, config, &admission).await
 }
 
 const TEST_LOCAL_PROOF_SECRET: &str =
@@ -601,6 +596,99 @@ async fn queue_test_delivery_invite(
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id")
+}
+
+fn retry_identity_delivery_request(
+    delivery_id: Uuid,
+    admin_token: &str,
+    expected_attempt_count: i32,
+) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {admin_token}"))
+        .body(Body::from(
+            serde_json::json!({ "expected_attempt_count": expected_attempt_count }).to_string(),
+        ))
+        .unwrap()
+}
+
+async fn seed_due_retryable_identity_delivery(
+    pool: &sqlx::PgPool,
+    delivery_id: Uuid,
+    attempt_count: i32,
+) {
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'retryable_failed',
+            outcome_kind = 'retryable_failure',
+            outcome_code = 'provider_unavailable',
+            last_error = 'provider_unavailable',
+            attempt_count = $2,
+            next_attempt_at = 0,
+            delivered_at = NULL,
+            provider_receipt_id = NULL,
+            claim_token = NULL,
+            claim_expires_at = NULL,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(attempt_count)
+    .execute(pool)
+    .await
+    .expect("seed due retryable identity delivery");
+}
+
+async fn identity_delivery_resolution_audits(
+    pool: &sqlx::PgPool,
+    delivery_id: Uuid,
+) -> Vec<(String, Uuid)> {
+    sqlx::query_as::<_, (String, Uuid)>(
+        r#"
+        SELECT event_kind, actor_principal_id
+        FROM identity_lifecycle_audit
+        WHERE metadata ->> 'delivery_id' = $1
+          AND event_kind IN (
+              'auth_delivery_delivered',
+              'auth_delivery_retried',
+              'auth_delivery_cancelled'
+          )
+        ORDER BY id
+        "#,
+    )
+    .bind(delivery_id.to_string())
+    .fetch_all(pool)
+    .await
+    .expect("load identity delivery completion audits")
+}
+
+async fn wait_for_identity_owner_lock_waiter(pool: &sqlx::PgPool) {
+    for _ in 0..200 {
+        let waiters: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND wait_event_type = 'Lock'
+              AND query LIKE '%FROM platform_principal%'
+              AND query LIKE '%FOR UPDATE%'
+            "#,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiters >= 1 {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("expected an identity owner-lock waiter");
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9220,14 +9308,13 @@ async fn identity_delivery_two_workers_never_share_a_live_claim(pool: sqlx::PgPo
     .await;
     let first_pool = pool.clone();
     let first_gateway = gateway.clone();
-    let now = unix_now_seconds();
     let first = tokio::spawn(async move {
-        process_next_identity_delivery(&first_pool, first_gateway.as_ref(), now).await
+        process_next_identity_delivery(&first_pool, first_gateway.as_ref()).await
     });
     gateway.wait_for_first_attempt().await;
 
     assert!(
-        process_next_identity_delivery(&pool, gateway.as_ref(), now)
+        process_next_identity_delivery(&pool, gateway.as_ref())
             .await
             .unwrap()
             .is_none(),
@@ -9242,6 +9329,750 @@ async fn identity_delivery_two_workers_never_share_a_live_claim(pool: sqlx::PgPo
     assert_eq!(receipt.delivery_id, delivery_id);
     assert_eq!(receipt.status, "delivered");
     assert_eq!(gateway.attempts(), vec![(delivery_id, 1)]);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_next_due_claim_excludes_explicit_http_retry(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "mixed_auto_winner_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "mixed-auto-winner@example.test",
+        "correct horse battery",
+        "mixed_auto_winner_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "mixed-auto-winner@example.test",
+        "mixed_auto_winner_user",
+        "mixed-auto-winner-delivery-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    let winner_pool = pool.clone();
+    let winner_gateway = gateway.clone();
+    let winner = tokio::spawn(async move {
+        process_next_identity_delivery(&winner_pool, winner_gateway.as_ref()).await
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let loser_response = app
+        .clone()
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    gateway.release_first_attempt();
+    let winner_receipt = winner
+        .await
+        .unwrap()
+        .unwrap()
+        .expect("the NextDue claimant retains the live generation");
+
+    assert_eq!(loser_response.status(), StatusCode::CONFLICT);
+    assert_eq!(winner_receipt.delivery_id, delivery_id);
+    assert_eq!(winner_receipt.status, "delivered");
+    assert_eq!(winner_receipt.attempt_count, 2);
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 2)]);
+    let persisted = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("delivered".to_string(), 2));
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_delivered".to_string(),
+            PrincipalId::fixture("mixed_auto_winner_user").as_uuid(),
+        )]
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_explicit_http_retry_excludes_next_due_claim(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_label = "mixed_explicit_winner_admin";
+    let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "mixed-explicit-winner@example.test",
+        "correct horse battery",
+        "mixed_explicit_winner_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "mixed-explicit-winner@example.test",
+        "mixed_explicit_winner_user",
+        "mixed-explicit-winner-delivery-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    let winner_app = app.clone();
+    let winner_token = admin_token.clone();
+    let winner = tokio::spawn(async move {
+        winner_app
+            .oneshot(retry_identity_delivery_request(
+                delivery_id,
+                &winner_token,
+                1,
+            ))
+            .await
+            .unwrap()
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let loser = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap();
+    gateway.release_first_attempt();
+    let winner_response = winner.await.unwrap();
+
+    assert!(
+        loser.is_none(),
+        "NextDue must not share the explicit retry's live generation"
+    );
+    assert_eq!(winner_response.status(), StatusCode::OK);
+    let winner_body = to_bytes(winner_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let winner_receipt: serde_json::Value = serde_json::from_slice(&winner_body).unwrap();
+    assert_eq!(winner_receipt["delivery_id"], delivery_id.to_string());
+    assert_eq!(winner_receipt["status"], "delivered");
+    assert_eq!(winner_receipt["attempt_count"], 2);
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 2)]);
+    let persisted = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("delivered".to_string(), 2));
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_retried".to_string(),
+            PrincipalId::fixture(admin_label).as_uuid(),
+        )]
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_explicit_retry_rejects_stale_attempt_generation(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token =
+        issue_dev_session(&app, "stale_retry_generation_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "stale-retry-generation@example.test",
+        "correct horse battery",
+        "stale_retry_generation_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "stale-retry-generation@example.test",
+        "stale_retry_generation_user",
+        "stale-retry-generation-delivery-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 2).await;
+
+    let response = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let response_body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let rejection: RejectMsg = serde_json::from_slice(&response_body).unwrap();
+    assert_eq!(rejection.error, RejectCode::StreamConflict);
+    assert!(gateway.attempts().is_empty());
+    let persisted = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("retryable_failed".to_string(), 2));
+    assert!(
+        identity_delivery_resolution_audits(&pool, delivery_id)
+            .await
+            .is_empty(),
+        "a stale retry generation has no authority to deliver or audit"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_retry_rejects_invalid_attempt_generations(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "invalid_retry_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "invalid-retry@example.test",
+        "correct horse battery",
+        "invalid_retry_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "invalid-retry@example.test",
+        "invalid_retry_user",
+        "invalid-retry-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    for (body, expected_status) in [
+        ("{", StatusCode::BAD_REQUEST),
+        ("{}", StatusCode::UNPROCESSABLE_ENTITY),
+        (
+            r#"{"expected_attempt_count":1,"unexpected":true}"#,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            r#"{"expected_attempt_count":2147483648}"#,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {admin_token}"))
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected_status, "payload: {body}");
+    }
+
+    let negative = app
+        .clone()
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            -1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(negative.status(), StatusCode::BAD_REQUEST);
+    let negative_body = to_bytes(negative.into_body(), usize::MAX).await.unwrap();
+    let negative_rejection: RejectMsg = serde_json::from_slice(&negative_body).unwrap();
+    assert_eq!(negative_rejection.error, RejectCode::InvalidArgument);
+
+    assert!(gateway.attempts().is_empty());
+    let persisted = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("retryable_failed".to_string(), 1));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_explicit_retry_cancellation_preserves_admin_provenance(
+    pool: sqlx::PgPool,
+) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_label = "inactive_retry_admin";
+    let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "inactive-retry@example.test",
+        "correct horse battery",
+        "inactive_retry_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "inactive-retry@example.test",
+        "inactive_retry_user",
+        "inactive-retry-delivery-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+    sqlx::query(
+        r#"
+        UPDATE game_invitation
+        SET revoked_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT
+        WHERE token_hash = (
+            SELECT credential_hash
+            FROM auth_delivery_intent
+            WHERE delivery_id = $1
+        )
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let response = app
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body: serde_json::Value = serde_json::from_slice(&response_body).unwrap();
+    assert_eq!(response_body["status"], "cancelled");
+    assert_eq!(response_body["attempt_count"], 1);
+    assert!(gateway.attempts().is_empty());
+    let persisted = sqlx::query_as::<_, (String, i32, String, Option<String>)>(
+        r#"
+        SELECT status, attempt_count, outcome_kind, outcome_code
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted.0, "cancelled");
+    assert_eq!(persisted.1, 1);
+    assert_eq!(persisted.2, "cancelled");
+    assert_eq!(persisted.3.as_deref(), Some("credential_inactive"));
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_cancelled".to_string(),
+            PrincipalId::fixture(admin_label).as_uuid(),
+        )]
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_explicit_retry_provenance_survives_lease_recovery(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_label = "recovered_explicit_retry_admin";
+    let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "recovered-explicit-retry@example.test",
+        "correct horse battery",
+        "recovered_explicit_retry_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "recovered-explicit-retry@example.test",
+        "recovered_explicit_retry_user",
+        "recovered-explicit-retry-delivery-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    let original_app = app.clone();
+    let original_token = admin_token.clone();
+    let original = tokio::spawn(async move {
+        original_app
+            .oneshot(retry_identity_delivery_request(
+                delivery_id,
+                &original_token,
+                1,
+            ))
+            .await
+            .unwrap()
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let claimed = sqlx::query_as::<_, (String, i32, Option<String>, Option<Uuid>)>(
+        r#"
+        SELECT status, attempt_count, claim_source, claim_actor_principal_id
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(claimed.0, "processing");
+    assert_eq!(claimed.1, 2);
+    assert_eq!(claimed.2.as_deref(), Some("explicit_retry"));
+    assert_eq!(claimed.3, Some(PrincipalId::fixture(admin_label).as_uuid()));
+
+    sqlx::query(
+        r#"
+        WITH database_clock AS (
+            SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT AS now_seconds
+        )
+        UPDATE auth_delivery_intent AS delivery
+        SET claim_expires_at = database_clock.now_seconds - 1,
+            created_at = database_clock.now_seconds - 2,
+            credential_expires_at = database_clock.now_seconds - 1
+        FROM database_clock
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .expect("provider I/O does not hold the delivery row lock");
+
+    let recovered = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("expired explicit claim is recovered");
+    assert_eq!(recovered.status, "delivered");
+    assert_eq!(recovered.attempt_count, 2);
+
+    gateway.release_first_attempt();
+    let original_response = tokio::time::timeout(std::time::Duration::from_secs(5), original)
+        .await
+        .expect("obsolete explicit retry must finish")
+        .unwrap();
+    assert_eq!(original_response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        gateway.attempts(),
+        vec![(delivery_id, 2), (delivery_id, 2)],
+        "lease recovery repeats the same idempotent provider attempt"
+    );
+    let persisted = sqlx::query_as::<_, (String, i32, Option<String>, Option<Uuid>)>(
+        r#"
+        SELECT status, attempt_count, claim_source, claim_actor_principal_id
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("delivered".to_string(), 2, None, None));
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_retried".to_string(),
+            PrincipalId::fixture(admin_label).as_uuid(),
+        )],
+        "the recovering process must retain the explicit admin provenance"
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_retry_revalidates_the_exact_session_before_claim(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_label = "retry_revocation_first_admin";
+    let admin_principal = PrincipalId::fixture(admin_label);
+    let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "retry-revocation-first@example.test",
+        "correct horse battery",
+        "retry_revocation_first_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "retry-revocation-first@example.test",
+        "retry_revocation_first_user",
+        "retry-revocation-first-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(admin_principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
+
+    let retry_app = app.clone();
+    let retry_token = admin_token.clone();
+    let retry = tokio::spawn(async move {
+        retry_app
+            .oneshot(retry_identity_delivery_request(
+                delivery_id,
+                &retry_token,
+                1,
+            ))
+            .await
+            .unwrap()
+    });
+    wait_for_identity_owner_lock_waiter(&pool).await;
+
+    sqlx::query(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT
+        WHERE token_hash = $1
+        "#,
+    )
+    .bind(identity::token::hash_token(admin_token.as_str()))
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    owner_gate.commit().await.unwrap();
+
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), retry)
+        .await
+        .expect("retry must leave the owner fence")
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(gateway.attempts().is_empty());
+    let persisted = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("retryable_failed".to_string(), 1));
+    assert!(identity_delivery_resolution_audits(&pool, delivery_id)
+        .await
+        .is_empty());
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_retry_claim_wins_before_later_session_revocation(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_label = "retry_claim_first_admin";
+    let admin_token = issue_dev_session(&app, admin_label, &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "retry-claim-first@example.test",
+        "correct horse battery",
+        "retry_claim_first_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "retry-claim-first@example.test",
+        "retry_claim_first_user",
+        "retry-claim-first-token",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, delivery_id, 1).await;
+
+    let retry_app = app.clone();
+    let retry_token = admin_token.clone();
+    let retry = tokio::spawn(async move {
+        retry_app
+            .oneshot(retry_identity_delivery_request(
+                delivery_id,
+                &retry_token,
+                1,
+            ))
+            .await
+            .unwrap()
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let logout = post_bearer_json(
+        &app,
+        "/auth/session-logout",
+        serde_json::json!({}),
+        &admin_token,
+    )
+    .await;
+    assert_eq!(logout.status(), StatusCode::OK);
+    gateway.release_first_attempt();
+
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), retry)
+        .await
+        .expect("claimed retry must finish")
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 2)]);
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_retried".to_string(),
+            PrincipalId::fixture(admin_label).as_uuid(),
+        )]
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_explicit_retries_share_process_admission(pool: sqlx::PgPool) {
+    let gateway = Arc::new(FencedIdentityDeliveryGateway::default());
+    let retry_policy = IdentityDeliveryRetryPolicy::new(
+        std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(2),
+        8,
+    )
+    .unwrap();
+    let config = IdentityDeliveryWorkerConfig::new(
+        1,
+        1,
+        std::time::Duration::from_millis(10),
+        std::time::Duration::from_secs(15),
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_secs(1),
+        retry_policy,
+    )
+    .unwrap();
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone())
+            .with_identity_delivery_worker_config(config),
+    );
+    let admin_token = issue_dev_session(&app, "retry_admission_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "retry-admission-a@example.test",
+        "correct horse battery",
+        "retry_admission_user_a",
+    )
+    .await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "retry-admission-b@example.test",
+        "correct horse battery",
+        "retry_admission_user_b",
+    )
+    .await;
+    let first_delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "retry-admission-a@example.test",
+        "retry_admission_user_a",
+        "retry-admission-token-a",
+    )
+    .await;
+    let second_delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "retry-admission-b@example.test",
+        "retry_admission_user_b",
+        "retry-admission-token-b",
+    )
+    .await;
+    seed_due_retryable_identity_delivery(&pool, first_delivery_id, 1).await;
+    seed_due_retryable_identity_delivery(&pool, second_delivery_id, 1).await;
+
+    let first_app = app.clone();
+    let first_token = admin_token.clone();
+    let first = tokio::spawn(async move {
+        first_app
+            .oneshot(retry_identity_delivery_request(
+                first_delivery_id,
+                &first_token,
+                1,
+            ))
+            .await
+            .unwrap()
+    });
+    gateway.wait_for_first_attempt().await;
+
+    let saturated = app
+        .clone()
+        .oneshot(retry_identity_delivery_request(
+            second_delivery_id,
+            &admin_token,
+            1,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(saturated.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(saturated.headers()["retry-after"], "1");
+    let saturated_body = to_bytes(saturated.into_body(), usize::MAX).await.unwrap();
+    let saturated_rejection: RejectMsg = serde_json::from_slice(&saturated_body).unwrap();
+    assert!(saturated_rejection.retryable);
+    assert_eq!(gateway.attempts(), vec![(first_delivery_id, 2)]);
+
+    gateway.release_first_attempt();
+    let first_response = tokio::time::timeout(std::time::Duration::from_secs(5), first)
+        .await
+        .expect("admitted retry must finish")
+        .unwrap();
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let second_state = sqlx::query_as::<_, (String, i32)>(
+        "SELECT status, attempt_count FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(second_delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(second_state, ("retryable_failed".to_string(), 1));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9271,9 +10102,8 @@ async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(poo
     .await;
     let first_pool = pool.clone();
     let first_gateway = gateway.clone();
-    let now = unix_now_seconds();
     let first = tokio::spawn(async move {
-        process_next_identity_delivery(&first_pool, first_gateway.as_ref(), now).await
+        process_next_identity_delivery(&first_pool, first_gateway.as_ref()).await
     });
     gateway.wait_for_first_attempt().await;
 
@@ -9288,20 +10118,20 @@ async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(poo
     .execute(&pool)
     .await
     .expect("provider I/O holds no delivery row lock");
-    let replacement = process_next_identity_delivery(&pool, gateway.as_ref(), now)
+    let replacement = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("expired lease is reclaimed");
     assert_eq!(replacement.delivery_id, delivery_id);
     assert_eq!(replacement.status, "delivered");
-    assert_eq!(replacement.attempt_count, 2);
+    assert_eq!(replacement.attempt_count, 1);
 
     gateway.release_first_attempt();
     assert!(
         first.await.unwrap().unwrap().is_none(),
         "the old claim token must lose its finalization CAS"
     );
-    assert_eq!(gateway.attempts(), vec![(delivery_id, 1), (delivery_id, 2)]);
+    assert_eq!(gateway.attempts(), vec![(delivery_id, 1), (delivery_id, 1)]);
     let persisted = sqlx::query_as::<_, (String, i32, String)>(
         "SELECT status, attempt_count, provider_receipt_id FROM auth_delivery_intent WHERE delivery_id = $1",
     )
@@ -9310,7 +10140,7 @@ async fn identity_delivery_obsolete_worker_cannot_finalize_a_reclaimed_lease(poo
     .await
     .unwrap();
     assert_eq!(persisted.0, "delivered");
-    assert_eq!(persisted.1, 2);
+    assert_eq!(persisted.1, 1);
     assert_eq!(persisted.2, format!("fixture-fenced-{delivery_id}-1"));
 }
 
@@ -9358,7 +10188,7 @@ async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
     .await
     .unwrap();
 
-    let receipt = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("exhausted retry is terminalized");
@@ -9366,6 +10196,123 @@ async fn identity_delivery_exhausted_retry_is_dead_lettered_without_provider_io(
     assert_eq!(receipt.attempt_count, 8);
     assert_eq!(receipt.outcome_code.as_deref(), Some("attempts_exhausted"));
     assert!(gateway.attempts().is_empty());
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn identity_delivery_expired_processing_at_attempt_cap_is_replayed(pool: sqlx::PgPool) {
+    let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = issue_dev_session(&app, "cap_reclaim_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "cap-reclaim@example.test",
+        "correct horse battery",
+        "cap_reclaim_user",
+    )
+    .await;
+    let delivery_id = queue_test_delivery_invite(
+        &app,
+        &admin_token,
+        "cap-reclaim@example.test",
+        "cap_reclaim_user",
+        "cap-reclaim-delivery-token",
+    )
+    .await;
+
+    let invalid_claim = sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'processing',
+            outcome_kind = 'processing',
+            outcome_code = NULL,
+            next_attempt_at = NULL,
+            claim_token = $2,
+            claim_expires_at = 1,
+            claim_source = NULL,
+            claim_actor_principal_id = NULL,
+            attempt_count = 8
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .expect_err("processing claims require durable provenance");
+    assert_eq!(
+        invalid_claim
+            .as_database_error()
+            .and_then(|error| error.constraint()),
+        Some("auth_delivery_intent_claim_provenance_check")
+    );
+
+    sqlx::query(
+        r#"
+        UPDATE auth_delivery_intent
+        SET status = 'processing',
+            outcome_kind = 'processing',
+            outcome_code = NULL,
+            next_attempt_at = NULL,
+            delivered_at = NULL,
+            last_error = NULL,
+            provider_receipt_id = NULL,
+            claim_token = $2,
+            claim_expires_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT - 1,
+            claim_source = 'automatic',
+            claim_actor_principal_id = NULL,
+            attempt_count = 8
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("expired processing claim at the cap is replayed");
+    assert_eq!(receipt.status, "delivered");
+    assert_eq!(receipt.attempt_count, 8);
+    assert_eq!(
+        gateway.attempts(),
+        vec![(delivery_id, 8, "cap-reclaim-delivery-token".to_string())]
+    );
+    let persisted = sqlx::query_as::<_, (String, i32, Option<String>, Option<Uuid>)>(
+        r#"
+        SELECT status, attempt_count, claim_source, claim_actor_principal_id
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persisted, ("delivered".to_string(), 8, None, None));
+    let regressed =
+        sqlx::query("UPDATE auth_delivery_intent SET attempt_count = 7 WHERE delivery_id = $1")
+            .bind(delivery_id)
+            .execute(&pool)
+            .await
+            .expect_err("delivery attempt generations are database-monotonic");
+    assert!(regressed
+        .as_database_error()
+        .is_some_and(|error| error.message().contains("attempt_count cannot decrease")));
+    assert_eq!(
+        identity_delivery_resolution_audits(&pool, delivery_id).await,
+        vec![(
+            "auth_delivery_delivered".to_string(),
+            PrincipalId::fixture("cap_reclaim_user").as_uuid(),
+        )]
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9402,17 +10349,21 @@ async fn identity_delivery_revocation_wins_the_post_provider_cas(pool: sqlx::PgP
     .unwrap();
     let attempt_pool = pool.clone();
     let attempt_gateway = gateway.clone();
-    let now = unix_now_seconds();
     let attempt = tokio::spawn(async move {
-        process_next_identity_delivery(&attempt_pool, attempt_gateway.as_ref(), now).await
+        process_next_identity_delivery(&attempt_pool, attempt_gateway.as_ref()).await
     });
     gateway.wait_for_first_attempt().await;
-    sqlx::query("UPDATE game_invitation SET revoked_at = $2 WHERE token_hash = $1")
-        .bind(credential_hash)
-        .bind(now)
-        .execute(&pool)
-        .await
-        .expect("revocation is not blocked by provider I/O");
+    sqlx::query(
+        r#"
+        UPDATE game_invitation
+        SET revoked_at = floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT
+        WHERE token_hash = $1
+        "#,
+    )
+    .bind(credential_hash)
+    .execute(&pool)
+    .await
+    .expect("revocation is not blocked by provider I/O");
     gateway.release_first_attempt();
 
     let receipt = attempt
@@ -9482,16 +10433,10 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert!(invite["delivery_outcome_code"].is_null());
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
-    process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("queued delivery claimed");
-    assert!(
-        process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
-            .await
-            .unwrap()
-            .is_none()
-    );
 
     let (
         credential_hash,
@@ -9569,14 +10514,11 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     assert!(queue["deliveries"][0].get("credential_envelope").is_none());
     assert!(!String::from_utf8_lossy(&bytes).contains("delivery-invite-raw-token"));
     let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
-                .header("authorization", format!("Bearer {admin_token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -9725,7 +10667,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     assert!(invite["delivery_outcome_code"].is_null());
     let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
         .expect("typed delivery id");
-    process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("queued delivery claimed");
@@ -9803,14 +10745,11 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     );
 
     let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
-                .header("authorization", format!("Bearer {admin_token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CONFLICT);
@@ -9877,12 +10816,12 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert!(
-        process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
-            .await
-            .unwrap()
-            .is_none()
-    );
+    let cancellation = process_next_identity_delivery(&pool, gateway.as_ref())
+        .await
+        .unwrap()
+        .expect("inactive delivery is reconciled as a completed cancellation");
+    assert_eq!(cancellation.status, "cancelled");
+    assert_eq!(cancellation.attempt_count, 0);
     let cancellation_window_end =
         sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
             .fetch_one(&pool)
@@ -11048,7 +11987,7 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
     assert!(cancelled.3.is_none());
     assert_eq!(active.1, "queued");
 
-    let receipt = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    let receipt = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("active rotated credential remains deliverable");
@@ -11112,7 +12051,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
     .fetch_one(&pool)
     .await
     .unwrap();
-    let first = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    let first = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("first recovery delivery attempt");
@@ -11149,14 +12088,11 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
         .unwrap();
     let response = app
         .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
-                .header("authorization", format!("Bearer {admin_token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            1,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -11189,14 +12125,11 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
 
     let response = app
         .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/auth/delivery-intents/{delivery_id}/retry"))
-                .header("authorization", format!("Bearer {admin_token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(retry_identity_delivery_request(
+            delivery_id,
+            &admin_token,
+            2,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CONFLICT);
@@ -11246,7 +12179,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
     .execute(&pool)
     .await
     .unwrap();
-    let expired = process_next_identity_delivery(&pool, gateway.as_ref(), unix_now_seconds())
+    let expired = process_next_identity_delivery(&pool, gateway.as_ref())
         .await
         .unwrap()
         .expect("expired recovery delivery is finalized");

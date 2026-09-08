@@ -2693,7 +2693,13 @@ async function retryFailedDelivery({
     `${apiBaseUrl}/auth/delivery-intents/${encodeURIComponent(delivery.deliveryId)}/retry`,
     {
       method: "POST",
-      headers: { authorization: `Bearer ${rootAdminSessionToken}` },
+      headers: {
+        authorization: `Bearer ${rootAdminSessionToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        expected_attempt_count: delivery.attemptCount,
+      }),
     },
   );
   if (
