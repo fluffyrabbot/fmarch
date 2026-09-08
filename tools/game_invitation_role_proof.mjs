@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
@@ -26,6 +25,11 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import {
+  identityDeliveryClockSkewMarginCoversBound,
+  identityDeliveryLeaseIsLive,
+  startIdentityDeliveryProviderFixture,
+} from "./identity_delivery_provider_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -228,11 +232,15 @@ try {
     migrationUrl: proofDatabase.migrationUrl,
   });
   proofDatabase.applicationUrl = authority.applicationUrl;
-  deliveryProvider = await startIdentityDeliveryCapture();
-  const ownedApi = await startApi(
-    authority.applicationUrl,
-    deliveryProvider.endpoint,
-  );
+  deliveryProvider = await startIdentityDeliveryProviderFixture({
+    host,
+    authToken: `local-delivery-auth-${game}`,
+    providerGeneration: "local-deterministic",
+    retryAfterSeconds: explicitRetryBackoffSeconds,
+    minimumClockSkewMarginSeconds:
+      identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds,
+  });
+  const ownedApi = await startApi(authority.applicationUrl, deliveryProvider);
   const apiBaseUrl = ownedApi.baseUrl;
   await seedRootAdminSession(apiBaseUrl, ownedApi.localProofAuth);
   const accounts = await createAccounts(apiBaseUrl);
@@ -371,9 +379,10 @@ try {
     stage: "invite-proof-listen",
   });
   if (!handled) {
-    if (deliveryProvider?.diagnostics.length > 0) {
+    const providerDiagnostics = deliveryProvider?.diagnosticsSnapshot() ?? [];
+    if (providerDiagnostics.length > 0) {
       error.message = `${error.message}; identity delivery provider diagnostics=${JSON.stringify(
-        deliveryProvider.diagnostics,
+        providerDiagnostics,
       )}`;
     }
     error.serverOutput = serverOutput.slice(-4000);
@@ -613,14 +622,17 @@ async function waitForDeliveredProviderCapture({
   const deadline = Date.now() + deliveryIntentPollTimeoutMs;
   let deliveryObservationFailureCount = 0;
   while (Date.now() <= deadline) {
-    const capture = deliveryProvider.captures.get(deliveryId);
+    const capture = deliveryProvider.captureFor(deliveryId);
     if (capture !== undefined) {
       if (
         capture.schema !== "fmarch.identity-delivery.v2" ||
         capture.provider_generation !== "local-deterministic" ||
         typeof capture.attempt_token !== "string" ||
-        !deliveryLeaseIsLive(capture) ||
-        !deliveryClockSkewMarginCoversCrossClockBound(capture) ||
+        !identityDeliveryLeaseIsLive(capture) ||
+        !identityDeliveryClockSkewMarginCoversBound(capture, {
+          minimumClockSkewMarginSeconds:
+            identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds,
+        }) ||
         capture.delivery_kind !== expectedKind ||
         capture.account_id !== expectedAccountId.toLowerCase() ||
         !deliveryCredentialMatchesExpectation(
@@ -653,13 +665,15 @@ async function waitForDeliveredProviderCapture({
       persisted.outcomeKind === "delivered" &&
       persisted.outcomeCode === null
     ) {
-      deliveryProvider.captures.delete(deliveryId);
+      deliveryProvider.acknowledgeCapture(deliveryId, capture.attempt_token);
       return capture.credential;
     }
-    const terminalDiagnostic = deliveryProvider.diagnostics.findLast(
+    const terminalDiagnostic = deliveryProvider
+      .diagnosticsSnapshot()
+      .findLast(
       (diagnostic) =>
         diagnostic.deliveryId === deliveryId && diagnostic.reason !== "delivered",
-    );
+      );
     if (
       terminalDiagnostic !== undefined ||
       new Set(["delivered", "retryable_failed", "permanent_failed", "cancelled"]).has(
@@ -683,7 +697,7 @@ async function waitForDeliveredProviderCapture({
   throw new Error(
     `identity delivery provider did not acknowledge ${deliveryId}; diagnostics=${JSON.stringify({
       deliveryObservationFailureCount,
-      providerDiagnostics: deliveryProvider.diagnostics,
+      providerDiagnostics: deliveryProvider.diagnosticsSnapshot(),
     })}`,
   );
 }
@@ -4208,528 +4222,7 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
-// The safety margin must cover the database clock's maximum lead over the
-// provider clock plus the provider's maximum deadline-to-no-effect quiescence
-// lag. This proof's final deadline check and synchronous capture mutation are
-// one uninterrupted turn, so its quiescence-lag term is zero.
-function deliveryLeaseIsLive(delivery) {
-  return (
-    Number.isInteger(delivery.lease_expires_at) &&
-    delivery.lease_expires_at > Math.floor(Date.now() / 1000)
-  );
-}
-
-function deliveryClockSkewMarginCoversCrossClockBound(delivery) {
-  return (
-    Number.isInteger(delivery.clock_skew_margin_seconds) &&
-    delivery.clock_skew_margin_seconds >=
-      identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds
-  );
-}
-
-// BEGIN identity delivery provider transition model
-function identityDeliveryEffectIdentityFromRequest(delivery) {
-  return Object.freeze({
-    deliveryKind: delivery.delivery_kind,
-    accountId: delivery.account_id,
-    principalId: delivery.principal_id,
-    credential: delivery.credential,
-  });
-}
-
-function identityDeliveryEffectIdentityMatchesRequest(effectIdentity, delivery) {
-  return (
-    effectIdentity !== undefined &&
-    effectIdentity.deliveryKind === delivery.delivery_kind &&
-    effectIdentity.accountId === delivery.account_id &&
-    effectIdentity.principalId === delivery.principal_id &&
-    effectIdentity.credential === delivery.credential
-  );
-}
-
-function resolveCachedIdentityDeliveryProviderAttempt({ delivery, cachedAttempt }) {
-  if (cachedAttempt === undefined) {
-    return Object.freeze({ kind: "miss" });
-  }
-  if (cachedAttempt.attemptNumber !== delivery.attempt_number) {
-    return Object.freeze({
-      kind: "rejected",
-      reason: "attempt_generation_rejected",
-    });
-  }
-  if (
-    !identityDeliveryEffectIdentityMatchesRequest(
-      cachedAttempt.effectIdentity,
-      delivery,
-    )
-  ) {
-    return Object.freeze({
-      kind: "rejected",
-      reason: "effect_identity_rejected",
-    });
-  }
-  return Object.freeze({
-    kind: "cached",
-    outcome: cachedAttempt.outcome,
-  });
-}
-
-function planIdentityDeliveryProviderTransition({
-  delivery,
-  previous,
-  retryableFailureArm = null,
-  retryAfterSeconds,
-}) {
-  const effectIdentity = identityDeliveryEffectIdentityFromRequest(delivery);
-  if (
-    previous !== undefined &&
-    !identityDeliveryEffectIdentityMatchesRequest(
-      previous.effectIdentity,
-      delivery,
-    )
-  ) {
-    return Object.freeze({
-      kind: "rejected",
-      reason: "effect_identity_rejected",
-    });
-  }
-  let transitionKind;
-  if (previous === undefined && delivery.attempt_number === 1) {
-    transitionKind = "start";
-  } else if (
-    previous !== undefined &&
-    delivery.attempt_number === previous.attemptNumber
-  ) {
-    transitionKind = "reclaim";
-  } else if (
-    previous !== undefined &&
-    previous.status === "retryable_failure" &&
-    delivery.attempt_number === previous.attemptNumber + 1
-  ) {
-    transitionKind = "retry";
-  } else if (
-    previous !== undefined &&
-    previous.status === "delivered" &&
-    delivery.attempt_number === previous.attemptNumber + 1
-  ) {
-    transitionKind = "reconcile";
-  } else {
-    return Object.freeze({
-      kind: "rejected",
-      reason: "attempt_generation_rejected",
-    });
-  }
-
-  const failureArm =
-    transitionKind === "start" && retryableFailureArm !== null
-      ? retryableFailureArm
-      : null;
-  const outcome =
-    transitionKind === "reclaim" || transitionKind === "reconcile"
-      ? Object.freeze({
-          ...previous.outcome,
-          attempt_token: delivery.attempt_token,
-        })
-      : failureArm !== null
-        ? Object.freeze({
-            schema: "fmarch.identity-delivery-result.v2",
-            provider_generation: delivery.provider_generation,
-            delivery_id: delivery.delivery_id,
-            attempt_token: delivery.attempt_token,
-            status: "retryable_failure",
-            code: "provider_unavailable",
-            retry_after_seconds: retryAfterSeconds,
-          })
-        : Object.freeze({
-            schema: "fmarch.identity-delivery-result.v2",
-            provider_generation: delivery.provider_generation,
-            delivery_id: delivery.delivery_id,
-            attempt_token: delivery.attempt_token,
-            status: "delivered",
-            provider_receipt_id: `local-${delivery.delivery_id}`,
-          });
-  const next = Object.freeze({
-    attemptNumber: delivery.attempt_number,
-    status: outcome.status,
-    outcome,
-    effectIdentity,
-  });
-  const capture =
-    outcome.status === "delivered" &&
-    (transitionKind === "start" || transitionKind === "retry")
-      ? identityDeliveryProviderCaptureFromRequest(delivery)
-      : null;
-  return Object.freeze({
-    kind: "accepted",
-    transitionKind,
-    outcome,
-    next,
-    capture,
-    failureArm,
-    effectIdentity,
-  });
-}
-
-function identityDeliveryProviderCaptureFromRequest(delivery) {
-  return Object.freeze({
-    schema: delivery.schema,
-    provider_generation: delivery.provider_generation,
-    delivery_id: delivery.delivery_id,
-    attempt_token: delivery.attempt_token,
-    lease_expires_at: delivery.lease_expires_at,
-    clock_skew_margin_seconds: delivery.clock_skew_margin_seconds,
-    delivery_kind: delivery.delivery_kind,
-    account_id: delivery.account_id,
-    principal_id: delivery.principal_id,
-    credential: delivery.credential,
-    attempt_number: delivery.attempt_number,
-    idempotency_key: delivery.idempotency_key,
-  });
-}
-
-function commitIdentityDeliveryProviderTransition({
-  transition,
-  deliveryKey,
-  attemptKey,
-  deliveryId,
-  outcomesByAttempt,
-  latestOutcomeByDelivery,
-  captures,
-  retryableFailureArms,
-}) {
-  if (transition.kind !== "accepted") {
-    throw new TypeError("only an accepted provider transition can be committed");
-  }
-  const failureArmIndex =
-    transition.failureArm === null
-      ? -1
-      : retryableFailureArms.indexOf(transition.failureArm);
-  if (transition.failureArm !== null && failureArmIndex === -1) {
-    throw new TypeError("planned delivery failure arm is no longer available");
-  }
-
-  // Every possible contract failure is resolved above. The mutations below
-  // are one synchronous publication step: no request can observe a consumed
-  // fault arm without its corresponding outcome, or an outcome without its
-  // corresponding provider effect.
-  outcomesByAttempt.set(attemptKey, transition.next);
-  latestOutcomeByDelivery.set(deliveryKey, transition.next);
-  if (transition.capture !== null) {
-    captures.set(deliveryId, transition.capture);
-  }
-  if (failureArmIndex !== -1) {
-    retryableFailureArms.splice(failureArmIndex, 1);
-  }
-  return transition.outcome;
-}
-// END identity delivery provider transition model
-
-async function startIdentityDeliveryCapture() {
-  const captures = new Map();
-  const retryableFailureArms = [];
-  const outcomesByAttempt = new Map();
-  const latestOutcomeByDelivery = new Map();
-  const diagnostics = [];
-  const maximumDiagnostics = 64;
-  const canonicalDeliveryIdPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
-  const handlerFailureReasonByStage = Object.freeze({
-    request_authentication: "provider_handler_authentication_stage_failed",
-    request_body: "provider_handler_body_stage_failed",
-    request_dispatch: "provider_handler_dispatch_stage_failed",
-    probe_response: "provider_handler_probe_response_stage_failed",
-    delivery_validation: "provider_handler_delivery_validation_stage_failed",
-    transition_lookup: "provider_handler_transition_lookup_stage_failed",
-    transition_plan: "provider_handler_transition_plan_stage_failed",
-    transition_commit: "provider_handler_transition_commit_stage_failed",
-    outcome_diagnostic: "provider_handler_outcome_diagnostic_stage_failed",
-    response_serialization: "provider_handler_response_serialization_stage_failed",
-    response_write: "provider_handler_response_write_stage_failed",
-  });
-  const authToken = `local-delivery-auth-${game}`;
-  function recordDiagnostic(reason, status, delivery = undefined) {
-    try {
-      diagnostics.push(
-        Object.freeze({
-          reason,
-          status,
-          deliveryId:
-            typeof delivery?.delivery_id === "string" &&
-            canonicalDeliveryIdPattern.test(delivery.delivery_id)
-              ? delivery.delivery_id
-              : null,
-          attemptNumber:
-            Number.isInteger(delivery?.attempt_number) ? delivery.attempt_number : null,
-        }),
-      );
-      if (diagnostics.length > maximumDiagnostics) diagnostics.shift();
-    } catch {
-      // Diagnostics are bounded, best-effort observability. They must never
-      // change a provider outcome or turn a committed effect into a failure.
-    }
-  }
-  function closeProviderResponse(response) {
-    try {
-      response.destroy();
-    } catch {
-      // The connection is already unusable; there is no further response to send.
-    }
-  }
-  function rejectProvider(response, reason, status, delivery = undefined) {
-    recordDiagnostic(reason, status, delivery);
-    try {
-      if (!response.headersSent && !response.writableEnded) {
-        response.writeHead(status).end();
-      } else {
-        closeProviderResponse(response);
-      }
-    } catch {
-      closeProviderResponse(response);
-    }
-  }
-  function armRetryableFailure({ expectedKind, credential, expectedAccountId }) {
-    if (
-      !new Set(["invite", "recovery", "community_invitation"]).has(expectedKind)
-    ) {
-      throw new Error(`invalid delivery fault kind: ${expectedKind}`);
-    }
-    const hasCredential = typeof credential === "string" && credential.length > 0;
-    const hasAccount =
-      typeof expectedAccountId === "string" && expectedAccountId.length > 0;
-    if (hasCredential === hasAccount) {
-      throw new Error(
-        "delivery fault injection requires exactly one credential or account target",
-      );
-    }
-    if (
-      retryableFailureArms.some(
-        (arm) =>
-          arm.expectedKind === expectedKind &&
-          arm.credential === credential &&
-          arm.expectedAccountId === expectedAccountId,
-      )
-    ) {
-      throw new Error("delivery fault injection target is already armed");
-    }
-    retryableFailureArms.push(
-      Object.freeze({
-        expectedKind,
-        credential: hasCredential ? credential : undefined,
-        expectedAccountId: hasAccount ? expectedAccountId : undefined,
-      }),
-    );
-  }
-  function retryableFailureArmFor(delivery) {
-    if (delivery.attempt_number !== 1) return null;
-    return (
-      retryableFailureArms.find(
-      (arm) =>
-        arm.expectedKind === delivery.delivery_kind &&
-        (arm.credential !== undefined
-          ? arm.credential === delivery.credential
-          : arm.expectedAccountId === delivery.account_id),
-      ) ?? null
-    );
-  }
-  const provider = createServer(async (request, response) => {
-    let delivery;
-    let handlerStage = "request_authentication";
-    let outcomeCommitted = false;
-    try {
-      if (
-        request.method !== "POST" ||
-        request.headers.authorization !== `Bearer ${authToken}`
-      ) {
-        rejectProvider(response, "request_authentication_rejected", 401);
-        return;
-      }
-      handlerStage = "request_body";
-      const chunks = [];
-      let size = 0;
-      for await (const chunk of request) {
-        size += chunk.length;
-        if (size > 64 * 1024) {
-          rejectProvider(response, "request_body_too_large", 413);
-          return;
-        }
-        chunks.push(chunk);
-      }
-      try {
-        delivery = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      } catch {
-        rejectProvider(response, "request_json_rejected", 400);
-        return;
-      }
-      handlerStage = "request_dispatch";
-      if (delivery === null || typeof delivery !== "object" || Array.isArray(delivery)) {
-        rejectProvider(response, "delivery_shape_rejected", 409);
-        return;
-      }
-      if (delivery.schema === "fmarch.identity-delivery-provider-probe.v1") {
-        if (
-          delivery.provider_generation !== "local-deterministic" ||
-          typeof delivery.probe_token !== "string"
-        ) {
-          rejectProvider(response, "probe_contract_rejected", 409);
-          return;
-        }
-        handlerStage = "probe_response";
-        const probeBody = JSON.stringify({
-          schema: delivery.schema,
-          provider_generation: delivery.provider_generation,
-          probe_token: delivery.probe_token,
-          status: "available",
-        });
-        recordDiagnostic("probe_available", 200);
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(probeBody);
-        return;
-      }
-      handlerStage = "delivery_validation";
-      const rejectedContract = [
-        [delivery.schema !== "fmarch.identity-delivery.v2", "delivery_schema_rejected"],
-        [
-          delivery.provider_generation !== "local-deterministic",
-          "provider_generation_rejected",
-        ],
-        [typeof delivery.attempt_token !== "string", "attempt_token_rejected"],
-        [
-          typeof delivery.delivery_id !== "string" ||
-            typeof delivery.attempt_token !== "string" ||
-            !canonicalDeliveryIdPattern.test(delivery.delivery_id) ||
-            !canonicalDeliveryIdPattern.test(delivery.attempt_token) ||
-            typeof delivery.delivery_kind !== "string" ||
-            typeof delivery.account_id !== "string" ||
-            delivery.account_id.length === 0 ||
-            typeof delivery.principal_id !== "string" ||
-            typeof delivery.credential !== "string" ||
-            delivery.credential.length === 0 ||
-            !Number.isInteger(delivery.attempt_number) ||
-            delivery.attempt_number < 1,
-          "delivery_shape_rejected",
-        ],
-        [!deliveryLeaseIsLive(delivery), "effect_deadline_rejected"],
-        [
-          !deliveryClockSkewMarginCoversCrossClockBound(delivery),
-          "clock_skew_margin_rejected",
-        ],
-        [delivery.idempotency_key !== delivery.delivery_id, "idempotency_key_rejected"],
-      ].find(([rejected]) => rejected);
-      if (rejectedContract !== undefined) {
-        rejectProvider(response, rejectedContract[1], 409, delivery);
-        return;
-      }
-      handlerStage = "transition_lookup";
-      const deliveryKey = `${delivery.provider_generation}:${delivery.delivery_id}`;
-      const attemptKey = `${deliveryKey}:${delivery.attempt_token}`;
-      const cachedAttempt = resolveCachedIdentityDeliveryProviderAttempt({
-        delivery,
-        cachedAttempt: outcomesByAttempt.get(attemptKey),
-      });
-      if (cachedAttempt.kind === "rejected") {
-        rejectProvider(response, cachedAttempt.reason, 409, delivery);
-        return;
-      }
-      let outcome;
-      let responseBody;
-      if (cachedAttempt.kind === "miss") {
-        const previous = latestOutcomeByDelivery.get(deliveryKey);
-        handlerStage = "transition_plan";
-        const transition = planIdentityDeliveryProviderTransition({
-          delivery,
-          previous,
-          retryableFailureArm: retryableFailureArmFor(delivery),
-          retryAfterSeconds: explicitRetryBackoffSeconds,
-        });
-        if (transition.kind === "rejected") {
-          rejectProvider(response, transition.reason, 409, delivery);
-          return;
-        }
-        handlerStage = "response_serialization";
-        responseBody = JSON.stringify(transition.outcome);
-        // Delivery-v2 makes the lease a hard execution/commit deadline, not
-        // merely an admission check. Planning and response serialization are
-        // complete before this final check, so the synchronous publication
-        // below cannot commit a credential effect at or after its deadline.
-        handlerStage = "delivery_validation";
-        if (!deliveryLeaseIsLive(delivery)) {
-          rejectProvider(
-            response,
-            "effect_deadline_elapsed_before_commit",
-            409,
-            delivery,
-          );
-          return;
-        }
-        handlerStage = "transition_commit";
-        // Crossing this synchronous boundary makes the result potentially
-        // committed. Any exception from here onward must close the connection
-        // and let the API reconcile; it must never synthesize a negative ack.
-        outcomeCommitted = true;
-        outcome = commitIdentityDeliveryProviderTransition({
-          transition,
-          deliveryKey,
-          attemptKey,
-          deliveryId: delivery.delivery_id,
-          outcomesByAttempt,
-          latestOutcomeByDelivery,
-          captures,
-          retryableFailureArms,
-        });
-      } else {
-        outcome = cachedAttempt.outcome;
-        outcomeCommitted = true;
-        handlerStage = "response_serialization";
-        responseBody = JSON.stringify(outcome);
-      }
-      handlerStage = "outcome_diagnostic";
-      recordDiagnostic(
-        outcome.status === "delivered"
-          ? "delivered"
-          : "fault_injected_provider_unavailable",
-        200,
-        delivery,
-      );
-      handlerStage = "response_write";
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(responseBody);
-    } catch {
-      const reason =
-        handlerFailureReasonByStage[handlerStage] ??
-        "provider_handler_unclassified_stage_failed";
-      if (outcomeCommitted) {
-        recordDiagnostic(reason, 0, delivery);
-        closeProviderResponse(response);
-      } else {
-        rejectProvider(response, reason, 400, delivery);
-      }
-    }
-  });
-  await new Promise((resolve, reject) => {
-    provider.once("error", reject);
-    provider.listen(0, host, () => {
-      provider.off("error", reject);
-      resolve();
-    });
-  });
-  const address = provider.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("local identity delivery provider did not bind a TCP port");
-  }
-  return {
-    endpoint: `http://${host}:${address.port}/deliver`,
-    authToken,
-    captures,
-    diagnostics,
-    armRetryableFailure,
-    close: () =>
-      new Promise((resolve, reject) => {
-        provider.close((error) => (error === undefined ? resolve() : reject(error)));
-      }),
-  };
-}
-
-async function startApi(applicationUrl, deliveryEndpoint) {
+async function startApi(applicationUrl, deliveryProviderCapability) {
   const localProofAuth = createLocalProofAuth();
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
@@ -4762,9 +4255,11 @@ async function startApi(applicationUrl, deliveryEndpoint) {
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
-      FMARCH_IDENTITY_DELIVERY_ENDPOINT: deliveryEndpoint,
-      FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "local-deterministic",
-      FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: deliveryProvider.authToken,
+      FMARCH_IDENTITY_DELIVERY_ENDPOINT: deliveryProviderCapability.endpoint,
+      FMARCH_IDENTITY_DELIVERY_PROVIDER_ID:
+        deliveryProviderCapability.providerGeneration,
+      FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN:
+        deliveryProviderCapability.authToken,
       FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS:
         scratchApiDatabaseCapacity.identityDeliveryProviderTimeoutMs,
       FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS:

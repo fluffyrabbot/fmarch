@@ -371,46 +371,52 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
   }
 });
 
-test("auth invite proof observes provider backoff before an explicit admin retry", async () => {
+test("auth invite role proof consumes the extracted provider capability", async () => {
   const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
 
-  for (const contract of [
+  assert.match(
+    source,
+    /from "\.\/identity_delivery_provider_fixture\.mjs"/u,
+  );
+  assert.match(
+    source,
+    /await startIdentityDeliveryProviderFixture\(\{[\s\S]*?providerGeneration: "local-deterministic",[\s\S]*?retryAfterSeconds: explicitRetryBackoffSeconds,[\s\S]*?minimumClockSkewMarginSeconds:/u,
+  );
+  assert.match(
+    source,
+    /const ownedApi = await startApi\(authority\.applicationUrl, deliveryProvider\)/u,
+  );
+  for (const capabilityUse of [
+    "deliveryProvider.captureFor(deliveryId)",
+    "deliveryProvider.acknowledgeCapture(deliveryId, capture.attempt_token)",
+    "deliveryProvider.diagnosticsSnapshot()",
     "deliveryProvider.armRetryableFailure({",
-    "const retryableFailureArms = [];",
-    "const outcomesByAttempt = new Map();",
-    "const latestOutcomeByDelivery = new Map();",
-    "function planIdentityDeliveryProviderTransition({",
-    "function identityDeliveryEffectIdentityFromRequest(delivery)",
-    "function identityDeliveryEffectIdentityMatchesRequest(effectIdentity, delivery)",
-    "function resolveCachedIdentityDeliveryProviderAttempt({ delivery, cachedAttempt })",
-    "function identityDeliveryProviderCaptureFromRequest(delivery)",
-    "function commitIdentityDeliveryProviderTransition({",
-    "function retryableFailureArmFor(delivery)",
+    "deliveryProviderCapability.endpoint",
+    "deliveryProviderCapability.providerGeneration",
+    "deliveryProviderCapability.authToken",
+  ]) {
+    assert.ok(source.includes(capabilityUse), `missing provider capability use: ${capabilityUse}`);
+  }
+  assert.doesNotMatch(source, /from "node:http"/u);
+  assert.doesNotMatch(source, /BEGIN identity delivery provider transition model/u);
+  assert.doesNotMatch(source, /function startIdentityDeliveryCapture\(/u);
+  assert.doesNotMatch(source, /deliveryProvider\.(?:captures|diagnostics)\b/u);
+});
+
+test("auth invite role proof retains durable acknowledgement and explicit retry orchestration", async () => {
+  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
+
+  assert.equal(
+    source.match(/deliveryProvider\.armRetryableFailure\(\{/gu)?.length,
+    2,
+    "only the intended invite and recovery scenarios may arm provider failure",
+  );
+  for (const retainedContract of [
     "credential: recoveryInviteToken",
     "expectedAccountId: hostAccount.accountId",
-    "if (delivery.attempt_number !== 1) return null;",
-    "retryableFailureArms.splice(failureArmIndex, 1);",
-    "cachedAttempt: outcomesByAttempt.get(attemptKey)",
-    'if (cachedAttempt.kind === "miss")',
-    'transitionKind = "start";',
-    'transitionKind = "reclaim";',
-    'transitionKind = "retry";',
-    'transitionKind = "reconcile";',
-    'previous.status === "retryable_failure"',
-    'previous.status === "delivered"',
-    "delivery.attempt_number === previous.attemptNumber + 1",
-    "...previous.outcome",
-    "attempt_token: delivery.attempt_token",
-    "retryableFailureArm: retryableFailureArmFor(delivery)",
-    "outcomesByAttempt.set(attemptKey, transition.next);",
-    "latestOutcomeByDelivery.set(",
-    "captures.set(deliveryId, transition.capture);",
-    "delivery fault injection requires exactly one credential or account target",
     "retryAfterSeconds: explicitRetryBackoffSeconds",
-    "retry_after_seconds: retryAfterSeconds",
     "2 * defaultFetchTimeoutMs",
     "explicitRetryBackoffMarginMs",
-    "explicitRetryBackoffSeconds >=",
     "waitForRetryableDeliveryIntent({",
     "lastDelivery.nextAttemptAt > Math.floor(Date.now() / 1000)",
     "expected_attempt_count: delivery.attemptCount",
@@ -418,456 +424,6 @@ test("auth invite proof observes provider backoff before an explicit admin retry
     "delivery lookup requires exactly one delivery id or credential hash",
     "timeoutMs: Math.min(deliveryIntentObservationTimeoutMs, remainingMs)",
     'import { runBoundedProcess } from "./proof_process.mjs"',
-  ]) {
-    assert.equal(source.includes(contract), true, `missing delivery retry contract: ${contract}`);
-  }
-  assert.doesNotMatch(
-    source,
-    /await delay\(1100\)/u,
-    "admin retry must wait on durable delivery state rather than a wall-clock guess",
-  );
-  assert.equal(
-    source.match(/deliveryProvider\.armRetryableFailure\(\{/gu)?.length,
-    2,
-    "only the intended invite and recovery scenarios may arm provider failure",
-  );
-  assert.doesNotMatch(
-    source,
-    /const outcome =\s*delivery\.attempt_number === 1\s*\?/u,
-    "provider failure must never be ambient for every delivery's first attempt",
-  );
-  assert.doesNotMatch(
-    source,
-    /structuredClone\(delivery\)/u,
-    "provider effects must be committed from an explicit request projection",
-  );
-  const generationValidation = source.indexOf(
-    "function planIdentityDeliveryProviderTransition({",
-  );
-  const acceptedOutcomeState = source.indexOf("latestOutcomeByDelivery.set(");
-  const deliveredCapturePublication = source.indexOf("captures.set(deliveryId, transition.capture);");
-  assert.ok(
-    generationValidation < acceptedOutcomeState &&
-      acceptedOutcomeState < deliveredCapturePublication,
-    "provider capture publication must follow attempt-generation validation and accepted outcome state",
-  );
-  const providerHandlerStart = source.indexOf("const provider = createServer(");
-  const providerHandlerEnd = source.indexOf("await new Promise((resolve, reject) => {", providerHandlerStart);
-  const providerHandler = source.slice(providerHandlerStart, providerHandlerEnd);
-  assert.ok(
-    providerHandler.indexOf("responseBody = JSON.stringify(transition.outcome);") <
-      providerHandler.indexOf("outcome = commitIdentityDeliveryProviderTransition({"),
-    "a new provider response must serialize before its outcome/effect is committed",
-  );
-  assert.match(
-    providerHandler,
-    /outcomeCommitted = true;[\s\S]*?commitIdentityDeliveryProviderTransition\(\{[\s\S]*?if \(outcomeCommitted\) \{[\s\S]*?closeProviderResponse\(response\)/u,
-    "errors after the commit boundary must close for reconciliation, never synthesize a failure response",
-  );
-  const retryStart = source.indexOf("async function retryFailedDelivery({");
-  const retryEnd = source.indexOf("async function retryFailedDeliveryForCredential", retryStart);
-  const retrySource = source.slice(retryStart, retryEnd);
-  assert.ok(
-    retrySource.indexOf("waitForRetryableDeliveryIntent({") <
-      retrySource.indexOf("/admin/auth-delivery-provider/probe") &&
-      retrySource.indexOf("/admin/auth-delivery-provider/probe") <
-        retrySource.indexOf("/retry"),
-    "every deliberately failed delivery must be observed, recovered by GlobalAdmin probe, and only then retried",
-  );
-  const recoveryInviteArm = source.indexOf("credential: recoveryInviteToken");
-  const recoveryInviteRetry = source.indexOf("const inviteDelivery = await retryFailedDelivery({");
-  const recoveryCredentialArm = source.indexOf("expectedAccountId: hostAccount.accountId");
-  const recoveryCredentialRetry = source.indexOf(
-    "const recoveryDelivery = await retryFailedDeliveryForCredential({",
-  );
-  assert.ok(
-    recoveryInviteArm < recoveryInviteRetry &&
-      recoveryInviteRetry < recoveryCredentialArm &&
-      recoveryCredentialArm < recoveryCredentialRetry,
-    "each explicit one-shot outage must terminate at its own probe-and-retry recovery boundary",
-  );
-});
-
-test("auth invite provider transition model executes delivery, retry, reclaim, reconciliation, and stale rejection", async () => {
-  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
-  const modelStart = source.indexOf("// BEGIN identity delivery provider transition model");
-  const modelEnd = source.indexOf(
-    "// END identity delivery provider transition model",
-    modelStart,
-  );
-  assert.ok(modelStart >= 0 && modelEnd > modelStart, "provider transition model is extractable");
-  const modelSource = source.slice(modelStart, modelEnd);
-  const {
-    planIdentityDeliveryProviderTransition,
-    commitIdentityDeliveryProviderTransition,
-    resolveCachedIdentityDeliveryProviderAttempt,
-  } = Function(
-    `"use strict"; ${modelSource}; return { planIdentityDeliveryProviderTransition, commitIdentityDeliveryProviderTransition, resolveCachedIdentityDeliveryProviderAttempt };`,
-  )();
-  const delivery = ({
-    deliveryId,
-    attemptToken,
-    attemptNumber,
-  }) => ({
-    schema: "fmarch.identity-delivery.v2",
-    provider_generation: "local-deterministic",
-    delivery_id: deliveryId,
-    attempt_token: attemptToken,
-    lease_expires_at: 4_102_444_800,
-    clock_skew_margin_seconds: 5,
-    delivery_kind: "invite",
-    account_id: "provider-model@example.test",
-    principal_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    credential: "provider-model-credential",
-    attempt_number: attemptNumber,
-    idempotency_key: deliveryId,
-  });
-  const commitStores = () => ({
-    outcomesByAttempt: new Map(),
-    latestOutcomeByDelivery: new Map(),
-    captures: new Map(),
-    retryableFailureArms: [],
-  });
-  const commit = (transition, request, stores) =>
-    commitIdentityDeliveryProviderTransition({
-      transition,
-      deliveryKey: `local-deterministic:${request.delivery_id}`,
-      attemptKey: `local-deterministic:${request.delivery_id}:${request.attempt_token}`,
-      deliveryId: request.delivery_id,
-      ...stores,
-    });
-
-  const deliveredRequest = delivery({
-    deliveryId: "11111111-1111-4111-8111-111111111111",
-    attemptToken: "aaaaaaaa-1111-4111-8111-111111111111",
-    attemptNumber: 1,
-  });
-  const delivered = planIdentityDeliveryProviderTransition({
-    delivery: deliveredRequest,
-    previous: undefined,
-    retryableFailureArm: null,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(delivered.kind, "accepted");
-  assert.equal(delivered.transitionKind, "start");
-  assert.equal(delivered.outcome.status, "delivered");
-  assert.notStrictEqual(delivered.capture, deliveredRequest);
-  assert.deepEqual(Object.keys(delivered.capture).sort(), Object.keys(deliveredRequest).sort());
-  const deliveredStores = commitStores();
-  assert.equal(commit(delivered, deliveredRequest, deliveredStores), delivered.outcome);
-  assert.equal(deliveredStores.captures.get(deliveredRequest.delivery_id), delivered.capture);
-  const deliveredAttempt = deliveredStores.outcomesByAttempt.get(
-    `local-deterministic:${deliveredRequest.delivery_id}:${deliveredRequest.attempt_token}`,
-  );
-  const exactCachedAttempt = resolveCachedIdentityDeliveryProviderAttempt({
-    delivery: deliveredRequest,
-    cachedAttempt: deliveredAttempt,
-  });
-  assert.equal(exactCachedAttempt.kind, "cached");
-  assert.equal(exactCachedAttempt.outcome, delivered.outcome);
-  assert.deepEqual(
-    resolveCachedIdentityDeliveryProviderAttempt({
-      delivery: { ...deliveredRequest, attempt_number: 2 },
-      cachedAttempt: deliveredAttempt,
-    }),
-    { kind: "rejected", reason: "attempt_generation_rejected" },
-  );
-  for (const [field, value] of [
-    ["delivery_kind", "recovery"],
-    ["account_id", "mutated@example.test"],
-    ["principal_id", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
-    ["credential", "mutated-provider-credential"],
-  ]) {
-    const mutatedReplay = { ...deliveredRequest, [field]: value };
-    assert.deepEqual(
-      resolveCachedIdentityDeliveryProviderAttempt({
-        delivery: mutatedReplay,
-        cachedAttempt: deliveredAttempt,
-      }),
-      { kind: "rejected", reason: "effect_identity_rejected" },
-      `exact attempt-token replay may not mutate ${field}`,
-    );
-    assert.deepEqual(
-      planIdentityDeliveryProviderTransition({
-        delivery: {
-          ...mutatedReplay,
-          attempt_token: "99999999-1111-4111-8111-111111111111",
-          attempt_number: 2,
-        },
-        previous: deliveredStores.latestOutcomeByDelivery.get(
-          `local-deterministic:${deliveredRequest.delivery_id}`,
-        ),
-        retryableFailureArm: null,
-        retryAfterSeconds: 60,
-      }),
-      { kind: "rejected", reason: "effect_identity_rejected" },
-      `later delivery generation may not mutate ${field}`,
-    );
-  }
-  assert.equal(deliveredStores.outcomesByAttempt.size, 1);
-  assert.equal(deliveredStores.captures.size, 1);
-
-  const reconciledRequest = delivery({
-    deliveryId: deliveredRequest.delivery_id,
-    attemptToken: "ffffffff-1111-4111-8111-111111111111",
-    attemptNumber: 2,
-  });
-  const reconciled = planIdentityDeliveryProviderTransition({
-    delivery: reconciledRequest,
-    previous: deliveredStores.latestOutcomeByDelivery.get(
-      `local-deterministic:${deliveredRequest.delivery_id}`,
-    ),
-    retryableFailureArm: null,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(reconciled.transitionKind, "reconcile");
-  assert.equal(reconciled.outcome.status, "delivered");
-  assert.equal(reconciled.outcome.attempt_token, reconciledRequest.attempt_token);
-  assert.equal(
-    reconciled.outcome.provider_receipt_id,
-    delivered.outcome.provider_receipt_id,
-  );
-  assert.equal(reconciled.capture, null);
-  commit(reconciled, reconciledRequest, deliveredStores);
-  assert.equal(
-    deliveredStores.captures.size,
-    1,
-    "lost acknowledgement reconciliation must not repeat the provider effect",
-  );
-
-  const retryId = "22222222-2222-4222-8222-222222222222";
-  const failedRequest = delivery({
-    deliveryId: retryId,
-    attemptToken: "bbbbbbbb-2222-4222-8222-222222222222",
-    attemptNumber: 1,
-  });
-  const failureArm = Object.freeze({
-    expectedKind: "invite",
-    credential: failedRequest.credential,
-    expectedAccountId: undefined,
-  });
-  const failed = planIdentityDeliveryProviderTransition({
-    delivery: failedRequest,
-    previous: undefined,
-    retryableFailureArm: failureArm,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(failed.transitionKind, "start");
-  assert.equal(failed.outcome.status, "retryable_failure");
-  assert.equal(failed.capture, null);
-  const missingArmStores = commitStores();
-  assert.throws(
-    () => commit(failed, failedRequest, missingArmStores),
-    /planned delivery failure arm is no longer available/u,
-  );
-  assert.equal(missingArmStores.outcomesByAttempt.size, 0);
-  assert.equal(missingArmStores.latestOutcomeByDelivery.size, 0);
-  assert.equal(missingArmStores.captures.size, 0);
-  const retryStores = commitStores();
-  retryStores.retryableFailureArms.push(failureArm);
-  commit(failed, failedRequest, retryStores);
-  assert.equal(
-    retryStores.retryableFailureArms.length,
-    0,
-    "the matched one-shot arm must be consumed by the outcome commit",
-  );
-
-  const reclaimedRequest = delivery({
-    deliveryId: retryId,
-    attemptToken: "cccccccc-2222-4222-8222-222222222222",
-    attemptNumber: 1,
-  });
-  const reclaimed = planIdentityDeliveryProviderTransition({
-    delivery: reclaimedRequest,
-    previous: retryStores.latestOutcomeByDelivery.get(`local-deterministic:${retryId}`),
-    retryableFailureArm: null,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(reclaimed.transitionKind, "reclaim");
-  assert.equal(reclaimed.outcome.status, "retryable_failure");
-  assert.equal(reclaimed.outcome.attempt_token, reclaimedRequest.attempt_token);
-  assert.equal(reclaimed.capture, null, "reclaim must not repeat a provider side effect");
-  commit(reclaimed, reclaimedRequest, retryStores);
-
-  const retryRequest = delivery({
-    deliveryId: retryId,
-    attemptToken: "dddddddd-2222-4222-8222-222222222222",
-    attemptNumber: 2,
-  });
-  const retried = planIdentityDeliveryProviderTransition({
-    delivery: retryRequest,
-    previous: retryStores.latestOutcomeByDelivery.get(`local-deterministic:${retryId}`),
-    retryableFailureArm: null,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(retried.transitionKind, "retry");
-  assert.equal(retried.outcome.status, "delivered");
-  commit(retried, retryRequest, retryStores);
-
-  const staleRequest = delivery({
-    deliveryId: retryId,
-    attemptToken: "eeeeeeee-2222-4222-8222-222222222222",
-    attemptNumber: 4,
-  });
-  const stale = planIdentityDeliveryProviderTransition({
-    delivery: staleRequest,
-    previous: retryStores.latestOutcomeByDelivery.get(`local-deterministic:${retryId}`),
-    retryableFailureArm: null,
-    retryAfterSeconds: 60,
-  });
-  assert.deepEqual(stale, {
-    kind: "rejected",
-    reason: "attempt_generation_rejected",
-  });
-  assert.equal(retryStores.outcomesByAttempt.size, 3);
-  assert.equal(retryStores.latestOutcomeByDelivery.get(`local-deterministic:${retryId}`).attemptNumber, 2);
-
-  const serializationStores = commitStores();
-  const serializationArm = Object.freeze({
-    expectedKind: "invite",
-    credential: "serialization-failure-credential",
-    expectedAccountId: undefined,
-  });
-  serializationStores.retryableFailureArms.push(serializationArm);
-  const rejectedBeforeCommit = planIdentityDeliveryProviderTransition({
-    delivery: delivery({
-      deliveryId: "33333333-3333-4333-8333-333333333333",
-      attemptToken: "bbbbbbbb-3333-4333-8333-333333333333",
-      attemptNumber: 2,
-    }),
-    previous: undefined,
-    retryableFailureArm: serializationArm,
-    retryAfterSeconds: 60,
-  });
-  assert.equal(rejectedBeforeCommit.kind, "rejected");
-  assert.equal(serializationStores.retryableFailureArms.length, 1);
-  assert.equal(serializationStores.outcomesByAttempt.size, 0);
-  assert.equal(serializationStores.latestOutcomeByDelivery.size, 0);
-  assert.equal(serializationStores.captures.size, 0);
-  const unserializableRequest = {
-    ...delivery({
-      deliveryId: "33333333-3333-4333-8333-333333333333",
-      attemptToken: "aaaaaaaa-3333-4333-8333-333333333333",
-      attemptNumber: 1,
-    }),
-    provider_generation: 1n,
-  };
-  const unserializable = planIdentityDeliveryProviderTransition({
-    delivery: unserializableRequest,
-    previous: undefined,
-    retryableFailureArm: serializationArm,
-    retryAfterSeconds: 60,
-  });
-  assert.throws(() => JSON.stringify(unserializable.outcome), TypeError);
-  assert.equal(serializationStores.retryableFailureArms.length, 1);
-  assert.equal(serializationStores.outcomesByAttempt.size, 0);
-  assert.equal(serializationStores.latestOutcomeByDelivery.size, 0);
-  assert.equal(serializationStores.captures.size, 0);
-});
-
-test("auth invite provider diagnostics are bounded, sanitized, and all credential delivery is durably acknowledged", async () => {
-  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
-
-  for (const reason of [
-    "request_authentication_rejected",
-    "request_body_too_large",
-    "request_json_rejected",
-    "probe_contract_rejected",
-    "delivery_shape_rejected",
-    "delivery_schema_rejected",
-    "provider_generation_rejected",
-    "attempt_token_rejected",
-    "effect_deadline_rejected",
-    "clock_skew_margin_rejected",
-    "idempotency_key_rejected",
-    "effect_deadline_elapsed_before_commit",
-    "attempt_generation_rejected",
-    "effect_identity_rejected",
-    "provider_handler_authentication_stage_failed",
-    "provider_handler_body_stage_failed",
-    "provider_handler_dispatch_stage_failed",
-    "provider_handler_probe_response_stage_failed",
-    "provider_handler_delivery_validation_stage_failed",
-    "provider_handler_transition_lookup_stage_failed",
-    "provider_handler_transition_plan_stage_failed",
-    "provider_handler_transition_commit_stage_failed",
-    "provider_handler_outcome_diagnostic_stage_failed",
-    "provider_handler_response_serialization_stage_failed",
-    "provider_handler_response_write_stage_failed",
-    "provider_handler_unclassified_stage_failed",
-    "fault_injected_provider_unavailable",
-    "delivered",
-  ]) {
-    assert.ok(source.includes(`"${reason}"`), `missing sanitized provider diagnostic ${reason}`);
-  }
-  const diagnosticStart = source.indexOf("function recordDiagnostic(");
-  const diagnosticEnd = source.indexOf("function rejectProvider(", diagnosticStart);
-  const diagnosticShape = source.slice(diagnosticStart, diagnosticEnd);
-  assert.match(source, /const maximumDiagnostics = 64;/u);
-  assert.match(
-    source,
-    /const canonicalDeliveryIdPattern =\s*\/\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{4\}-\[0-9a-f\]\{12\}\$\/u;/u,
-  );
-  assert.match(
-    diagnosticShape,
-    /diagnostics\.length > maximumDiagnostics\) diagnostics\.shift\(\)/u,
-  );
-  assert.match(diagnosticShape, /reason,[\s\S]*status,[\s\S]*deliveryId:[\s\S]*attemptNumber:/u);
-  assert.match(
-    diagnosticShape,
-    /canonicalDeliveryIdPattern\.test\(delivery\.delivery_id\)[\s\S]*\? delivery\.delivery_id[\s\S]*: null/u,
-    "diagnostic delivery ids must be fixed-width canonical UUIDs",
-  );
-  assert.doesNotMatch(
-    diagnosticShape,
-    /credential|account_id|principal_id|authorization|authToken|probe_token/u,
-    "provider diagnostics must never retain credential, account, principal, auth, or probe-token material",
-  );
-  assert.match(
-    source,
-    /error\.message = `\$\{error\.message\}; identity delivery provider diagnostics=/u,
-  );
-
-  const bootstrapStart = source.indexOf("async function createInvites(");
-  const bootstrapEnd = source.indexOf("async function createAccounts(", bootstrapStart);
-  const bootstrapSource = source.slice(bootstrapStart, bootstrapEnd);
-  assert.match(
-    bootstrapSource,
-    /for \(const \[role, invitation\] of invitations\)[\s\S]*await createInvite\([\s\S]*await waitForDeliveredProviderCapture\([\s\S]*issued\[role\] = receipt/u,
-    "bootstrap invitations must prove one delivery before the next credential is issued",
-  );
-  const deliveryAcknowledgementStart = source.indexOf(
-    "function deliveryCredentialMatchesExpectation(",
-  );
-  const deliveryAcknowledgementEnd = source.indexOf(
-    "async function issueCommunityInvitation(",
-    deliveryAcknowledgementStart,
-  );
-  const deliveryAcknowledgement = source.slice(
-    deliveryAcknowledgementStart,
-    deliveryAcknowledgementEnd,
-  );
-  assert.match(deliveryAcknowledgement, /let deliveryObservationFailureCount = 0;/u);
-  assert.match(
-    deliveryAcknowledgement,
-    /try \{[\s\S]*persisted = await storedDeliveryIntent\(\{[\s\S]*timeoutMs: Math\.min\(deliveryIntentObservationTimeoutMs, remainingMs\)[\s\S]*\} catch \{[\s\S]*deliveryObservationFailureCount \+= 1;[\s\S]*continue;/u,
-    "transient delivery-observation failures must retry within the existing deadline",
-  );
-  assert.doesNotMatch(
-    deliveryAcknowledgement,
-    /catch \(error\)|error\.message|error\.stack|String\(error\)|DATABASE_(?:MIGRATION_)?URL|JSON\.stringify\((?:capture|credentialExpectation|expectedAccountId)\)/u,
-    "delivery observation diagnostics must not retain database errors, URLs, identities, or credentials",
-  );
-  assert.match(
-    deliveryAcknowledgement,
-    /new Set\(\["delivered", "retryable_failed", "permanent_failed", "cancelled"\]\)/u,
-    "every terminal persisted delivery state must fail closed unless the delivered contract matched",
-  );
-  assert.match(
-    deliveryAcknowledgement,
-    /diagnostics=\$\{JSON\.stringify\(\{[\s\S]*deliveryObservationFailureCount,[\s\S]*providerDiagnostics:/u,
-  );
-  for (const durableContract of [
     'persisted.status === "delivered"',
     "Number.isInteger(persisted.attemptCount)",
     "persisted.attemptCount >= capture.attempt_number",
@@ -875,21 +431,52 @@ test("auth invite provider diagnostics are bounded, sanitized, and all credentia
     'persisted.outcomeKind === "delivered"',
     "persisted.outcomeCode === null",
   ]) {
-    assert.ok(
-      deliveryAcknowledgement.includes(durableContract),
-      `bootstrap delivery acknowledgement omits ${durableContract}`,
-    );
+    assert.ok(source.includes(retainedContract), `missing role-proof contract: ${retainedContract}`);
   }
+  assert.doesNotMatch(
+    source,
+    /await delay\(1100\)/u,
+    "admin retry must wait on durable delivery state rather than a wall-clock guess",
+  );
+
+  const acknowledgementStart = source.indexOf(
+    "function deliveryCredentialMatchesExpectation(",
+  );
+  const acknowledgementEnd = source.indexOf(
+    "async function issueCommunityInvitation(",
+    acknowledgementStart,
+  );
+  const acknowledgement = source.slice(acknowledgementStart, acknowledgementEnd);
   assert.ok(
-    deliveryAcknowledgement.indexOf("persisted = await storedDeliveryIntent({") <
-      deliveryAcknowledgement.indexOf("deliveryProvider.captures.delete(deliveryId)"),
-    "provider capture must remain pending until the durable delivered receipt is observed",
+    acknowledgement.indexOf("persisted = await storedDeliveryIntent({") <
+      acknowledgement.indexOf(
+        "deliveryProvider.acknowledgeCapture(deliveryId, capture.attempt_token)",
+      ),
+    "capture acknowledgement must follow the durable delivered receipt",
   );
   assert.match(
-    deliveryAcknowledgement,
-    /if \(expectation\.kind === "exact"\)[\s\S]*if \(expectation\.kind === "prefix"\)/u,
-    "the shared acknowledgement must support exact and prefix-only secret expectations",
+    acknowledgement,
+    /try \{[\s\S]*?persisted = await storedDeliveryIntent\(\{[\s\S]*?\} catch \{[\s\S]*?deliveryObservationFailureCount \+= 1;[\s\S]*?continue;/u,
   );
+  assert.match(
+    acknowledgement,
+    /new Set\(\["delivered", "retryable_failed", "permanent_failed", "cancelled"\]\)/u,
+  );
+
+  const retryStart = source.indexOf("async function retryFailedDelivery({");
+  const retryEnd = source.indexOf(
+    "async function retryFailedDeliveryForCredential",
+    retryStart,
+  );
+  const retrySource = source.slice(retryStart, retryEnd);
+  assert.ok(
+    retrySource.indexOf("waitForRetryableDeliveryIntent({") <
+      retrySource.indexOf("/admin/auth-delivery-provider/probe") &&
+      retrySource.indexOf("/admin/auth-delivery-provider/probe") <
+        retrySource.indexOf("/retry"),
+    "failed delivery must be observed, probed, and only then retried",
+  );
+
   const communityInvitationStart = source.indexOf(
     "async function issueCommunityInvitation(",
   );
@@ -897,56 +484,8 @@ test("auth invite provider diagnostics are bounded, sanitized, and all credentia
     "async function storeCommunityInvitationCookie(",
     communityInvitationStart,
   );
-  const communityInvitation = source.slice(
-    communityInvitationStart,
-    communityInvitationEnd,
-  );
   assert.match(
-    communityInvitation,
-    /return await waitForDeliveredProviderCapture\(\{[\s\S]*expectedKind: "community_invitation"[\s\S]*kind: "prefix"[\s\S]*value: "fmci_"/u,
-    "community invitation credentials require the shared capture plus durable-intent acknowledgement",
+    source.slice(communityInvitationStart, communityInvitationEnd),
+    /return await waitForDeliveredProviderCapture\(\{[\s\S]*?expectedKind: "community_invitation"[\s\S]*?kind: "prefix"[\s\S]*?value: "fmci_"/u,
   );
-  assert.doesNotMatch(
-    communityInvitation,
-    /deliveryProvider\.captures\.(?:get|delete)|while \(Date\.now\(\) <= deadline\)/u,
-    "community invitation issuance must not bypass the shared durable acknowledgement",
-  );
-});
-
-test("auth invite provider enforces one skew-guarded side-effect deadline", async () => {
-  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
-
-  assert.match(source, /function deliveryLeaseIsLive\(delivery\)/u);
-  assert.match(
-    source,
-    /function deliveryClockSkewMarginCoversCrossClockBound\(delivery\)/u,
-  );
-  assert.match(
-    source,
-    /identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds = 5/u,
-  );
-  assert.ok(
-    source.indexOf(
-      "const identityDeliveryProviderMaximumDatabaseClockLeadAndQuiescenceSeconds = 5;",
-    ) < source.indexOf("await preflightLocalhostBindOrExit({"),
-    "provider handler dependencies must initialize before top-level orchestration can serve requests",
-  );
-  assert.equal(
-    source.match(/deliveryLeaseIsLive\(delivery\)/gu)?.length,
-    3,
-    "the helper definition, admission check, and final pre-effect check must remain explicit",
-  );
-  assert.match(
-    source,
-    /if \(!deliveryLeaseIsLive\(delivery\)\) \{[\s\S]*?outcome = commitIdentityDeliveryProviderTransition\(\{/u,
-    "the final lease guard must precede the synchronous provider commit",
-  );
-  assert.match(source, /schema: "fmarch\.identity-delivery-result\.v2"/u);
-  for (const field of ["provider_generation", "delivery_id", "attempt_token"]) {
-    assert.match(
-      source,
-      new RegExp(`${field}: delivery\\.${field}`, "u"),
-      `provider completion must echo ${field}`,
-    );
-  }
 });
