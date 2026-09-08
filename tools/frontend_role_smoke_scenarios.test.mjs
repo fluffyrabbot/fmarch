@@ -24,9 +24,136 @@ import {
   APP_SHELL_CONTRACT,
   roleNavTestId,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
+import {
+  DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
+  DURABLE_READING_CHECKPOINT_RESTORE_TIMEOUT_MS,
+  initializeReadingCheckpointClientsSequentially,
+  waitForReadingCheckpointRestoration,
+} from "./frontend_role_smoke_reliability.mjs";
 
 const expectedRoleIds = ["admin", "player", "moderator"];
 const allowedStatusStates = new Set(["ack", "pending", "reject", "confirm"]);
+
+test("durable reading checkpoint clients complete navigation and restoration serially", async () => {
+  const events = [];
+  const position = { source_seq: 20, offset_px: 110 };
+  const page = label => ({
+    async waitForFunction(predicate, expected, options) {
+      events.push(`${label}:restore`);
+      assert.match(predicate.toString(), /document\.activeElement/);
+      assert.match(predicate.toString(), /getBoundingClientRect/);
+      assert.deepEqual(expected, {
+        sourceSeq: position.source_seq,
+        offsetPx: position.offset_px,
+        tolerancePx: 2,
+        verifyOffset: true,
+      });
+      assert.deepEqual(options, { timeout: DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS });
+    },
+  });
+  const primary = page("primary");
+  const peer = page("peer");
+
+  await initializeReadingCheckpointClientsSequentially({
+    clients: [{ label: "primary", page: primary }, { label: "peer", page: peer }],
+    navigate: async (_page, { label, timeout }) => {
+      events.push(`${label}:navigate`);
+      assert.equal(timeout, DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS);
+    },
+    position,
+  });
+
+  assert.deepEqual(events, [
+    "primary:navigate",
+    "primary:restore",
+    "peer:navigate",
+    "peer:restore",
+  ]);
+});
+
+test("durable reading checkpoint restoration timeout reports browser and harness state", async () => {
+  const cause = new Error("Timeout 30000ms exceeded");
+  const page = {
+    async waitForFunction() { throw cause; },
+    async evaluate(_capture, expected) {
+      assert.deepEqual(expected, { source_seq: 42, offset_px: 96 });
+      return {
+        active: { id: "player-thread" },
+        document: { readyState: "complete", visibilityState: "visible" },
+        expectedPost: null,
+        recovery: { ariaBusy: "true", text: "Restoring your place" },
+        url: "http://127.0.0.1/g/midsummer?checkpoint-proof=ready",
+      };
+    },
+  };
+
+  await assert.rejects(
+    waitForReadingCheckpointRestoration(page, {
+      diagnosticContext: () => ({ checkpointReads: { primary: 1, peer: 1 }, writes: 0 }),
+      phase: "remote-resume:peer",
+      position: { source_seq: 42, offset_px: 96 },
+    }),
+    error => {
+      assert.equal(error.cause, cause);
+      assert.match(error.message, /durable reading checkpoint phase failed/);
+      assert.match(error.message, /"phase":"remote-resume:peer"/);
+      assert.match(error.message, /"expected":\{"source_seq":42,"offset_px":96\}/);
+      assert.match(error.message, /"active":\{"id":"player-thread"\}/);
+      assert.match(error.message, /"checkpointReads":\{"primary":1,"peer":1\}/);
+      assert.match(error.message, new RegExp(`"timeoutMs":${DURABLE_READING_CHECKPOINT_RESTORE_TIMEOUT_MS}`));
+      assert.match(error.message, /"verifyOffset":true/);
+      return true;
+    },
+  );
+});
+
+test("durable reading checkpoint focus-only phases retain their narrower contract", async () => {
+  let expectation;
+  const page = {
+    async waitForFunction(_predicate, value, options) {
+      expectation = { options, value };
+    },
+  };
+
+  await waitForReadingCheckpointRestoration(page, {
+    phase: "history-forward-repeat:peer",
+    position: { source_seq: 42, offset_px: 96 },
+    verifyOffset: false,
+  });
+
+  assert.deepEqual(expectation, {
+    options: { timeout: DURABLE_READING_CHECKPOINT_RESTORE_TIMEOUT_MS },
+    value: { sourceSeq: 42, offsetPx: 96, tolerancePx: 2, verifyOffset: false },
+  });
+});
+
+test("durable reading checkpoint navigation failure stops before the next client", async () => {
+  const events = [];
+  const cause = new Error("navigation stalled");
+  const primary = {
+    async evaluate() {
+      events.push("primary:diagnostics");
+      return { document: { readyState: "interactive" }, url: "about:blank" };
+    },
+  };
+
+  await assert.rejects(
+    initializeReadingCheckpointClientsSequentially({
+      clients: [{ label: "primary", page: primary }, { label: "peer", page: {} }],
+      navigate: async (_page, { label }) => {
+        events.push(`${label}:navigate`);
+        throw cause;
+      },
+      position: { source_seq: 20, offset_px: 110 },
+    }),
+    error => {
+      assert.equal(error.cause, cause);
+      assert.match(error.message, /"phase":"initial-navigation:primary"/);
+      return true;
+    },
+  );
+  assert.deepEqual(events, ["primary:navigate", "primary:diagnostics"]);
+});
 
 test("role smoke scenario matrix covers tablet-first acceptance viewports", () => {
   assert.deepEqual(

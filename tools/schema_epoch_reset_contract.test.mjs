@@ -47,3 +47,14 @@ test("epoch reset atomically journals state outside public and recovers committe
   assert.match(source, /verify_database_environment_identity/);
   assert.match(authoritySource, /acl\.grantee <> relation\.relowner/);
 });
+
+test("epoch reset confines dynamic SQL to quoted catalog relations", () => {
+  assert.match(source, /struct PublicDataRelation/);
+  assert.match(source, /PublicDataRelation::from_catalog\(name, &kind\)/);
+  assert.match(source, /if !matches!\(kind, "r" \| "p"\)/);
+  assert.match(source, /identifier\.replace\('\"', "\\\"\\\""\)/);
+  assert.match(source, /struct Statement\(String\)/);
+  assert.match(source, /sqlx::AssertSqlSafe\(self\.0\)/);
+  assert.match(source, /sole dynamic-SQL trust boundary/);
+  assert.doesNotMatch(source, /sqlx::query(?:_scalar)?\(&statement\)/);
+});

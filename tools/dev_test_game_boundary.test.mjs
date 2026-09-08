@@ -262,18 +262,59 @@ test("active JavaScript proofs cannot manufacture auth_session rows or instance 
 test("auth invite scratch proof owns a deterministic database capacity budget", async () => {
   const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
 
-  assert.match(
-    source,
-    /const scratchApiDatabaseCapacity = Object\.freeze\(\{\s*maxConnections: "32",\s*acquireTimeoutMs: "3000",\s*\}\);/s,
+  const capacityBlock = source.match(
+    /const scratchApiDatabaseCapacity = Object\.freeze\(\{(?<body>[^}]+)\}\);/,
+  )?.groups?.body;
+  assert.notEqual(capacityBlock, undefined);
+  const capacity = Object.fromEntries(
+    [...capacityBlock.matchAll(/^\s*(\w+): "(\d+)",$/gmu)].map((match) => [
+      match[1],
+      Number(match[2]),
+    ]),
   );
-  assert.match(
-    source,
-    /FMARCH_DB_MAX_CONNECTIONS:\s*scratchApiDatabaseCapacity\.maxConnections/,
+  assert.deepEqual(capacity, {
+    maxConnections: 32,
+    acquireTimeoutMs: 3000,
+    statementTimeoutMs: 5000,
+    identityDeliveryProviderTimeoutMs: 10000,
+    identityDeliveryDatabaseTimeoutMs: 9000,
+    identityDeliveryClaimLeaseMs: 45000,
+    workerReadinessGraceMs: 10000,
+    shutdownDrainTimeoutMs: 30000,
+  });
+  const oneDatabaseOperation =
+    capacity.acquireTimeoutMs + capacity.statementTimeoutMs;
+  assert.ok(capacity.workerReadinessGraceMs > oneDatabaseOperation);
+  assert.ok(
+    capacity.identityDeliveryDatabaseTimeoutMs > oneDatabaseOperation,
   );
-  assert.match(
-    source,
-    /FMARCH_DB_ACQUIRE_TIMEOUT_MS:\s*scratchApiDatabaseCapacity\.acquireTimeoutMs/,
+  assert.ok(
+    capacity.identityDeliveryClaimLeaseMs >
+      capacity.identityDeliveryProviderTimeoutMs +
+        3 * capacity.identityDeliveryDatabaseTimeoutMs +
+        1000,
   );
-  assert.doesNotMatch(source, /process\.env\.FMARCH_DB_MAX_CONNECTIONS/);
-  assert.doesNotMatch(source, /process\.env\.FMARCH_DB_ACQUIRE_TIMEOUT_MS/);
+  assert.ok(
+    capacity.shutdownDrainTimeoutMs >
+      capacity.identityDeliveryProviderTimeoutMs +
+        2 * capacity.identityDeliveryDatabaseTimeoutMs,
+  );
+  for (const [variable, property] of Object.entries({
+    FMARCH_DB_MAX_CONNECTIONS: "maxConnections",
+    FMARCH_DB_ACQUIRE_TIMEOUT_MS: "acquireTimeoutMs",
+    FMARCH_DB_STATEMENT_TIMEOUT_MS: "statementTimeoutMs",
+    FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS:
+      "identityDeliveryProviderTimeoutMs",
+    FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS:
+      "identityDeliveryDatabaseTimeoutMs",
+    FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS: "identityDeliveryClaimLeaseMs",
+    FMARCH_WORKER_READINESS_GRACE_MS: "workerReadinessGraceMs",
+    FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "shutdownDrainTimeoutMs",
+  })) {
+    assert.match(
+      source,
+      new RegExp(`${variable}:\\s*scratchApiDatabaseCapacity\\.${property}`),
+    );
+    assert.doesNotMatch(source, new RegExp(`process\\.env\\.${variable}`));
+  }
 });

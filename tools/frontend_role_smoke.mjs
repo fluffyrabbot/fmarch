@@ -45,6 +45,11 @@ import {
   privateChannelFixtureApiRoutes,
   roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
+import {
+  DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
+  initializeReadingCheckpointClientsSequentially,
+  waitForReadingCheckpointRestoration,
+} from "./frontend_role_smoke_reliability.mjs";
 
 const browserName = process.env.FMARCH_PROOF_BROWSER ?? "chromium";
 const browserType = { chromium, firefox, webkit }[browserName];
@@ -4250,7 +4255,8 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
   await installLiveProjectionHarness(peer, { roleId: "player" });
   await installFixtureApiRoutes(peer, { routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState() });
   let saved = { revision: 1, position: { source_seq: 20, offset_px: 110 }, available: true };
-  let writes = 0, peerReads = 0, unavailable = false;
+  let writes = 0, unavailable = false;
+  const checkpointReads = { primary: 0, peer: 0 };
   const checkpointEndpoint = "**/api/gameplay/games/*/channels/*/reading-checkpoint";
   const threadEndpoint = "**/api/gameplay/games/midsummer?**";
   const checkpoint = async route => {
@@ -4258,7 +4264,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
       const input = route.request().postDataJSON();
       if (input.expected_revision !== saved.revision) return route.fulfill({ status: 409, json: saved });
       saved = { revision: saved.revision + 1, position: input.position, available: true }; writes++;
-    } else if (route.request().frame().page() === peer) peerReads++;
+    } else checkpointReads[route.request().frame().page() === peer ? "peer" : "primary"]++;
     return route.fulfill({ json: saved });
   };
   const thread = route => {
@@ -4270,12 +4276,33 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
       body: `Durable historical post ${i + 1}.`, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 }));
     return route.fulfill({ json: { next_before_seq: null, next_after_seq: 60, posts } });
   };
+  const diagnosticContext = () => ({
+    checkpointReads: { ...checkpointReads },
+    saved,
+    unavailable,
+    writes,
+  });
+  const waitForRestore = (tab, phase, position, options = {}) => waitForReadingCheckpointRestoration(tab, {
+    diagnosticContext,
+    ...options,
+    phase,
+    position,
+  });
   for (const tab of [page, peer]) { await tab.route(checkpointEndpoint, checkpoint); await tab.route(threadEndpoint, thread); }
+  let completed = false;
   try {
-    await Promise.all([page, peer].map(tab => navigateBrowserPage(tab, `${baseUrl}${routePath}?checkpoint-proof=ready`, { waitUntil: "networkidle" })));
-    for (const tab of [page, peer]) await tab.waitForFunction(() => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - 110) < 2);
+    await initializeReadingCheckpointClientsSequentially({
+      clients: [{ label: "primary", page }, { label: "peer", page: peer }],
+      diagnosticContext,
+      navigate: (tab, { timeout }) => navigateBrowserPage(
+        tab,
+        `${baseUrl}${routePath}?checkpoint-proof=ready`,
+        { waitUntil: "networkidle", timeout },
+      ),
+      position: saved.position,
+    });
     const peerTop = await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top);
-    const initialReads = peerReads;
+    const initialReads = checkpointReads.peer;
     await page.locator("#thread-post-20").focus(); await page.keyboard.press("PageDown");
     await page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("reading-checkpoint"));
     assert.equal(writes, 1); assert.notEqual(saved.position.source_seq, 20);
@@ -4286,8 +4313,8 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
     await reconnectRequest;
     assert.equal(writes, 1, "reconnect does not record a reading gesture");
-    for (let i = 0; peerReads === initialReads && i < 50; i++) await new Promise(resolve => setTimeout(resolve, 50));
-    assert.ok(peerReads > initialReads, "peer refreshes after an invalidation");
+    for (let i = 0; checkpointReads.peer === initialReads && i < 50; i++) await new Promise(resolve => setTimeout(resolve, 50));
+    assert.ok(checkpointReads.peer > initialReads, "peer refreshes after an invalidation");
     assert.ok(Math.abs(await peer.locator("#thread-post-20").evaluate(el => el.getBoundingClientRect().top) - peerTop) < 2, "peer stays in place");
     const resume = peer.getByTestId("resume-saved-position");
     await resume.waitFor();
@@ -4296,7 +4323,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     const verified = peer.waitForRequest(request => new URL(request.url()).searchParams.get("around_seq") === String(saved.position.source_seq));
     await resume.focus(); await peer.keyboard.press("Enter");
     await verified;
-    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
+    await waitForRestore(peer, "remote-resume:peer", saved.position);
     assert.equal(await resume.count(), 0); assert.equal(writes, 1);
     const visited = { ...saved.position };
     const returnButton = peer.getByTestId("return-previous-place");
@@ -4304,17 +4331,17 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     const returnBox = await returnButton.boundingBox();
     assert.ok(returnBox.width >= 44 && returnBox.height >= 44);
     await reloadBrowserPage(peer);
-    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
+    await waitForRestore(peer, "reload-visited:peer", visited);
     await returnButton.focus(); await peer.keyboard.press("Enter");
-    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await waitForRestore(peer, "return-previous-place:peer", { source_seq: 20, offset_px: peerTop });
     await reloadBrowserPage(peer);
-    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await waitForRestore(peer, "reload-returned-place:peer", { source_seq: 20, offset_px: peerTop });
     await peer.goForward();
-    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, visited);
+    await waitForRestore(peer, "history-forward-visited:peer", visited);
     await peer.goBack();
-    await peer.waitForFunction(top => document.activeElement?.id === "thread-post-20" && Math.abs(document.activeElement.getBoundingClientRect().top - top) < 2, peerTop);
+    await waitForRestore(peer, "history-back-returned:peer", { source_seq: 20, offset_px: peerTop });
     await peer.goForward();
-    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}`, visited);
+    await waitForRestore(peer, "history-forward-repeat:peer", visited, { verifyOffset: false });
     assert.equal(writes, 1, "history navigation never writes a reading checkpoint");
     unavailable = true;
     saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
@@ -4329,9 +4356,9 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     assert.equal(await peer.locator("#thread-post-20").count(), 0);
     unavailable = false;
     await peer.getByTestId("reader-recovery-retry").click();
-    await peer.waitForFunction(() => document.activeElement?.id === "thread-post-20");
+    await waitForRestore(peer, "retry-recovered-checkpoint:peer", saved.position, { verifyOffset: false });
     await reloadBrowserPage(peer);
-    await peer.waitForFunction(position => document.activeElement?.id === `thread-post-${position.source_seq}` && Math.abs(document.activeElement.getBoundingClientRect().top - position.offset_px) < 2, saved.position);
+    await waitForRestore(peer, "reload-recovered-checkpoint:peer", saved.position);
     for (const outcome of ["hidden", "deleted"]) {
       unavailable = true; saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
       await navigateBrowserPage(page, `${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { waitUntil: "networkidle" });
@@ -4339,9 +4366,13 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
       assert.equal(await page.locator("#thread-post-20").count(), 0);
       assert.equal(writes, 1, "restoration and background activity never create saves");
     }
+    completed = true;
   } finally {
     await peer.close(); await page.unroute(checkpointEndpoint, checkpoint); await page.unroute(threadEndpoint, thread);
-    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    if (completed) await navigateBrowserPage(page, `${baseUrl}${routePath}`, {
+      waitUntil: "networkidle",
+      timeout: DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
+    });
   }
 }
 

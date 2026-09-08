@@ -149,11 +149,11 @@ async fn committed_reset_recovers_without_a_second_drop_and_rejects_a_changed_in
     );
     let first_inventory =
         message(&first_audit, "fmarch-schema-epoch-reset-audit")["counts"].clone();
-    sqlx::query("CREATE TABLE public.audit_race_canary (id bigint PRIMARY KEY)")
+    sqlx::query(r#"CREATE TABLE public."audit_""race_canary" (id bigint PRIMARY KEY)"#)
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO public.audit_race_canary VALUES (1)")
+    sqlx::query(r#"INSERT INTO public."audit_""race_canary" VALUES (1)"#)
         .execute(&pool)
         .await
         .unwrap();
@@ -171,7 +171,7 @@ async fn committed_reset_recovers_without_a_second_drop_and_rejects_a_changed_in
         events_still_exist,
         "inventory mismatch must preserve public schema"
     );
-    sqlx::query("DROP TABLE public.audit_race_canary")
+    sqlx::query(r#"DROP TABLE public."audit_""race_canary""#)
         .execute(&pool)
         .await
         .unwrap();

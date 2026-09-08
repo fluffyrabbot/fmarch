@@ -66,7 +66,7 @@ impl RuntimeSupervisor {
         let (fatal_sender, fatal) = mpsc::unbounded_channel();
         let mut specs = vec![
             subject_erasure_spec(pool.clone(), &budget),
-            day_event_spec(pool.clone(), scheduler, &budget),
+            day_event_spec(pool.clone(), scheduler),
             media_reconciliation_spec(pool.clone(), api_state.clone(), &budget),
             live_listener_spec(api_state, &budget),
         ];
@@ -273,11 +273,14 @@ fn subject_erasure_spec(pool: PgPool, budget: &WorkerBudget) -> WorkerSpec {
 fn day_event_spec(
     pool: PgPool,
     config: commands::day_scheduler::DayEventSchedulerConfig,
-    budget: &WorkerBudget,
 ) -> WorkerSpec {
     WorkerSpec {
         name: DAY_EVENT_WORKER,
         required: true,
+        // The worker contains database iteration failures and keeps polling.
+        // Reaching the supervisor means invalid startup configuration or an
+        // unexpected exit, which is a process-fatal condition rather than a
+        // restart-budget concern.
         policy: WorkerPolicy::Fatal,
         factory: Arc::new(move |shutdown, health| {
             let pool = pool.clone();

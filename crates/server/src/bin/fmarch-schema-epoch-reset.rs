@@ -52,6 +52,105 @@ struct CompletionEvidence {
     prior_counts: Value,
 }
 
+mod catalog_sql {
+    use super::DynError;
+
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    pub(super) struct PublicDataRelation {
+        name: String,
+    }
+
+    impl PublicDataRelation {
+        pub(super) fn from_catalog(name: String, kind: &str) -> Result<Self, DynError> {
+            if !matches!(kind, "r" | "p") {
+                return Err(format!(
+                    "schema epoch reset encountered unclassified public relation {name} of kind {kind}"
+                )
+                .into());
+            }
+            Ok(Self { name })
+        }
+
+        pub(super) fn name(&self) -> &str {
+            &self.name
+        }
+
+        pub(super) fn into_name(self) -> String {
+            self.name
+        }
+
+        fn qualified_identifier(&self) -> String {
+            format!("public.{}", quote_identifier(&self.name))
+        }
+    }
+
+    #[derive(Debug)]
+    pub(super) struct Statement(String);
+
+    impl Statement {
+        pub(super) fn lock(relations: &[PublicDataRelation]) -> Result<Self, DynError> {
+            if relations.is_empty() {
+                return Err("schema epoch reset found no public data relations".into());
+            }
+            let targets = relations
+                .iter()
+                .map(PublicDataRelation::qualified_identifier)
+                .collect::<Vec<_>>()
+                .join(", ");
+            Ok(Self(format!(
+                "LOCK TABLE {targets} IN ACCESS EXCLUSIVE MODE"
+            )))
+        }
+
+        pub(super) fn count(relation: &PublicDataRelation) -> Self {
+            Self(format!(
+                "SELECT COUNT(*) FROM {}",
+                relation.qualified_identifier()
+            ))
+        }
+
+        pub(super) fn into_sqlx(self) -> sqlx::AssertSqlSafe<String> {
+            // This is the sole dynamic-SQL trust boundary for the reset inventory.
+            // Statement's field is private to this module, and its constructors use
+            // only fixed SQL grammar plus catalog-derived identifiers that are always
+            // delimited and escape every embedded delimiter.
+            sqlx::AssertSqlSafe(self.0)
+        }
+    }
+
+    fn quote_identifier(identifier: &str) -> String {
+        format!("\"{}\"", identifier.replace('"', "\"\""))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{PublicDataRelation, Statement};
+
+        #[test]
+        fn catalog_relation_sql_quotes_embedded_delimiters() {
+            let relation = PublicDataRelation::from_catalog(
+                "inventory\"; DROP SCHEMA public; --".to_string(),
+                "r",
+            )
+            .unwrap();
+            assert_eq!(
+                Statement::count(&relation).0,
+                "SELECT COUNT(*) FROM public.\"inventory\"\"; DROP SCHEMA public; --\""
+            );
+        }
+
+        #[test]
+        fn catalog_relation_rejects_unclassified_kinds() {
+            let error = PublicDataRelation::from_catalog("unexpected".to_string(), "f")
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("unclassified public relation unexpected of kind f"));
+        }
+    }
+}
+
+use catalog_sql::{PublicDataRelation, Statement as CatalogStatement};
+
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
     tracing_subscriber::fmt()
@@ -475,7 +574,7 @@ async fn load_completion(
 
 async fn public_data_relations(
     connection: &mut PgConnection,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<PublicDataRelation>, Box<dyn std::error::Error>> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         r#"
         SELECT relation.relname, relation.relkind::text
@@ -490,35 +589,19 @@ async fn public_data_relations(
     .await?;
     let mut relations = Vec::with_capacity(rows.len());
     for (name, kind) in rows {
-        if !matches!(kind.as_str(), "r" | "p") {
-            return Err(format!(
-                "schema epoch reset encountered unclassified public relation {name} of kind {kind}"
-            )
-            .into());
-        }
-        relations.push(name);
+        relations.push(PublicDataRelation::from_catalog(name, &kind)?);
     }
     Ok(relations)
-}
-
-fn quote_identifier(identifier: &str) -> String {
-    format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
 async fn lock_public_data_relations(
     connection: &mut PgConnection,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let relations = public_data_relations(connection).await?;
-    if relations.is_empty() {
-        return Err("schema epoch reset found no public data relations".into());
-    }
-    let targets = relations
-        .iter()
-        .map(|name| format!("public.{}", quote_identifier(name)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let statement = format!("LOCK TABLE {targets} IN ACCESS EXCLUSIVE MODE");
-    sqlx::query(&statement).execute(&mut *connection).await?;
+    let statement = CatalogStatement::lock(&relations)?;
+    sqlx::query(statement.into_sqlx())
+        .execute(&mut *connection)
+        .await?;
     Ok(())
 }
 
@@ -527,18 +610,15 @@ async fn audit_counts(connection: &mut PgConnection) -> Result<Value, Box<dyn st
     let mut application_tables = Map::new();
     let mut sqlx_migrations = None;
     for relation in relations {
-        let statement = format!(
-            "SELECT COUNT(*) FROM public.{}",
-            quote_identifier(&relation)
-        );
-        let count: i64 = sqlx::query_scalar(&statement)
+        let statement = CatalogStatement::count(&relation);
+        let count: i64 = sqlx::query_scalar(statement.into_sqlx())
             .fetch_one(&mut *connection)
             .await?;
         let count = u64::try_from(count)?;
-        if relation == "_sqlx_migrations" {
+        if relation.name() == "_sqlx_migrations" {
             sqlx_migrations = Some(count);
         } else {
-            application_tables.insert(relation, json!(count));
+            application_tables.insert(relation.into_name(), json!(count));
         }
     }
     let audit = json!({

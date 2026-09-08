@@ -522,10 +522,12 @@ impl MediaRepository {
                     &self.read_admission,
                     request_permit,
                     self.limits,
-                    id,
-                    format,
-                    kind,
-                    limits,
+                    ObjectVariantLookup {
+                        id,
+                        format,
+                        kind,
+                        limits,
+                    },
                 )
                 .await
             }
@@ -678,16 +680,26 @@ async fn put_immutable(
     }
 }
 
+struct ObjectVariantLookup {
+    id: ContentId,
+    format: VariantFormat,
+    kind: VariantKind,
+    limits: VariantLimits,
+}
+
 async fn lookup_object_variant(
     store: &dyn ObjectStore,
     admission: &MediaReadAdmission,
     request_permit: OwnedSemaphorePermit,
     media_limits: MediaLimits,
-    id: ContentId,
-    format: VariantFormat,
-    kind: VariantKind,
-    limits: VariantLimits,
+    lookup: ObjectVariantLookup,
 ) -> Result<Option<StoredVariant>, MediaError> {
+    let ObjectVariantLookup {
+        id,
+        format,
+        kind,
+        limits,
+    } = lookup;
     let _manifest_bytes = admission.acquire_bytes(MANIFEST_MAX_BYTES)?;
     let manifest_path = object_path(&format!(
         "blobs/{id}/{VARIANT_RECIPE_REVISION}/{MANIFEST_NAME}"

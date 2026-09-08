@@ -72,6 +72,12 @@ const LOGIN_NAVIGATION_TIMEOUT_MS = 45_000;
 const scratchApiDatabaseCapacity = Object.freeze({
   maxConnections: "32",
   acquireTimeoutMs: "3000",
+  statementTimeoutMs: "5000",
+  identityDeliveryProviderTimeoutMs: "10000",
+  identityDeliveryDatabaseTimeoutMs: "9000",
+  identityDeliveryClaimLeaseMs: "45000",
+  workerReadinessGraceMs: "10000",
+  shutdownDrainTimeoutMs: "30000",
 });
 const host = "127.0.0.1";
 const game = randomUUID();
@@ -4085,12 +4091,24 @@ async function startApi(applicationUrl, deliveryEndpoint) {
       FMARCH_DB_MAX_CONNECTIONS: scratchApiDatabaseCapacity.maxConnections,
       FMARCH_DB_ACQUIRE_TIMEOUT_MS:
         scratchApiDatabaseCapacity.acquireTimeoutMs,
+      FMARCH_DB_STATEMENT_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.statementTimeoutMs,
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
       FMARCH_IDENTITY_DELIVERY_ENDPOINT: deliveryEndpoint,
       FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "local-deterministic",
       FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: deliveryProvider.authToken,
+      FMARCH_IDENTITY_DELIVERY_PROVIDER_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.identityDeliveryProviderTimeoutMs,
+      FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs,
+      FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS:
+        scratchApiDatabaseCapacity.identityDeliveryClaimLeaseMs,
+      FMARCH_WORKER_READINESS_GRACE_MS:
+        scratchApiDatabaseCapacity.workerReadinessGraceMs,
+      FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.shutdownDrainTimeoutMs,
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     }),

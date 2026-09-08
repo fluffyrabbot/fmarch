@@ -228,18 +228,48 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "let cancelled_attempt_count",
             "AND NOT CASE $4",
             "record_delivery_audit(",
+        ],
+        "delivery finalization",
+    );
+
+    assert_eq!(
+        finalization.matches("record_delivery_audit(").count(),
+        1,
+        "delivery finalization must persist exactly one lifecycle audit"
+    );
+    assert_eq!(
+        finalization
+            .matches("IdentityDeliveryAuditRecord {")
+            .count(),
+        1,
+        "delivery finalization must construct exactly one typed lifecycle audit"
+    );
+    let finalization_audit_start = finalization
+        .find("IdentityDeliveryAuditRecord {")
+        .expect("finalization audit record");
+    let finalization_receipt_start = finalization[finalization_audit_start..]
+        .find("let receipt = IdentityDeliveryReceipt {")
+        .map(|offset| finalization_audit_start + offset)
+        .expect("finalization receipt boundary");
+    let finalization_audit = &finalization[finalization_audit_start..finalization_receipt_start];
+    assert_ordered(
+        finalization_audit,
+        &[
             "IdentityDeliveryAuditRecord {",
             "event_at: now",
             "event_kind,",
             "actor_principal_id,",
             "principal_id: &claim.attempt.principal_id",
+            "credential_hash: claim.attempt.credential_hash.as_str()",
+            "delivery_id: claim.attempt.delivery_id",
+            "delivery_kind: claim.attempt.kind",
+            "account_id: claim.attempt.account_id.as_str()",
             "provider_id: claim.provider_id.as_str()",
             "outcome_kind: outcome.kind()",
             "outcome_code: outcome.code()",
             "provider_receipt_id: provider_receipt_id.as_deref()",
-            "let receipt = IdentityDeliveryReceipt {",
         ],
-        "delivery finalization",
+        "delivery finalization audit",
     );
 
     let audit = &source[audit_start..audit_end];
@@ -299,10 +329,14 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
         .find("pub async fn run_identity_delivery_worker_observed")
         .expect("supervised worker entry point");
     let worker_end = source[worker_start..]
-        .find("async fn finish_delivery_task")
+        .find("\nfn finish_delivery_task(")
         .map(|offset| worker_start + offset)
         .expect("worker completion boundary");
     let worker = &source[worker_start..worker_end];
+    assert!(
+        source[worker_end..].starts_with("\nfn finish_delivery_task("),
+        "completed task decoding must remain a synchronous, side-effect-free boundary"
+    );
 
     assert!(source.contains(
         "let lease_coverage_timeout = post_claim_timeout.saturating_add(database_timeout)"

@@ -48,7 +48,7 @@ pub use runtime_config::{
 };
 pub use runtime_health::{RuntimeWorkerHealth, WorkerHealthView};
 
-use auth_http::{internal_auth_error, unauthorized_session, unix_now_seconds, AuthHttpState};
+use auth_http::{internal_auth_error, unauthorized_session, AuthHttpState};
 
 use live_delivery::GameEventWakeHub;
 use live_projection::LiveProjectionPublisher;
@@ -846,6 +846,7 @@ fn capability_capacity_error(error: &caps::CapError) -> bool {
 
 #[cfg(test)]
 mod capacity_error_tests {
+    use super::auth_http::unix_now_seconds;
     use super::*;
     use axum::http::HeaderMap;
 

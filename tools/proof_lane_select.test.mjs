@@ -1378,6 +1378,10 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/frontend_role_smoke_flows.mjs',
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
+    [
+      'tools/frontend_role_smoke_reliability.mjs',
+      ['test:frontend-contract', 'test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
     ['tools/frontend_route_live_contract.mjs', 'test:frontend-route-live-contract'],
     ['tools/frontend_route_state_render_contract.mjs', 'test:frontend-route-state-render'],
     ['tools/frontend_tablet_interaction_contract.mjs', 'test:frontend-tablet-interaction'],
