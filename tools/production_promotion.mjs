@@ -10,6 +10,7 @@ import { loadCompletionRegistry, validateRegistry } from "./completeness_scoreca
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import {
   revalidateCanonicalHostedVariables,
+  revalidateCanonicalProductionHostedVariables,
   validateDatabaseAuthorityVariables,
   validateHostedVariables,
 } from "./release_hosted_variable_authority.mjs";
@@ -31,12 +32,15 @@ import {
   canonicalReleaseFetchArguments,
   createProductionPromotionLockIntent,
   productionPointerPushArgumentsForAuthority,
+  readProductionPromotionLease,
   releaseGitEnvironment,
+  validateProductionPromotionLeaseIntent,
 } from "./release_git_authority.mjs";
 
 export { PRODUCTION_PROMOTION_LOCK_REF } from "./release_git_authority.mjs";
 export {
   revalidateCanonicalHostedVariables,
+  revalidateCanonicalProductionHostedVariables,
   validateDatabaseAuthorityVariables,
   validateHostedVariables,
 };
@@ -89,8 +93,17 @@ export function parseArguments(argv) {
     else if (argument === "--fleet-receipt") result.fleetReceipt = requiredValue(argv, ++index, argument);
     else if (argument === "--fleet-public-key") result.fleetPublicKey = requiredValue(argv, ++index, argument);
     else if (argument === "--fleet-job") result.fleetJob = requiredValue(argv, ++index, argument);
+    else if (argument === "--resume-lock") {
+      result.resumeLock = requiredValue(argv, ++index, argument);
+      assertFullCommit(result.resumeLock, "production promotion resume lock");
+    }
     else throw new Error(`unknown production promotion argument: ${argument}`);
   }
+  assert.equal(
+    result.checkOnly && result.resumeLock !== undefined,
+    false,
+    "--check cannot adopt a production promotion lease",
+  );
   return result;
 }
 
@@ -106,15 +119,36 @@ export function validateRepositoryState({
   head,
   originMain,
   productionIsAncestor,
+  resumeLock,
+  headIsAncestorOfOriginMain = false,
 }) {
   assert.equal(status, "", "production promotion requires a clean worktree");
-  assert.equal(branch, "main", "production promotion must run from main");
-  assert.equal(head, originMain, "HEAD must equal origin/main before production promotion");
+  if (resumeLock) {
+    assertFullCommit(resumeLock, "production promotion resume lock");
+    assert.equal(
+      headIsAncestorOfOriginMain,
+      true,
+      "resumed production release commit must remain reachable from origin/main",
+    );
+  } else {
+    assert.equal(branch, "main", "production promotion must run from main");
+    assert.equal(head, originMain, "HEAD must equal origin/main before production promotion");
+  }
   assert.equal(
     productionIsAncestor,
     true,
     "origin/production must be an ancestor of the promoted main commit",
   );
+}
+
+export async function revalidatePromotionHostedVariables(
+  config,
+  { resumeLock = null } = {},
+  options = {},
+) {
+  return resumeLock
+    ? await revalidateCanonicalProductionHostedVariables(config, options)
+    : await revalidateCanonicalHostedVariables(config, options);
 }
 
 export function validateCoordinatedServiceSources(config, serviceIds = DEFAULTS, receipt = null) {
@@ -286,6 +320,7 @@ export function productionReceiptPathForLease(commit, promotionLockToken, root =
 export async function finalizeProductionPointer({
   commit,
   expectedProductionCommit,
+  pointerAlreadyAdvanced = false,
   revalidate,
   revalidateEvidence = async () => {},
   assertLease = async () => {},
@@ -297,29 +332,42 @@ export async function finalizeProductionPointer({
   const currentProductionCommit = await refreshProductionPointer();
   assert.equal(
     currentProductionCommit,
-    expectedProductionCommit,
-    "production pointer moved after promotion preflight",
+    pointerAlreadyAdvanced ? commit : expectedProductionCommit,
+    pointerAlreadyAdvanced
+      ? "production pointer no longer identifies the resumed release"
+      : "production pointer moved after promotion preflight",
   );
   await assertLease();
-  await pushPointer(productionPointerPushArguments(commit, expectedProductionCommit));
+  if (!pointerAlreadyAdvanced) {
+    await pushPointer(productionPointerPushArguments(commit, expectedProductionCommit));
+  }
 }
 
 export async function withProductionPromotionLock({ acquire, release }, action) {
   const token = await acquire();
-  let actionError = null;
+  let result;
   try {
-    return await action(token);
+    result = await action(token);
   } catch (error) {
-    actionError = error;
-    throw error;
-  } finally {
-    try {
-      await release(token);
-    } catch (releaseError) {
-      if (actionError) actionError.cause = releaseError;
-      else throw releaseError;
-    }
+    throw retainedPromotionLeaseError(error, token);
   }
+  try {
+    await release(token);
+  } catch (error) {
+    throw retainedPromotionLeaseError(error, token);
+  }
+  return result;
+}
+
+function retainedPromotionLeaseError(error, token) {
+  const retained = new Error(
+    `${error?.message ?? error}; production promotion lease ${token} remains held; ` +
+      `resume only with --resume-lock ${token}`,
+    { cause: error },
+  );
+  retained.code = error?.code;
+  retained.promotionLockToken = token;
+  return retained;
 }
 
 export function reconcilePromotionLockMutation({ operation, token, mutate, inspect }) {
@@ -438,6 +486,73 @@ function releaseProductionPromotionLock(token) {
   });
 }
 
+function gitCommitIsAncestor(ancestor, descendant) {
+  assertFullCommit(ancestor, "promotion lock prior production pointer");
+  assertFullCommit(descendant, "promotion release commit");
+  const result = spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+    cwd: repoRoot,
+    env: releaseGitEnvironment(),
+    timeout: SUBPROCESS_TIMEOUT_MS.git,
+  });
+  if (result.error) throw result.error;
+  assert.ok(
+    result.status === 0 || result.status === 1,
+    "could not validate the promotion lock prior production pointer",
+  );
+  return result.status === 0;
+}
+
+export function resumeProductionPromotionLock(
+  {
+    token,
+    commit,
+    fleetProof,
+    stagingReceipt,
+  },
+  {
+    loadLease = readProductionPromotionLease,
+    loadCurrentProductionCommit = refreshCanonicalProductionPointer,
+    isAncestor = gitCommitIsAncestor,
+  } = {},
+) {
+  assertFullCommit(token, "production promotion resume lock");
+  assertFullCommit(commit, "promotion release commit");
+  const leaseIntent = loadLease({ token, releaseCommit: commit });
+  const currentProductionCommit = loadCurrentProductionCommit();
+  assertFullCommit(currentProductionCommit, "current production pointer");
+  const expectedProductionCommit = leaseIntent.expected_production_commit;
+  validateProductionPromotionLeaseIntent(
+    leaseIntent,
+    promotionLeaseExpectation({
+      token,
+      commit,
+      expectedProductionCommit,
+      fleetProof,
+      stagingReceipt,
+    }),
+  );
+  assert.equal(
+    isAncestor(expectedProductionCommit, commit),
+    true,
+    "promotion lock prior production pointer is not an ancestor of the release commit",
+  );
+  assert.ok(
+    currentProductionCommit === expectedProductionCommit || currentProductionCommit === commit,
+    "production pointer is neither the promotion lock prior pointer nor its release commit",
+  );
+  return {
+    token,
+    expectedProductionCommit,
+    pointerAlreadyAdvanced: currentProductionCommit === commit,
+  };
+}
+
+function refreshCanonicalProductionPointer() {
+  assertCanonicalReleaseRemote();
+  run("git", canonicalReleaseFetchArguments(["production"]));
+  return text("git", ["rev-parse", "origin/production"]);
+}
+
 export function validateReusableProductionReceipt(
   receipt,
   { commit, stagingReceipt, fleetProof, releaseReadiness },
@@ -496,7 +611,7 @@ async function revalidateCanonicalProduction(config, receipt) {
     "--json",
   ]);
   validateCoordinatedServiceSources(productionConfig, config, receipt);
-  await revalidateCanonicalHostedVariables(config, { load: variables });
+  await revalidateCanonicalProductionHostedVariables(config, { load: variables });
   await validateCoordinatedEnvironment(
     config,
     { id: config.productionEnvironmentId, name: config.productionEnvironment },
@@ -567,16 +682,14 @@ async function finalizeCanonicalProductionPointer(
   commit,
   expectedProductionCommit,
   authority,
+  pointerAlreadyAdvanced = false,
 ) {
   await finalizeProductionPointer({
     commit,
     expectedProductionCommit,
+    pointerAlreadyAdvanced,
     revalidate: () => revalidateCanonicalProduction(config, receipt),
-    refreshProductionPointer: () => {
-      assertCanonicalReleaseRemote();
-      run("git", canonicalReleaseFetchArguments(["production"]));
-      return text("git", ["rev-parse", "origin/production"]);
-    },
+    refreshProductionPointer: refreshCanonicalProductionPointer,
     revalidateEvidence: () => revalidatePromotionEvidence({
       ...authority,
       productionReceipt: receipt,
@@ -605,6 +718,7 @@ async function main() {
   run("git", canonicalReleaseFetchArguments(["main", "production"]));
   const head = text("git", ["rev-parse", "HEAD"]);
   const originProduction = text("git", ["rev-parse", "origin/production"]);
+  const originMain = text("git", ["rev-parse", "origin/main"]);
   const stagingReceiptPath = path.resolve(
     process.env.FMARCH_STAGING_RELEASE_RECEIPT ??
       path.join(
@@ -630,8 +744,12 @@ async function main() {
     status: text("git", ["status", "--porcelain"]),
     branch: text("git", ["branch", "--show-current"]),
     head,
-    originMain: text("git", ["rev-parse", "origin/main"]),
+    originMain,
     productionIsAncestor,
+    resumeLock: args.resumeLock,
+    headIsAncestorOfOriginMain: args.resumeLock
+      ? gitCommitIsAncestor(head, originMain)
+      : false,
   });
   const fleetReceiptPath = args.fleetReceipt ?? process.env.FMARCH_FLEET_RECEIPT;
   const fleetPublicKeyPath =
@@ -656,70 +774,102 @@ async function main() {
   await validateRegistry(completionRegistry);
   const releaseReadiness = validateProductionReleaseReadiness(completionRegistry);
 
-  const [stagingConfig, productionConfig] = await Promise.all([
-    railwayJson(
+  const productionConfig = await railwayJson(
+    config,
+    [
+      "environment",
+      "config",
+      "--environment",
+      config.productionEnvironmentId,
+      "--json",
+    ],
+  );
+  validateProductionSourceCutover(productionConfig, config);
+  if (!args.resumeLock) {
+    const stagingConfig = await railwayJson(
       config,
       ["environment", "config", "--environment", config.stagingEnvironmentId, "--json"],
-    ),
-    railwayJson(
-      config,
-      [
-        "environment",
-        "config",
-        "--environment",
-        config.productionEnvironmentId,
-        "--json",
-      ],
-    ),
-  ]);
-  validateCoordinatedServiceSources(stagingConfig, config, stagingReceipt);
-  validateProductionSourceCutover(productionConfig, config);
+    );
+    validateCoordinatedServiceSources(stagingConfig, config, stagingReceipt);
+  }
 
-  const {
-    stagingApi,
-    productionApi,
-  } = await revalidateCanonicalHostedVariables(config, { load: variables });
-  await Promise.all([
-    preflightWorkosOidc({
-      label: "staging",
-      clientId: stagingApi.WORKOS_CLIENT_ID,
-      issuer: stagingApi.WORKOS_ISSUER,
-      jwksUrl: stagingApi.WORKOS_JWKS_URL,
-    }),
+  const { stagingApi, productionApi } = await revalidatePromotionHostedVariables(
+    config,
+    { resumeLock: args.resumeLock },
+    { load: variables },
+  );
+  const oidcPreflights = [
     preflightWorkosOidc({
       label: "production",
       clientId: productionApi.WORKOS_CLIENT_ID,
       issuer: productionApi.WORKOS_ISSUER,
       jwksUrl: productionApi.WORKOS_JWKS_URL,
     }),
-  ]);
+  ];
+  if (!args.resumeLock) {
+    oidcPreflights.push(preflightWorkosOidc({
+      label: "staging",
+      clientId: stagingApi.WORKOS_CLIENT_ID,
+      issuer: stagingApi.WORKOS_ISSUER,
+      jwksUrl: stagingApi.WORKOS_JWKS_URL,
+    }));
+  }
+  await Promise.all(oidcPreflights);
 
-  await validateCoordinatedEnvironment(
-    config,
-    { id: config.stagingEnvironmentId, name: config.stagingEnvironment },
-    stagingReceipt,
-    {
-    apiUrl: config.stagingApiUrl,
-    frontendUrl: config.stagingFrontendUrl,
-    },
-  );
+  if (!args.resumeLock) {
+    await validateCoordinatedEnvironment(
+      config,
+      { id: config.stagingEnvironmentId, name: config.stagingEnvironment },
+      stagingReceipt,
+      {
+        apiUrl: config.stagingApiUrl,
+        frontendUrl: config.stagingFrontendUrl,
+      },
+    );
+  }
 
   if (checkOnly) {
     console.log(`production promotion check passed for ${head}`);
     return;
   }
 
+  let promotionSession;
   await withProductionPromotionLock(
     {
-      acquire: () => acquireProductionPromotionLock({
-        commit: head,
-        expectedProductionCommit: originProduction,
-        fleetProof,
-        stagingReceipt,
-      }),
+      acquire: () => {
+        if (args.resumeLock) {
+          promotionSession = resumeProductionPromotionLock({
+            token: args.resumeLock,
+            commit: head,
+            fleetProof,
+            stagingReceipt,
+          });
+          return promotionSession.token;
+        }
+        const currentProductionCommit = refreshCanonicalProductionPointer();
+        assert.equal(
+          gitCommitIsAncestor(currentProductionCommit, head),
+          true,
+          "current production pointer is not an ancestor of the release commit",
+        );
+        const token = acquireProductionPromotionLock({
+          commit: head,
+          expectedProductionCommit: currentProductionCommit,
+          fleetProof,
+          stagingReceipt,
+        });
+        promotionSession = {
+          token,
+          expectedProductionCommit: currentProductionCommit,
+          pointerAlreadyAdvanced: false,
+        };
+        return token;
+      },
       release: (token) => releaseProductionPromotionLock(token),
     },
     async (promotionLockToken) => {
+      assert.equal(promotionSession.token, promotionLockToken);
+      const { expectedProductionCommit, pointerAlreadyAdvanced } = promotionSession;
       const promotionAuthority = {
         promotionLockToken,
         stagingReceiptPath,
@@ -732,7 +882,7 @@ async function main() {
       assertProductionPromotionLease(promotionLeaseExpectation({
         token: promotionLockToken,
         commit: head,
-        expectedProductionCommit: originProduction,
+        expectedProductionCommit,
         fleetProof,
         stagingReceipt,
       }));
@@ -757,12 +907,19 @@ async function main() {
           config,
           reusable,
           head,
-          originProduction,
+          expectedProductionCommit,
           promotionAuthority,
+          pointerAlreadyAdvanced,
         );
         console.log(`production promotion resumed from durable receipt for ${head}`);
         return;
       }
+
+      assert.equal(
+        pointerAlreadyAdvanced,
+        false,
+        "advanced production pointer has no exact lease-scoped receipt; retaining the lease",
+      );
 
       const coordinatorArguments = [
         "tools/release_coordinator.mjs",
@@ -806,7 +963,7 @@ async function main() {
         config,
         productionReceipt,
         head,
-        originProduction,
+        expectedProductionCommit,
         promotionAuthority,
       );
       console.log(`production promotion completed for ${head}`);

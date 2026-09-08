@@ -262,6 +262,22 @@ async function contract() {
     source["deploy/railway/migrator.env.example"],
     /^FMARCH_DATABASE_ENVIRONMENT=staging$/m,
   );
+  assert.match(
+    source["tools/release_coordinator.mjs"],
+    /revalidateCanonicalProductionHostedVariables\(config/,
+  );
+  assert.doesNotMatch(
+    source["tools/release_coordinator.mjs"],
+    /revalidateCanonicalHostedVariables/,
+  );
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /revalidatePromotionHostedVariables\([\s\S]*?resumeLock: args\.resumeLock/,
+  );
+  assert.match(
+    source["tools/release_hosted_variable_authority.mjs"],
+    /loadCanonicalProductionHostedVariables[\s\S]*?productionEnvironmentId/,
+  );
   for (const forbidden of [
     "DATABASE_URL",
     "DATABASE_KEY_ADMIN_URL",

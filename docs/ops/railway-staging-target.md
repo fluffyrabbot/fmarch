@@ -101,7 +101,27 @@ require strictly live evidence. `FAILED` or `CRASHED` one-shot reset/migrator de
 may be re-dispatched with the same digest; approval and other ambiguous
 terminal states remain operator-visible and fail closed. All release Git,
 Railway, and Podman subprocesses have bounded timeouts; a timeout unwinds the
-promoter and releases only its exact lease.
+promoter but deliberately retains its exact remote lease so a queued remote
+database job cannot outlive its authority. Any coordinator error has the same
+fail-closed result. A new promotion may not replace or generically clear that
+lease. After the exact remote jobs have reached terminal state, resume only the
+same immutable operation with
+`npm run promote:production -- --resume-lock <40-hex-lease> ...`; resume
+revalidates the remote token, complete lock intent, staging receipt, signed
+fleet proof, reset decision, and freshly fetched prior pointer. The
+lease-scoped production receipt allows resume to revalidate live production and
+finish an uncommitted pointer CAS without repeating Railway mutations. If the
+CAS already succeeded, resume accepts only the release commit as the current
+pointer, revalidates the receipt and live system, and then releases the lease.
+Any third pointer state fails while retaining the lease. The lease is deleted
+only after successful receipt validation and final pointer completion, or by a
+separate recovery that has independently proven exact remote-job cancellation.
+If `main` and live staging have advanced, check out the lease intent's exact
+release commit in a clean detached worktree before using `--resume-lock`; that
+commit must still be reachable from current `origin/main`. Recovery validates
+the immutable fresh staging receipt and signed fleet envelope bound into the
+lease rather than requiring live staging to roll back to the old commit. Normal
+first-time promotion still requires synchronized `main` and exact live staging.
 
 Do not retain a Git source or enable image auto-updates on these services.
 `tools/release_coordinator.mjs` is the only release sequencer. It runs from a

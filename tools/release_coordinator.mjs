@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
-import { revalidateCanonicalHostedVariables } from "./release_hosted_variable_authority.mjs";
+import { revalidateCanonicalProductionHostedVariables } from "./release_hosted_variable_authority.mjs";
 import {
   TERMINAL_DEPLOYMENT_STATES,
   CANONICAL_RELEASE_TOPOLOGY,
@@ -448,26 +448,31 @@ function railwayText(config, args) {
   ], { env: scrubHostedEnvironment(process.env) });
 }
 
-async function revalidateHostedVariableAuthority(config) {
-  return await revalidateCanonicalHostedVariables(config, {
-    load: async (_config, environmentId, serviceId) =>
-      JSON.parse(
-        commandText(
-          "railway",
-          [
-            "variable",
-            "list",
-            "--project",
-            config.projectId,
-            "--environment",
-            environmentId,
-            "--service",
-            serviceId,
-            "--json",
-          ],
-          { env: scrubHostedEnvironment(process.env) },
-        ),
-      ),
+export async function revalidateProductionHostedVariableAuthority(
+  config,
+  { load } = {},
+) {
+  return await revalidateCanonicalProductionHostedVariables(config, {
+    load:
+      load ??
+      (async (_config, environmentId, serviceId) =>
+        JSON.parse(
+          commandText(
+            "railway",
+            [
+              "variable",
+              "list",
+              "--project",
+              config.projectId,
+              "--environment",
+              environmentId,
+              "--service",
+              serviceId,
+              "--json",
+            ],
+            { env: scrubHostedEnvironment(process.env) },
+          ),
+        )),
   });
 }
 
@@ -537,7 +542,7 @@ export async function assertProductionMutationAuthority(
     readStagingReceipt = async (receiptPath) =>
       JSON.parse(await readFile(receiptPath, "utf8")),
     reloadFleetProof = loadFleetReleaseProof,
-    revalidateHostedVariables = revalidateHostedVariableAuthority,
+    revalidateHostedVariables = revalidateProductionHostedVariableAuthority,
     assertLease = assertProductionPromotionLease,
     now = () => new Date(),
     minimumFreshnessReserveMilliseconds = 0,

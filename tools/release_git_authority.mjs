@@ -257,11 +257,43 @@ export function createProductionPromotionLockIntent({
   };
 }
 
-function validateLockIntent(document, expected) {
+function validateLockIntentShape(document) {
   assert.equal(document?.version, 1, "production promotion lock version drifted");
   assert.equal(document?.kind, "fmarch-production-promotion-lock", "promotion lock kind drifted");
   assert.match(document.identity ?? "", /^fmarch-production-promotion-[0-9a-f-]+$/u);
   assert.equal(new Date(document.created_at).toISOString(), document.created_at);
+  assertFullCommit(document.release_commit, "promotion lock release commit");
+  assertFullCommit(
+    document.expected_production_commit,
+    "promotion lock prior production pointer",
+  );
+  assert.match(document.fleet_job_id ?? "", /\S/u, "promotion lock fleet job is invalid");
+  assert.match(
+    document.fleet_receipt_sha256 ?? "",
+    digestPattern,
+    "promotion lock fleet receipt digest is invalid",
+  );
+  assert.match(
+    document.staging_receipt_sha256 ?? "",
+    digestPattern,
+    "promotion lock staging receipt digest is invalid",
+  );
+  assert.ok(
+    document.schema_epoch_reset === null ||
+      (Number.isSafeInteger(document.schema_epoch_reset) && document.schema_epoch_reset > 0),
+    "promotion lock schema epoch reset is invalid",
+  );
+  assert.equal(
+    document.git_remote_url,
+    CANONICAL_RELEASE_REMOTE_URL,
+    "promotion lock Git authority drifted",
+  );
+  assert.deepEqual(document.topology, CANONICAL_RELEASE_TOPOLOGY, "promotion lock topology drifted");
+  return document;
+}
+
+export function validateProductionPromotionLeaseIntent(document, expected) {
+  validateLockIntentShape(document);
   assert.equal(document.release_commit, expected.releaseCommit, "promotion lock commit drifted");
   assert.equal(
     document.expected_production_commit,
@@ -284,8 +316,6 @@ function validateLockIntent(document, expected) {
     expected.schemaEpochReset,
     "promotion lock schema epoch reset decision drifted",
   );
-  assert.equal(document.git_remote_url, CANONICAL_RELEASE_REMOTE_URL, "promotion lock Git authority drifted");
-  assert.deepEqual(document.topology, CANONICAL_RELEASE_TOPOLOGY, "promotion lock topology drifted");
   return document;
 }
 
@@ -315,16 +345,8 @@ function defaultLeaseSnapshot(token, releaseCommit) {
   }
 }
 
-export function assertProductionPromotionLease(
-  {
-    token,
-    releaseCommit,
-    expectedProductionCommit,
-    fleetJobId,
-    fleetReceiptSha256,
-    stagingReceiptSha256,
-    schemaEpochReset = null,
-  },
+export function readProductionPromotionLease(
+  { token, releaseCommit },
   { inspect = defaultLeaseSnapshot } = {},
 ) {
   assertFullCommit(token, "production promotion lock token");
@@ -340,7 +362,29 @@ export function assertProductionPromotionLease(
   } catch {
     assert.fail("production promotion lock intent is not valid JSON");
   }
-  return validateLockIntent(document, {
+  validateLockIntentShape(document);
+  assert.equal(
+    document.release_commit,
+    releaseCommit,
+    "promotion lock intent does not bind its release commit parent",
+  );
+  return document;
+}
+
+export function assertProductionPromotionLease(
+  {
+    token,
+    releaseCommit,
+    expectedProductionCommit,
+    fleetJobId,
+    fleetReceiptSha256,
+    stagingReceiptSha256,
+    schemaEpochReset = null,
+  },
+  options = {},
+) {
+  const document = readProductionPromotionLease({ token, releaseCommit }, options);
+  return validateProductionPromotionLeaseIntent(document, {
     releaseCommit,
     expectedProductionCommit,
     fleetJobId,

@@ -5,10 +5,13 @@ import test from "node:test";
 import {
   finalizeProductionPointer,
   revalidateCanonicalHostedVariables,
+  revalidateCanonicalProductionHostedVariables,
+  revalidatePromotionHostedVariables,
   parseArguments,
   productionPointerPushArguments,
   productionReceiptPathForLease,
   reconcilePromotionLockMutation,
+  resumeProductionPromotionLock,
   railwayArguments,
   runtimeConfig,
   validateDatabaseAuthorityVariables,
@@ -21,6 +24,8 @@ import {
   validateSecretCustodyPolicy,
   withProductionPromotionLock,
 } from "./production_promotion.mjs";
+import { createProductionPromotionLockIntent } from "./release_git_authority.mjs";
+import { revalidateProductionHostedVariableAuthority } from "./release_coordinator.mjs";
 
 const canonicalProjectId = "9d285d67-c11b-4508-9efb-fad042787b4c";
 const canonicalMigratorServiceId = "7c2c2665-2be2-4938-84e5-7580a964d610";
@@ -38,8 +43,17 @@ test("promotion arguments are fail closed", () => {
     fleetReceipt: "receipt.json",
     fleetJob: "job",
   });
+  assert.deepEqual(parseArguments(["--resume-lock", "a".repeat(40)]), {
+    checkOnly: false,
+    resumeLock: "a".repeat(40),
+  });
   assert.throws(() => parseArguments(["--force"]), /unknown production promotion argument/);
   assert.throws(() => parseArguments(["--fleet-receipt"]), /requires a value/);
+  assert.throws(() => parseArguments(["--resume-lock", "main"]), /full lowercase Git SHA/);
+  assert.throws(
+    () => parseArguments(["--check", "--resume-lock", "a".repeat(40)]),
+    /cannot adopt/,
+  );
 });
 
 test("production promotion consumes the coordinated staging receipt", async () => {
@@ -122,6 +136,22 @@ test("production pointer refresh and CAS occur only after fresh live revalidatio
     }),
     /moved after promotion preflight/,
   );
+
+  events.length = 0;
+  await finalizeProductionPointer({
+    commit,
+    expectedProductionCommit: prior,
+    pointerAlreadyAdvanced: true,
+    revalidateEvidence: async () => events.push("evidence"),
+    revalidate: async () => events.push("live"),
+    refreshProductionPointer: async () => {
+      events.push("fetch");
+      return commit;
+    },
+    assertLease: async () => events.push("lease"),
+    pushPointer: async () => assert.fail("an already-complete CAS must not be repeated"),
+  });
+  assert.deepEqual(events, ["evidence", "live", "fetch", "lease"]);
 });
 
 test("Railway commands always use the canonical explicit project", () => {
@@ -149,7 +179,7 @@ test("promotion pins the complete canonical Railway topology", () => {
   );
 });
 
-test("production promotion lock rejects contention and permits a released replay", async () => {
+test("production promotion lock releases only success and retains failures for exact resume", async () => {
   let owner = null;
   let releaseFirst;
   const acquire = async () => {
@@ -183,9 +213,80 @@ test("production promotion lock rejects contention and permits a released replay
       timeout.code = "ETIMEDOUT";
       throw timeout;
     }),
-    /timed out/,
+    (error) => {
+      assert.match(error.message, /timed out/);
+      assert.match(error.message, /resume only with --resume-lock token/);
+      assert.equal(error.promotionLockToken, "token");
+      return true;
+    },
   );
-  assert.equal(owner, null, "timeout must release the exact promotion lease");
+  assert.equal(owner, "token", "timeout must retain the exact promotion lease");
+});
+
+test("exact-token resume validates immutable intent and both unambiguous pointer states", () => {
+  const commit = "a".repeat(40);
+  const prior = "b".repeat(40);
+  const token = "c".repeat(40);
+  const fleetProof = {
+    job_id: "job-123",
+    receipt_sha256: "d".repeat(64),
+  };
+  const stagingReceipt = {
+    receipt_sha256: "e".repeat(64),
+    schema_epoch_reset: { epoch: 2 },
+  };
+  const leaseIntent = createProductionPromotionLockIntent({
+    identity: "fmarch-production-promotion-00000000-0000-4000-8000-000000000000",
+    releaseCommit: commit,
+    expectedProductionCommit: prior,
+    fleetJobId: fleetProof.job_id,
+    fleetReceiptSha256: fleetProof.receipt_sha256,
+    stagingReceiptSha256: stagingReceipt.receipt_sha256,
+    schemaEpochReset: 2,
+    createdAt: new Date("2026-09-07T12:00:00.000Z"),
+  });
+  let loaded = null;
+  const options = {
+    loadLease: (request) => {
+      loaded = request;
+      return leaseIntent;
+    },
+    loadCurrentProductionCommit: () => prior,
+    isAncestor: (ancestor, descendant) => ancestor === prior && descendant === commit,
+  };
+  assert.deepEqual(
+    resumeProductionPromotionLock({
+      token,
+      commit,
+      fleetProof,
+      stagingReceipt,
+    }, options),
+    { token, expectedProductionCommit: prior, pointerAlreadyAdvanced: false },
+  );
+  assert.deepEqual(loaded, { token, releaseCommit: commit });
+  assert.deepEqual(
+    resumeProductionPromotionLock(
+      { token, commit, fleetProof, stagingReceipt },
+      { ...options, loadCurrentProductionCommit: () => commit },
+    ),
+    { token, expectedProductionCommit: prior, pointerAlreadyAdvanced: true },
+  );
+  assert.throws(
+    () => resumeProductionPromotionLock(
+      { token, commit, fleetProof, stagingReceipt },
+      { ...options, loadCurrentProductionCommit: () => "f".repeat(40) },
+    ),
+    /neither the promotion lock prior pointer nor its release commit/,
+  );
+  assert.throws(
+    () => resumeProductionPromotionLock({
+      token,
+      commit,
+      fleetProof,
+      stagingReceipt: { ...stagingReceipt, receipt_sha256: "f".repeat(64) },
+    }, options),
+    /staging receipt drifted/,
+  );
 });
 
 test("ambiguous promotion lock pushes reconcile only the exact intended state", () => {
@@ -238,6 +339,35 @@ test("repository state requires clean synchronized main and an ancestor release 
   assert.throws(
     () => validateRepositoryState({ ...ready, productionIsAncestor: false }),
     /must be an ancestor/,
+  );
+
+  const resumeLock = "d".repeat(40);
+  assert.doesNotThrow(() => validateRepositoryState({
+    ...ready,
+    branch: "",
+    head: "old-release",
+    originMain: "advanced-main",
+    resumeLock,
+    headIsAncestorOfOriginMain: true,
+  }));
+  assert.throws(
+    () => validateRepositoryState({
+      ...ready,
+      branch: "recovery",
+      head: "unpublished-release",
+      originMain: "advanced-main",
+      resumeLock,
+      headIsAncestorOfOriginMain: false,
+    }),
+    /reachable from origin\/main/,
+  );
+  assert.throws(
+    () => validateRepositoryState({
+      ...ready,
+      head: "old-release",
+      originMain: "advanced-main",
+    }),
+    /HEAD must equal origin\/main/,
   );
 });
 
@@ -428,6 +558,58 @@ test("hosted variables require isolated production identity credentials", async 
     return current[`${environment}${process}`];
   };
   await assert.doesNotReject(revalidateCanonicalHostedVariables(config, { load }));
+  const productionLoads = [];
+  const productionOnlyLoad = async (_config, environmentId, serviceId) => {
+    assert.equal(
+      environmentId,
+      config.productionEnvironmentId,
+      "resume must never load mutable staging variables",
+    );
+    productionLoads.push(serviceId);
+    const process = serviceId === config.apiServiceId
+      ? "Api"
+      : serviceId === config.migratorServiceId
+        ? "Migrator"
+        : "Frontend";
+    return ready[`production${process}`];
+  };
+  await assert.doesNotReject(
+    revalidateCanonicalProductionHostedVariables(config, { load: productionOnlyLoad }),
+  );
+  await assert.doesNotReject(
+    revalidatePromotionHostedVariables(
+      config,
+      { resumeLock: "a".repeat(40) },
+      { load: productionOnlyLoad },
+    ),
+  );
+  await assert.doesNotReject(
+    revalidateProductionHostedVariableAuthority(config, { load: productionOnlyLoad }),
+  );
+  await assert.rejects(
+    revalidatePromotionHostedVariables(config, {}, { load: productionOnlyLoad }),
+    /resume must never load mutable staging variables/,
+  );
+  assert.deepEqual(
+    new Set(productionLoads),
+    new Set([config.apiServiceId, config.migratorServiceId, config.frontendServiceId]),
+  );
+  const productionDriftLoad = async (_config, environmentId, serviceId) => {
+    const variables = await productionOnlyLoad(_config, environmentId, serviceId);
+    return serviceId === config.apiServiceId
+      ? { ...variables, FMARCH_DATABASE_ENVIRONMENT: "staging" }
+      : variables;
+  };
+  await assert.rejects(
+    revalidateCanonicalProductionHostedVariables(config, {
+      load: productionDriftLoad,
+    }),
+    /production API database environment identity drifted/,
+  );
+  await assert.rejects(
+    revalidateProductionHostedVariableAuthority(config, { load: productionDriftLoad }),
+    /production API database environment identity drifted/,
+  );
   current = {
     ...ready,
     productionApi: {
