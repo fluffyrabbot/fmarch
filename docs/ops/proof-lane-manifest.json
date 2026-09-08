@@ -107,6 +107,7 @@
         ]
       }
     },
+    "test:identity-delivery-provider-conformance": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:identity-delivery-provider-conformance"], "resources": [] } },
     "test:auth-invite-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:public-search-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-schema:static": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-schema:static"], "resources": [] } },
@@ -1029,6 +1030,26 @@
         "product.mash.day-event-runtime",
         "product.mash.private-day-event-rooms"
       ]
+    },
+    {
+      "id": "proof:identity-delivery-provider-runtime",
+      "tier": "frozen",
+      "paths": [
+        "tools/identity_delivery_provider_model.mjs",
+        "tools/identity_delivery_provider_fixture.mjs"
+      ],
+      "lanes": [
+        "test:identity-delivery-provider-conformance",
+        "test:auth-invite-role-proof"
+      ],
+      "capabilities": ["product.identity.delivery"]
+    },
+    {
+      "id": "proof:identity-delivery-provider-conformance",
+      "tier": "frozen",
+      "paths": ["tools/identity_delivery_provider_conformance.test.mjs"],
+      "lanes": ["test:identity-delivery-provider-conformance"],
+      "capabilities": ["product.identity.delivery"]
     },
     {
       "id": "proof:auth-invite-role",

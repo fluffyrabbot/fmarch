@@ -1458,6 +1458,18 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/frontend_screenshot_pixels.mjs',
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
+    [
+      'tools/identity_delivery_provider_model.mjs',
+      ['test:identity-delivery-provider-conformance', 'test:auth-invite-role-proof'],
+    ],
+    [
+      'tools/identity_delivery_provider_fixture.mjs',
+      ['test:identity-delivery-provider-conformance', 'test:auth-invite-role-proof'],
+    ],
+    [
+      'tools/identity_delivery_provider_conformance.test.mjs',
+      'test:identity-delivery-provider-conformance',
+    ],
     ['tools/game_invitation_role_proof.mjs', 'test:auth-invite-role-proof'],
     [
       'tools/proof_process.mjs',
@@ -1539,6 +1551,17 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
     }
   }
+
+  const conformanceTestOnly = selectLanes({
+    changed: ['tools/identity_delivery_provider_conformance.test.mjs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(
+    !conformanceTestOnly.laneIds.includes('test:auth-invite-role-proof'),
+    'provider conformance test-only changes must not arm the browser role proof',
+  );
 });
 
 test('public search role proof is selected from search, projections, and public-platform HTTP', () => {
