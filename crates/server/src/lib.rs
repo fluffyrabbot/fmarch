@@ -34,6 +34,7 @@ pub fn configured_database_environment_identity(
     }
 }
 
+pub mod one_shot_database;
 pub mod staging_search_corpus;
 
 /// Reject every ambient libpq-style authority input. Matching the `PG` prefix

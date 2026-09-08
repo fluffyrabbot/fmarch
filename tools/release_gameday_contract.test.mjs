@@ -8,6 +8,10 @@ import {
   validateGameDayInputs,
 } from "./release_gameday_contract.mjs";
 import {
+  createGameDayDatabaseOneShotRunner,
+  gameDayOneShotVariables,
+} from "./release_gameday.mjs";
+import {
   bindReleaseAttempt,
   buildReleaseReceipt,
   receiptDigest,
@@ -19,6 +23,77 @@ const priorRuntimeDigest = `sha256:${"c".repeat(64)}`;
 const priorFrontendDigest = `sha256:${"d".repeat(64)}`;
 const currentCommit = "1".repeat(40);
 const priorCommit = "2".repeat(40);
+
+test("game-day cleanup resolves an outcome-unknown exact one-shot before restore dispatch", async () => {
+  const events = [];
+  const receipt = {
+    commit: currentCommit,
+    receipt_sha256: "e".repeat(64),
+    images: { runtime: runtimeDigest },
+  };
+  let active = null;
+  const activeOperations = {
+    loadActive: async () => structuredClone(active),
+    publishActive: async (_receipt, value) => {
+      assert.equal(active, null, "active one-shot fence must be exclusive");
+      active = structuredClone(value);
+    },
+    finishActive: async (_receipt, expected, result) => {
+      assert.equal(active.receipt_sha256, expected.receipt_sha256);
+      assert.equal(result.deployment.id, "exact-deployment");
+      active = null;
+    },
+  };
+  const interruptedProcess = createGameDayDatabaseOneShotRunner({
+    ...activeOperations,
+    runOneShot: async () => {
+      events.push("v2-response-lost");
+      throw new Error("injected lost Railway V2 response");
+    },
+  });
+
+  await assert.rejects(
+    interruptedProcess.run({ receipt, scenario: "delayed-migrator", startCommand: "fmarch-migrate" }),
+    /lost Railway V2 response/,
+  );
+  assert.ok(active, "hard-crash recovery requires a durable active-operation fence");
+
+  const restartedProcess = createGameDayDatabaseOneShotRunner({
+    ...activeOperations,
+    runOneShot: async () => {
+      events.push("exact-operation-adopted");
+      return {
+        deployment: { id: "exact-deployment" },
+        intent: { operation_id: "f".repeat(64) },
+      };
+    },
+  });
+  await restartedProcess.resumePending(receipt);
+  events.push("restore-migrator-dispatched");
+
+  assert.deepEqual(events, [
+    "v2-response-lost",
+    "exact-operation-adopted",
+    "restore-migrator-dispatched",
+  ]);
+  assert.equal(
+    await restartedProcess.resumePending(receipt),
+    null,
+    "resolved operation must not be replayed",
+  );
+});
+
+test("game-day one-shots inject canonical database identity and maintenance deadlines", () => {
+  assert.deepEqual(gameDayOneShotVariables(), {
+    FMARCH_DATABASE_ENVIRONMENT: "staging",
+    FMARCH_DATABASE_PROJECT_ID: "9d285d67-c11b-4508-9efb-fad042787b4c",
+    FMARCH_DATABASE_ENVIRONMENT_ID: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    FMARCH_DB_ACQUIRE_TIMEOUT_MS: "30000",
+    FMARCH_DB_LOCK_TIMEOUT_MS: "60000",
+    FMARCH_DB_STATEMENT_TIMEOUT_MS: "300000",
+    FMARCH_DB_OPERATION_TIMEOUT_MS: "600000",
+  });
+});
 
 function fleetProof(commit, id) {
   return {

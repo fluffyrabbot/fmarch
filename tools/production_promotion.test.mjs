@@ -26,6 +26,7 @@ import {
 } from "./production_promotion.mjs";
 import { createProductionPromotionLockIntent } from "./release_git_authority.mjs";
 import { revalidateProductionHostedVariableAuthority } from "./release_coordinator.mjs";
+import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./release_coordinator_contract.mjs";
 
 const canonicalProjectId = "9d285d67-c11b-4508-9efb-fad042787b4c";
 const canonicalMigratorServiceId = "7c2c2665-2be2-4938-84e5-7580a964d610";
@@ -474,6 +475,7 @@ test("hosted variables require isolated production identity credentials", async 
     FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
     FMARCH_DATABASE_ENVIRONMENT_ID: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     FMARCH_DATABASE_ENVIRONMENT: "staging",
+    ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
   };
   const productionApi = {
     DATABASE_URL:
@@ -536,6 +538,7 @@ test("hosted variables require isolated production identity credentials", async 
     FMARCH_DATABASE_PROJECT_ID: canonicalProjectId,
     FMARCH_DATABASE_ENVIRONMENT_ID: "c1378737-84cc-45ba-8474-9c868baf7cfb",
     FMARCH_DATABASE_ENVIRONMENT: "production",
+    ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
   };
   const ready = {
     stagingApi,
@@ -546,6 +549,25 @@ test("hosted variables require isolated production identity credentials", async 
     productionFrontend,
   };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  for (const key of Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES)) {
+    assert.throws(
+      () => validateHostedVariables({
+        ...ready,
+        productionMigrator: { ...productionMigrator, [key]: "1" },
+      }),
+      new RegExp(`canonical ${key}`),
+    );
+  }
+  assert.throws(
+    () => validateHostedVariables({
+      ...ready,
+      productionApi: {
+        ...productionApi,
+        FMARCH_DB_OPERATION_TIMEOUT_MS: "600000",
+      },
+    }),
+    /production API must not receive FMARCH_DB_OPERATION_TIMEOUT_MS/,
+  );
   const config = runtimeConfig();
   let current = ready;
   const load = async (_config, environmentId, serviceId) => {

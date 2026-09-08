@@ -78,7 +78,10 @@ of duplicating member inventories.
 - [Database schema evolution](ops/database-schema-evolution.md) owns append-only
   migration changes, epoch/checksum updates, generated snapshots, and upgrade
   proof. `fmarch-migrate` is the only normal schema writer; local harnesses call
-  it through `runFmarchMigrations` under the shared lock.
+  it through `runFmarchMigrations` under the shared lock. That helper supplies a
+  deterministic 64-hex operation ID and overwrites ambient API timeouts with
+  the canonical 30 s acquisition, 60 s lock, 5 min statement, and 10 min
+  overall one-shot deadlines; direct bare migrator launches are invalid.
 - [Wire protocol](arch/04-wire-protocol.md#type-generation-workflow) owns the
   Rust→TypeScript exporter workflow. Do not hand-edit generated copies.
 - [Completion registry](ops/completion-registry.json) owns capability status.

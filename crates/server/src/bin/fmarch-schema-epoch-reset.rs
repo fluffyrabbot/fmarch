@@ -1,20 +1,49 @@
-use std::env;
+use std::{env, str::FromStr};
 
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{
-    postgres::{PgConnection, PgPoolOptions},
-    Acquire,
+    postgres::{PgConnectOptions, PgConnection},
+    Acquire, PgPool,
+};
+
+use server::one_shot_database::{
+    application_name, debug_operation_delay, exact_operation_id, validate_debug_operation_delay,
+    OneShotDatabaseTimeouts, OperationId,
 };
 
 const EMBEDDED_SCHEMA_EPOCH_DOCUMENT: &str =
     include_str!("../../../database_schema/schema/epoch.json");
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+type DynError = Box<dyn std::error::Error>;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum Mode {
-    Audit,
-    Execute,
+    Audit { operation_id: OperationId },
+    Execute { operation_id: OperationId },
     BindDatabaseIdentity,
+}
+
+impl Mode {
+    fn operation_id(&self) -> Option<&OperationId> {
+        match self {
+            Self::Audit { operation_id } | Self::Execute { operation_id } => Some(operation_id),
+            Self::BindDatabaseIdentity => None,
+        }
+    }
+
+    fn is_execute(&self) -> bool {
+        matches!(self, Self::Execute { .. })
+    }
+}
+
+#[derive(Debug)]
+struct ResetRequest {
+    environment: String,
+    epoch: u64,
+    epoch_i64: i64,
+    expected_inventory: Option<Value>,
+    fail_after_commit: bool,
 }
 
 #[derive(Debug)]
@@ -24,7 +53,7 @@ struct CompletionEvidence {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), DynError> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -35,40 +64,137 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "fmarch-schema-epoch-reset",
         "DATABASE_MIGRATION_URL",
     )?;
-    let mode = match env::args().skip(1).collect::<Vec<_>>().as_slice() {
-        [] => Mode::Audit,
-        [flag] if flag == "--execute" => Mode::Execute,
-        [flag] if flag == "--bind-database-identity" => Mode::BindDatabaseIdentity,
-        _ => {
-            return Err(
-                "usage: fmarch-schema-epoch-reset [--execute|--bind-database-identity]".into(),
-            )
-        }
-    };
+    let mode = parse_mode()?;
     let database_url = env::var("DATABASE_MIGRATION_URL")?;
     server::validate_database_transport(&database_url, "DATABASE_MIGRATION_URL")?;
     let release_commit = exact_release_commit()?;
-    let pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&database_url)
-        .await?;
-    sqlx::query("SELECT set_config('search_path', 'public', false)")
-        .execute(&pool)
-        .await?;
-    server::verify_migration_authority(&pool).await?;
-
     let (database_environment, project_id, environment_id) = database_identity_environment()?;
-    if mode == Mode::BindDatabaseIdentity {
+    let request = if mode == Mode::BindDatabaseIdentity {
         let expected_confirmation =
             format!("{project_id}:{environment_id}:{database_environment}:{release_commit}");
         if env::var("FMARCH_DATABASE_IDENTITY_BIND_CONFIRM")? != expected_confirmation {
             return Err("database identity bootstrap confirmation does not match canonical project, environment, and release commit".into());
         }
-        server::bind_database_environment_identity(
+        None
+    } else {
+        let environment = env::var("FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT")?;
+        if environment != database_environment {
+            return Err("schema reset and durable database environment identities differ".into());
+        }
+        let epoch: u64 = env::var("FMARCH_SCHEMA_EPOCH_RESET_EPOCH")?.parse()?;
+        let embedded_epoch = embedded_schema_epoch()?;
+        if epoch != embedded_epoch {
+            return Err(format!(
+                "schema epoch reset epoch {epoch} does not match embedded schema epoch {embedded_epoch}"
+            )
+            .into());
+        }
+        let epoch_i64 = i64::try_from(epoch)?;
+        let expected_confirmation = format!("{environment}:{epoch}:{release_commit}");
+        if env::var("FMARCH_SCHEMA_EPOCH_RESET_CONFIRM")? != expected_confirmation {
+            return Err(
+                "schema epoch reset confirmation does not match environment, epoch, and release commit"
+                    .into(),
+            );
+        }
+        let expected_inventory = if mode.is_execute() {
+            Some(load_expected_inventory()?)
+        } else {
+            None
+        };
+        let fail_after_commit = match env::var("FMARCH_SCHEMA_EPOCH_RESET_FAILPOINT") {
+            Err(env::VarError::NotPresent) => false,
+            Ok(value) if cfg!(debug_assertions) && value == "after-commit-before-output" => true,
+            Ok(_) => return Err("schema epoch reset failpoint is unavailable in this build".into()),
+            Err(error) => return Err(error.into()),
+        };
+        Some(ResetRequest {
+            environment,
+            epoch,
+            epoch_i64,
+            expected_inventory,
+            fail_after_commit,
+        })
+    };
+
+    let timeouts = OneShotDatabaseTimeouts::from_env()?;
+    validate_debug_operation_delay()?;
+    let session_name = mode
+        .operation_id()
+        .map(|operation_id| application_name("fmarch-schema-epoch-reset", operation_id))
+        .unwrap_or_else(|| "fmarch-schema-epoch-reset:bind-identity".to_string());
+    let options = PgConnectOptions::from_str(&database_url)?.application_name(&session_name);
+    let pool = timeouts.pool_options(1).connect_lazy_with(options);
+    let operation_label = mode
+        .operation_id()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "bind-database-identity".to_string());
+    let operation = tokio::time::timeout(
+        timeouts.operation(),
+        run(
             &pool,
+            &mode,
+            &release_commit,
             &database_environment,
             &project_id,
             &environment_id,
+            request.as_ref(),
+        ),
+    )
+    .await;
+    let cleanup = timeouts.close_pool(&pool).await;
+    let operation = match operation {
+        Ok(result) => result,
+        Err(_) => Err(format!(
+            "fmarch-schema-epoch-reset operation {operation_label} exceeded its database operation deadline"
+        )
+        .into()),
+    };
+    match (operation, cleanup) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(()), Err(error)) => Err(error.into()),
+        (Err(error), Err(cleanup_error)) => Err(format!("{error}; {cleanup_error}").into()),
+    }
+}
+
+fn parse_mode() -> Result<Mode, DynError> {
+    match env::args().skip(1).collect::<Vec<_>>().as_slice() {
+        [operation_flag, operation_id] if operation_flag == "--operation-id" => Ok(Mode::Audit {
+            operation_id: exact_operation_id(operation_id)?,
+        }),
+        [execute_flag, operation_flag, operation_id]
+            if execute_flag == "--execute" && operation_flag == "--operation-id" =>
+        {
+            Ok(Mode::Execute {
+                operation_id: exact_operation_id(operation_id)?,
+            })
+        }
+        [flag] if flag == "--bind-database-identity" => Ok(Mode::BindDatabaseIdentity),
+        _ => Err("usage: fmarch-schema-epoch-reset [--execute] --operation-id <64-lowercase-hex> | --bind-database-identity".into()),
+    }
+}
+
+async fn run(
+    pool: &PgPool,
+    mode: &Mode,
+    release_commit: &str,
+    database_environment: &str,
+    project_id: &str,
+    environment_id: &str,
+    request: Option<&ResetRequest>,
+) -> Result<(), DynError> {
+    sqlx::query("SELECT set_config('search_path', 'public', false)")
+        .execute(pool)
+        .await?;
+    server::verify_migration_authority(pool).await?;
+
+    if mode == &Mode::BindDatabaseIdentity {
+        server::bind_database_environment_identity(
+            pool,
+            database_environment,
+            project_id,
+            environment_id,
         )
         .await?;
         println!(
@@ -84,56 +210,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let environment = env::var("FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT")?;
-    if environment != database_environment {
-        return Err("schema reset and durable database environment identities differ".into());
-    }
-    let epoch: u64 = env::var("FMARCH_SCHEMA_EPOCH_RESET_EPOCH")?.parse()?;
-    let embedded_epoch = embedded_schema_epoch()?;
-    if epoch != embedded_epoch {
-        return Err(format!(
-            "schema epoch reset epoch {epoch} does not match embedded schema epoch {embedded_epoch}"
-        )
-        .into());
-    }
-    let epoch_i64 = i64::try_from(epoch)?;
-    let expected_confirmation = format!("{environment}:{epoch}:{release_commit}");
-    if env::var("FMARCH_SCHEMA_EPOCH_RESET_CONFIRM")? != expected_confirmation {
-        return Err(
-            "schema epoch reset confirmation does not match environment, epoch, and release commit"
-                .into(),
-        );
-    }
-    let expected_inventory = if mode == Mode::Execute {
-        Some(load_expected_inventory()?)
-    } else {
-        None
-    };
-    let fail_after_commit = match env::var("FMARCH_SCHEMA_EPOCH_RESET_FAILPOINT") {
-        Err(env::VarError::NotPresent) => false,
-        Ok(value) if cfg!(debug_assertions) && value == "after-commit-before-output" => true,
-        Ok(_) => return Err("schema epoch reset failpoint is unavailable in this build".into()),
-        Err(error) => return Err(error.into()),
-    };
-
-    if mode == Mode::Audit {
-        let mut tx = pool.begin().await?;
+    let operation_id = mode
+        .operation_id()
+        .expect("audit and execute modes have an operation ID");
+    let request = request.expect("audit and execute modes have a reset request");
+    if matches!(mode, Mode::Audit { .. }) {
+        let mut connection = pool.acquire().await?;
+        connection.close_on_drop();
+        debug_operation_delay().await?;
+        let mut tx = connection.begin().await?;
         lock_database_identity(&mut tx).await?;
         server::verify_database_environment_identity(
             &mut tx,
-            &environment,
-            &project_id,
-            &environment_id,
+            &request.environment,
+            project_id,
+            environment_id,
         )
         .await?;
         if completion_store_exists(&mut tx).await? {
-            if let Some(completion) = load_completion(&mut tx, &environment, epoch_i64).await? {
-                assert_completion_commit(&completion, &release_commit)?;
+            if let Some(completion) =
+                load_completion(&mut tx, &request.environment, request.epoch_i64).await?
+            {
+                assert_completion_commit(&completion, release_commit)?;
                 tx.commit().await?;
                 emit_audit(
-                    &environment,
-                    epoch,
-                    &release_commit,
+                    &request.environment,
+                    request.epoch,
+                    operation_id.as_str(),
+                    release_commit,
                     false,
                     &completion.prior_counts,
                 );
@@ -142,42 +246,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let audit = audit_counts(&mut tx).await?;
         tx.commit().await?;
-        emit_audit(&environment, epoch, &release_commit, false, &audit);
+        emit_audit(
+            &request.environment,
+            request.epoch,
+            operation_id.as_str(),
+            release_commit,
+            false,
+            &audit,
+        );
         return Ok(());
     }
 
-    let expected_inventory = expected_inventory.expect("execute inventory was parsed");
-    let mut tx = pool.begin().await?;
+    let expected_inventory = request
+        .expected_inventory
+        .as_ref()
+        .expect("execute inventory was parsed");
+    let mut connection = pool.acquire().await?;
+    connection.close_on_drop();
+    debug_operation_delay().await?;
+    let mut tx = connection.begin().await?;
     lock_database_identity(&mut tx).await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("fmarch-schema-epoch-reset:{environment}"))
+        .bind(format!("fmarch-schema-epoch-reset:{}", request.environment))
         .execute(&mut *tx)
         .await?;
     server::verify_database_environment_identity(
         &mut tx,
-        &environment,
-        &project_id,
-        &environment_id,
+        &request.environment,
+        project_id,
+        environment_id,
     )
     .await?;
     ensure_completion_store(&mut tx).await?;
-    if let Some(completion) = load_completion(&mut tx, &environment, epoch_i64).await? {
-        assert_completion_commit(&completion, &release_commit)?;
-        if completion.prior_counts != expected_inventory {
+    if let Some(completion) =
+        load_completion(&mut tx, &request.environment, request.epoch_i64).await?
+    {
+        assert_completion_commit(&completion, release_commit)?;
+        if &completion.prior_counts != expected_inventory {
             return Err("completed schema reset inventory differs from this operation".into());
         }
         tx.commit().await?;
         emit_audit(
-            &environment,
-            epoch,
-            &release_commit,
+            &request.environment,
+            request.epoch,
+            operation_id.as_str(),
+            release_commit,
             true,
             &completion.prior_counts,
         );
         emit_completion(
-            &environment,
-            epoch,
-            &release_commit,
+            &request.environment,
+            request.epoch,
+            operation_id.as_str(),
+            release_commit,
             &completion.prior_counts,
         );
         return Ok(());
@@ -186,16 +307,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     lock_public_data_relations(&mut tx).await?;
     server::verify_database_environment_identity(
         &mut tx,
-        &environment,
-        &project_id,
-        &environment_id,
+        &request.environment,
+        project_id,
+        environment_id,
     )
     .await?;
     let audit = audit_counts(&mut tx).await?;
-    if audit != expected_inventory {
+    if &audit != expected_inventory {
         return Err("schema epoch reset inventory changed after the non-mutating audit".into());
     }
-    emit_audit(&environment, epoch, &release_commit, true, &audit);
+    emit_audit(
+        &request.environment,
+        request.epoch,
+        operation_id.as_str(),
+        release_commit,
+        true,
+        &audit,
+    );
     sqlx::query("DROP SCHEMA public CASCADE")
         .execute(&mut *tx)
         .await?;
@@ -212,17 +340,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         VALUES ($1, $2, $3, $4)
         "#,
     )
-    .bind(&environment)
-    .bind(epoch_i64)
-    .bind(&release_commit)
+    .bind(&request.environment)
+    .bind(request.epoch_i64)
+    .bind(release_commit)
     .bind(&audit)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    if fail_after_commit {
+    if request.fail_after_commit {
         return Err("injected failure after reset commit and before completion output".into());
     }
-    emit_completion(&environment, epoch, &release_commit, &audit);
+    emit_completion(
+        &request.environment,
+        request.epoch,
+        operation_id.as_str(),
+        release_commit,
+        &audit,
+    );
     Ok(())
 }
 
@@ -476,13 +610,21 @@ fn assert_completion_commit(
     Ok(())
 }
 
-fn emit_audit(environment: &str, epoch: u64, release_commit: &str, execute: bool, counts: &Value) {
+fn emit_audit(
+    environment: &str,
+    epoch: u64,
+    operation_id: &str,
+    release_commit: &str,
+    execute: bool,
+    counts: &Value,
+) {
     println!(
         "{}",
         json!({
             "kind": "fmarch-schema-epoch-reset-audit",
             "environment": environment,
             "epoch": epoch,
+            "operation_id": operation_id,
             "release_commit": release_commit,
             "execute": execute,
             "inventory_sha256": inventory_digest(counts),
@@ -491,13 +633,20 @@ fn emit_audit(environment: &str, epoch: u64, release_commit: &str, execute: bool
     );
 }
 
-fn emit_completion(environment: &str, epoch: u64, release_commit: &str, counts: &Value) {
+fn emit_completion(
+    environment: &str,
+    epoch: u64,
+    operation_id: &str,
+    release_commit: &str,
+    counts: &Value,
+) {
     println!(
         "{}",
         json!({
             "kind": "fmarch-schema-epoch-reset-complete",
             "environment": environment,
             "epoch": epoch,
+            "operation_id": operation_id,
             "release_commit": release_commit,
             "prior_counts": counts,
         })

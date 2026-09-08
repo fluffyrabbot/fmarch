@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 import { CANONICAL_RELEASE_TOPOLOGY } from "./release_coordinator_contract.mjs";
 
 const DEFAULTS = Object.freeze({
@@ -40,6 +41,7 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
     "FMARCH_PROFILE_HANDLE_INDEX_KEY",
     "FMARCH_PROFILE_HANDLE_INDEX_KID",
+    ...Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES),
   ]) {
     assertSecretRelation(
       frontend[key] === undefined,
@@ -53,6 +55,7 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     "DATABASE_KEY_ADMIN_URL",
     "FMARCH_DATABASE_APPLICATION_PASSWORD",
     "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+    "FMARCH_DB_OPERATION_TIMEOUT_MS",
   ]) {
     assertSecretRelation(
       api[key] === undefined,
@@ -65,6 +68,7 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     "FMARCH_DATABASE_APPLICATION_PASSWORD",
     "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
     "FMARCH_DATABASE_AUTHORITY_REVISION",
+    ...Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES),
   ]) {
     assert.ok(migrator[key], `${environment} migrator is missing ${key}`);
   }
@@ -87,10 +91,19 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     "WORKOS_API_KEY",
     "WORKOS_COOKIE_PASSWORD",
     "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
+    "FMARCH_DB_MAX_CONNECTIONS",
+    "FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS",
   ]) {
     assertSecretRelation(
       migrator[key] === undefined,
       `${environment} migrator must not receive ${key}`,
+    );
+  }
+  for (const [key, expected] of Object.entries(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES)) {
+    assert.equal(
+      migrator[key],
+      expected,
+      `${environment} migrator must use canonical ${key}`,
     );
   }
 

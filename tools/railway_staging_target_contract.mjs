@@ -41,7 +41,12 @@ async function contract() {
         "tools/production_promotion.mjs",
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
+        "tools/database_one_shot_policy.mjs",
+        "tools/database_schema_upgrade_proof.mjs",
+        "tools/database_tls_boundary.mjs",
+        "tools/release_gameday.mjs",
         "tools/release_hosted_variable_authority.mjs",
+        "tools/run_fmarch_migrations.mjs",
         "tools/release_git_authority.mjs",
         "tools/workos_oidc_preflight.mjs",
         "package.json",
@@ -49,6 +54,8 @@ async function contract() {
         "crates/server/src/bin/fmarch-migrate.rs",
         "crates/server/src/bin/fmarch-schema-gate.rs",
         "crates/server/src/bin/fmarch-schema-epoch-reset.rs",
+        "crates/server/src/one_shot_database.rs",
+        "crates/server/tests/schema_epoch_reset_recovery.rs",
         "crates/server/src/bin/fmarch-staging-search-corpus.rs",
         "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
@@ -153,7 +160,7 @@ async function contract() {
     /fmarch-database-migration-complete/,
   );
   assert.match(source["docs/ops/release-game-day.md"], /application rollback never runs the\s+migrator/i);
-  assert.match(source["tools/release_coordinator.mjs"], /await deployImage\([\s\S]*migratorServiceId/);
+  assert.match(source["tools/release_coordinator.mjs"], /coordinateDatabaseOneShot\(\{/);
   assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
   assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);
   assert.match(source["tools/release_git_authority.mjs"], /CANONICAL_RELEASE_REMOTE_URL/);
@@ -169,7 +176,7 @@ async function contract() {
   assert.match(source["tools/production_promotion.mjs"], /timeout:/);
   assert.match(
     source["deploy/railway/migrator.railway.toml"],
-    /startCommand = "fmarch-migrate"/,
+    /startCommand = "\/bin\/false"/,
   );
   assert.match(source["deploy/railway/migrator.railway.toml"], /numReplicas = 1/);
   assert.match(
@@ -262,6 +269,22 @@ async function contract() {
     source["deploy/railway/migrator.env.example"],
     /^FMARCH_DATABASE_ENVIRONMENT=staging$/m,
   );
+  for (const [key, value] of [
+    ["FMARCH_DB_ACQUIRE_TIMEOUT_MS", "30000"],
+    ["FMARCH_DB_LOCK_TIMEOUT_MS", "60000"],
+    ["FMARCH_DB_STATEMENT_TIMEOUT_MS", "300000"],
+    ["FMARCH_DB_OPERATION_TIMEOUT_MS", "600000"],
+  ]) {
+    assert.match(
+      source["deploy/railway/migrator.env.example"],
+      new RegExp(`^${key}=${value}$`, "m"),
+    );
+    assert.match(source["tools/database_one_shot_policy.mjs"], new RegExp(`${key}: "${value}"`));
+  }
+  assert.doesNotMatch(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_DB_OPERATION_TIMEOUT_MS=/m,
+  );
   assert.match(
     source["tools/release_coordinator.mjs"],
     /revalidateCanonicalProductionHostedVariables\(config/,
@@ -277,6 +300,63 @@ async function contract() {
   assert.match(
     source["tools/release_hosted_variable_authority.mjs"],
     /loadCanonicalProductionHostedVariables[\s\S]*?productionEnvironmentId/,
+  );
+  assert.match(source["tools/release_coordinator.mjs"], /serviceInstanceDeployV2/);
+  assert.doesNotMatch(source["tools/release_coordinator.mjs"], /serviceInstanceDeploy\(/);
+  assert.match(
+    source["tools/release_coordinator.mjs"],
+    /deployment\(id: \$id\).*id status projectId environmentId serviceId meta/,
+  );
+  assert.match(source["tools/release_coordinator.mjs"], /fmarch-database-one-shot-intent/);
+  assert.match(source["tools/release_coordinator.mjs"], /start_command: `\$\{startCommand\} --operation-id/);
+  assert.match(source["tools/release_coordinator.mjs"], /succeeded without exact operation completion evidence/);
+  const coordinatorDisarm = source["tools/release_coordinator.mjs"].slice(
+    source["tools/release_coordinator.mjs"].indexOf("async function disarmConfiguredDatabaseOneShot"),
+    source["tools/release_coordinator.mjs"].indexOf("export async function runJournaledDatabaseOneShot"),
+  );
+  assert.match(coordinatorDisarm, /serviceInstanceUpdate/);
+  assert.match(coordinatorDisarm, /databaseOneShotDisarmInput/);
+  assert.doesNotMatch(coordinatorDisarm, /serviceInstanceDeploy/);
+  assert.ok(
+    source["tools/release_coordinator.mjs"].indexOf("await disarm(dispatchRecord.deployment_id, intent)") <
+      source["tools/release_coordinator.mjs"].indexOf("deployment = await awaitTerminal"),
+    "database one-shot must disarm before waiting on the exact deployment",
+  );
+  assert.match(source["tools/release_gameday.mjs"], /serviceInstanceDeployV2/);
+  assert.doesNotMatch(source["tools/release_gameday.mjs"], /serviceInstanceDeploy\(/);
+  assert.match(source["tools/release_gameday.mjs"], /bindDatabaseOneShotIntent/);
+  assert.match(source["tools/release_gameday.mjs"], /runJournaledDatabaseOneShot/);
+  assert.match(source["tools/release_gameday.mjs"], /findMatchingGameDayOneShotDeployments/);
+  assert.match(source["tools/release_gameday.mjs"], /fmarch-game-day-active-database-one-shot/);
+  assert.match(source["tools/release_gameday.mjs"], /active_receipt_sha256/);
+  assert.ok(
+    source["tools/release_gameday.mjs"].indexOf("await publishActive(specification.receipt, expected)") <
+      source["tools/release_gameday.mjs"].indexOf("return await resume(specification.receipt, expected)"),
+    "game-day active one-shot fence must be durable before dispatch recovery begins",
+  );
+  assert.match(source["tools/release_gameday.mjs"], /await oneShots\.resumePending\(receipt\);[\s\S]*?deployCanonicalMigrator/);
+  assert.match(
+    source["tools/release_gameday.mjs"],
+    /startCommand: "\/bin\/false",[\s\S]*?statuses: \["FAILED", "CRASHED"\]/,
+  );
+  assert.match(
+    source["tools/release_gameday.mjs"],
+    /timeoutMilliseconds = DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS/,
+  );
+  const gameDayDisarm = source["tools/release_gameday.mjs"].slice(
+    source["tools/release_gameday.mjs"].indexOf("function disarmOneShotService"),
+    source["tools/release_gameday.mjs"].indexOf("async function waitForDeployment"),
+  );
+  assert.match(gameDayDisarm, /serviceInstanceUpdate/);
+  assert.match(gameDayDisarm, /startCommand: "\/bin\/false"/);
+  assert.doesNotMatch(gameDayDisarm, /serviceInstanceDeploy/);
+  assert.match(
+    source["tools/database_tls_boundary.mjs"],
+    /\["--operation-id", localMigrationOperationId\]/,
+  );
+  assert.match(
+    source["tools/database_schema_upgrade_proof.mjs"],
+    /\["--operation-id", localMigrationOperationId\]/,
   );
   for (const forbidden of [
     "DATABASE_URL",
@@ -649,11 +729,66 @@ async function contract() {
     /classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT/,
   );
   assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
-  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
+  assert.match(
+    source["crates/server/src/bin/fmarch-migrate.rs"],
+    /tokio::time::timeout\(timeouts\.statement\(\), server::MIGRATOR\.run\(&mut \*connection\)\)/,
+  );
+  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /connection\.close_on_drop\(\)/);
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /pg_advisory_lock/);
+  assert.ok(
+    source["crates/server/src/bin/fmarch-migrate.rs"].indexOf("operation_lock.close_on_drop()") <
+      source["crates/server/src/bin/fmarch-migrate.rs"].indexOf("debug_operation_delay().await?"),
+    "migrator outer-deadline failpoint must run while owning a close-on-drop database session",
+  );
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /verify_database_environment_identity/);
+  assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /--operation-id <64-lowercase-hex>/);
   assert.match(source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"], /--bind-database-identity/);
+  assert.match(
+    source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"],
+    /--execute.*--operation-id <64-lowercase-hex>/,
+  );
   assert.match(source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"], /ACCESS EXCLUSIVE/);
+  const resetConnection = source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"].indexOf(
+    "connection.close_on_drop()",
+  );
+  const resetDelay = source["crates/server/src/bin/fmarch-schema-epoch-reset.rs"].indexOf(
+    "debug_operation_delay().await?",
+    resetConnection,
+  );
+  assert.ok(
+    resetConnection >= 0 && resetConnection < resetDelay,
+    "schema-reset outer-deadline failpoint must run while owning a close-on-drop database session",
+  );
+  for (const [name, value] of [
+    ["ACQUIRE_TIMEOUT_MS", "30_000"],
+    ["LOCK_TIMEOUT_MS", "60_000"],
+    ["STATEMENT_TIMEOUT_MS", "300_000"],
+    ["OPERATION_TIMEOUT_MS", "600_000"],
+  ]) {
+    assert.match(
+      source["crates/server/src/one_shot_database.rs"],
+      new RegExp(`pub const ${name}: u64 = ${value}`),
+    );
+  }
+  assert.match(
+    source["crates/server/src/one_shot_database.rs"],
+    /Err\(format!\("\{name\} is required"\)\)/,
+  );
+  assert.match(
+    source["crates/server/src/one_shot_database.rs"],
+    /cfg!\(debug_assertions\)[\s\S]*?is unavailable in this build/,
+  );
+  for (const binary of [
+    "crates/server/src/bin/fmarch-migrate.rs",
+    "crates/server/src/bin/fmarch-schema-epoch-reset.rs",
+  ]) {
+    assert.match(source[binary], /validate_debug_operation_delay\(\)\?/);
+    assert.match(source[binary], /debug_operation_delay\(\)\.await\?/);
+  }
+  assert.match(
+    source["crates/server/tests/schema_epoch_reset_recovery.rs"],
+    /shared_lock_contention_is_bounded_and_leaves_no_database_side_effects/,
+  );
   assert.match(source["crates/database_schema/src/authority.rs"], /acl\.grantee <> relation\.relowner/);
   assert.match(
     source["crates/server/src/bin/fmarch-migrate.rs"],

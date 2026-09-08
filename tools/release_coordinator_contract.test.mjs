@@ -7,6 +7,7 @@ import { test } from "node:test";
 
 import {
   RELEASE_EVIDENCE_MAX_AGE_MS,
+  DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
   assertReleaseReceipt,
   assertFreshStagingReleaseReceipt,
   bindReleaseAttempt,
@@ -24,20 +25,25 @@ import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 import { validateReusableProductionReceipt } from "./production_promotion.mjs";
 import {
   PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS,
+  ONE_SHOT_RAILWAY_WAIT_TIMEOUT_MS,
+  bindDatabaseOneShotIntent,
   bindProductionMutationEvidence,
   canonicalDeploymentPolicy,
+  databaseOneShotDisarmInput,
+  databaseIdentityVariables,
+  oneShotDatabaseVariables,
   publishFreshImage,
-  recoverOneShotDeployment,
   parseMigrationCompletion,
   serviceSourceCutoverAction,
   parseResetLogRows,
   releaseRuntimeValidation,
   runEpochResetJournal,
+  runJournaledDatabaseOneShot,
   runtimeConfig,
   validateEpochResetAudit,
   validateRequestedSchemaEpoch,
   withProductionMutationAuthority,
-  waitForNewDeployment,
+  waitForDeployment,
   waitForMigrationCompletion,
   waitForResetLogRows,
   waitForStagingSentinelReceipt,
@@ -75,6 +81,14 @@ const deployment = (id, digest, status = "SUCCESS") => ({
   id,
   status,
   meta: { imageDigest: digest },
+});
+const oneShotDeployment = (id, intent, status = "SUCCESS", digest = intent.digest) => ({
+  id,
+  status,
+  meta: {
+    ...(digest == null ? {} : { imageDigest: digest }),
+    serviceManifest: { deploy: { startCommand: intent.start_command } },
+  },
 });
 const fleetWorkflow = {
   setup: ["npm ci --no-audit --no-fund"],
@@ -630,18 +644,43 @@ test("image deployments restore the complete service safety policy", () => {
   assert.throws(() => canonicalDeploymentPolicy("database"), /unknown Railway deployment policy/);
 });
 
-test("deployment sequencing waits through a slow migrator and stops on terminal failure", async () => {
+test("database one-shots use a canonical budget below the Railway wait envelope", () => {
+  const config = runtimeConfig("staging", {});
+  assert.deepEqual(databaseIdentityVariables(config), {
+    FMARCH_DATABASE_ENVIRONMENT: "staging",
+    FMARCH_DATABASE_PROJECT_ID: config.projectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: config.environmentId,
+  });
+  assert.deepEqual(oneShotDatabaseVariables(config), {
+    ...databaseIdentityVariables(config),
+    ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+  });
+  for (const key of Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES)) {
+    assert.equal(databaseIdentityVariables(config)[key], undefined, `${key} must not enter API vars`);
+  }
+  const acquire = Number(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES.FMARCH_DB_ACQUIRE_TIMEOUT_MS);
+  const lock = Number(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES.FMARCH_DB_LOCK_TIMEOUT_MS);
+  const statement = Number(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES.FMARCH_DB_STATEMENT_TIMEOUT_MS);
+  const operation = Number(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES.FMARCH_DB_OPERATION_TIMEOUT_MS);
+  assert.ok(acquire < lock && lock < statement && statement < operation);
+  assert.ok(operation < ONE_SHOT_RAILWAY_WAIT_TIMEOUT_MS);
+  assert.deepEqual(databaseOneShotDisarmInput(), {
+    startCommand: "/bin/false",
+    railwayConfigFile: null,
+  });
+});
+
+test("deployment sequencing follows the exact V2 deployment ID and stops on terminal failure", async () => {
   let clock = 0;
   const slowStates = [
-    deployment("old", runtimeDigest),
     deployment("new", runtimeDigest, "BUILDING"),
     deployment("new", runtimeDigest, "DEPLOYING"),
     deployment("new", runtimeDigest),
   ];
-  const completed = await waitForNewDeployment(
+  const completed = await waitForDeployment(
     {},
     "migrator",
-    "old",
+    "new",
     runtimeDigest,
     "staging migrator",
     {
@@ -655,10 +694,10 @@ test("deployment sequencing waits through a slow migrator and stops on terminal 
   assert.equal(completed.id, "new");
 
   await assert.rejects(
-    waitForNewDeployment(
+    waitForDeployment(
       {},
       "api",
-      "old",
+      "new",
       runtimeDigest,
       "staging API",
       {
@@ -672,10 +711,12 @@ test("deployment sequencing waits through a slow migrator and stops on terminal 
 });
 
 test("migration completion requires exact-commit structured log evidence", async () => {
+  const operationId = "f".repeat(64);
   const row = JSON.stringify({
     message: JSON.stringify({
       kind: "fmarch-database-migration-complete",
       release_commit: commit,
+      operation_id: operationId,
     }),
   });
   assert.equal(parseMigrationCompletion(row).release_commit, commit);
@@ -686,6 +727,7 @@ test("migration completion requires exact-commit structured log evidence", async
     "deployment",
     "migrator",
     commit,
+    operationId,
     {
       load: () => (clock === 0 ? "" : row),
       now: () => clock,
@@ -701,6 +743,7 @@ test("migration completion requires exact-commit structured log evidence", async
       "deployment",
       "migrator",
       commit,
+      operationId,
       {
         load: () => JSON.stringify({ message: "/bin/false exited" }),
         now: () => clock,
@@ -825,44 +868,203 @@ test("schema reset request must equal the immutable release epoch", () => {
   assert.throws(() => validateRequestedSchemaEpoch(2, 3), /must equal checked-in schema epoch 3/);
 });
 
-test("failed or log-ambiguous one-shots recover once while approval states fail closed", async () => {
-  for (const initial of [
-    { id: "crashed", status: "CRASHED" },
-    { id: "committed-without-log", status: "SUCCESS" },
-  ]) {
-    let redeployments = 0;
-    const outcome = await recoverOneShotDeployment({
-      previousDeploymentId: "before",
-      currentDeployment: initial,
-      awaitTerminal: async () => assert.fail("terminal successor must not be awaited"),
-      readCompletion: async (deployment) =>
-        deployment.id === "recovery" ? { durable: true } : null,
-      redeploy: async () => {
-        redeployments += 1;
-        return { id: "recovery", status: "SUCCESS" };
-      },
-      validateCandidate: () => {},
-      label: "schema reset",
-    });
-    assert.equal(outcome.completion.durable, true);
-    assert.equal(outcome.recovered, true);
-    assert.equal(redeployments, 1);
-  }
+test("journaled one-shots adopt exact IDs, retry only exact failure, and refuse ambiguity", async () => {
+  const config = runtimeConfig("staging", {});
+  const intentForGeneration = (generation) => bindDatabaseOneShotIntent({
+    config,
+    commit,
+    phase: "migrate",
+    generation,
+    repository: config.runtimeImage,
+    digest: runtimeDigest,
+    startCommand: "fmarch-migrate",
+    variables: oneShotDatabaseVariables(config),
+  });
+  const run = (records, overrides = {}) => runJournaledDatabaseOneShot({
+    intentForGeneration,
+    loadRecord: async (generation, record) => records.get(`${generation}:${record}`) ?? null,
+    publishRecord: async (generation, record, value) => {
+      const key = `${generation}:${record}`;
+      assert.equal(records.has(key), false, `journal record ${key} was replaced`);
+      records.set(key, structuredClone(value));
+    },
+    findMatchingDeployments: async () => [],
+    dispatch: async (intent) => `deployment-${intent.generation}`,
+    awaitTerminal: async (deploymentId, intent) =>
+      oneShotDeployment(deploymentId, intent),
+    disarm: async () => {},
+    readCompletion: async (_deployment, intent) => ({ operation_id: intent.operation_id }),
+    label: "migrator",
+    ...overrides,
+  });
 
+  const freshRecords = new Map();
+  const events = [];
+  const freshDisarms = [];
+  const fresh = await run(freshRecords, {
+    dispatch: async (intent) => {
+      assert.ok(freshRecords.has("0:intent"), "intent must be durable before dispatch");
+      events.push(intent.operation_id);
+      return "fresh-deployment";
+    },
+    disarm: async (deploymentId) => freshDisarms.push(deploymentId),
+  });
+  assert.equal(fresh.deployment.id, "fresh-deployment");
+  assert.equal(freshRecords.get("0:dispatch").deployment_id, "fresh-deployment");
+  assert.equal(events.length, 1);
+  assert.deepEqual(
+    freshDisarms,
+    ["fresh-deployment", "fresh-deployment"],
+    "one-shot service must disarm immediately after V2 and again after terminal observation",
+  );
+
+  const lostResponseRecords = new Map();
+  let historyReads = 0;
+  let lostResponseDispatches = 0;
+  const lostResponseDisarms = [];
+  const lostResponse = await run(lostResponseRecords, {
+    findMatchingDeployments: async (intent, options) => {
+      historyReads += 1;
+      return options.dispatchError
+        ? [oneShotDeployment("lost-response-deployment", intent)]
+        : [];
+    },
+    dispatch: async () => {
+      lostResponseDispatches += 1;
+      throw new Error("injected lost V2 response");
+    },
+    disarm: async (deploymentId) => lostResponseDisarms.push(deploymentId),
+  });
+  assert.equal(lostResponse.deployment.id, "lost-response-deployment");
+  assert.equal(lostResponseDispatches, 1);
+  assert.equal(historyReads, 2, "lost dispatch response must trigger bounded history recovery");
+  assert.deepEqual(
+    lostResponseDisarms,
+    [null, "lost-response-deployment", "lost-response-deployment"],
+    "lost V2 responses must disarm before bounded history recovery and exact-ID waiting",
+  );
+
+  const queuedRecords = new Map([["0:intent", intentForGeneration(0)]]);
+  const queued = await run(queuedRecords, {
+    findMatchingDeployments: async (intent) => [
+      oneShotDeployment("queued-deployment", intent, "QUEUED", null),
+    ],
+    dispatch: async () => assert.fail("an existing intent must never be redispatched"),
+    awaitTerminal: async (deploymentId, intent) => {
+      assert.equal(deploymentId, "queued-deployment");
+      return oneShotDeployment(deploymentId, intent);
+    },
+  });
+  assert.equal(queued.deployment.id, "queued-deployment");
+
+  const missingRecords = new Map([["0:intent", intentForGeneration(0)]]);
+  const unknownDisarms = [];
   await assert.rejects(
-    recoverOneShotDeployment({
-      previousDeploymentId: "before",
-      currentDeployment: { id: "approval", status: "NEEDS_APPROVAL" },
-      awaitTerminal: async () => {},
+    run(missingRecords, {
+      dispatch: async () => assert.fail("unknown outcome must never redispatch"),
+      disarm: async (deploymentId) => unknownDisarms.push(deploymentId),
+    }),
+    /durable intent but no exact deployment.*must not be redispatched/,
+  );
+  assert.deepEqual(unknownDisarms, [null], "outcome-unknown intent must still disarm the service");
+
+  const ambiguousRecords = new Map();
+  let ambiguousDispatches = 0;
+  await assert.rejects(
+    run(ambiguousRecords, {
+      dispatch: async () => {
+        ambiguousDispatches += 1;
+        return "committed-without-log";
+      },
       readCompletion: async () => null,
-      redeploy: async () => assert.fail("approval state must not auto-retry"),
-      label: "migrator",
+    }),
+    /succeeded without exact operation completion evidence.*must not be redeployed/,
+  );
+  assert.equal(ambiguousDispatches, 1);
+  assert.equal(ambiguousRecords.has("0:failure"), false);
+  assert.equal(ambiguousRecords.has("1:intent"), false);
+
+  const timeoutRecords = new Map();
+  const timeoutDisarms = [];
+  await assert.rejects(
+    run(timeoutRecords, {
+      awaitTerminal: async () => { throw new Error("injected exact-ID wait timeout"); },
+      disarm: async (deploymentId) => timeoutDisarms.push(deploymentId),
+    }),
+    /exact-ID wait timeout/,
+  );
+  assert.deepEqual(timeoutDisarms, ["deployment-0", "deployment-0"]);
+
+  const disarmRecoveryRecords = new Map();
+  let disarmMaySucceed = false;
+  let disarmAttempts = 0;
+  let recoveryDispatches = 0;
+  const recoverableDisarm = async () => {
+    disarmAttempts += 1;
+    if (!disarmMaySucceed) throw new Error("injected disarm failure");
+  };
+  await assert.rejects(
+    run(disarmRecoveryRecords, {
+      dispatch: async () => {
+        recoveryDispatches += 1;
+        return "disarm-recovery-deployment";
+      },
+      disarm: recoverableDisarm,
+    }),
+    /one-shot command could not be disarmed/,
+  );
+  disarmMaySucceed = true;
+  const disarmRecovered = await run(disarmRecoveryRecords, {
+    dispatch: async () => {
+      recoveryDispatches += 1;
+      return "unexpected-redispatch";
+    },
+    disarm: recoverableDisarm,
+  });
+  assert.equal(disarmRecovered.deployment.id, "disarm-recovery-deployment");
+  assert.equal(recoveryDispatches, 1, "disarm recovery must adopt the exact durable deployment");
+  assert.equal(disarmAttempts, 4, "disarm must retry fail-closed and bracket recovery waiting");
+
+  const retryRecords = new Map();
+  const retryDispatches = [];
+  const retried = await run(retryRecords, {
+    dispatch: async (intent) => {
+      retryDispatches.push(intent.generation);
+      return `retry-${intent.generation}`;
+    },
+    awaitTerminal: async (deploymentId, intent) => oneShotDeployment(
+      deploymentId,
+      intent,
+      intent.generation === 0 ? "CRASHED" : "SUCCESS",
+    ),
+  });
+  assert.equal(retried.generation, 1);
+  assert.deepEqual(retryDispatches, [0, 1]);
+  assert.equal(retryRecords.get("0:failure").status, "CRASHED");
+
+  const splitRecords = new Map([["0:intent", intentForGeneration(0)]]);
+  await assert.rejects(
+    run(splitRecords, {
+      findMatchingDeployments: async (intent) => [
+        oneShotDeployment("split-a", intent),
+        oneShotDeployment("split-b", intent),
+      ],
+    }),
+    /multiple deployments.*split-brain/,
+  );
+
+  const approvalRecords = new Map();
+  await assert.rejects(
+    run(approvalRecords, {
+      awaitTerminal: async (deploymentId, intent) =>
+        oneShotDeployment(deploymentId, intent, "NEEDS_APPROVAL"),
     }),
     /non-retryable state NEEDS_APPROVAL/,
   );
 });
 
 test("epoch reset audit permits only an exhaustively empty application inventory", () => {
+  const operationId = "e".repeat(64);
   const counts = {
     application_tables: {
       platform_principal: 0,
@@ -878,12 +1080,18 @@ test("epoch reset audit permits only an exhaustively empty application inventory
     environment: "staging",
     epoch: 1,
     release_commit: commit,
+    operation_id: operationId,
     execute: false,
     inventory_sha256: createHash("sha256").update(JSON.stringify(counts)).digest("hex"),
     counts,
   };
   assert.equal(
-    validateEpochResetAudit(audit, { environment: "staging", epoch: 1, commit }),
+    validateEpochResetAudit(audit, {
+      environment: "staging",
+      epoch: 1,
+      commit,
+      operationId,
+    }),
     audit,
   );
   assert.throws(
@@ -901,22 +1109,27 @@ test("epoch reset audit permits only an exhaustively empty application inventory
           application_tables: { ...counts.application_tables, events: 1 },
         },
       },
-      { environment: "staging", epoch: 1, commit },
+      { environment: "staging", epoch: 1, commit, operationId },
     ),
     /non-greenfield events/,
   );
   assert.throws(
-    () => validateEpochResetAudit({ ...audit, execute: true }, { environment: "staging", epoch: 1, commit }),
+    () => validateEpochResetAudit(
+      { ...audit, execute: true },
+      { environment: "staging", epoch: 1, commit, operationId },
+    ),
     /must not mutate/,
   );
 });
 
 test("epoch reset logs accept Railway structured fields and embedded JSON messages", () => {
+  const operationId = "d".repeat(64);
   const structured = JSON.stringify({
     kind: "fmarch-schema-epoch-reset-audit",
     environment: "staging",
     epoch: 1,
     release_commit: commit,
+    operation_id: operationId,
     execute: false,
     counts: {},
     message: "",
@@ -927,6 +1140,7 @@ test("epoch reset logs accept Railway structured fields and embedded JSON messag
       environment: "staging",
       epoch: 1,
       release_commit: commit,
+      operation_id: operationId,
     })}`,
   });
   const parsed = parseResetLogRows(`${structured}\n${embedded}`);

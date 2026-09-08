@@ -1,4 +1,6 @@
 [deploy]
-startCommand = "fmarch-migrate"
+# Release authority installs an exact operation-bound command immediately before
+# dispatch. An ambient Railway deploy must fail closed instead of writing schema.
+startCommand = "/bin/false"
 numReplicas = 1
 restartPolicyType = "NEVER"

@@ -7,7 +7,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { normalizeSchemaDump } from "./database_schema_snapshot.mjs";
-import { migrationDatabaseEnvironment } from "./run_fmarch_migrations.mjs";
+import {
+  localMigrationOperationId,
+  migrationDatabaseEnvironment,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const epochPath = path.join(repoRoot, "crates", "database_schema", "schema", "epoch.json");
@@ -46,7 +49,7 @@ function migratorEnvironment(url) {
 }
 
 function runMigrator(binary, url, { allowFailure = false } = {}) {
-  return run(binary, [], {
+  return run(binary, ["--operation-id", localMigrationOperationId], {
     env: migratorEnvironment(url),
     capture: true,
     allowFailure,

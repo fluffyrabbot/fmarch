@@ -1,23 +1,31 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   deploymentImageDigest,
+  receiptDigest,
   validateDeploymentArtifact,
   validateHealth,
 } from "./release_coordinator_contract.mjs";
 import {
+  bindDatabaseOneShotIntent,
   canonicalDeploymentPolicy,
   parseMigrationCompletion,
+  runJournaledDatabaseOneShot,
 } from "./release_coordinator.mjs";
 import {
   assertGameDayReceipt,
   buildGameDayReceipt,
   validateGameDayInputs,
 } from "./release_gameday_contract.mjs";
+import {
+  DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS,
+  DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+} from "./database_one_shot_policy.mjs";
+import { publishImmutableJson } from "./immutable_json_receipt.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const railwayEnvironment = Object.freeze({
@@ -42,6 +50,8 @@ const terminalStates = new Set([
   "REMOVED",
   "REMOVING",
 ]);
+const gameDayOneShotHistoryLimit = 50;
+const gameDayOneShotRecoveryTimeoutMilliseconds = 60_000;
 
 function parseArguments(argv) {
   const result = { execute: false, delaySeconds: 15 };
@@ -87,6 +97,7 @@ function commandText(command, args, { allowFailure = false } = {}) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 32 * 1024 * 1024,
+    timeout: 5 * 60 * 1_000,
   });
   if (!allowFailure && result.status !== 0) {
     const diagnostic = String(result.stderr || result.stdout || "").trim().slice(-4_000);
@@ -120,8 +131,21 @@ function railwayApi(query, variables) {
   return response.data;
 }
 
-function latestDeployment(serviceId) {
-  return railwayJson(["deployment", "list", "--service", serviceId, "--limit", "1"])[0] ?? null;
+function deploymentById(deploymentId, serviceId) {
+  const data = railwayApi(
+    "query Deployment($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId meta } }",
+    { id: deploymentId },
+  );
+  const deployment = data.deployment;
+  assert.equal(deployment.id, deploymentId, "Railway returned the wrong game-day deployment");
+  assert.equal(deployment.projectId, railwayEnvironment.projectId, "game-day deployment project drifted");
+  assert.equal(
+    deployment.environmentId,
+    railwayEnvironment.environmentId,
+    "game-day deployment environment drifted",
+  );
+  assert.equal(deployment.serviceId, serviceId, "game-day deployment service drifted");
+  return deployment;
 }
 
 function deploymentLogs(deploymentId, serviceId) {
@@ -140,7 +164,12 @@ function deploymentLogs(deploymentId, serviceId) {
   ]).output;
 }
 
-async function waitForMigrationEvidence(deploymentId, expectedCommit, timeoutMilliseconds = 60_000) {
+async function waitForMigrationEvidence(
+  deploymentId,
+  expectedCommit,
+  expectedOperationId,
+  timeoutMilliseconds = 60_000,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     const completion = parseMigrationCompletion(
@@ -148,6 +177,11 @@ async function waitForMigrationEvidence(deploymentId, expectedCommit, timeoutMil
     );
     if (completion) {
       assert.equal(completion.release_commit, expectedCommit, "migration evidence commit drifted");
+      assert.equal(
+        completion.operation_id,
+        expectedOperationId,
+        "migration evidence operation drifted",
+      );
       return completion;
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -181,8 +215,23 @@ function exactImage(repository, digest) {
   return `${repository}@${digest}`;
 }
 
-function updateAndStart({ serviceId, image, digest, startCommand, policy }) {
-  const previousId = latestDeployment(serviceId)?.id ?? null;
+function updateAndStart({ serviceId, image, digest, startCommand, policy, variables = null }) {
+  if (variables && Object.keys(variables).length > 0) {
+    const variableUpdate = railwayApi(
+      "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
+      {
+        input: {
+          projectId: railwayEnvironment.projectId,
+          environmentId: railwayEnvironment.environmentId,
+          serviceId,
+          variables,
+          replace: false,
+          skipDeploys: true,
+        },
+      },
+    );
+    assert.equal(variableUpdate.variableCollectionUpsert, true, "Railway game-day variables were not updated");
+  }
   const updated = railwayApi(
     "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
     {
@@ -198,33 +247,330 @@ function updateAndStart({ serviceId, image, digest, startCommand, policy }) {
   );
   assert.equal(updated.serviceInstanceUpdate, true, "Railway service policy update failed");
   const deployed = railwayApi(
-    "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
+    "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) }",
     { serviceId, environmentId: railwayEnvironment.environmentId },
   );
-  assert.equal(deployed.serviceInstanceDeploy, true, "Railway service deployment did not start");
-  return previousId;
+  assert.match(
+    deployed.serviceInstanceDeployV2 ?? "",
+    /\S/u,
+    "Railway service deployment did not return an exact ID",
+  );
+  return deployed.serviceInstanceDeployV2;
 }
 
-async function waitForDeployment({ serviceId, previousId, digest, statuses, timeoutMilliseconds = 5 * 60_000 }) {
+function disarmOneShotService(serviceId) {
+  const updated = railwayApi(
+    "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+    {
+      serviceId,
+      environmentId: railwayEnvironment.environmentId,
+      input: { startCommand: "/bin/false", railwayConfigFile: null },
+    },
+  );
+  assert.equal(updated.serviceInstanceUpdate, true, "Railway game-day one-shot could not be disarmed");
+}
+
+export function gameDayOneShotVariables() {
+  return {
+    FMARCH_DATABASE_ENVIRONMENT: railwayEnvironment.environment,
+    FMARCH_DATABASE_PROJECT_ID: railwayEnvironment.projectId,
+    FMARCH_DATABASE_ENVIRONMENT_ID: railwayEnvironment.environmentId,
+    ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+  };
+}
+
+function gameDayOneShotRecordPath(commit, scenario, generation, record) {
+  assert.match(commit, /^[0-9a-f]{40}$/u, "game-day one-shot commit is invalid");
+  assert.match(scenario, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u, "game-day one-shot scenario is invalid");
+  assert.ok(Number.isSafeInteger(generation) && generation >= 0);
+  assert.ok(["intent", "dispatch", "failure"].includes(record));
+  return path.join(
+    repoRoot,
+    "target",
+    "releases",
+    "staging",
+    "game-day-one-shots",
+    commit,
+    scenario,
+    `generation-${String(generation).padStart(2, "0")}-${record}.json`,
+  );
+}
+
+async function loadOptionalJson(file) {
+  try {
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function gameDayDeploymentStartCommand(deployment) {
+  return deployment?.meta?.serviceManifest?.deploy?.startCommand ?? null;
+}
+
+function matchingGameDayOneShotDeployments(intent) {
+  const deployments = railwayJson([
+    "deployment",
+    "list",
+    "--service",
+    railwayEnvironment.migratorServiceId,
+    "--limit",
+    String(gameDayOneShotHistoryLimit),
+  ]);
+  assert.ok(Array.isArray(deployments), "Railway game-day deployment history is invalid");
+  return deployments.filter((deployment) => {
+    if (gameDayDeploymentStartCommand(deployment) !== intent.start_command) return false;
+    const digest = deploymentImageDigest(deployment);
+    if (digest != null) {
+      assert.equal(digest, intent.digest, "game-day one-shot history digest drifted");
+    }
+    return true;
+  });
+}
+
+async function findMatchingGameDayOneShotDeployments(
+  intent,
+  {
+    recovering = false,
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    timeoutMilliseconds = gameDayOneShotRecoveryTimeoutMilliseconds,
+    pollMilliseconds = 2_000,
+  } = {},
+) {
+  if (!recovering) return matchingGameDayOneShotDeployments(intent);
+  const deadline = now() + timeoutMilliseconds;
+  do {
+    const matches = matchingGameDayOneShotDeployments(intent);
+    if (matches.length > 0) return matches;
+    await sleep(pollMilliseconds);
+  } while (now() < deadline);
+  return [];
+}
+
+async function coordinateGameDayDatabaseOneShot({ receipt, scenario, startCommand }) {
+  const config = {
+    ...railwayEnvironment,
+    productionLease: null,
+  };
+  const variables = gameDayOneShotVariables();
+  const intentForGeneration = (generation) => bindDatabaseOneShotIntent({
+    config,
+    commit: receipt.commit,
+    phase: `game-day-${scenario}`,
+    generation,
+    repository: railwayEnvironment.runtimeImage,
+    digest: receipt.images.runtime,
+    startCommand,
+    variables,
+  });
+  return await runJournaledDatabaseOneShot({
+    intentForGeneration,
+    loadRecord: (generation, record) =>
+      loadOptionalJson(gameDayOneShotRecordPath(receipt.commit, scenario, generation, record)),
+    publishRecord: (generation, record, value) =>
+      publishImmutableJson(
+        gameDayOneShotRecordPath(receipt.commit, scenario, generation, record),
+        value,
+      ),
+    findMatchingDeployments: (intent, options) =>
+      findMatchingGameDayOneShotDeployments(intent, options),
+    dispatch: (intent) => updateAndStart({
+      serviceId: railwayEnvironment.migratorServiceId,
+      image: railwayEnvironment.runtimeImage,
+      digest: receipt.images.runtime,
+      startCommand: intent.start_command,
+      policy: canonicalDeploymentPolicy("migrator"),
+      variables,
+    }),
+    awaitTerminal: (deploymentId) => waitForDeployment({
+      serviceId: railwayEnvironment.migratorServiceId,
+      deploymentId,
+      digest: receipt.images.runtime,
+      statuses: ["SUCCESS", "FAILED", "CRASHED"],
+    }),
+    disarm: () => disarmOneShotService(railwayEnvironment.migratorServiceId),
+    readCompletion: async (deployment, intent, { allowMissing }) => {
+      try {
+        return await waitForMigrationEvidence(
+          deployment.id,
+          receipt.commit,
+          intent.operation_id,
+        );
+      } catch (error) {
+        if (allowMissing && /no exact-commit completion evidence/u.test(error.message)) return null;
+        throw error;
+      }
+    },
+    label: `game-day ${scenario} migrator`,
+  });
+}
+
+function gameDayActiveOneShotPath(receipt) {
+  return path.join(
+    repoRoot,
+    "target",
+    "releases",
+    "staging",
+    "game-day-one-shots",
+    receipt.commit,
+    "active.json",
+  );
+}
+
+function bindGameDayActiveOneShot({ receipt, scenario, startCommand }) {
+  const base = {
+    version: 1,
+    kind: "fmarch-game-day-active-database-one-shot",
+    release_commit: receipt.commit,
+    staging_receipt_sha256: receipt.receipt_sha256,
+    runtime_digest: receipt.images.runtime,
+    scenario,
+    start_command: startCommand,
+  };
+  return { ...base, receipt_sha256: receiptDigest(base) };
+}
+
+function validateGameDayActiveOneShot(active, receipt) {
+  const { receipt_sha256: actual, ...base } = active ?? {};
+  assert.equal(actual, receiptDigest(base), "game-day active one-shot fence was tampered with");
+  assert.equal(active.kind, "fmarch-game-day-active-database-one-shot");
+  assert.equal(active.release_commit, receipt.commit, "game-day active one-shot commit drifted");
+  assert.equal(
+    active.staging_receipt_sha256,
+    receipt.receipt_sha256,
+    "game-day active one-shot staging receipt drifted",
+  );
+  assert.equal(active.runtime_digest, receipt.images.runtime, "game-day active one-shot digest drifted");
+  assert.match(active.scenario ?? "", /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+  assert.equal(typeof active.start_command, "string");
+  assert.ok(active.start_command.length > 0);
+  return active;
+}
+
+async function loadGameDayActiveOneShot(receipt) {
+  return await loadOptionalJson(gameDayActiveOneShotPath(receipt));
+}
+
+async function publishGameDayActiveOneShot(receipt, active) {
+  await publishImmutableJson(gameDayActiveOneShotPath(receipt), active);
+}
+
+async function finishGameDayActiveOneShot(receipt, active, result) {
+  const base = {
+    version: 1,
+    kind: "fmarch-game-day-resolved-database-one-shot",
+    active_receipt_sha256: active.receipt_sha256,
+    operation_id: result.intent.operation_id,
+    deployment_id: result.deployment.id,
+  };
+  const resolution = { ...base, receipt_sha256: receiptDigest(base) };
+  const resolutionPath = path.join(
+    path.dirname(gameDayActiveOneShotPath(receipt)),
+    "resolved",
+    `${active.receipt_sha256}.json`,
+  );
+  await publishImmutableJson(resolutionPath, resolution);
+  const current = validateGameDayActiveOneShot(
+    await loadGameDayActiveOneShot(receipt),
+    receipt,
+  );
+  assert.equal(
+    current.receipt_sha256,
+    active.receipt_sha256,
+    "game-day active one-shot changed before its exact resolution",
+  );
+  await unlink(gameDayActiveOneShotPath(receipt));
+}
+
+export function createGameDayDatabaseOneShotRunner({
+  runOneShot = coordinateGameDayDatabaseOneShot,
+  loadActive = loadGameDayActiveOneShot,
+  publishActive = publishGameDayActiveOneShot,
+  finishActive = finishGameDayActiveOneShot,
+} = {}) {
+  assert.equal(typeof runOneShot, "function");
+  assert.equal(typeof loadActive, "function");
+  assert.equal(typeof publishActive, "function");
+  assert.equal(typeof finishActive, "function");
+
+  const resume = async (receipt, active) => {
+    validateGameDayActiveOneShot(active, receipt);
+    const result = await runOneShot({
+      receipt,
+      scenario: active.scenario,
+      startCommand: active.start_command,
+    });
+    await finishActive(receipt, active, result);
+    return result;
+  };
+
+  return {
+    async run(specification) {
+      const expected = bindGameDayActiveOneShot(specification);
+      const active = await loadActive(specification.receipt);
+      if (active) {
+        const recovered = await resume(specification.receipt, active);
+        if (active.receipt_sha256 === expected.receipt_sha256) return recovered;
+      }
+      await publishActive(specification.receipt, expected);
+      return await resume(specification.receipt, expected);
+    },
+    async resumePending(receipt) {
+      const active = await loadActive(receipt);
+      if (!active) return null;
+      return await resume(receipt, active);
+    },
+  };
+}
+
+async function waitForDeployment({
+  serviceId,
+  deploymentId,
+  digest,
+  statuses,
+  timeoutMilliseconds = DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS,
+}) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
-    const deployment = latestDeployment(serviceId);
-    if (deployment && deployment.id !== previousId) {
-      const actualDigest = deploymentImageDigest(deployment);
-      if (actualDigest) assert.equal(actualDigest, digest, "Railway started the wrong injected artifact");
-      if (terminalStates.has(deployment.status)) {
-        assert.ok(statuses.includes(deployment.status), `deployment terminated as ${deployment.status}`);
-        return deployment;
-      }
+    const deployment = deploymentById(deploymentId, serviceId);
+    const actualDigest = deploymentImageDigest(deployment);
+    if (actualDigest) assert.equal(actualDigest, digest, "Railway started the wrong injected artifact");
+    if (terminalStates.has(deployment.status)) {
+      assert.equal(actualDigest, digest, "terminal Railway deployment omitted its exact OCI digest");
+      assert.ok(statuses.includes(deployment.status), `deployment terminated as ${deployment.status}`);
+      return deployment;
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
   throw new Error("Railway deployment did not reach the expected terminal state");
 }
 
-async function deployAndWait({ serviceId, image, digest, startCommand, policy, statuses = ["SUCCESS"] }) {
-  const previousId = updateAndStart({ serviceId, image, digest, startCommand, policy });
-  return await waitForDeployment({ serviceId, previousId, digest, statuses });
+async function deployAndWait({
+  serviceId,
+  image,
+  digest,
+  startCommand,
+  policy,
+  variables = null,
+  disarmOneShot = false,
+  statuses = ["SUCCESS"],
+}) {
+  try {
+    const deploymentId = updateAndStart({
+      serviceId,
+      image,
+      digest,
+      startCommand,
+      policy,
+      variables,
+    });
+    if (disarmOneShot) disarmOneShotService(serviceId);
+    return await waitForDeployment({ serviceId, deploymentId, digest, statuses });
+  } finally {
+    if (disarmOneShot) disarmOneShotService(serviceId);
+  }
 }
 
 async function health(url, commit, kind) {
@@ -272,16 +618,13 @@ async function measureScenario(name, run) {
   };
 }
 
-async function deployCanonicalMigrator(receipt) {
-  const deployment = await deployAndWait({
-    serviceId: railwayEnvironment.migratorServiceId,
-    image: railwayEnvironment.runtimeImage,
-    digest: receipt.images.runtime,
+async function deployCanonicalMigrator(receipt, scenario, oneShots) {
+  const outcome = await oneShots.run({
+    receipt,
+    scenario,
     startCommand: "fmarch-migrate",
-    policy: canonicalDeploymentPolicy("migrator"),
   });
-  await waitForMigrationEvidence(deployment.id, receipt.commit);
-  return deployment;
+  return outcome.deployment;
 }
 
 async function deployApplication(receipt) {
@@ -338,8 +681,9 @@ function verifyPlatformSources(receipt) {
   return { migrator, api, frontend };
 }
 
-async function recoverCurrentRelease(receipt) {
-  await deployCanonicalMigrator(receipt);
+async function recoverCurrentRelease(receipt, oneShots) {
+  await oneShots.resumePending(receipt);
+  await deployCanonicalMigrator(receipt, "interrupted-restore", oneShots);
   await deployApplication(receipt);
 }
 
@@ -373,17 +717,16 @@ export async function main(argv = process.argv.slice(2)) {
     frontend: serviceById(initialServices, railwayEnvironment.frontendServiceId).deploymentId,
   };
   const scenarios = {};
+  const oneShots = createGameDayDatabaseOneShotRunner();
   let restored = false;
   try {
     scenarios.delayed_migrator = await measureScenario("delayed_migrator", async () => {
-      const deployment = await deployAndWait({
-        serviceId: railwayEnvironment.migratorServiceId,
-        image: railwayEnvironment.runtimeImage,
-        digest: currentReceipt.images.runtime,
-        startCommand: `/bin/sh -c "sleep ${args.delaySeconds}; exec fmarch-migrate"`,
-        policy: canonicalDeploymentPolicy("migrator"),
+      const outcome = await oneShots.run({
+        receipt: currentReceipt,
+        scenario: "delayed-migrator",
+        startCommand: `/bin/sh -c 'sleep ${args.delaySeconds}; exec fmarch-migrate "$@"' _`,
       });
-      await waitForMigrationEvidence(deployment.id, currentReceipt.commit);
+      const deployment = outcome.deployment;
       assertUnchangedServingDeployments(servingBeforeMigratorDrills);
       await assertServing(currentReceipt.commit);
       return { deployment_id: deployment.id, injected_delay_seconds: args.delaySeconds };
@@ -396,7 +739,8 @@ export async function main(argv = process.argv.slice(2)) {
         digest: currentReceipt.images.runtime,
         startCommand: "/bin/false",
         policy: canonicalDeploymentPolicy("migrator"),
-        statuses: ["SUCCESS"],
+        disarmOneShot: true,
+        statuses: ["FAILED", "CRASHED"],
       });
       await assertNoMigrationEvidence(deployment.id);
       assertUnchangedServingDeployments(servingBeforeMigratorDrills);
@@ -409,7 +753,7 @@ export async function main(argv = process.argv.slice(2)) {
     });
 
     scenarios.exact_digest_retry = await measureScenario("exact_digest_retry", async () => {
-      const deployment = await deployCanonicalMigrator(currentReceipt);
+      const deployment = await deployCanonicalMigrator(currentReceipt, "exact-digest-retry", oneShots);
       return { deployment_id: deployment.id, runtime_digest: currentReceipt.images.runtime };
     });
 
@@ -507,7 +851,7 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     if (!restored) {
       console.error("release game day interrupted; restoring the exact current staging release");
-      await recoverCurrentRelease(currentReceipt);
+      await recoverCurrentRelease(currentReceipt, oneShots);
       console.error("exact current staging release restored");
     }
   }

@@ -37,6 +37,25 @@ staging environment and exact current commit. An interrupted run enters a
 `finally` recovery path that redeploys the current migrator, API, and frontend
 digests with their canonical Railway policies.
 
+Every game-day migrator command carries an operation ID bound to its complete
+immutable intent, including the current commit, scenario, artifact digest,
+start command, canonical database identity, and one-shot deadlines. Its
+tamper-evident journal is commit/scenario scoped under
+`target/releases/staging/game-day-one-shots/`; rerunning the same drill resumes
+the exact operation by design. A commit-scoped tamper-evident `active.json`
+fence is durable before any database dispatch and is cleared only after an
+immutable exact-resolution marker exists. A restarted harness resolves that
+fence before it may begin another database scenario. Dispatch uses Railway's
+exact-ID V2 mutation, and a lost V2 response is recovered only by a unique
+history match on the exact operation command and digest. Cleanup resolves any
+pending exact operation before it may dispatch the restore migrator. The
+harness polls the captured ID for up to 15 minutes and requires the same
+operation ID and commit in migration completion evidence; it never infers
+success from the service's mutable latest deployment. It restores `/bin/false`
+immediately after V2 captures the deployment and again after the wait,
+including error paths, so the temporary operation command cannot become
+ambient redeploy authority.
+
 The secret-free receipt is written under
 `target/releases/staging/<commit>.game-day.json`. It records deployment IDs,
 observed artifact digests, scenario and recovery durations, health and search

@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
+import { localMigrationOperationId } from "./run_fmarch_migrations.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRoot = path.join(repoRoot, "target");
 // Direct invocations keep their long-lived evidence location.  Proof-lane runs
@@ -106,13 +109,18 @@ try {
     database: "postgres",
   });
   const releaseDir = path.join(repoRoot, "target", "release");
-  await run(path.join(releaseDir, "fmarch-migrate"), [], {
-    env: isolatedEnvironment({
-      DATABASE_MIGRATION_URL: ownerUrl,
-      FMARCH_DATABASE_APPLICATION_PASSWORD: applicationPassword,
-      FMARCH_DATABASE_KEY_ADMIN_PASSWORD: keyAdminPassword,
-    }),
-  });
+  await run(
+    path.join(releaseDir, "fmarch-migrate"),
+    ["--operation-id", localMigrationOperationId],
+    {
+      env: isolatedEnvironment({
+        DATABASE_MIGRATION_URL: ownerUrl,
+        FMARCH_DATABASE_APPLICATION_PASSWORD: applicationPassword,
+        FMARCH_DATABASE_KEY_ADMIN_PASSWORD: keyAdminPassword,
+        ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+      }),
+    },
+  );
   await run(path.join(releaseDir, "fmarch-schema-gate"), [], {
     env: isolatedEnvironment({
       DATABASE_URL: applicationUrl,

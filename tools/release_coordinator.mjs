@@ -15,6 +15,8 @@ import { revalidateCanonicalProductionHostedVariables } from "./release_hosted_v
 import {
   TERMINAL_DEPLOYMENT_STATES,
   CANONICAL_RELEASE_TOPOLOGY,
+  DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS,
+  DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
   RELEASE_CLOCK_SKEW_MS,
   RELEASE_EVIDENCE_MAX_AGE_MS,
   assertFullCommit,
@@ -49,6 +51,10 @@ const SUBPROCESS_TIMEOUT_MS = Object.freeze({
   node: 5 * 60 * 1_000,
 });
 export const PRODUCTION_MUTATION_FRESHNESS_RESERVE_MS = 60 * 60 * 1_000 + RELEASE_CLOCK_SKEW_MS;
+export const ONE_SHOT_RAILWAY_WAIT_TIMEOUT_MS = DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS;
+const ONE_SHOT_HISTORY_LIMIT = 50;
+const ONE_SHOT_HISTORY_RECOVERY_TIMEOUT_MS = 60_000;
+const MAX_ONE_SHOT_GENERATIONS = 2;
 const productionMutationsStarted = new WeakSet();
 
 export function parseArguments(argv) {
@@ -641,10 +647,6 @@ export async function withProductionMutationAuthority(
   return result;
 }
 
-function latestDeployment(config, serviceId) {
-  return railwayJson(config, ["deployment", "list", "--service", serviceId, "--limit", "1"])[0] ?? null;
-}
-
 export function serviceSourceCutoverAction(source, expectedImage = null) {
   if (source == null) return "connect";
   if (source?.repo === "fluffyrabbot/fmarch" && source.image == null) return "disconnect";
@@ -688,6 +690,32 @@ async function deployConfiguredImage(
     allowTerminalFailure = false,
   },
 ) {
+  const deploymentId = await configureAndDispatchImage(config, {
+    serviceId,
+    image,
+    digest,
+    startCommand,
+    label,
+    variables,
+    deploymentPolicy,
+  });
+  return await waitForDeployment(config, serviceId, deploymentId, digest, label, {
+    allowTerminalFailure,
+  });
+}
+
+async function configureAndDispatchImage(
+  config,
+  {
+    serviceId,
+    image,
+    digest,
+    startCommand,
+    label,
+    variables = null,
+    deploymentPolicy = {},
+  },
+) {
   const imageReference = `${image}@${digest}`;
   await detachGitSource(config, serviceId, imageReference);
   if (variables && Object.keys(variables).length > 0) {
@@ -708,7 +736,6 @@ async function deployConfiguredImage(
     );
     assert.equal(variablesData.variableCollectionUpsert, true, `${label} variables were not updated`);
   }
-  const previousId = latestDeployment(config, serviceId)?.id ?? null;
   const updateData = await withProductionMutationAuthority(config, () =>
     railwayApi(
       "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
@@ -728,14 +755,15 @@ async function deployConfiguredImage(
   const deployData = await withProductionMutationAuthority(
     config,
     () => railwayApi(
-      "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
+      "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) }",
       { serviceId, environmentId: config.environmentId },
     ),
   );
-  assert.equal(deployData.serviceInstanceDeploy, true, `${label} deployment was not started`);
-  return await waitForNewDeployment(config, serviceId, previousId, digest, label, {
-    allowTerminalFailure,
-  });
+  assertNonemptyDeploymentId(
+    deployData.serviceInstanceDeployV2,
+    `${label} deployment ID`,
+  );
+  return deployData.serviceInstanceDeployV2;
 }
 
 export function canonicalDeploymentPolicy(kind) {
@@ -772,17 +800,41 @@ export function canonicalDeploymentPolicy(kind) {
   throw new Error(`unknown Railway deployment policy ${kind}`);
 }
 
-export async function waitForNewDeployment(
+function assertNonemptyDeploymentId(value, label) {
+  assert.equal(typeof value, "string", `${label} must be a string`);
+  assert.equal(value.trim(), value, `${label} must not contain surrounding whitespace`);
+  assert.ok(value.length > 0, `${label} must not be empty`);
+  return value;
+}
+
+function deploymentById(config, serviceId, deploymentId) {
+  assertNonemptyDeploymentId(deploymentId, "Railway deployment ID");
+  const deployment = railwayApi(
+    "query Deployment($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId meta } }",
+    { id: deploymentId },
+  ).deployment;
+  assert.equal(deployment.id, deploymentId, "Railway returned the wrong deployment ID");
+  assert.equal(deployment.projectId, config.projectId, "Railway deployment project drifted");
+  assert.equal(
+    deployment.environmentId,
+    config.environmentId,
+    "Railway deployment environment drifted",
+  );
+  assert.equal(deployment.serviceId, serviceId, "Railway deployment service drifted");
+  return deployment;
+}
+
+export async function waitForDeployment(
   config,
   serviceId,
-  previousId,
+  deploymentId,
   expectedDigest,
   label,
   {
-    load = () => latestDeployment(config, serviceId),
+    load = () => deploymentById(config, serviceId, deploymentId),
     now = () => Date.now(),
     sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-    timeoutMilliseconds = 15 * 60 * 1_000,
+    timeoutMilliseconds = ONE_SHOT_RAILWAY_WAIT_TIMEOUT_MS,
     pollMilliseconds = 10_000,
     allowTerminalFailure = false,
   } = {},
@@ -790,7 +842,8 @@ export async function waitForNewDeployment(
   const deadline = now() + timeoutMilliseconds;
   while (now() < deadline) {
     const deployment = await load();
-    if (deployment && deployment.id !== previousId) {
+    if (deployment) {
+      assert.equal(deployment.id, deploymentId, `${label} deployment ID drifted`);
       const digest = deploymentImageDigest(deployment);
       if (TERMINAL_DEPLOYMENT_STATES.has(deployment.status)) {
         if (allowTerminalFailure && ["FAILED", "CRASHED"].includes(deployment.status)) {
@@ -806,27 +859,28 @@ export async function waitForNewDeployment(
     }
     await sleep(pollMilliseconds);
   }
-  throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
+  throw new Error(`${label} did not reach a terminal deployment state within its bounded wait`);
 }
 
 async function waitForOneShotTerminal(
   config,
   serviceId,
-  previousId,
+  deploymentId,
   expectedDigest,
   label,
   {
-    load = () => latestDeployment(config, serviceId),
+    load = () => deploymentById(config, serviceId, deploymentId),
     now = () => Date.now(),
     sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
-    timeoutMilliseconds = 15 * 60 * 1_000,
+    timeoutMilliseconds = ONE_SHOT_RAILWAY_WAIT_TIMEOUT_MS,
     pollMilliseconds = 10_000,
   } = {},
 ) {
   const deadline = now() + timeoutMilliseconds;
   while (now() < deadline) {
     const deployment = await load();
-    if (deployment && deployment.id !== previousId) {
+    if (deployment) {
+      assert.equal(deployment.id, deploymentId, `${label} deployment ID drifted`);
       const actualDigest = deploymentImageDigest(deployment);
       if (actualDigest) {
         assert.equal(actualDigest, expectedDigest, `${label} started from an unexpected digest`);
@@ -835,49 +889,350 @@ async function waitForOneShotTerminal(
     }
     await sleep(pollMilliseconds);
   }
-  throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
+  throw new Error(`${label} did not reach a terminal deployment state within its bounded wait`);
 }
 
-export async function recoverOneShotDeployment({
-  previousDeploymentId,
-  currentDeployment,
-  awaitTerminal,
-  readCompletion,
-  redeploy,
-  validateCandidate = () => {},
-  label,
+export function bindDatabaseOneShotIntent({
+  config,
+  commit,
+  phase,
+  generation,
+  repository,
+  digest,
+  startCommand,
+  variables,
 }) {
-  if (!currentDeployment) {
-    assert.equal(previousDeploymentId, null, `${label} recovery found no Railway deployment`);
-  }
-  let candidate = currentDeployment ?? { id: null, status: "BASELINE" };
-  if (candidate.id === previousDeploymentId) {
-    candidate = await redeploy();
-  } else if (!TERMINAL_DEPLOYMENT_STATES.has(candidate.status)) {
-    candidate = await awaitTerminal();
-  }
-  validateCandidate(candidate);
-
-  if (candidate.status === "SUCCESS") {
-    const completion = await readCompletion(candidate, { allowMissing: true });
-    if (completion) return { deployment: candidate, completion, recovered: false };
-  } else if (!["FAILED", "CRASHED"].includes(candidate.status)) {
-    throw new Error(`${label} stopped in non-retryable state ${candidate.status}`);
-  }
-
-  const recovered = await redeploy();
-  validateCandidate(recovered);
-  assert.equal(recovered.status, "SUCCESS", `${label} recovery deployment is ${recovered.status}`);
-  const completion = await readCompletion(recovered, { allowMissing: false });
-  assert.ok(completion, `${label} recovery emitted no completion evidence`);
-  return { deployment: recovered, completion, recovered: true };
+  assertFullCommit(commit);
+  assert.match(phase ?? "", /^[a-z0-9]+(?:-[a-z0-9]+)*$/u, "database one-shot phase is invalid");
+  assert.ok(
+    Number.isSafeInteger(generation) && generation >= 0,
+    "database one-shot generation is invalid",
+  );
+  assert.equal(typeof repository, "string", "database one-shot repository is invalid");
+  assert.ok(repository.length > 0, "database one-shot repository is empty");
+  assertImageDigest(digest, "database one-shot image digest");
+  assert.equal(typeof startCommand, "string", "database one-shot start command is invalid");
+  assert.ok(startCommand.length > 0, "database one-shot start command is empty");
+  assert.equal(
+    startCommand.includes("--operation-id"),
+    false,
+    "database one-shot start command already contains an operation ID",
+  );
+  assert.ok(
+    variables && typeof variables === "object" && !Array.isArray(variables),
+    "database one-shot variables are invalid",
+  );
+  const promotionLeaseCommit = config.environment === "production"
+    ? assertFullCommit(config.productionLease?.token, "production promotion lock token")
+    : null;
+  const identity = {
+    version: 1,
+    kind: "fmarch-database-one-shot-operation-id",
+    environment: config.environment,
+    project_id: config.projectId,
+    environment_id: config.environmentId,
+    service_id: config.migratorServiceId,
+    release_commit: commit,
+    promotion_lease_commit: promotionLeaseCommit,
+    phase,
+    generation,
+    repository,
+    digest,
+    start_command_base: startCommand,
+    variables_sha256: receiptDigest(variables),
+  };
+  const operationId = receiptDigest(identity);
+  const base = {
+    ...identity,
+    kind: "fmarch-database-one-shot-intent",
+    operation_id: operationId,
+    start_command: `${startCommand} --operation-id ${operationId}`,
+  };
+  delete base.start_command_base;
+  return { ...base, receipt_sha256: receiptDigest(base) };
 }
 
-function databaseIdentityVariables(config) {
+function validateDatabaseOneShotIntent(actual, expected) {
+  const { receipt_sha256: actualDigest, ...base } = actual ?? {};
+  assert.equal(
+    actualDigest,
+    receiptDigest(base),
+    "database one-shot intent journal was tampered with",
+  );
+  assert.deepEqual(actual, expected, "database one-shot intent belongs to another operation");
+  return actual;
+}
+
+function databaseOneShotDispatch(intent, deploymentId) {
+  assertNonemptyDeploymentId(deploymentId, "database one-shot deployment ID");
+  const base = {
+    version: 1,
+    kind: "fmarch-database-one-shot-dispatch",
+    operation_id: intent.operation_id,
+    intent_receipt_sha256: intent.receipt_sha256,
+    deployment_id: deploymentId,
+  };
+  return { ...base, receipt_sha256: receiptDigest(base) };
+}
+
+function validateDatabaseOneShotDispatch(actual, intent) {
+  const { receipt_sha256: actualDigest, ...base } = actual ?? {};
+  assert.equal(
+    actualDigest,
+    receiptDigest(base),
+    "database one-shot dispatch journal was tampered with",
+  );
+  assert.equal(actual?.kind, "fmarch-database-one-shot-dispatch");
+  assert.equal(actual.operation_id, intent.operation_id, "database one-shot dispatch operation drifted");
+  assert.equal(
+    actual.intent_receipt_sha256,
+    intent.receipt_sha256,
+    "database one-shot dispatch intent drifted",
+  );
+  assertNonemptyDeploymentId(actual.deployment_id, "database one-shot deployment ID");
+  return actual;
+}
+
+function databaseOneShotFailure(intent, deployment) {
+  assert.ok(
+    ["FAILED", "CRASHED"].includes(deployment.status),
+    "only an exact failed database one-shot may close a generation",
+  );
+  const base = {
+    version: 1,
+    kind: "fmarch-database-one-shot-failure",
+    operation_id: intent.operation_id,
+    intent_receipt_sha256: intent.receipt_sha256,
+    deployment_id: deployment.id,
+    status: deployment.status,
+  };
+  return { ...base, receipt_sha256: receiptDigest(base) };
+}
+
+function validateDatabaseOneShotFailure(actual, intent, deployment) {
+  const expected = databaseOneShotFailure(intent, deployment);
+  const { receipt_sha256: actualDigest, ...base } = actual ?? {};
+  assert.equal(
+    actualDigest,
+    receiptDigest(base),
+    "database one-shot failure journal was tampered with",
+  );
+  assert.deepEqual(actual, expected, "database one-shot failure belongs to another deployment");
+  return actual;
+}
+
+function deploymentStartCommand(deployment) {
+  return deployment?.meta?.serviceManifest?.deploy?.startCommand ?? null;
+}
+
+function validateDatabaseOneShotDeployment(
+  deployment,
+  intent,
+  { allowMissingDigest = false } = {},
+) {
+  assert.equal(deployment?.id != null, true, "database one-shot deployment is missing");
+  const digest = deploymentImageDigest(deployment);
+  if (allowMissingDigest && digest == null) {
+    // Railway may not populate imageDigest until a queued deployment initializes.
+  } else {
+    assert.equal(digest, intent.digest, "database one-shot deployment digest drifted");
+  }
+  assert.equal(
+    deploymentStartCommand(deployment),
+    intent.start_command,
+    "database one-shot deployment start command drifted",
+  );
+  return deployment;
+}
+
+export function databaseOneShotDisarmInput() {
+  return { startCommand: "/bin/false", railwayConfigFile: null };
+}
+
+async function disarmConfiguredDatabaseOneShot(config, label) {
+  const updateData = await withProductionMutationAuthority(config, () =>
+    railwayApi(
+      "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+      {
+        serviceId: config.migratorServiceId,
+        environmentId: config.environmentId,
+        input: databaseOneShotDisarmInput(),
+      },
+    ),
+  );
+  assert.equal(
+    updateData.serviceInstanceUpdate,
+    true,
+    `${label} service could not be disarmed after its one-shot`,
+  );
+}
+
+export async function runJournaledDatabaseOneShot(options) {
+  assert.equal(typeof options?.disarm, "function");
+  let activeIntent = null;
+  let commandIsDisarmed = true;
+  const disarm = async (deploymentId, intent) => {
+    commandIsDisarmed = false;
+    await options.disarm(deploymentId, intent);
+    commandIsDisarmed = true;
+  };
+  try {
+    return await runJournaledDatabaseOneShotGenerations({
+      ...options,
+      disarm,
+      markActive(intent) {
+        activeIntent = intent;
+        commandIsDisarmed = false;
+      },
+    });
+  } catch (error) {
+    if (activeIntent && !commandIsDisarmed) {
+      try {
+        await disarm(null, activeIntent);
+      } catch (disarmError) {
+        throw new AggregateError(
+          [error, disarmError],
+          `${options.label} failed and its one-shot command could not be disarmed`,
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function runJournaledDatabaseOneShotGenerations({
+  intentForGeneration,
+  loadRecord,
+  publishRecord,
+  findMatchingDeployments,
+  dispatch,
+  awaitTerminal,
+  disarm,
+  markActive,
+  readCompletion,
+  label,
+  maxGenerations = MAX_ONE_SHOT_GENERATIONS,
+}) {
+  assert.equal(typeof intentForGeneration, "function");
+  assert.ok(Number.isSafeInteger(maxGenerations) && maxGenerations > 0);
+  let priorFailure = null;
+  for (let generation = 0; generation < maxGenerations; generation += 1) {
+    const expectedIntent = intentForGeneration(generation);
+    markActive(expectedIntent);
+    let intent = await loadRecord(generation, "intent");
+    const existingIntent = intent != null;
+    if (existingIntent) validateDatabaseOneShotIntent(intent, expectedIntent);
+    else {
+      if (generation > 0) {
+        assert.ok(priorFailure, `${label} next generation has no exact failed predecessor`);
+      }
+      await publishRecord(generation, "intent", expectedIntent);
+      intent = expectedIntent;
+    }
+
+    let dispatchRecord = await loadRecord(generation, "dispatch");
+    if (dispatchRecord) validateDatabaseOneShotDispatch(dispatchRecord, intent);
+    else {
+      let matches = await findMatchingDeployments(intent, { recovering: existingIntent });
+      assert.ok(Array.isArray(matches), `${label} deployment history is invalid`);
+      for (const match of matches) {
+        validateDatabaseOneShotDeployment(match, intent, { allowMissingDigest: true });
+      }
+      assert.ok(
+        matches.length <= 1,
+        `${label} has multiple deployments for one operation ID; refusing split-brain recovery`,
+      );
+      let deploymentId;
+      if (matches.length === 1) deploymentId = matches[0].id;
+      else if (existingIntent) {
+        throw new Error(
+          `${label} has a durable intent but no exact deployment; outcome is unknown and must not be redispatched`,
+        );
+      } else {
+        try {
+          deploymentId = await dispatch(intent);
+        } catch (error) {
+          // The V2 mutation may have committed even though its response was
+          // lost. Remove the mutable command before waiting for deployment
+          // history to converge; this does not cancel any captured snapshot.
+          await disarm(null, intent);
+          matches = await findMatchingDeployments(intent, {
+            recovering: true,
+            dispatchError: error,
+          });
+          assert.ok(Array.isArray(matches), `${label} deployment history is invalid`);
+          for (const match of matches) {
+            validateDatabaseOneShotDeployment(match, intent, { allowMissingDigest: true });
+          }
+          assert.ok(
+            matches.length <= 1,
+            `${label} has multiple deployments for one operation ID; refusing split-brain recovery`,
+          );
+          if (matches.length === 0) throw error;
+          deploymentId = matches[0].id;
+        }
+      }
+      dispatchRecord = databaseOneShotDispatch(intent, deploymentId);
+      await publishRecord(generation, "dispatch", dispatchRecord);
+    }
+
+    // V2 has already captured the exact deployment snapshot. Disarm the
+    // mutable service immediately after its ID is durable, before waiting, so
+    // a manual/ambient redeploy cannot duplicate the database operation.
+    await disarm(dispatchRecord.deployment_id, intent);
+    let deployment;
+    try {
+      deployment = await awaitTerminal(dispatchRecord.deployment_id, intent);
+    } finally {
+      // The operation-bound command is a temporary capability. Remove it even
+      // after a wait timeout or unexpected terminal result; exact-ID recovery
+      // can still adopt the already-created deployment without leaving an
+      // ambient/manual redeploy path armed.
+      await disarm(dispatchRecord.deployment_id, intent);
+    }
+    assert.equal(
+      deployment.id,
+      dispatchRecord.deployment_id,
+      `${label} terminal deployment ID drifted`,
+    );
+    validateDatabaseOneShotDeployment(deployment, intent);
+    if (deployment.status === "SUCCESS") {
+      const completion = await readCompletion(deployment, intent, { allowMissing: true });
+      assert.ok(
+        completion,
+        `${label} succeeded without exact operation completion evidence; outcome is ambiguous and must not be redeployed`,
+      );
+      return { deployment, completion, intent, generation };
+    }
+    if (!["FAILED", "CRASHED"].includes(deployment.status)) {
+      throw new Error(`${label} stopped in non-retryable state ${deployment.status}`);
+    }
+
+    const expectedFailure = databaseOneShotFailure(intent, deployment);
+    const existingFailure = await loadRecord(generation, "failure");
+    if (existingFailure) {
+      validateDatabaseOneShotFailure(existingFailure, intent, deployment);
+      priorFailure = existingFailure;
+    } else {
+      await publishRecord(generation, "failure", expectedFailure);
+      priorFailure = expectedFailure;
+    }
+  }
+  throw new Error(`${label} exhausted its bounded recovery generations`);
+}
+
+export function databaseIdentityVariables(config) {
   return {
     FMARCH_DATABASE_ENVIRONMENT: config.environment,
     FMARCH_DATABASE_PROJECT_ID: config.projectId,
     FMARCH_DATABASE_ENVIRONMENT_ID: config.environmentId,
+  };
+}
+
+export function oneShotDatabaseVariables(config) {
+  return {
+    ...databaseIdentityVariables(config),
+    ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
   };
 }
 
@@ -890,6 +1245,139 @@ async function deployImage(config, serviceId, image, digest, startCommand, label
     label,
     variables,
     deploymentPolicy: canonicalDeploymentPolicy(kind),
+  });
+}
+
+function releaseJournalScope(config, commit) {
+  assertFullCommit(commit);
+  if (config.environment !== "production") return commit;
+  return `${commit}-${assertFullCommit(
+    config.productionLease?.token,
+    "production promotion lock token",
+  )}`;
+}
+
+function oneShotJournalDirectory(config, commit, phase) {
+  return path.join(
+    repoRoot,
+    "target",
+    "releases",
+    config.environment,
+    "database-one-shots",
+    releaseJournalScope(config, commit),
+    phase,
+  );
+}
+
+function oneShotRecordPath(directory, generation, record) {
+  assert.ok(Number.isSafeInteger(generation) && generation >= 0);
+  assert.ok(["intent", "dispatch", "failure"].includes(record));
+  return path.join(directory, `generation-${String(generation).padStart(2, "0")}-${record}.json`);
+}
+
+async function loadOptionalJson(file) {
+  try {
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function matchingOneShotDeployments(config, intent) {
+  const deployments = railwayJson(config, [
+    "deployment",
+    "list",
+    "--service",
+    config.migratorServiceId,
+    "--limit",
+    String(ONE_SHOT_HISTORY_LIMIT),
+  ]);
+  assert.ok(Array.isArray(deployments), "Railway deployment history is invalid");
+  const matches = deployments.filter(
+    (deployment) => deploymentStartCommand(deployment) === intent.start_command,
+  );
+  for (const deployment of matches) {
+    const digest = deploymentImageDigest(deployment);
+    if (digest != null) {
+      assert.equal(digest, intent.digest, "database one-shot history digest drifted");
+    }
+  }
+  return matches;
+}
+
+async function findMatchingOneShotDeployments(
+  config,
+  intent,
+  {
+    recovering = false,
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    timeoutMilliseconds = ONE_SHOT_HISTORY_RECOVERY_TIMEOUT_MS,
+    pollMilliseconds = 2_000,
+  } = {},
+) {
+  if (!recovering) return matchingOneShotDeployments(config, intent);
+  const deadline = now() + timeoutMilliseconds;
+  do {
+    const matches = matchingOneShotDeployments(config, intent);
+    if (matches.length > 0) return matches;
+    await sleep(pollMilliseconds);
+  } while (now() < deadline);
+  return [];
+}
+
+async function coordinateDatabaseOneShot({
+  config,
+  commit,
+  phase,
+  digest,
+  startCommand,
+  variables,
+  label,
+  readCompletion,
+}) {
+  const directory = oneShotJournalDirectory(config, commit, phase);
+  const intentForGeneration = (generation) =>
+    bindDatabaseOneShotIntent({
+      config,
+      commit,
+      phase,
+      generation,
+      repository: config.runtimeImage,
+      digest,
+      startCommand,
+      variables,
+    });
+  return await runJournaledDatabaseOneShot({
+    intentForGeneration,
+    loadRecord: (generation, record) =>
+      loadOptionalJson(oneShotRecordPath(directory, generation, record)),
+    publishRecord: (generation, record, receipt) =>
+      publishImmutableJson(oneShotRecordPath(directory, generation, record), receipt),
+    findMatchingDeployments: (intent, options) =>
+      findMatchingOneShotDeployments(config, intent, options),
+    dispatch: (intent) =>
+      configureAndDispatchImage(config, {
+        serviceId: config.migratorServiceId,
+        image: config.runtimeImage,
+        digest,
+        startCommand: intent.start_command,
+        label,
+        variables,
+        deploymentPolicy: canonicalDeploymentPolicy("migrator"),
+      }),
+    awaitTerminal: (deploymentId, intent) =>
+      waitForOneShotTerminal(
+        config,
+        config.migratorServiceId,
+        deploymentId,
+        intent.digest,
+        label,
+      ),
+    disarm: () => disarmConfiguredDatabaseOneShot(config, label),
+    readCompletion,
+    label,
   });
 }
 
@@ -930,6 +1418,7 @@ export async function waitForMigrationCompletion(
   deploymentId,
   serviceId,
   expectedCommit,
+  expectedOperationId,
   {
     load = () => railwayText(config, [
       "logs",
@@ -945,6 +1434,11 @@ export async function waitForMigrationCompletion(
     pollMilliseconds = 2_000,
   } = {},
 ) {
+  assert.match(
+    expectedOperationId ?? "",
+    /^[0-9a-f]{64}$/u,
+    "migration operation ID must be a lowercase SHA-256 digest",
+  );
   const deadline = now() + timeoutMilliseconds;
   while (now() < deadline) {
     const completion = parseMigrationCompletion(await load());
@@ -953,6 +1447,11 @@ export async function waitForMigrationCompletion(
         completion.release_commit,
         expectedCommit,
         "migration completion record does not match the release commit",
+      );
+      assert.equal(
+        completion.operation_id,
+        expectedOperationId,
+        "migration completion record does not match the journaled operation",
       );
       return completion;
     }
@@ -991,11 +1490,12 @@ export async function waitForResetLogRows(
   throw new Error(`${label} emitted no ${required.join(" and ")} record within 60 seconds`);
 }
 
-export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
+export function validateEpochResetAudit(audit, { environment, epoch, commit, operationId }) {
   assert.equal(audit?.kind, "fmarch-schema-epoch-reset-audit", "schema epoch reset audit kind drifted");
   assert.equal(audit.environment, environment, "schema epoch reset audit environment drifted");
   assert.equal(audit.epoch, epoch, "schema epoch reset audit epoch drifted");
   assert.equal(audit.release_commit, commit, "schema epoch reset audit commit drifted");
+  assert.equal(audit.operation_id, operationId, "schema epoch reset audit operation drifted");
   assert.equal(audit.execute, false, "pre-reset audit must not mutate the database");
   assert.ok(
     audit.counts?.application_tables &&
@@ -1023,7 +1523,7 @@ export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
   return audit;
 }
 
-function epochResetOperation(config, digest, commit, epoch, auditEvidence) {
+function epochResetOperation(config, digest, commit, epoch) {
   const base = {
     version: 1,
     kind: "fmarch-schema-epoch-reset-operation",
@@ -1031,9 +1531,8 @@ function epochResetOperation(config, digest, commit, epoch, auditEvidence) {
     environment: config.environment,
     epoch,
     commit,
+    promotion_lease_commit: config.productionLease?.token ?? null,
     runtime_digest: digest,
-    audit_inventory_sha256: auditEvidence.inventory_sha256,
-    expected_inventory: auditEvidence.prior_counts,
     topology: config.topology,
   };
   return { ...base, receipt_sha256: receiptDigest(base) };
@@ -1151,30 +1650,44 @@ export async function runEpochResetJournal({
 async function deployEpochResetAudit(config, digest, commit, epoch) {
   const serviceId = config.migratorServiceId;
   const confirmation = `${config.environment}:${epoch}:${commit}`;
-  const auditDeployment = await deployConfiguredImage(config, {
-    serviceId,
-    image: config.runtimeImage,
+  const outcome = await coordinateDatabaseOneShot({
+    config,
+    commit,
+    phase: `schema-epoch-${epoch}-audit`,
     digest,
     startCommand: "fmarch-schema-epoch-reset",
     label: `${config.environment} schema epoch reset audit`,
-    deploymentPolicy: canonicalDeploymentPolicy("migrator"),
     variables: {
-      ...databaseIdentityVariables(config),
+      ...oneShotDatabaseVariables(config),
       FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
       FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
       FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: confirmation,
     },
+    readCompletion: async (deployment, intent, { allowMissing }) => {
+      try {
+        const audit = (await waitForResetLogRows(
+          config,
+          deployment.id,
+          serviceId,
+          ["audit"],
+          "schema epoch reset audit deployment",
+        )).audit;
+        return validateEpochResetAudit(audit, {
+          environment: config.environment,
+          epoch,
+          commit,
+          operationId: intent.operation_id,
+        });
+      } catch (error) {
+        if (allowMissing && /emitted no audit record/u.test(error.message)) return null;
+        throw error;
+      }
+    },
   });
-  const audit = (await waitForResetLogRows(
-    config,
-    auditDeployment.id,
-    serviceId,
-    ["audit"],
-    "schema epoch reset audit deployment",
-  )).audit;
-  validateEpochResetAudit(audit, { environment: config.environment, epoch, commit });
+  const audit = outcome.completion;
   return {
-    audit_deployment_id: auditDeployment.id,
+    audit_deployment_id: outcome.deployment.id,
+    audit_operation_id: outcome.intent.operation_id,
     inventory_sha256: audit.inventory_sha256,
     prior_counts: audit.counts,
   };
@@ -1193,72 +1706,56 @@ async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, au
     "schema epoch reset start plan inventory drifted",
   );
   const expectedInventory = JSON.stringify(plan.expected_inventory);
-  const deploy = () => deployConfiguredImage(config, {
-      serviceId,
-      image: config.runtimeImage,
-      digest,
-      startCommand: "fmarch-schema-epoch-reset --execute",
-      label: `${config.environment} schema epoch reset`,
-      deploymentPolicy: canonicalDeploymentPolicy("migrator"),
-      variables: {
-        ...databaseIdentityVariables(config),
-        FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
-        FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
-        FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: `${config.environment}:${epoch}:${commit}`,
-        FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY: expectedInventory,
-        FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY_SHA256: plan.audit_inventory_sha256,
-      },
-      allowTerminalFailure: true,
-    });
-  const readCompletion = async (deployment, { allowMissing }) => {
-    let parsed;
-    try {
-      parsed = await waitForResetLogRows(
-        config,
-        deployment.id,
-        serviceId,
-        ["audit", "complete"],
-        "schema epoch reset deployment",
-      );
-    } catch (error) {
-      if (allowMissing && /emitted no audit and complete record/u.test(error.message)) return null;
-      throw error;
-    }
-    validateEpochResetAudit(
-      { ...parsed.audit, execute: false },
-      { environment: config.environment, epoch, commit },
-    );
-    assert.equal(parsed.audit.execute, true, "schema epoch reset execution audit is not mutating");
-    assert.equal(parsed.complete.release_commit, commit);
-    assert.equal(parsed.complete.environment, config.environment);
-    assert.equal(parsed.complete.epoch, epoch);
-    assert.deepEqual(
-      parsed.complete.prior_counts,
-      auditEvidence.prior_counts,
-      "schema epoch reset execution no longer matches its greenfield audit",
-    );
-    return parsed;
-  };
-  const outcome = await recoverOneShotDeployment({
-    previousDeploymentId: plan.previous_deployment_id,
-    currentDeployment: latestDeployment(config, serviceId),
-    awaitTerminal: () => waitForOneShotTerminal(
-      config,
-      serviceId,
-      plan.previous_deployment_id,
-      digest,
-      `${config.environment} schema epoch reset recovery`,
-    ),
-    readCompletion,
-    redeploy: deploy,
-    validateCandidate: (deployment) => {
-      assert.equal(
-        deploymentImageDigest(deployment),
-        digest,
-        `${config.environment} schema epoch reset recovery digest drifted`,
-      );
-    },
+  const outcome = await coordinateDatabaseOneShot({
+    config,
+    commit,
+    phase: `schema-epoch-${epoch}-execute`,
+    digest,
+    startCommand: "fmarch-schema-epoch-reset --execute",
     label: `${config.environment} schema epoch reset`,
+    variables: {
+      ...oneShotDatabaseVariables(config),
+      FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
+      FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
+      FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: `${config.environment}:${epoch}:${commit}`,
+      FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY: expectedInventory,
+      FMARCH_SCHEMA_EPOCH_RESET_EXPECTED_INVENTORY_SHA256: plan.audit_inventory_sha256,
+    },
+    readCompletion: async (deployment, intent, { allowMissing }) => {
+      let parsed;
+      try {
+        parsed = await waitForResetLogRows(
+          config,
+          deployment.id,
+          serviceId,
+          ["audit", "complete"],
+          "schema epoch reset deployment",
+        );
+      } catch (error) {
+        if (allowMissing && /emitted no audit and complete record/u.test(error.message)) return null;
+        throw error;
+      }
+      validateEpochResetAudit(
+        { ...parsed.audit, execute: false },
+        {
+          environment: config.environment,
+          epoch,
+          commit,
+          operationId: intent.operation_id,
+        },
+      );
+      assert.equal(parsed.audit.execute, true, "schema epoch reset execution audit is not mutating");
+      assert.equal(parsed.complete.release_commit, commit);
+      assert.equal(parsed.complete.operation_id, intent.operation_id);
+      assert.equal(parsed.complete.environment, config.environment);
+      assert.equal(parsed.complete.epoch, epoch);
+      assert.deepEqual(
+        parsed.complete.prior_counts,
+        auditEvidence.prior_counts,
+        "schema epoch reset execution no longer matches its greenfield audit",
+      );
+      return parsed;
+    },
   });
   const { deployment, completion: parsed } = outcome;
   const base = {
@@ -1269,7 +1766,9 @@ async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, au
     commit,
     runtime_digest: digest,
     audit_deployment_id: auditEvidence.audit_deployment_id,
+    audit_operation_id: auditEvidence.audit_operation_id,
     deployment_id: deployment.id,
+    operation_id: outcome.intent.operation_id,
     prior_counts: parsed.complete.prior_counts,
   };
   return {
@@ -1277,73 +1776,52 @@ async function deployOrRecoverEpochReset(config, digest, commit, epoch, plan, au
   };
 }
 
-async function deployOrRecoverMigrator(config, digest, commit, plan) {
+async function deployOrRecoverMigrator(config, digest, commit, phase) {
   const serviceId = config.migratorServiceId;
-  const deploy = () => deployConfiguredImage(config, {
-      serviceId,
-      image: config.runtimeImage,
-      digest,
-      startCommand: "fmarch-migrate",
-      label: `${config.environment} migrator`,
-      deploymentPolicy: canonicalDeploymentPolicy("migrator"),
-      variables: databaseIdentityVariables(config),
-      allowTerminalFailure: true,
-    });
-  const readCompletion = async (deployment, { allowMissing }) => {
-    try {
-      return await waitForMigrationCompletion(config, deployment.id, serviceId, commit);
-    } catch (error) {
-      if (allowMissing && /emitted no exact-commit completion record/u.test(error.message)) return null;
-      throw error;
-    }
-  };
-  const outcome = await recoverOneShotDeployment({
-    previousDeploymentId: plan.previous_deployment_id,
-    currentDeployment: latestDeployment(config, serviceId),
-    awaitTerminal: () => waitForOneShotTerminal(
-      config,
-      serviceId,
-      plan.previous_deployment_id,
-      digest,
-      `${config.environment} migrator recovery`,
-    ),
-    readCompletion,
-    redeploy: deploy,
-    validateCandidate: (deployment) => {
-      assert.equal(
-        deploymentImageDigest(deployment),
-        digest,
-        `${config.environment} migrator recovery digest drifted`,
-      );
-    },
+  const outcome = await coordinateDatabaseOneShot({
+    config,
+    commit,
+    phase,
+    digest,
+    startCommand: "fmarch-migrate",
     label: `${config.environment} migrator`,
+    variables: oneShotDatabaseVariables(config),
+    readCompletion: async (deployment, intent, { allowMissing }) => {
+      try {
+        return await waitForMigrationCompletion(
+          config,
+          deployment.id,
+          serviceId,
+          commit,
+          intent.operation_id,
+        );
+      } catch (error) {
+        if (allowMissing && /emitted no exact-commit completion record/u.test(error.message)) {
+          return null;
+        }
+        throw error;
+      }
+    },
   });
   const { deployment } = outcome;
   return {
     deployment: {
       id: deployment.id,
       status: "SUCCESS",
-      meta: { imageDigest: digest },
+      meta: { imageDigest: digest, operationId: outcome.intent.operation_id },
     },
   };
 }
 
 async function coordinateEpochReset(config, digest, commit, epoch) {
-  const currentAuditEvidence = await deployEpochResetAudit(config, digest, commit, epoch);
-  const operation = epochResetOperation(
-    config,
-    digest,
-    commit,
-    epoch,
-    currentAuditEvidence,
-  );
+  const operation = epochResetOperation(config, digest, commit, epoch);
   const journalDirectory = path.join(
     repoRoot,
     "target",
     "releases",
     config.environment,
     "schema-epoch-reset",
-    `${commit}-epoch-${epoch}`,
+    `${releaseJournalScope(config, commit)}-epoch-${epoch}`,
   );
   const loadPhase = async (phase) => {
     try {
@@ -1360,19 +1838,16 @@ async function coordinateEpochReset(config, digest, commit, epoch) {
     operation,
     loadPhase,
     publishPhase,
-    audit: async () => currentAuditEvidence,
+    audit: () => deployEpochResetAudit(config, digest, commit, epoch),
     planReset: async (auditEvidence) => ({
-      previous_deployment_id: latestDeployment(config, config.migratorServiceId)?.id ?? null,
       audit_inventory_sha256: auditEvidence.inventory_sha256,
       expected_inventory: auditEvidence.prior_counts,
     }),
     executeOrRecoverReset: (plan, auditEvidence) =>
       deployOrRecoverEpochReset(config, digest, commit, epoch, plan, auditEvidence),
-    planMigration: async (resetEvidence) => ({
-      previous_deployment_id: resetEvidence.schema_epoch_reset.deployment_id,
-    }),
+    planMigration: async () => ({ phase: `schema-epoch-${epoch}-migrate` }),
     executeOrRecoverMigration: (plan) =>
-      deployOrRecoverMigrator(config, digest, commit, plan),
+      deployOrRecoverMigrator(config, digest, commit, plan.phase),
   });
 }
 
@@ -1610,23 +2085,13 @@ export async function main(argv = process.argv.slice(2)) {
     schemaEpochReset = reset.schemaEpochReset;
     migrator = reset.migrator;
   } else {
-    migrator = await deployImage(
+    migrator = (await deployOrRecoverMigrator(
       config,
-      config.migratorServiceId,
-      config.runtimeImage,
       runtimeDigest,
-      "fmarch-migrate",
-      `${args.environment} migrator`,
-      "migrator",
-      databaseIdentityVariables(config),
-    );
+      commit,
+      "migrate",
+    )).deployment;
   }
-  await waitForMigrationCompletion(
-    config,
-    migrator.id,
-    config.migratorServiceId,
-    commit,
-  );
   const [api, frontend] = await Promise.all([
     deployImage(
       config,

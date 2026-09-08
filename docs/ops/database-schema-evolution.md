@@ -49,15 +49,19 @@ and environment-specific bootstrap/sentinel last. Record the new migration
 checksums and the coordinator release receipt. Staging must be proven before
 the production release pointer advances.
 
-The coordinator journals epoch reset intent and every phase as immutable files
-under `target/releases/<environment>/schema-epoch-reset/`, keyed by exact
-environment, epoch, commit, runtime digest, and canonical Railway topology. It
-records the prior migrator deployment before dispatching the destructive reset.
-After interruption it inspects the succeeding Railway deployment and requires
-the expected image digest. A failed or log-ambiguous successor is re-dispatched
-once with that same digest; the binary reads the database ledger to distinguish
-committed completion from work that still must run. Migration completion is
-likewise recovered only from a same-digest deployment and exact-commit record.
+The coordinator journals the high-level epoch reset and every database one-shot
+as immutable files under `target/releases/<environment>/`. Before reset audit,
+reset execution, and post-reset migration, it records an exact intent containing
+the environment, epoch/phase, commit, runtime repository and digest, canonical
+variable hash, production lease when applicable, generation, start command,
+and deterministic operation ID. Railway returns the exact deployment ID through
+`serviceInstanceDeployV2`; the coordinator durably binds and waits for that ID.
+If the V2 response is lost, bounded history may recover one exact command/image
+match, while zero or multiple matches remain outcome-unknown. `FAILED` or
+`CRASHED` closes a generation and permits one journaled successor. `SUCCESS`
+without the exact operation-and-commit log is ambiguous and is never
+redispatched. Ordinary migration uses this same protocol rather than relying on
+mutable latest-deployment state.
 
 The requested reset epoch must equal `schema/epoch.json` at the exact release
 Git commit, and `fmarch-schema-epoch-reset` independently requires the same
@@ -75,18 +79,31 @@ the shared database-operation advisory lock. Execute takes `ACCESS EXCLUSIVE`
 locks on the complete, stably ordered public data-relation inventory, recounts,
 and requires the exact audit inventory plus digest supplied by the coordinator
 before `DROP`; a post-audit insert therefore aborts without destroying data.
-A retry after commit but before
-stdout reconstructs the same audit/completion from that ledger and never
-repeats the drop. The filesystem phase journal is orchestration evidence, not
-the authority for whether the database transaction committed. If a Railway
-reset or SQLx migrator process is `FAILED`/`CRASHED`, or succeeds without its
-terminal log, the coordinator re-dispatches the same digest once so the reset
-can read the ledger or SQLx can verify its already-committed history; other
-terminal states fail closed.
+A retry after commit but before stdout reconstructs the same audit/completion
+from that ledger and never repeats the drop. The filesystem phase journal is
+orchestration evidence, not the authority for whether the database transaction
+committed. Only an exact Railway `FAILED`/`CRASHED` result permits the single
+successor generation, allowing the reset ledger or SQLx history to prove an
+already-committed operation. Missing logs after Railway `SUCCESS` and every
+other terminal state fail closed for operator investigation.
+
+Both binaries require a journal-derived `--operation-id` and share a bounded
+maintenance policy: 30-second pool acquisition, 60-second lock wait,
+five-minute statement execution, and ten-minute overall operation. The
+coordinator's 15-minute exact-deployment wait is strictly larger. Cancellation
+closes the physical SQLx connections and releases session locks; the migrator
+also reapplies the deadlines after the frozen epoch-one baseline resets session
+settings. That immutable baseline is bounded by the five-minute process-side
+statement cap while its embedded timeout resets are active; subsequent lock
+waits again use the 60-second session limit. Debug integration tests may only
+shorten the canonical values.
 
 The canonical `cargo:server` Postgres lane exercises the test-only
 `after-commit-before-output` failpoint, exact ledger recovery without a second
-drop, changed-inventory refusal, and a successful migration after recovery.
+drop, changed-inventory refusal, and a successful migration after recovery. It
+also holds the shared operation lock and proves both binaries exit within short
+debug deadlines, leave a reset canary and revoked privilege untouched, and
+retain no database sessions after cancellation.
 
 Epoch one has one exceptional cutover: staging briefly applied a rewritten
 `0001` checksum before append-only history existed. Freeze the pre-rewrite

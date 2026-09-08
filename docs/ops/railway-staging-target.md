@@ -97,9 +97,10 @@ topology, images, reset decision, trust root, and all freshness clocks, and only
 then checks the remote lease as the last pre-mutation step. The first production
 mutation additionally requires a 65-minute freshness reserve (the promoter's
 one-hour coordinator deadline plus clock-skew allowance); later mutations still
-require strictly live evidence. `FAILED` or `CRASHED` one-shot reset/migrator deployments
-may be re-dispatched with the same digest; approval and other ambiguous
-terminal states remain operator-visible and fail closed. All release Git,
+require strictly live evidence. Every database one-shot has a durable intent
+before Railway mutation and a maximum of two generations: the initial attempt
+and one successor after an exact `FAILED` or `CRASHED` deployment. Approval and
+other terminal states remain operator-visible and fail closed. All release Git,
 Railway, and Podman subprocesses have bounded timeouts; a timeout unwinds the
 promoter but deliberately retains its exact remote lease so a queued remote
 database job cannot outlive its authority. Any coordinator error has the same
@@ -137,13 +138,41 @@ first disconnects the canonical Git source without stopping the last successful
 deployment, then
 restores the complete service policy that source cutover would otherwise clear
 (replica count, restart policy, health checks, and the API schema gate), then
-waits for both Railway's one-shot migrator deployment and the migrator's
-exact-commit completion record before deploying API and frontend, verifies
+dispatches through `serviceInstanceDeployV2`, pins the returned deployment ID,
+and waits for that ID rather than mutable latest-service state. As soon as V2
+has captured the deployment snapshot, and again after terminal observation,
+the coordinator restores the migrator command to `/bin/false` without
+triggering another deployment. Error and outcome-unknown paths perform the same
+idempotent disarm before returning. Before every
+reset audit, reset execution, and ordinary or post-reset migration, the
+coordinator publishes a tamper-evident intent keyed by environment, release
+commit, production lease when applicable, phase and generation, exact image,
+start command, and credential-free variable hash. The intent's deterministic
+64-hex operation ID is passed on the binary command line and must reappear with
+the exact commit in structured logs. A lost V2 response may adopt one unique
+bounded-history match for that command and image; multiple matches fail as
+split brain. An existing intent with no match is outcome-unknown and is never
+redispatched. A `SUCCESS` deployment without exact completion evidence is also
+ambiguous and cannot open a new generation. The coordinator waits for both the
+pinned one-shot deployment and exact completion before deploying API and
+frontend, verifies
 their reported digests and embedded `release_commit`, and finally produces the
 environment receipt. A failed migrator starts neither later deployment. A
 failed API or frontend may be retried only with the same receipt-bound digest.
 The bounded API schema gate still tolerates normal migration progress but never
 migrates or weakens checksum/ACL failures.
+
+The one-shot database budget is process-specific and repository-owned:
+30 seconds to acquire a connection, 60 seconds for locks, five minutes for a
+statement, and ten minutes for the complete operation. Railway's exact-ID wait
+is 15 minutes, leaving a bounded queue allowance above the database deadline.
+The coordinator and staging game day upsert the four canonical
+`FMARCH_DB_*_TIMEOUT_MS` values immediately before a migrator dispatch. Both
+binaries close their owned sessions on cancellation so an expired deployment
+cannot later resume a queued lock or DDL operation. The frozen epoch-one
+baseline temporarily resets PostgreSQL session lock/statement settings; its
+execution is still capped by the five-minute process deadline, after which the
+migrator restores the 60-second lock and five-minute statement settings.
 
 Immediately before the production pointer CAS, promotion revalidates staging,
 fleet, and production-attempt freshness, then rechecks exact live production
@@ -233,14 +262,20 @@ business integrity or plaintext confidentiality after API compromise.
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
 2. Add a private `migrator` service and configure the deployment shape from
    `deploy/railway/migrator.railway.toml`. The coordinator owns its digest-pinned
-   image source. Copy
+   image source and installs an operation-bound start command immediately before
+   each dispatch. The persistent template deliberately uses `/bin/false`; never
+   replace it with a bare `fmarch-migrate` command or enable ambient deploys. Copy
    `deploy/railway/migrator.env.example`. Generate distinct, URI-safe
    application and key-admin passwords in each environment. Only this service
    receives the environment-local `${{Postgres.DATABASE_URL}}` composed as
    `DATABASE_MIGRATION_URL` with exactly one secure `sslmode` and both password
    values. It has no public domain, TCP proxy, event keys, bucket
    credentials, or identity credentials. Its `NEVER` restart policy preserves
-   one-shot semantics.
+   one-shot semantics. Preserve the exact template deadlines:
+   `FMARCH_DB_ACQUIRE_TIMEOUT_MS=30000`,
+   `FMARCH_DB_LOCK_TIMEOUT_MS=60000`,
+   `FMARCH_DB_STATEMENT_TIMEOUT_MS=300000`, and
+   `FMARCH_DB_OPERATION_TIMEOUT_MS=600000`.
    Set `FMARCH_DATABASE_PROJECT_ID`, `FMARCH_DATABASE_ENVIRONMENT_ID`, and
    `FMARCH_DATABASE_ENVIRONMENT` to the repository-owned canonical values for
    that environment. Before the first normal migration, run the exact release

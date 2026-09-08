@@ -2,6 +2,11 @@ import {assertAuthenticatedReceipt, stagingOrigins} from './hosted_authenticated
 import assert from "node:assert/strict";
 import { createHash, createPublicKey, verify } from "node:crypto";
 
+export {
+  DATABASE_ONE_SHOT_PLATFORM_WAIT_TIMEOUT_MS,
+  DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+} from "./database_one_shot_policy.mjs";
+
 export const RELEASE_RECEIPT_VERSION = 7;
 export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
@@ -51,6 +56,7 @@ export const TERMINAL_DEPLOYMENT_STATES = new Set([
 
 const fullCommitPattern = /^[0-9a-f]{40}$/u;
 const imageDigestPattern = /^sha256:[0-9a-f]{64}$/u;
+const sha256Pattern = /^[0-9a-f]{64}$/u;
 
 export function assertFullCommit(commit, label = "release commit") {
   assert.match(commit ?? "", fullCommitPattern, `${label} must be a full lowercase Git SHA`);
@@ -693,7 +699,17 @@ function assertSchemaEpochReset(reset, receipt) {
   assert.equal(reset.runtime_digest, receipt.images.runtime, "schema epoch reset image drifted");
   assert.ok(Number.isSafeInteger(reset.epoch) && reset.epoch > 0, "schema epoch reset epoch is invalid");
   assertNonemptyString(reset.audit_deployment_id, "schema epoch reset audit deployment id");
+  assert.match(
+    reset.audit_operation_id ?? "",
+    sha256Pattern,
+    "schema epoch reset audit operation id is invalid",
+  );
   assertNonemptyString(reset.deployment_id, "schema epoch reset deployment id");
+  assert.match(
+    reset.operation_id ?? "",
+    sha256Pattern,
+    "schema epoch reset operation id is invalid",
+  );
   assert.ok(
     reset.prior_counts !== null &&
       typeof reset.prior_counts === "object" &&

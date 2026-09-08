@@ -6,10 +6,12 @@ import {
   fmarchMigrationInvocation,
   keyAdminDatabaseEnvironment,
   localDatabaseAuthority,
+  localMigrationOperationId,
   localDatabaseRoleNames,
   migrationDatabaseEnvironment,
   serverRuntimeEnvironment,
 } from "./run_fmarch_migrations.mjs";
+import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 
 const migrationHarnessCallers = Object.freeze([
   "game_invitation_role_proof.mjs",
@@ -98,6 +100,7 @@ test("application child environment carries no migration or key-admin authority"
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
+  assert.equal(env.FMARCH_DB_OPERATION_TIMEOUT_MS, undefined);
   assertPostgresOwnerEnvironmentRemoved(env);
 });
 
@@ -169,6 +172,12 @@ test("migrator child environment carries no runtime, key-admin, or ambient libpq
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.keys(DATABASE_ONE_SHOT_TIMEOUT_VARIABLES).map((key) => [key, env[key]]),
+    ),
+    DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+  );
   assertPostgresOwnerEnvironmentRemoved(env);
 });
 
@@ -186,6 +195,9 @@ test("every shared migrator launch registers with the host-wide heavyweight lane
     "server",
     "--bin",
     "fmarch-migrate",
+    "--",
+    "--operation-id",
+    localMigrationOperationId,
   ]);
 });
 
@@ -269,6 +281,10 @@ function contaminatedEnvironment() {
     FMARCH_PROFILE_HANDLE_INDEX_KEY: "ambient-profile-index-key-material-0000001",
     FMARCH_PROFILE_HANDLE_INDEX_KID: "ambient-profile-index-v1",
     FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY: "ambient-rotation-secret-material-00000002",
+    FMARCH_DB_ACQUIRE_TIMEOUT_MS: "1",
+    FMARCH_DB_LOCK_TIMEOUT_MS: "2",
+    FMARCH_DB_STATEMENT_TIMEOUT_MS: "3",
+    FMARCH_DB_OPERATION_TIMEOUT_MS: "4",
     ...Object.fromEntries(
       ambientPostgresVariables.map((key) => [key, `attacker-controlled-${key}`]),
     ),

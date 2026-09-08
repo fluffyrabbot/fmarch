@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
+
+import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 
 export const localDatabaseRoleNames = Object.freeze({
   application: "fmarch_application",
@@ -10,6 +13,9 @@ const defaultApplicationPassword = "fmarch-local-application-password";
 const defaultKeyAdminPassword = "fmarch-local-key-admin-password";
 const defaultProfileHandleIndexKey = "fmarch-local-profile-index-key-material-v1";
 const defaultProfileHandleIndexKid = "local-profile-index-v1";
+export const localMigrationOperationId = createHash("sha256")
+  .update("fmarch-local-migration-v1")
+  .digest("hex");
 const authorityOnlyEnvironmentKeys = Object.freeze([
   "DATABASE_MIGRATION_URL",
   "DATABASE_RESTORE_MIGRATION_URL",
@@ -19,6 +25,7 @@ const authorityOnlyEnvironmentKeys = Object.freeze([
   "FMARCH_PROFILE_HANDLE_INDEX_KEY",
   "FMARCH_PROFILE_HANDLE_INDEX_KID",
   "FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY",
+  "FMARCH_DB_OPERATION_TIMEOUT_MS",
 ]);
 
 /**
@@ -99,7 +106,7 @@ export function migrationDatabaseEnvironment({ migrationUrl, env = process.env }
 }
 
 /** Build the registered host-wide heavyweight-lane invocation for fmarch-migrate. */
-export function fmarchMigrationInvocation({ cwd }) {
+export function fmarchMigrationInvocation({ cwd, operationId = localMigrationOperationId }) {
   return Object.freeze({
     command: "python3",
     args: Object.freeze([
@@ -112,6 +119,9 @@ export function fmarchMigrationInvocation({ cwd }) {
       "server",
       "--bin",
       "fmarch-migrate",
+      "--",
+      "--operation-id",
+      operationId,
     ]),
   });
 }
@@ -149,6 +159,7 @@ function migrationDatabaseEnvironmentForAuthority(authority, env) {
     env.FMARCH_DATABASE_APPLICATION_PASSWORD ?? defaultApplicationPassword;
   migrationEnv.FMARCH_DATABASE_KEY_ADMIN_PASSWORD =
     env.FMARCH_DATABASE_KEY_ADMIN_PASSWORD ?? defaultKeyAdminPassword;
+  Object.assign(migrationEnv, DATABASE_ONE_SHOT_TIMEOUT_VARIABLES);
   return migrationEnv;
 }
 

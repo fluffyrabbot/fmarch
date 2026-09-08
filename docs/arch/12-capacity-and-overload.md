@@ -40,6 +40,24 @@ The defaults are conservative starting points, not claims about hosted capacity:
 | Gameplay commands | 32 | `FMARCH_COMMAND_MAX_IN_FLIGHT` | Retryable `503`, with an additional one-command-per-principal admission fence. |
 | Deltas retained per receiver | 256 | `FMARCH_LIVE_PROJECTION_CAPACITY` | Lagging receiver gets a terminal `ResyncRequired`; delivery resumes only in a fresh generation after reconnect and refresh. |
 
+Schema-owner one-shots use the same database variable namespace in a separate
+process profile; they do not inherit the latency-oriented API values:
+
+| One-shot boundary | Canonical value | Environment variable | Exhaustion behavior |
+|---|---:|---|---|
+| Pool acquisition | 30 s | `FMARCH_DB_ACQUIRE_TIMEOUT_MS` | The binary exits before starting or resuming schema work. |
+| Lock acquisition | 60 s | `FMARCH_DB_LOCK_TIMEOUT_MS` | PostgreSQL cancels the blocked advisory, table, or DDL lock request. |
+| Statement | 5 min | `FMARCH_DB_STATEMENT_TIMEOUT_MS` | PostgreSQL and the migrator's process-side cap cancel the active statement/migration. |
+| Complete operation | 10 min | `FMARCH_DB_OPERATION_TIMEOUT_MS` | The binary cancels all remaining work, closes its owned physical sessions, and exits without later resumption. |
+| Railway exact-ID wait | 15 min | repository policy (not a service variable) | Coordination retains authority and reports a bounded timeout rather than switching to mutable latest state. |
+
+The strict ordering is acquisition < lock < statement < operation < Railway
+wait. Release binaries accept only the canonical profile; debug database proofs
+may shorten it while preserving the same order. The frozen epoch-one baseline
+contains historical session timeout resets, so its DDL is bounded by the
+five-minute process-side migration cap; the migrator reapplies the canonical
+session limits immediately afterward.
+
 Configuration is strict at startup for the database and HTTP budgets. Invalid or out-of-range
 values fail the process rather than silently changing the capacity model. `FMARCH_WS_MAX_CONNECTIONS`
 and the live projection capacity are clamped by the API boundary to safe ranges.
