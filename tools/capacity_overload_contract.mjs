@@ -99,6 +99,10 @@ export function assertCapacityOverloadReport(report) {
   assert(report?.proof === "fmarch-capacity-overload", "proof id drifted");
   assert(report?.version === 1, "proof version drifted");
   assert(report?.status === "passed", "capacity proof did not pass");
+  assert(
+    report.configuration?.authSourceProvenance === "hmac-sha256",
+    "caller rate-limit proof did not use signed source provenance",
+  );
 
   const scenarios = report.scenarios ?? {};
   for (const name of [
@@ -273,6 +277,10 @@ export function assertCapacityOverloadReport(report) {
     scenarios.callerRateLimit.statusCode === 429 &&
       Number(scenarios.callerRateLimit.retryAfter) >= 1,
     "caller-scoped rate limit was not an intentional retryable 429",
+  );
+  assert(
+    scenarios.callerRateLimit.isolatedSourceStatus === 401,
+    "an independent signed caller inherited another caller's rate limit",
   );
   return report;
 }

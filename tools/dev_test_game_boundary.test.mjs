@@ -279,6 +279,7 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     identityDeliveryProviderTimeoutMs: 10000,
     identityDeliveryDatabaseTimeoutMs: 9000,
     identityDeliveryClaimLeaseMs: 45000,
+    identityDeliveryRetryMaxSeconds: 300,
     workerReadinessGraceMs: 10000,
     shutdownDrainTimeoutMs: 30000,
   });
@@ -299,6 +300,41 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
       capacity.identityDeliveryProviderTimeoutMs +
         2 * capacity.identityDeliveryDatabaseTimeoutMs,
   );
+  const deliveryObservationBudget =
+    capacity.workerReadinessGraceMs +
+    capacity.identityDeliveryProviderTimeoutMs +
+    3 * capacity.identityDeliveryDatabaseTimeoutMs +
+    5000;
+  assert.ok(
+    deliveryObservationBudget >
+      capacity.workerReadinessGraceMs +
+        capacity.identityDeliveryProviderTimeoutMs +
+        3 * capacity.identityDeliveryDatabaseTimeoutMs,
+  );
+  const defaultFetchTimeoutMs = 15000;
+  const explicitRetryBackoffMarginMs = 5000;
+  const explicitRetryBackoffSeconds =
+    Math.ceil(
+      (deliveryObservationBudget +
+        2 * defaultFetchTimeoutMs +
+        explicitRetryBackoffMarginMs) /
+        1000,
+    );
+  assert.ok(
+    explicitRetryBackoffSeconds * 1000 >
+      deliveryObservationBudget + 2 * defaultFetchTimeoutMs,
+  );
+  assert.ok(
+    explicitRetryBackoffSeconds < capacity.identityDeliveryRetryMaxSeconds,
+  );
+  for (const budgetTerm of [
+    "scratchApiDatabaseCapacity.workerReadinessGraceMs",
+    "scratchApiDatabaseCapacity.identityDeliveryProviderTimeoutMs",
+    "3 * Number(scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs)",
+    "deliveryIntentPollMarginMs",
+  ]) {
+    assert.ok(source.includes(budgetTerm), `delivery observer budget omits ${budgetTerm}`);
+  }
   for (const [variable, property] of Object.entries({
     FMARCH_DB_MAX_CONNECTIONS: "maxConnections",
     FMARCH_DB_ACQUIRE_TIMEOUT_MS: "acquireTimeoutMs",
@@ -308,6 +344,8 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     FMARCH_IDENTITY_DELIVERY_DATABASE_TIMEOUT_MS:
       "identityDeliveryDatabaseTimeoutMs",
     FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS: "identityDeliveryClaimLeaseMs",
+    FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS:
+      "identityDeliveryRetryMaxSeconds",
     FMARCH_WORKER_READINESS_GRACE_MS: "workerReadinessGraceMs",
     FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "shutdownDrainTimeoutMs",
   })) {
@@ -317,4 +355,28 @@ test("auth invite scratch proof owns a deterministic database capacity budget", 
     );
     assert.doesNotMatch(source, new RegExp(`process\\.env\\.${variable}`));
   }
+});
+
+test("auth invite proof observes provider backoff before an explicit admin retry", async () => {
+  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
+
+  for (const contract of [
+    "retry_after_seconds: explicitRetryBackoffSeconds",
+    "2 * defaultFetchTimeoutMs",
+    "explicitRetryBackoffMarginMs",
+    "explicitRetryBackoffSeconds >=",
+    "waitForRetryableDeliveryIntent({",
+    "lastDelivery.nextAttemptAt > Math.floor(Date.now() / 1000)",
+    "backoffOverridden: true",
+    "delivery lookup requires exactly one delivery id or credential hash",
+    "timeoutMs: Math.min(deliveryIntentObservationTimeoutMs, remainingMs)",
+    'import { runBoundedProcess } from "./proof_process.mjs"',
+  ]) {
+    assert.equal(source.includes(contract), true, `missing delivery retry contract: ${contract}`);
+  }
+  assert.doesNotMatch(
+    source,
+    /await delay\(1100\)/u,
+    "admin retry must wait on durable delivery state rather than a wall-clock guess",
+  );
 });

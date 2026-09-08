@@ -13,6 +13,7 @@ import {
   capacityOverloadBudgets as budgets,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
+import { createCapacityAuthSourceAuthority } from "./capacity_auth_source_authority.mjs";
 import {
   seededSetupRoster,
   seedSetupCommandPlanForGame,
@@ -51,6 +52,7 @@ const postPrefix = `capacity-post-${runId}`;
 const wsPostPrefix = `capacity-ws-${runId}`;
 const seedSessionTokens = new Map();
 const localProofAuth = createLocalProofAuth();
+const authSourceAuthority = createCapacityAuthSourceAuthority();
 
 let server;
 let serverOutput = "";
@@ -153,6 +155,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         websocketMaxConnections: budgets.websocketConnections,
         liveProjectionCapacity: 2,
         liveProjectionDeliveryDelayMs: 100,
+        authSourceProvenance: "hmac-sha256",
       },
       scenarios,
       proofBoundary:
@@ -206,27 +209,28 @@ function parseArgs(argv) {
 async function startServer({ baseUrl, port, databaseUrl, env }) {
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
-    env: localProofAuth.serverEnvironment({
-      ...serverRuntimeEnvironment({ applicationUrl: databaseUrl, env }),
-      FMARCH_BIND: `127.0.0.1:${port}`,
-      FMARCH_MEDIA_ROOT: mediaRoot,
-      FMARCH_DB_MAX_CONNECTIONS: "10",
-      FMARCH_DB_ACQUIRE_TIMEOUT_MS: "250",
-      FMARCH_DB_STATEMENT_TIMEOUT_MS: "4000",
-      FMARCH_DB_LOCK_TIMEOUT_MS: "2000",
-      FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "10000",
-      FMARCH_HTTP_MAX_IN_FLIGHT: "8",
-      FMARCH_HTTP_QUEUE_TIMEOUT_MS: "75",
-      FMARCH_HTTP_REQUEST_TIMEOUT_MS: "5000",
-      FMARCH_HTTP_RETRY_AFTER_SECONDS: "1",
-      FMARCH_WS_MAX_CONNECTIONS: String(budgets.websocketConnections),
-      FMARCH_LIVE_PROJECTION_CAPACITY: "2",
-      FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS: "100",
-      FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
-      FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
-      FMARCH_TRUST_AUTH_SOURCE_HEADER: "1",
-      RUST_LOG: env.RUST_LOG ?? "warn",
-    }),
+    env: localProofAuth.serverEnvironment(
+      authSourceAuthority.serverEnvironment({
+        ...serverRuntimeEnvironment({ applicationUrl: databaseUrl, env }),
+        FMARCH_BIND: `127.0.0.1:${port}`,
+        FMARCH_MEDIA_ROOT: mediaRoot,
+        FMARCH_DB_MAX_CONNECTIONS: "10",
+        FMARCH_DB_ACQUIRE_TIMEOUT_MS: "250",
+        FMARCH_DB_STATEMENT_TIMEOUT_MS: "4000",
+        FMARCH_DB_LOCK_TIMEOUT_MS: "2000",
+        FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "10000",
+        FMARCH_HTTP_MAX_IN_FLIGHT: "8",
+        FMARCH_HTTP_QUEUE_TIMEOUT_MS: "75",
+        FMARCH_HTTP_REQUEST_TIMEOUT_MS: "5000",
+        FMARCH_HTTP_RETRY_AFTER_SECONDS: "1",
+        FMARCH_WS_MAX_CONNECTIONS: String(budgets.websocketConnections),
+        FMARCH_LIVE_PROJECTION_CAPACITY: "2",
+        FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS: "100",
+        FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
+        FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
+        RUST_LOG: env.RUST_LOG ?? "warn",
+      }),
+    ),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", recordServerOutput);
@@ -968,27 +972,36 @@ async function proveHttpAdmission({ baseUrl, psql, databaseUrl }) {
 
 async function proveCallerRateLimit({ baseUrl }) {
   const url = `${baseUrl}/auth/accounts/login`;
-  const options = {
+  const requestForSource = (source) => ({
     method: "POST",
-    headers: {
+    headers: authSourceAuthority.requestHeaders(source, {
       "content-type": "application/json",
-      "x-fmarch-auth-source": `capacity-proof-${runId}`,
-    },
+    }),
     body: JSON.stringify({
-      account_id: `missing-${runId}`,
+      account_id: `missing-${source}`,
       password: "not-the-correct-password-123!",
     }),
-  };
+  });
+  const options = requestForSource(`capacity-proof-${runId}`);
   const first = await timedFetch(url, options);
   const second = await timedFetch(url, options);
   const limited = await timedFetch(url, options);
+  const isolated = await timedFetch(
+    url,
+    requestForSource(`capacity-proof-isolated-${runId}`),
+  );
   assert(first.status === 401 && second.status === 401, "auth failures did not precede 429");
   assert(limited.status === 429, `caller rate limit returned ${limited.status}`);
+  assert(
+    isolated.status === 401,
+    `independent signed caller inherited rate limit ${isolated.status}`,
+  );
   return {
     status: "passed",
     precedingStatuses: [first.status, second.status],
     statusCode: limited.status,
     retryAfter: limited.headers["retry-after"],
+    isolatedSourceStatus: isolated.status,
   };
 }
 

@@ -1399,7 +1399,23 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
     ['tools/game_invitation_role_proof.mjs', 'test:auth-invite-role-proof'],
+    [
+      'tools/proof_process.mjs',
+      ['test:auth-invite-role-proof', 'test:dev-test-game-contract'],
+    ],
+    [
+      'tools/proof_process.test.mjs',
+      ['test:auth-invite-role-proof', 'test:dev-test-game-contract'],
+    ],
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
+    [
+      'tools/capacity_auth_source_authority.mjs',
+      [
+        'test:capacity-overload-contract',
+        'test:public-search-staging-sentinel',
+        'test:capacity-overload',
+      ],
+    ],
     [
       'tools/capacity_overload_proof.mjs',
       [
@@ -1482,6 +1498,27 @@ test('public search role proof is selected from search, projections, and public-
       selection.laneIds.includes('test:public-search-role-proof'),
       `${source} must arm public search role proof`,
     );
+  }
+});
+
+test('auth-source signer changes re-arm signed capacity and identity proofs', () => {
+  const source = 'frontend/src/lib/server/auth-source.mjs';
+  const selection = selectLanes({
+    changed: [source],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  const touchedIds = new Set(selection.touched.map(({ id }) => id));
+  assert.ok(touchedIds.has('frontend:auth-source-signing'));
+  assert.ok(touchedIds.has('frontend:identity'));
+  for (const lane of [
+    'test:frontend-contract',
+    'test:capacity-overload-contract',
+    'test:public-search-staging-sentinel',
+    'test:capacity-overload',
+  ]) {
+    assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
   }
 });
 

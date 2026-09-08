@@ -3971,7 +3971,6 @@ async fn admin_auth_delivery_queue(
                delivery.updated_at,
                (
                    delivery.status = 'retryable_failed'
-                   AND delivery.next_attempt_at <= $1
                    AND delivery.credential_expires_at > $1
                    AND CASE delivery.delivery_kind
                        WHEN 'invite' THEN EXISTS (
@@ -4035,7 +4034,7 @@ async fn retry_auth_delivery_intent(
     .ok_or_else(|| ApiError::Reject {
         status: StatusCode::CONFLICT,
         error: RejectCode::StreamConflict,
-        message: "delivery intent is not ready for retry; refresh delivery status and try again"
+        message: "delivery intent is not retryable; refresh delivery status and try again"
             .to_string(),
     })?;
     Ok(Json(AuthDeliveryRetryResponse {

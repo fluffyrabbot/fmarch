@@ -44,7 +44,7 @@
               <button class="fm-touch-button" type="submit">Retry delivery</button>
             </form>
           {:else if item.status === "retryable_failed"}
-            <p class="delivery-queue__note">Retry is unavailable until the backoff window and credential checks pass.</p>
+            <p class="delivery-queue__note">Retry is unavailable because the credential is inactive or your role cannot retry it.</p>
           {/if}
         </article>
       {/each}

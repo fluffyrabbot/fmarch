@@ -242,8 +242,7 @@ impl IdentityDeliveryWorkerConfig {
             .min(62);
         let base = self.retry_base.as_secs();
         let exponential_cap = base
-            .checked_mul(1_u64 << exponent)
-            .unwrap_or(u64::MAX)
+            .saturating_mul(1_u64 << exponent)
             .min(self.retry_max.as_secs());
         // PostgreSQL persists second-resolution scheduling. Keep the lower bound
         // at one second while sampling every other point in the full-jitter
@@ -822,6 +821,21 @@ struct ClaimedIdentityDelivery {
     provider_attempt_permitted: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum IdentityDeliveryClaimTarget {
+    NextDue,
+    ExplicitRetry(Uuid),
+}
+
+impl IdentityDeliveryClaimTarget {
+    fn delivery_id(self) -> Option<Uuid> {
+        match self {
+            Self::NextDue => None,
+            Self::ExplicitRetry(delivery_id) => Some(delivery_id),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct IdentityDeliveryCancellationRequest<'a> {
     delivery_id: Uuid,
@@ -849,6 +863,16 @@ struct IdentityDeliveryAuditRecord<'a> {
     provider_receipt_id: Option<&'a str>,
 }
 
+struct IdentityDeliveryExecution<'a> {
+    pool: &'a PgPool,
+    gateway: &'a dyn IdentityDeliveryGateway,
+    actor_principal_id: &'a PrincipalId,
+    requested_event_kind: Option<&'a str>,
+    claimed_at: i64,
+    config: IdentityDeliveryWorkerConfig,
+    database_slots: Option<&'a Arc<Semaphore>>,
+}
+
 pub(super) async fn process_identity_delivery_intent_with_config(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
@@ -858,21 +882,28 @@ pub(super) async fn process_identity_delivery_intent_with_config(
     _caller_now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) =
-        claim_delivery(pool, gateway.provider_id(), Some(delivery_id), config).await?
+    let Some(claim) = claim_delivery(
+        pool,
+        gateway.provider_id(),
+        IdentityDeliveryClaimTarget::ExplicitRetry(delivery_id),
+        config,
+    )
+    .await?
     else {
         return Ok(None);
     };
     let claimed_at = claim.claimed_at;
     deliver_and_finalize(
-        pool,
         claim,
-        gateway,
-        actor_principal_id,
-        Some(event_kind),
-        claimed_at,
-        config,
-        None,
+        IdentityDeliveryExecution {
+            pool,
+            gateway,
+            actor_principal_id,
+            requested_event_kind: Some(event_kind),
+            claimed_at,
+            config,
+            database_slots: None,
+        },
     )
     .await
 }
@@ -883,20 +914,29 @@ pub async fn process_next_identity_delivery_with_config(
     _caller_now: i64,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
-    let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, config).await? else {
+    let Some(claim) = claim_delivery(
+        pool,
+        gateway.provider_id(),
+        IdentityDeliveryClaimTarget::NextDue,
+        config,
+    )
+    .await?
+    else {
         return Ok(None);
     };
     let actor_principal_id = claim.attempt.principal_id;
     let claimed_at = claim.claimed_at;
     deliver_and_finalize(
-        pool,
         claim,
-        gateway,
-        &actor_principal_id,
-        None,
-        claimed_at,
-        config,
-        None,
+        IdentityDeliveryExecution {
+            pool,
+            gateway,
+            actor_principal_id: &actor_principal_id,
+            requested_event_kind: None,
+            claimed_at,
+            config,
+            database_slots: None,
+        },
     )
     .await
 }
@@ -928,7 +968,12 @@ where
                     }
                     continue;
                 }
-                claim = claim_delivery(&pool, gateway.provider_id(), None, config) => claim?,
+                claim = claim_delivery(
+                    &pool,
+                    gateway.provider_id(),
+                    IdentityDeliveryClaimTarget::NextDue,
+                    config,
+                ) => claim?,
             };
             let Some(claim) = claim else {
                 observe_progress(IdentityDeliveryWorkerObservation {
@@ -953,14 +998,16 @@ where
             let claimed_at = claim.claimed_at;
             attempts.spawn(async move {
                 deliver_and_finalize(
-                    &attempt_pool,
                     claim,
-                    attempt_gateway.as_ref(),
-                    &actor_principal_id,
-                    None,
-                    claimed_at,
-                    config,
-                    Some(&attempt_database_slots),
+                    IdentityDeliveryExecution {
+                        pool: &attempt_pool,
+                        gateway: attempt_gateway.as_ref(),
+                        actor_principal_id: &actor_principal_id,
+                        requested_event_kind: None,
+                        claimed_at,
+                        config,
+                        database_slots: Some(&attempt_database_slots),
+                    },
                 )
                 .await
             });
@@ -1172,11 +1219,11 @@ fn validate_delivery_reseal_kid(kid: &str) -> Result<(), IdentityDeliveryError> 
 async fn claim_delivery(
     pool: &PgPool,
     provider_id: &str,
-    delivery_id: Option<Uuid>,
+    target: IdentityDeliveryClaimTarget,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     bounded_delivery_database_operation(config.database_timeout(), "claim", async {
-        claim_delivery_transaction(pool, provider_id, delivery_id, config).await
+        claim_delivery_transaction(pool, provider_id, target, config).await
     })
     .await
 }
@@ -1184,7 +1231,7 @@ async fn claim_delivery(
 async fn claim_delivery_transaction(
     pool: &PgPool,
     provider_id: &str,
-    delivery_id: Option<Uuid>,
+    target: IdentityDeliveryClaimTarget,
     config: IdentityDeliveryWorkerConfig,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
@@ -1192,16 +1239,26 @@ async fn claim_delivery_transaction(
         sqlx::query_scalar::<_, i64>("SELECT floor(EXTRACT(EPOCH FROM clock_timestamp()))::BIGINT")
             .fetch_one(&mut *tx)
             .await?;
+    let delivery_id = target.delivery_id();
     let row = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, i64, i32, Option<Value>)>(
         r#"
         SELECT delivery_id, delivery_kind, account_id, principal_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
         FROM auth_delivery_intent
         WHERE provider_id = $1
-          AND ($2::UUID IS NULL OR delivery_id = $2)
           AND (
-              (status = 'queued' AND next_attempt_at <= $3)
-              OR (status = 'retryable_failed' AND next_attempt_at <= $3)
-              OR (status = 'processing' AND claim_expires_at <= $3)
+              (
+                  $2::UUID IS NULL
+                  AND (
+                      (status = 'queued' AND next_attempt_at <= $3)
+                      OR (status = 'retryable_failed' AND next_attempt_at <= $3)
+                      OR (status = 'processing' AND claim_expires_at <= $3)
+                  )
+              )
+              OR (
+                  $2::UUID IS NOT NULL
+                  AND delivery_id = $2
+                  AND status = 'retryable_failed'
+              )
           )
         ORDER BY created_at, delivery_id
         FOR UPDATE SKIP LOCKED
@@ -1532,15 +1589,18 @@ pub fn delivery_aad(delivery_id: Uuid, kind: IdentityDeliveryKind) -> String {
 }
 
 async fn deliver_and_finalize(
-    pool: &PgPool,
     mut claim: ClaimedIdentityDelivery,
-    gateway: &dyn IdentityDeliveryGateway,
-    actor_principal_id: &PrincipalId,
-    requested_event_kind: Option<&str>,
-    claimed_at: i64,
-    config: IdentityDeliveryWorkerConfig,
-    database_slots: Option<&Arc<Semaphore>>,
+    execution: IdentityDeliveryExecution<'_>,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
+    let IdentityDeliveryExecution {
+        pool,
+        gateway,
+        actor_principal_id,
+        requested_event_kind,
+        claimed_at,
+        config,
+        database_slots,
+    } = execution;
     // The provider is deliberately outside every database transaction. The
     // claim token and immutable credential hash fence completion; source
     // revocation/consumption wins through the conditional finalization CAS.

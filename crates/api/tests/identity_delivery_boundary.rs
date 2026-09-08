@@ -100,10 +100,26 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     );
     assert!(claim.contains("OR (status = 'retryable_failed' AND next_attempt_at <= $3)"));
     assert!(claim.contains(".bind(database_now)"));
-    assert!(
-        !claim.contains("$2::UUID IS NOT NULL AND status = 'retryable_failed'"),
-        "automatic workers, not only admin retries, must reclaim due retryable work"
-    );
+    for claim_target_contract in [
+        "IdentityDeliveryClaimTarget::NextDue",
+        "IdentityDeliveryClaimTarget::ExplicitRetry(delivery_id)",
+    ] {
+        assert!(
+            source.contains(claim_target_contract),
+            "typed delivery claim target drifted at {claim_target_contract}"
+        );
+    }
+    for claim_mode_contract in [
+        "$2::UUID IS NULL",
+        "$2::UUID IS NOT NULL",
+        "AND delivery_id = $2",
+        "AND status = 'retryable_failed'",
+    ] {
+        assert!(
+            claim.contains(claim_mode_contract),
+            "automatic and explicit claim modes drifted at {claim_mode_contract}"
+        );
+    }
     for claim_contract in [
         "let request = IdentityDeliveryCancellationRequest {",
         "account_id: account_id.as_str()",
@@ -319,6 +335,9 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         !source.contains("clippy::too_many_arguments"),
         "typed lifecycle records must remove identity-delivery high-arity lint debt"
     );
+    assert!(source.contains("struct IdentityDeliveryExecution<'a> {"));
+    assert!(source.contains("execution: IdentityDeliveryExecution<'_>"));
+    assert!(source.contains(".saturating_mul(1_u64 << exponent)"));
 }
 
 #[test]

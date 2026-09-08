@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -9,6 +10,43 @@ import {
   percentile,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
+import { createCapacityAuthSourceAuthority } from "./capacity_auth_source_authority.mjs";
+
+test("capacity auth-source authority binds signed requests to fail-closed server config", () => {
+  const signingKey = "capacity-proof-auth-source-signing-key-at-least-32-bytes";
+  const authority = createCapacityAuthSourceAuthority(signingKey);
+  assert.deepEqual(
+    authority.serverEnvironment({
+      PRESERVED: "yes",
+      FMARCH_AUTH_SOURCE_SIGNING_KEY: "ambient-key-must-not-win",
+      FMARCH_TRUST_AUTH_SOURCE_HEADER: "1",
+    }),
+    {
+      PRESERVED: "yes",
+      FMARCH_AUTH_SOURCE_SIGNING_KEY: signingKey,
+      FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
+    },
+  );
+  assert.deepEqual(
+    authority.requestHeaders(
+      "Capacity-Proof-Caller",
+      { accept: "application/json" },
+      1_750_000_000_000,
+    ),
+    {
+      accept: "application/json",
+      "x-fmarch-auth-source": "Capacity-Proof-Caller",
+      "x-fmarch-auth-source-timestamp": "1750000000",
+      "x-fmarch-auth-source-signature": createHmac("sha256", signingKey)
+        .update("1750000000\ncapacity-proof-caller")
+        .digest("hex"),
+    },
+  );
+  assert.throws(
+    () => createCapacityAuthSourceAuthority("too-short"),
+    /at least 32 bytes/,
+  );
+});
 
 test("public search characterization requires bounded first and warm samples", () => {
   const profile = {
@@ -147,6 +185,7 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
     proof: "fmarch-capacity-overload",
     version: 1,
     status: "passed",
+    configuration: { authSourceProvenance: "hmac-sha256" },
     budgets: capacityOverloadBudgets,
     scenarios: {
       largeThreadFirstRead: {
@@ -257,6 +296,7 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
         status: "passed",
         statusCode: 429,
         retryAfter: "60",
+        isolatedSourceStatus: 401,
       },
     },
   };
@@ -292,5 +332,11 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
         },
       }),
     /intentional retryable 503/,
+  );
+  const collapsedAuthSources = structuredClone(report);
+  collapsedAuthSources.scenarios.callerRateLimit.isolatedSourceStatus = 429;
+  assert.throws(
+    () => assertCapacityOverloadReport(collapsedAuthSources),
+    /independent signed caller inherited another caller's rate limit/,
   );
 });

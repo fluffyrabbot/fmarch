@@ -15,6 +15,7 @@ import {
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
+import { runBoundedProcess } from "./proof_process.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
   buildDevTestGameIdentityAdapterContractPacket,
@@ -76,6 +77,7 @@ const scratchApiDatabaseCapacity = Object.freeze({
   identityDeliveryProviderTimeoutMs: "10000",
   identityDeliveryDatabaseTimeoutMs: "9000",
   identityDeliveryClaimLeaseMs: "45000",
+  identityDeliveryRetryMaxSeconds: "300",
   workerReadinessGraceMs: "10000",
   shutdownDrainTimeoutMs: "30000",
 });
@@ -112,7 +114,30 @@ const memberLifecycleCredentials = Object.freeze({
   principalId: `member-lifecycle-${game}`,
 });
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
-const deliveryIntentPollTimeoutMs = 5000;
+const defaultFetchTimeoutMs = 15_000;
+const deliveryIntentPollMarginMs = 5_000;
+const deliveryIntentPollTimeoutMs =
+  Number(scratchApiDatabaseCapacity.workerReadinessGraceMs) +
+  Number(scratchApiDatabaseCapacity.identityDeliveryProviderTimeoutMs) +
+  3 * Number(scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs) +
+  deliveryIntentPollMarginMs;
+const deliveryIntentObservationTimeoutMs =
+  Number(scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs) + 1_000;
+const explicitRetryBackoffMarginMs = 5_000;
+const explicitRetryBackoffSeconds =
+  Math.ceil(
+    (deliveryIntentPollTimeoutMs +
+      2 * defaultFetchTimeoutMs +
+      explicitRetryBackoffMarginMs) /
+      1_000,
+  );
+if (
+  explicitRetryBackoffSeconds >=
+  Number(scratchApiDatabaseCapacity.identityDeliveryRetryMaxSeconds)
+) {
+  throw new Error("explicit retry proof backoff must remain below the worker retry maximum");
+}
+const proofProcessTimeoutMs = 60_000;
 const deliveryIntentPollIntervalMs = 100;
 const fixtureAliasByPrincipalId = new Map();
 
@@ -2653,13 +2678,19 @@ async function revokeInvite({ apiBaseUrl, inviteToken }) {
   });
 }
 
-async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
-  if (typeof deliveryId !== "string" || deliveryId === "") {
-    throw new Error("delivery issuance did not return a delivery id");
-  }
-  await delay(1100);
+async function retryFailedDelivery({
+  apiBaseUrl,
+  deliveryId,
+  credentialHash,
+  expectedKind,
+}) {
+  const delivery = await waitForRetryableDeliveryIntent({
+    deliveryId,
+    credentialHash,
+    expectedKind,
+  });
   const response = await fetchJson(
-    `${apiBaseUrl}/auth/delivery-intents/${encodeURIComponent(deliveryId)}/retry`,
+    `${apiBaseUrl}/auth/delivery-intents/${encodeURIComponent(delivery.deliveryId)}/retry`,
     {
       method: "POST",
       headers: { authorization: `Bearer ${rootAdminSessionToken}` },
@@ -2667,7 +2698,7 @@ async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
   );
   if (
     response.status !== "delivered" ||
-    response.delivery_id !== deliveryId ||
+    response.delivery_id !== delivery.deliveryId ||
     response.delivery_kind !== expectedKind ||
     response.attempt_count !== 2 ||
     response.delivery_provider_id !== "local-deterministic" ||
@@ -2677,50 +2708,51 @@ async function retryFailedDelivery({ apiBaseUrl, deliveryId, expectedKind }) {
     throw new Error(`delivery retry drifted: ${JSON.stringify(response)}`);
   }
   return {
-    deliveryId,
+    deliveryId: delivery.deliveryId,
     deliveryKind: expectedKind,
     status: response.status,
     attemptCount: response.attempt_count,
     providerId: response.delivery_provider_id,
     outcomeKind: response.delivery_outcome_kind,
     outcomeCode: response.delivery_outcome_code,
+    scheduledRetryAt: delivery.nextAttemptAt,
+    backoffOverridden: true,
   };
 }
 
 async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expectedKind }) {
-  const delivery = await waitForRetryableDeliveryIntent({
-    credentialHash: hashSessionToken(credential),
-    expectedKind,
-  });
-  if (
-    delivery.deliveryKind !== expectedKind ||
-    delivery.status !== "retryable_failed" ||
-    delivery.providerId !== "local-deterministic" ||
-    delivery.outcomeKind !== "retryable_failure" ||
-    delivery.outcomeCode !== "provider_unavailable"
-  ) {
-    throw new Error(`stored delivery intent drifted: ${JSON.stringify(delivery)}`);
-  }
   return await retryFailedDelivery({
     apiBaseUrl,
-    deliveryId: delivery.deliveryId,
+    credentialHash: hashSessionToken(credential),
     expectedKind,
   });
 }
 
-async function waitForRetryableDeliveryIntent({ credentialHash, expectedKind }) {
+async function waitForRetryableDeliveryIntent({
+  deliveryId,
+  credentialHash,
+  expectedKind,
+}) {
   const deadline = Date.now() + deliveryIntentPollTimeoutMs;
   let lastDelivery;
   let lastError;
   while (Date.now() <= deadline) {
     try {
-      lastDelivery = await storedDeliveryIntent(credentialHash);
+      const remainingMs = Math.max(1, deadline - Date.now());
+      lastDelivery = await storedDeliveryIntent({
+        deliveryId,
+        credentialHash,
+        timeoutMs: Math.min(deliveryIntentObservationTimeoutMs, remainingMs),
+      });
       if (
         lastDelivery.deliveryKind === expectedKind &&
         lastDelivery.status === "retryable_failed" &&
+        lastDelivery.attemptCount === 1 &&
         lastDelivery.providerId === "local-deterministic" &&
         lastDelivery.outcomeKind === "retryable_failure" &&
-        lastDelivery.outcomeCode === "provider_unavailable"
+        lastDelivery.outcomeCode === "provider_unavailable" &&
+        Number.isInteger(lastDelivery.nextAttemptAt) &&
+        lastDelivery.nextAttemptAt > Math.floor(Date.now() / 1000)
       ) {
         return lastDelivery;
       }
@@ -2730,7 +2762,9 @@ async function waitForRetryableDeliveryIntent({ credentialHash, expectedKind }) 
     await delay(deliveryIntentPollIntervalMs);
   }
   if (lastDelivery !== undefined) {
-    return lastDelivery;
+    throw new Error(
+      `delivery intent did not become retryable with a future backoff: ${JSON.stringify(lastDelivery)}`,
+    );
   }
   throw lastError ?? new Error("delivery intent was not persisted");
 }
@@ -3047,32 +3081,51 @@ async function storedRegistrationAttemptRecords() {
   return JSON.parse(output.trim() || "[]");
 }
 
-async function storedDeliveryIntent(credentialHash) {
+async function storedDeliveryIntent({
+  deliveryId,
+  credentialHash,
+  timeoutMs = deliveryIntentObservationTimeoutMs,
+}) {
   if (proofDatabase === undefined) {
     throw new Error("proof database is not available");
   }
-  const output = await runProcess("psql", [
-    proofDatabase.applicationUrl,
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-t",
-    "-A",
-    "-c",
-    `
+  const selectors = [deliveryId, credentialHash].filter(
+    (value) => typeof value === "string" && value !== "",
+  );
+  if (selectors.length !== 1) {
+    throw new Error("delivery lookup requires exactly one delivery id or credential hash");
+  }
+  const predicate =
+    typeof deliveryId === "string" && deliveryId !== ""
+      ? `delivery_id = ${sqlLiteral(deliveryId)}::UUID`
+      : `credential_hash = ${sqlLiteral(credentialHash)}`;
+  const output = await runProcess(
+    "psql",
+    [
+      proofDatabase.applicationUrl,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-t",
+      "-A",
+      "-c",
+      `
       SELECT json_build_object(
         'deliveryId', delivery_id,
         'deliveryKind', delivery_kind,
         'status', status,
         'attemptCount', attempt_count,
+        'nextAttemptAt', next_attempt_at,
         'credentialHash', credential_hash,
         'providerId', provider_id,
         'outcomeKind', outcome_kind,
         'outcomeCode', outcome_code
       )::TEXT
       FROM auth_delivery_intent
-      WHERE credential_hash = ${sqlLiteral(credentialHash)}
+      WHERE ${predicate}
     `,
-  ]);
+    ],
+    { timeoutMs },
+  );
   const trimmed = output.trim();
   if (trimmed === "") {
     throw new Error("delivery intent was not persisted");
@@ -3655,12 +3708,20 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.localDelivery?.invite?.providerId !== "local-deterministic" ||
     evidence.identityLifecycle?.localDelivery?.invite?.outcomeKind !== "delivered" ||
     evidence.identityLifecycle?.localDelivery?.invite?.outcomeCode !== null ||
+    evidence.identityLifecycle?.localDelivery?.invite?.backoffOverridden !== true ||
+    !Number.isInteger(
+      evidence.identityLifecycle?.localDelivery?.invite?.scheduledRetryAt,
+    ) ||
     evidence.identityLifecycle?.localDelivery?.recovery?.deliveryKind !== "recovery" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.status !== "delivered" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.attemptCount !== 2 ||
     evidence.identityLifecycle?.localDelivery?.recovery?.providerId !== "local-deterministic" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.outcomeKind !== "delivered" ||
     evidence.identityLifecycle?.localDelivery?.recovery?.outcomeCode !== null ||
+    evidence.identityLifecycle?.localDelivery?.recovery?.backoffOverridden !== true ||
+    !Number.isInteger(
+      evidence.identityLifecycle?.localDelivery?.recovery?.scheduledRetryAt,
+    ) ||
     evidence.identityLifecycle?.localDelivery?.retryActorUserId !== "root_admin" ||
     evidence.identityLifecycle?.localDelivery?.rawCredentialsStored !== false ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
@@ -4030,7 +4091,11 @@ async function startIdentityDeliveryCapture() {
       captures.set(delivery.delivery_id, structuredClone(delivery));
       const outcome =
         delivery.attempt_number === 1
-          ? { status: "retryable_failure", code: "provider_unavailable" }
+          ? {
+              status: "retryable_failure",
+              code: "provider_unavailable",
+              retry_after_seconds: explicitRetryBackoffSeconds,
+            }
           : {
               status: "delivered",
               provider_receipt_id: `local-${delivery.delivery_id}`,
@@ -4105,6 +4170,8 @@ async function startApi(applicationUrl, deliveryEndpoint) {
         scratchApiDatabaseCapacity.identityDeliveryDatabaseTimeoutMs,
       FMARCH_IDENTITY_DELIVERY_CLAIM_LEASE_MS:
         scratchApiDatabaseCapacity.identityDeliveryClaimLeaseMs,
+      FMARCH_IDENTITY_DELIVERY_RETRY_MAX_SECONDS:
+        scratchApiDatabaseCapacity.identityDeliveryRetryMaxSeconds,
       FMARCH_WORKER_READINESS_GRACE_MS:
         scratchApiDatabaseCapacity.workerReadinessGraceMs,
       FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS:
@@ -4233,7 +4300,7 @@ async function sendCommand(apiBaseUrl, localProofAuth, id, principalId, command)
   };
 }
 
-async function fetchJson(url, options = {}, timeoutMs = 15000) {
+async function fetchJson(url, options = {}, timeoutMs = defaultFetchTimeoutMs) {
   const response = await fetchWithTimeout(url, options, timeoutMs);
   const body = await response.json();
   if (!response.ok) {
@@ -4242,7 +4309,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
   return preserveFixturePrincipalAliases(body);
 }
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = defaultFetchTimeoutMs) {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -4275,26 +4342,11 @@ async function runSql(url, sql) {
   return await runProcess("psql", [url, "-v", "ON_ERROR_STOP=1", "-c", sql]);
 }
 
-async function runProcess(command, args) {
-  const child = spawn(command, args, {
+async function runProcess(command, args, { timeoutMs = proofProcessTimeoutMs } = {}) {
+  return await runBoundedProcess(command, args, {
     cwd: repoRoot,
-    stdio: ["ignore", "pipe", "pipe"],
+    timeoutMs,
   });
-  let output = "";
-  child.stdout.on("data", (chunk) => {
-    output += chunk.toString();
-  });
-  child.stderr.on("data", (chunk) => {
-    output += chunk.toString();
-  });
-  const code = await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("exit", resolve);
-  });
-  if (code !== 0) {
-    throw new Error(`${command} ${args[0]} failed with exit ${code}:\n${output}`);
-  }
-  return output;
 }
 
 async function stopChild(child) {

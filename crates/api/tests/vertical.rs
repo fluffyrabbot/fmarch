@@ -1,3 +1,5 @@
+mod support;
+
 use api::{
     identity_delivery::{
         process_next_identity_delivery_with_config, unix_now_seconds, IdentityDeliveryAttempt,
@@ -20,6 +22,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use support::LiveEventListenerHarness;
 use tempfile::TempDir;
 use tokio::sync::Semaphore;
 use tower::ServiceExt;
@@ -2958,12 +2961,12 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         .unwrap()
         .with_local_proof_auth(test_local_proof_verifier()),
     );
-    let app = api::router_with_state(
-        ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
-            .unwrap()
-            .with_local_proof_auth(test_local_proof_verifier())
-            .with_live_projection_delivery_delay(std::time::Duration::from_millis(500)),
-    );
+    let state = ApiState::new(pool.clone(), store, api::ApiRuntimeConfig::default())
+        .unwrap()
+        .with_local_proof_auth(test_local_proof_verifier())
+        .with_live_projection_delivery_delay(std::time::Duration::from_millis(500));
+    let live_listener = LiveEventListenerHarness::start(state.clone()).await;
+    let app = api::router_with_state(state);
     let (spectator_token, spectator) =
         create_media_upload_account_session(&app, "spectator-room").await;
     let game = Uuid::new_v4();
@@ -3334,6 +3337,8 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     );
     drop(socket);
     server.abort();
+    let _ = server.await;
+    live_listener.shutdown().await;
 }
 
 fn stable_command_id(id: u64) -> Uuid {
@@ -6951,7 +6956,15 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     pool: sqlx::PgPool,
 ) {
     let verifier = test_local_proof_verifier();
-    let app = router_with_local_proof_verifier(pool.clone(), verifier.clone());
+    let state = ApiState::new(
+        pool.clone(),
+        shared_test_media_store(),
+        api::ApiRuntimeConfig::default(),
+    )
+    .unwrap()
+    .with_local_proof_auth(verifier.clone());
+    let live_listener = LiveEventListenerHarness::start(state.clone()).await;
+    let app = api::router_with_state(state);
     let moderation_app = router_with_local_proof_verifier(pool.clone(), verifier);
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "moderation-member").await;
@@ -7467,6 +7480,8 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     drop(socket);
     drop(moderator_socket);
     server.abort();
+    let _ = server.await;
+    live_listener.shutdown().await;
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9523,11 +9538,13 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     .unwrap();
     assert!(credential_envelope.contains("fmarch-event-aead-v1"));
     assert!(!credential_envelope.contains("delivery-invite-raw-token"));
-    sqlx::query("UPDATE auth_delivery_intent SET next_attempt_at = 0 WHERE delivery_id = $1")
-        .bind(delivery_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE auth_delivery_intent SET next_attempt_at = 4102444800 WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .execute(&pool)
+    .await
+    .unwrap();
     let response = app
         .clone()
         .oneshot(

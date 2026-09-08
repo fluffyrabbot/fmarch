@@ -719,6 +719,18 @@
       ]
     },
     {
+      "id": "frontend:auth-source-signing",
+      "tier": "frozen",
+      "paths": ["frontend/src/lib/server/auth-source.mjs"],
+      "lanes": [
+        "test:capacity-overload-contract",
+        "test:public-search-staging-sentinel",
+        "test:capacity-overload"
+      ],
+      "also_triggers": ["frontend:identity"],
+      "capabilities": ["product.identity.session-lifecycle"]
+    },
+    {
       "id": "frontend:identity",
       "tier": "frozen",
       "paths": ["frontend/src/routes/auth/", "frontend/src/lib/server/", "frontend/src/hooks.server."],
@@ -1021,8 +1033,12 @@
     {
       "id": "proof:auth-invite-role",
       "tier": "frozen",
-      "paths": ["tools/game_invitation_role_proof.mjs"],
-      "lanes": ["test:auth-invite-role-proof"],
+      "paths": [
+        "tools/game_invitation_role_proof.mjs",
+        "tools/proof_process.mjs",
+        "tools/proof_process.test.mjs"
+      ],
+      "lanes": ["test:auth-invite-role-proof", "test:dev-test-game-contract"],
       "capabilities": ["product.identity.account-login-invites"]
     },
     {
@@ -1069,6 +1085,7 @@
       "id": "proof:capacity-overload",
       "tier": "active",
       "paths": [
+        "tools/capacity_auth_source_authority.mjs",
         "tools/capacity_overload_contract.mjs",
         "tools/capacity_overload_contract.test.mjs",
         "tools/capacity_overload_proof.mjs",
