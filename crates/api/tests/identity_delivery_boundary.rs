@@ -44,9 +44,15 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         );
     }
     for admission_contract in [
+        "pub struct IdentityDeliveryWorkerCapacity {",
+        "max_attempts_in_flight: usize",
+        "max_database_in_flight: usize",
         "pub struct IdentityDeliveryAdmission {",
         "attempt_slots: Arc<Semaphore>",
         "database_slots: Arc<Semaphore>",
+        "capacity: IdentityDeliveryWorkerCapacity",
+        "self.capacity.max_attempts_in_flight",
+        "self.capacity.max_database_in_flight",
         "Semaphore::new(config.max_concurrency())",
         "Semaphore::new(config.max_database_in_flight())",
         "pub(super) fn try_acquire_attempt(&self)",
@@ -678,6 +684,14 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
 fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
     let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/identity_delivery.rs");
     let source = std::fs::read_to_string(source_path).unwrap();
+    let attempt_budget_start = source
+        .find("pub struct IdentityDeliveryAttemptBudget {")
+        .expect("typed attempt budget");
+    let worker_config_start = source[attempt_budget_start..]
+        .find("pub struct IdentityDeliveryWorkerConfig {")
+        .map(|offset| attempt_budget_start + offset)
+        .expect("typed worker configuration");
+    let attempt_budget = &source[attempt_budget_start..worker_config_start];
     let worker_start = source
         .find("pub async fn run_identity_delivery_worker_observed")
         .expect("supervised worker entry point");
@@ -691,14 +705,35 @@ fn supervised_delivery_worker_is_bounded_observable_and_shutdown_aware() {
         "completed task decoding must remain a synchronous, side-effect-free boundary"
     );
 
-    assert!(source.contains(
-        "let lease_coverage_timeout = post_claim_timeout.saturating_add(database_timeout)"
-    ));
-    assert!(source.contains(".saturating_add(provider_clock_skew_margin)"));
-    assert!(source.contains(".saturating_add(DATABASE_CLOCK_QUANTIZATION_RESERVE)"));
-    assert!(source.contains(
-        "generation_fence_expires_at.saturating_sub(self.provider_clock_skew_margin.as_secs() as i64)"
-    ));
+    for budget_contract in [
+        "claim_lease: Duration",
+        "provider_clock_skew_margin: Duration",
+        "provider_timeout: Duration",
+        "database_timeout: Duration",
+        "claim_lease\n                <= budget\n                    .lease_coverage_timeout()\n                    .saturating_add(provider_clock_skew_margin)\n                    .saturating_add(DATABASE_CLOCK_QUANTIZATION_RESERVE)",
+        "self.provider_timeout\n            .saturating_add(self.database_timeout)\n            .saturating_add(self.database_timeout)",
+        "self.total_timeout().saturating_add(self.database_timeout)",
+    ] {
+        assert!(
+            attempt_budget.contains(budget_contract),
+            "typed attempt budget lost contract: {budget_contract}"
+        );
+    }
+    for worker_config_contract in [
+        "attempt_budget: IdentityDeliveryAttemptBudget",
+        "self.attempt_budget.claim_lease",
+        "self.attempt_budget.provider_clock_skew_margin",
+        "self.attempt_budget.provider_timeout",
+        "self.attempt_budget.database_timeout",
+        "self.attempt_budget.total_timeout()",
+        "self.attempt_budget.lease_coverage_timeout()",
+    ] {
+        assert!(
+            source[worker_config_start..worker_start].contains(worker_config_contract),
+            "worker configuration lost typed budget ownership: {worker_config_contract}"
+        );
+    }
+    assert!(source.contains(".saturating_sub(self.provider_clock_skew_margin().as_secs() as i64)"));
 
     for contract in [
         "IdentityDeliveryWorkerObservation",
