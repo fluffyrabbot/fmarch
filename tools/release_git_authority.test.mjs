@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +16,7 @@ import test from "node:test";
 import {
   CANONICAL_RELEASE_REMOTE_URL,
   PRODUCTION_PROMOTION_LOCK_REF,
+  RELEASE_GIT_ASKPASS,
   RELEASE_GIT_CREDENTIAL_HELPER,
   assertCanonicalReleaseRemote,
   assertReleaseGitPosture,
@@ -118,6 +127,8 @@ test("release Git rejects ambient authority, replacements, grafts, sparse state,
     HTTPS_PROXY: "https://attacker.invalid",
     RSYNC_PROXY: "https://attacker.invalid",
     GH_HOST: "attacker.invalid",
+    SSH_ASKPASS: "/attacker/askpass",
+    SSH_ASKPASS_REQUIRE: "force",
   });
   assert.equal(environment.GIT_OBJECT_DIRECTORY, undefined);
   assert.equal(environment.SSL_CERT_FILE, undefined);
@@ -126,6 +137,9 @@ test("release Git rejects ambient authority, replacements, grafts, sparse state,
   assert.equal(environment.HTTPS_PROXY, undefined);
   assert.equal(environment.RSYNC_PROXY, undefined);
   assert.equal(environment.GH_HOST, undefined);
+  assert.equal(environment.SSH_ASKPASS, undefined);
+  assert.equal(environment.SSH_ASKPASS_REQUIRE, undefined);
+  assert.equal(environment.GIT_ASKPASS, RELEASE_GIT_ASKPASS);
   assert.equal(environment.GH_TOKEN, "deliberate-credential-authority");
   assert.equal(environment.GIT_CONFIG_NOSYSTEM, "1");
   assert.equal(environment.GIT_CONFIG_GLOBAL, "/dev/null");
@@ -165,6 +179,63 @@ test("release Git rejects ambient authority, replacements, grafts, sparse state,
     assert.equal(isForbiddenReleaseGitConfigKey(key), true, `${key} must be rejected`);
   }
   assert.equal(isForbiddenReleaseGitConfigKey("user.name"), false);
+});
+
+test("release Git rejects fsmonitor before deeper posture inspection can execute it", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "fmarch-release-git-fsmonitor-"));
+  const repository = path.join(directory, "repo");
+  mkdirSync(repository);
+  const git = (args) => execFileSync("git", args, {
+    cwd: repository,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  try {
+    git(["init", "--quiet"]);
+    writeFileSync(path.join(repository, "tracked.txt"), "tracked\n");
+    git(["add", "tracked.txt"]);
+    git(["config", "core.fsmonitor", "/usr/bin/touch"]);
+    const before = readdirSync(repository).sort();
+
+    assert.throws(() => assertReleaseGitPosture({ root: repository }), /transport authority/);
+    assert.deepEqual(
+      readdirSync(repository).sort(),
+      before,
+      "the forbidden fsmonitor command must not create its hook-argument files",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("release Git never invokes ambient askpass authority", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "fmarch-release-git-askpass-"));
+  const askpass = path.join(directory, "ambient-askpass.sh");
+  const marker = path.join(directory, "askpass-ran");
+  writeFileSync(askpass, `#!/bin/sh\n/usr/bin/touch "${marker}"\nprintf 'attacker\\n'\n`);
+  chmodSync(askpass, 0o700);
+  const environment = releaseGitEnvironment({
+    ...process.env,
+    GIT_ASKPASS: askpass,
+    SSH_ASKPASS: askpass,
+    SSH_ASKPASS_REQUIRE: "force",
+  });
+  try {
+    assert.throws(() => execFileSync(
+      "git",
+      ["-c", "credential.helper=", "credential", "fill"],
+      {
+        cwd: directory,
+        env: environment,
+        input: "protocol=https\nhost=credentials.example.invalid\n\n",
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    ));
+    assert.equal(existsSync(marker), false, "ambient askpass must never execute");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("release Git isolates global transport attacks and rejects unsafe local keys", () => {

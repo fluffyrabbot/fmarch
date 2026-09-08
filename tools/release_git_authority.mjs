@@ -12,6 +12,7 @@ export const CANONICAL_RELEASE_REMOTE_URL = "https://github.com/fluffyrabbot/fma
 export const PRODUCTION_PROMOTION_LOCK_REF = "refs/heads/release-locks/production";
 export const RELEASE_GIT_TIMEOUT_MS = 2 * 60 * 1_000;
 export const RELEASE_GIT_CREDENTIAL_HELPER = "!gh auth git-credential";
+export const RELEASE_GIT_ASKPASS = "/usr/bin/false";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,7 +34,9 @@ function isolatedReleaseGitEnvironment(environment, { commandConfig }) {
     if (
       name.startsWith("GIT_") ||
       /^(?:[a-z][a-z0-9+.-]*|all|no)_proxy$/iu.test(name) ||
-      /^(?:SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|GH_HOST)$/u.test(name)
+      /^(?:SSL_CERT_FILE|SSL_CERT_DIR|CURL_CA_BUNDLE|GH_HOST|SSH_ASKPASS|SSH_ASKPASS_REQUIRE)$/u.test(
+        name,
+      )
     ) {
       delete scrubbed[name];
     }
@@ -42,6 +45,7 @@ function isolatedReleaseGitEnvironment(environment, { commandConfig }) {
     ...scrubbed,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_ASKPASS: RELEASE_GIT_ASKPASS,
     GIT_NO_REPLACE_OBJECTS: "1",
     GIT_TERMINAL_PROMPT: "0",
   };
@@ -123,31 +127,37 @@ export function assertReleaseGitPosture({
   root = repoRoot,
   environment = process.env,
 } = {}) {
-  const load = inspect ?? (() => {
-    let configKeys = [];
-    try {
-      configKeys = lines(gitText(["config", "--name-only", "--get-regexp", ".*"], {
-        root,
-        environment,
-        postureInspection: true,
-      }));
-    } catch (error) {
-      if (error?.status !== 1) throw error;
-    }
+  if (inspect !== undefined) return validateReleaseGitPosture(inspect());
+
+  let configKeys = [];
+  try {
+    configKeys = lines(gitText(
+      ["config", "--no-includes", "--show-scope", "--name-only", "--get-regexp", ".*"],
+      { root, environment, postureInspection: true },
+    )).map((entry) => {
+      const match = /^(?:local|worktree)\s+(.+)$/u.exec(entry);
+      assert.ok(match, "release Git config enumeration escaped local/worktree scope");
+      return match[1];
+    });
+  } catch (error) {
+    if (error?.status !== 1) throw error;
+  }
+  const forbiddenConfigKeys = configKeys.filter(isForbiddenReleaseGitConfigKey);
+  validateReleaseGitPosture({ transportConfigKeys: forbiddenConfigKeys });
+
+  const load = () => {
     const commonDirectoryValue = gitText(["rev-parse", "--git-common-dir"], {
       root,
       environment,
-      postureInspection: true,
     });
     const commonDirectory = path.resolve(root, commonDirectoryValue);
     const graftsPath = path.join(commonDirectory, "info", "grafts");
     const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, "utf8") : "";
     let sparseCheckout = false;
     try {
-      sparseCheckout = gitText(["config", "--bool", "core.sparseCheckout"], {
+      sparseCheckout = gitText(["config", "--no-includes", "--bool", "core.sparseCheckout"], {
         root,
         environment,
-        postureInspection: true,
       }) === "true";
     } catch (error) {
       if (error?.status !== 1) throw error;
@@ -155,18 +165,14 @@ export function assertReleaseGitPosture({
     return {
       replaceRefs: lines(gitText(
         ["for-each-ref", "--format=%(refname)", "refs/replace"],
-        { root, environment, postureInspection: true },
+        { root, environment },
       )),
       grafts,
       sparseCheckout,
-      trackedFlags: lines(gitText(["ls-files", "-v"], {
-        root,
-        environment,
-        postureInspection: true,
-      })),
-      transportConfigKeys: configKeys.filter(isForbiddenReleaseGitConfigKey),
+      trackedFlags: lines(gitText(["ls-files", "-v"], { root, environment })),
+      transportConfigKeys: [],
     };
-  });
+  };
   return validateReleaseGitPosture(load());
 }
 

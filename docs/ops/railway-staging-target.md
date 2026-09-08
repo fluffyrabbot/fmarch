@@ -72,11 +72,14 @@ URLs must both match before any release fetch, lock, or pointer operation, and
 network operations address that URL directly. Release Git subprocesses scrub
 ambient `GIT_*`, proxy, and CA-bundle authority; ignore system/global Git
 configuration; force verified TLS; and reinject only the repository-owned
-`gh auth git-credential` helper. Local configuration may not delegate through
-`include`/`includeIf` or define URL rewrites, credentials, proxies, TLS/CA
-settings, hooks, fsmonitor, alternate attribute files, SSH commands, protocol
-overrides, or legacy Git proxies. Release commands also disable hooks,
-fsmonitor, replacement objects, and external attributes. Posture rejects
+`gh auth git-credential` helper. Ambient askpass authority is removed and Git
+uses a fixed noninteractive failing askpass. Local and worktree configuration
+keys are enumerated with includes disabled and executable indirection is
+rejected before any deeper checkout inspection. Local configuration may not
+delegate through `include`/`includeIf` or define URL rewrites, credentials,
+proxies, TLS/CA settings, hooks, fsmonitor, alternate attribute files, SSH
+commands, protocol overrides, or legacy Git proxies. Release commands also
+disable hooks, fsmonitor, replacement objects, and external attributes. Posture rejects
 replace refs, grafts, sparse checkout, and any tracked assume-unchanged or
 skip-worktree flag before trusting the checkout.
 
