@@ -576,9 +576,21 @@ async fn run_day_event_worker(
         .await
         {
             Ok(report) => {
-                let progress = report.succeeded_games as u64;
-                let backlog = day_event_backlog(&pool).await.ok();
-                health.heartbeat(DAY_EVENT_WORKER, progress, backlog);
+                match commands::day_scheduler::day_event_scheduler_queue_health(
+                    &pool,
+                    unix_now_seconds(),
+                )
+                .await
+                {
+                    Ok(queue) => record_day_event_health(&health, &report, &queue),
+                    Err(_) => {
+                        tracing::error!(
+                            event = "day_event_health_observation_failed",
+                            "DayEvent durable queue health could not be read"
+                        );
+                        health.iteration_failed(DAY_EVENT_WORKER);
+                    }
+                }
             }
             Err(_) => {
                 tracing::error!(
@@ -592,20 +604,35 @@ async fn run_day_event_worker(
     }
 }
 
+fn record_day_event_health(
+    health: &RuntimeWorkerHealth,
+    report: &commands::day_scheduler::DayEventSchedulerTickReport,
+    queue: &commands::day_scheduler::DayEventSchedulerQueueHealth,
+) {
+    let succeeded = report.failed_games == 0 && queue.failed_games == 0;
+    health.record_iteration(
+        DAY_EVENT_WORKER,
+        report.succeeded_games as u64,
+        Some(queue.pending_games),
+        succeeded,
+    );
+    if !succeeded {
+        tracing::warn!(
+            event = "day_event_work_unhealthy",
+            failed_attempts = report.failed_games,
+            failed_games = queue.failed_games,
+            pending_games = queue.pending_games,
+            oldest_due_at = queue.oldest_due_at,
+            "DayEvent work has unresolved failures"
+        );
+    }
+}
+
 async fn subject_erasure_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM subject_erasure WHERE state = 'pending'")
         .fetch_one(pool)
         .await
         .map(|count| count.max(0) as u64)
-}
-
-async fn day_event_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM day_event_schedule_work WHERE auto_resolve_pending OR narrative_pending",
-    )
-    .fetch_one(pool)
-    .await
-    .map(|count| count.max(0) as u64)
 }
 
 async fn media_reconciliation_backlog(pool: &PgPool) -> Result<u64, sqlx::Error> {
@@ -647,6 +674,55 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{mpsc, watch};
+
+    #[test]
+    fn day_event_failures_survive_empty_ticks_and_clear_only_after_durable_recovery() {
+        use commands::day_scheduler::{DayEventSchedulerQueueHealth, DayEventSchedulerTickReport};
+        let health = RuntimeWorkerHealth::default();
+        health.register(super::DAY_EVENT_WORKER, true);
+        let mut report = DayEventSchedulerTickReport {
+            worker_id: uuid::Uuid::new_v4(),
+            observed_at: 100,
+            claimed_games: 2,
+            succeeded_games: 1,
+            failed_games: 1,
+            appended_events: 1,
+        };
+        let mut queue = DayEventSchedulerQueueHealth {
+            pending_games: 1,
+            failed_games: 1,
+            oldest_due_at: Some(100),
+        };
+        super::record_day_event_health(&health, &report, &queue);
+        assert!(!health.required_workers_ready());
+        assert_eq!(health.snapshot()[0].progress, 1);
+        assert_eq!(health.snapshot()[0].backlog, Some(1));
+
+        report.claimed_games = 0;
+        report.succeeded_games = 0;
+        report.failed_games = 0;
+        report.appended_events = 0;
+        super::record_day_event_health(&health, &report, &queue);
+        assert!(!health.required_workers_ready(), "backoff is not recovery");
+
+        queue.failed_games = 0;
+        queue.pending_games = 0;
+        queue.oldest_due_at = None;
+        super::record_day_event_health(&health, &report, &queue);
+        assert!(
+            health.required_workers_ready(),
+            "another replica may recover the work"
+        );
+        assert_eq!(health.snapshot()[0].progress, 1);
+        assert_eq!(health.snapshot()[0].backlog, Some(0));
+
+        report.failed_games = 1;
+        super::record_day_event_health(&health, &report, &queue);
+        assert!(
+            !health.required_workers_ready(),
+            "this tick's failure remains observable"
+        );
+    }
 
     #[test]
     fn identity_delivery_failure_ignores_timer_ticks_but_clears_after_an_empty_claim() {

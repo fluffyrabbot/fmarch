@@ -91,6 +91,29 @@ impl RuntimeWorkerHealth {
         backlog: Option<u64>,
         in_flight: Option<u64>,
     ) {
+        self.record_heartbeat(name, progress_delta, backlog, in_flight, true);
+    }
+
+    /// Publish progress and outcome atomically, retaining backlog on failure.
+    /// A failed iteration must never briefly become ready between two writes.
+    pub fn record_iteration(
+        &self,
+        name: &str,
+        progress_delta: u64,
+        backlog: Option<u64>,
+        succeeded: bool,
+    ) {
+        self.record_heartbeat(name, progress_delta, backlog, None, succeeded);
+    }
+
+    fn record_heartbeat(
+        &self,
+        name: &str,
+        progress_delta: u64,
+        backlog: Option<u64>,
+        in_flight: Option<u64>,
+        succeeded: bool,
+    ) {
         if let Some(worker) = self
             .inner
             .write()
@@ -102,7 +125,7 @@ impl RuntimeWorkerHealth {
             worker.progress = worker.progress.saturating_add(progress_delta);
             worker.backlog = backlog;
             worker.in_flight = in_flight;
-            worker.last_iteration_succeeded = true;
+            worker.last_iteration_succeeded = succeeded;
         }
     }
 

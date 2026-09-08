@@ -88,6 +88,41 @@ pub struct DayEventSchedulerTickReport {
     pub appended_events: usize,
 }
 
+/// Durable active-game queue health, including work suppressed by retry backoff
+/// or another replica's lease. An empty claim is not evidence of recovery.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DayEventSchedulerQueueHealth {
+    pub pending_games: u64,
+    pub failed_games: u64,
+    pub oldest_due_at: Option<i64>,
+}
+
+pub async fn day_event_scheduler_queue_health(
+    pool: &PgPool,
+    observed_at: i64,
+) -> Result<DayEventSchedulerQueueHealth, SchedulerError> {
+    let (pending, failed, oldest_due_at): (i64, i64, Option<i64>) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*) FILTER (WHERE w.next_due_at <= $1
+                    OR w.wake_seq > s.last_observed_wake_seq
+                    OR w.auto_resolve_pending OR w.narrative_pending),
+               COUNT(*) FILTER (WHERE s.consecutive_failures > 0),
+               MIN(w.next_due_at) FILTER (WHERE w.next_due_at <= $1)
+        FROM day_event_schedule_work w
+        JOIN day_event_scheduler_state s ON s.game_id = w.game_id
+        JOIN game_index g ON g.game_id = w.game_id AND g.status = 'active'
+        "#,
+    )
+    .bind(observed_at)
+    .fetch_one(pool)
+    .await?;
+    Ok(DayEventSchedulerQueueHealth {
+        pending_games: pending as u64,
+        failed_games: failed as u64,
+        oldest_due_at,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DayEventSchedulerStatus {
     pub game_id: Uuid,

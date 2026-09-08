@@ -289,3 +289,15 @@ is admitted work and returns `200` only while the complete migration set and
 the configured object store are reachable; database, storage, or global
 admission failure makes it `503`. Railway deployment admission and release
 promotion use readiness, not liveness.
+
+The required DayEvent worker also gates readiness on durable active-game
+failures. Its queue observation includes due deadlines and unobserved wake
+sequences as well as automatic resolution and narrative work. Retry backoff
+and another replica's lease do not hide pending work or clear recorded failures.
+A failed tick, an unresolved durable failure, or failure to read queue health
+keeps the worker unhealthy; a later successful observation with no unresolved
+failures restores readiness, including when another replica performed recovery.
+Progress, backlog, and iteration outcome publish atomically. Structured failure
+telemetry includes pending/failed counts and the oldest due timestamp, without
+game payloads. This is execution-outcome health; batch duration and deadline
+lateness still require their own capacity qualification.
