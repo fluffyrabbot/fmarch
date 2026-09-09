@@ -59,8 +59,11 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
   const context = await browser.newContext({ colorScheme: "dark" });
   const page = await context.newPage();
   try {
+    await page.emulateMedia({ colorScheme: "dark" });
     for (const [scheme, expected] of [["light", "day"], ["dark", "night"], ["system", "night"]]) {
       await page.goto(`${baseUrl}/appearance`, { waitUntil: "networkidle" });
+      assert.equal(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true,
+        "appearance proof requires the browser to expose the emulated dark system preference");
       await page.getByLabel("Theme", { exact: true }).selectOption("slate");
       await page.getByLabel("Color preference").selectOption(scheme);
       await saveAppearance(page, context, "slate", scheme);
@@ -75,6 +78,7 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
         await writeFile(path.join(directory, `preference-failure-${scheme}.json`), JSON.stringify({
           scheme, expected,
           actual: await page.locator('[data-component="fm-app-shell"]').evaluate(element => ({ ...element.dataset })),
+          systemDark: await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches),
           preferenceCookie: (await context.cookies()).find(cookie => cookie.name === "fmarch_appearance")?.value,
           body: await page.locator("body").innerText(),
         }, null, 2));
