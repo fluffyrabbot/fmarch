@@ -423,3 +423,5 @@ mod tests {
         assert!(invalid.validate().is_err());
     }
 }
+
+// Proof benchmark: scheduler source fingerprint probe.
