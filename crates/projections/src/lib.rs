@@ -3852,7 +3852,8 @@ pub async fn rebuild_moderation_stream(
     pool: &PgPool,
     case_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, case_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = load_fenced_rebuild_events(&mut tx, case_id).await?;
     if !events
         .iter()
         .any(|event| event.kind == trust_safety::MODERATION_CASE_OPENED)
@@ -3873,7 +3874,6 @@ pub async fn rebuild_moderation_stream(
             source,
         }
     })?;
-    let mut tx = pool.begin().await?;
     sqlx::query("DELETE FROM moderation_target_state WHERE surface_id = $1 AND source_seq = $2")
         .bind(payload.target.public.surface_id)
         .bind(payload.target.public.source_seq)
@@ -3904,14 +3904,14 @@ pub async fn rebuild_subscription_stream(
     pool: &PgPool,
     subscription_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, subscription_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = load_fenced_rebuild_events(&mut tx, subscription_id).await?;
     if !events
         .iter()
         .any(|event| event.kind == attention::SUBSCRIPTION_ENABLED)
     {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
     sqlx::query("DELETE FROM public_watch WHERE subscription_id = $1")
         .bind(subscription_id)
         .execute(&mut *tx)
@@ -3941,14 +3941,14 @@ pub async fn rebuild_member_mute_stream(
     pool: &PgPool,
     relationship_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, relationship_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = load_fenced_rebuild_events(&mut tx, relationship_id).await?;
     if !events
         .iter()
         .any(|event| event.kind == social::MEMBER_MUTED)
     {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
     sqlx::query("DELETE FROM profile_mute WHERE relationship_id = $1")
         .bind(relationship_id)
         .execute(&mut *tx)
@@ -4046,7 +4046,8 @@ pub async fn rebuild_member_inbox_cursor_stream(
     pool: &PgPool,
     stream_id: Uuid,
 ) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, stream_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = load_fenced_rebuild_events(&mut tx, stream_id).await?;
     if !events
         .iter()
         .any(|event| event.kind == attention::INBOX_CURSOR_ADVANCED)
@@ -4067,7 +4068,6 @@ pub async fn rebuild_member_inbox_cursor_stream(
             })
         }
     };
-    let mut tx = pool.begin().await?;
     sqlx::query("DELETE FROM member_inbox_cursor WHERE principal_id = $1")
         .bind(principal_id.as_uuid())
         .execute(&mut *tx)
