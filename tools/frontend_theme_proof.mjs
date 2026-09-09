@@ -59,15 +59,14 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
   const context = await browser.newContext({ colorScheme: "dark" });
   const page = await context.newPage();
   try {
-    await page.emulateMedia({ colorScheme: "dark" });
     for (const [scheme, expected] of [["light", "day"], ["dark", "night"], ["system", "night"]]) {
       await page.goto(`${baseUrl}/appearance`, { waitUntil: "networkidle" });
-      assert.equal(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches), true,
-        "appearance proof requires the browser to expose the emulated dark system preference");
+      await setSystemScheme(page, "dark");
       await page.getByLabel("Theme", { exact: true }).selectOption("slate");
       await page.getByLabel("Color preference").selectOption(scheme);
       await saveAppearance(page, context, "slate", scheme);
       await page.goto(`${baseUrl}/_dev/ui/session?scenario=player`, { waitUntil: "networkidle" });
+      await setSystemScheme(page, "dark");
       await page.getByTestId("player-surface").waitFor({ state: "visible" });
       await page.getByRole("button", { name: "Night", exact: true }).click();
       await page.waitForFunction(expected => {
@@ -86,11 +85,20 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
       });
       evidence.push({ preference: scheme, system: "dark", phase: "night", palette: expected });
     }
-    await page.emulateMedia({ colorScheme: "light" });
+    await setSystemScheme(page, "light");
     await page.waitForFunction(() => document.querySelector('[data-component="fm-app-shell"]')?.dataset.palette === "day");
     evidence.push({ preference: "system", system: "light", phase: "night", palette: "day" });
   } finally { await context.close(); }
   return { status: "passed", boundary: "Real routes, persisted preferences, workbench live refresh, teardown, responsive geometry, and semantic contrast", cases: evidence };
+}
+
+async function setSystemScheme(page, colorScheme) {
+  // Bind emulation to the current document after navigation. The pinned Firefox
+  // can lose a context's media override when replacing its browsing context.
+  // Exercise native media-query changes; never substitute application state.
+  await page.emulateMedia({ colorScheme: null });
+  await page.emulateMedia({ colorScheme });
+  await page.waitForFunction(scheme => matchMedia(`(prefers-color-scheme: ${scheme})`).matches, colorScheme);
 }
 
 async function saveAppearance(page, context, themeId, scheme) {

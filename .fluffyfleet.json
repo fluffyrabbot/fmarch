@@ -36,6 +36,9 @@
       "resourceClass": "heavy",
       "stepTimeoutMs": 14400000,
       "verificationModes": {
+        "cross-browser": [
+          "bash scripts/linux-proof.sh --only test:frontend-cross-browser"
+        ],
         "push": [
           "bash scripts/linux-proof.sh --mode push --base \"$FLEET_COMPARISON_SHA\" --jobs 2 --keep-going"
         ],
