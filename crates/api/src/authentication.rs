@@ -762,3 +762,5 @@ async fn record_auth_delivery_audit(
     .await?;
     Ok(())
 }
+
+// Proof benchmark: authentication source fingerprint probe.
