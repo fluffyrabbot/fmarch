@@ -59,6 +59,13 @@ and semantic contrast. Screenshots are written under that lane's `themes/`
 artifact directory. These are deterministic browser evidence, not hosted or
 native Safari acceptance.
 
+For focused Firefox/WebKit diagnosis, the fleet profile also provides the
+`cross-browser` verification mode. It runs only that lane through the same
+Linux wrapper and shared admission lock. A focused receipt does not replace the
+normal diff-selected push proof required for landing. The browser harness
+reapplies native system-appearance emulation after document navigation and
+verifies the media query before asserting application state.
+
 Use `npm run proof:lanes -- --mode push` to plan the required closure, push the
 clean task checkpoint, then use `npm run proof:remote -- --mode push`. Inspect the
 signed Cachy receipt before landing. Follow the canonical verification runbook

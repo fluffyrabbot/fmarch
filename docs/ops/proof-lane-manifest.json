@@ -1145,6 +1145,8 @@
       "tier": "frozen",
       "paths": [
         "tools/game_invitation_role_proof.mjs",
+        "tools/seed_command_retry.mjs",
+        "tools/seed_command_retry.test.mjs",
         "tools/proof_process.mjs",
         "tools/proof_process.test.mjs"
       ],

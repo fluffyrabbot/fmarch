@@ -15,6 +15,7 @@ import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migr
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import { runBoundedProcess } from "./proof_process.mjs";
+import { postSeedCommand } from "./seed_command_retry.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
   buildDevTestGameIdentityAdapterContractPacket,
@@ -4372,7 +4373,7 @@ async function sendCommand(apiBaseUrl, localProofAuth, id, principalId, command)
     localProofAuth,
     principalId,
   );
-  const result = await fetchJson(`${apiBaseUrl}/commands`, {
+  const result = await postSeedCommand(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${sessionToken}`,
@@ -4389,10 +4390,7 @@ async function sendCommand(apiBaseUrl, localProofAuth, id, principalId, command)
         },
       },
     }),
-  });
-  if (result.body?.kind !== "Ack") {
-    throw new Error(`command rejected: ${JSON.stringify(result)}`);
-  }
+  }, { fetchResponse: fetchWithTimeout });
   return {
     principalId,
     kind: Object.keys(command)[0],
