@@ -225,3 +225,379 @@ async fn discussion_rebuild_holds_stream_fence_during_projection_replacement(poo
         .unwrap();
     assert_both_posts(&pool, topic).await;
 }
+
+#[derive(Clone, Copy)]
+enum CommunityFamily {
+    Moderation,
+    Subscription,
+    Mute,
+    InboxCursor,
+}
+
+#[derive(Clone, Copy)]
+struct CommunityFixture {
+    family: CommunityFamily,
+    stream: Uuid,
+    principal: PrincipalId,
+    surface: Uuid,
+    read_through: i64,
+}
+
+impl CommunityFixture {
+    async fn create(pool: &PgPool, family: CommunityFamily) -> Self {
+        let principal = auxiliary_principal(9100);
+        ensure_auxiliary_principal(pool, principal).await;
+        let mut fixture = Self {
+            family,
+            stream: Uuid::nil(),
+            principal,
+            surface: Uuid::nil(),
+            read_through: 9,
+        };
+        match family {
+            CommunityFamily::Moderation => {
+                fixture.surface = topic_fixture(pool).await;
+                let source_seq: i64 = sqlx::query_scalar(
+                    "SELECT source_seq FROM discussion_post WHERE topic_id = $1",
+                )
+                .bind(fixture.surface)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+                projections::submit_moderation_report(
+                    pool,
+                    ModerationTarget {
+                        public: PublicContentRef::new(fixture.surface, source_seq),
+                    },
+                    Uuid::new_v4(),
+                    principal,
+                    ReportReasonFamily::Harassment,
+                    "concurrent moderation".into(),
+                    10,
+                )
+                .await
+                .unwrap();
+                fixture.stream =
+                    sqlx::query_scalar("SELECT case_id FROM moderation_case WHERE surface_id = $1")
+                        .bind(fixture.surface)
+                        .fetch_one(pool)
+                        .await
+                        .unwrap();
+            }
+            CommunityFamily::Subscription => {
+                fixture.surface = topic_fixture(pool).await;
+                projections::subscribe_to_public_target(
+                    pool,
+                    WatchTarget {
+                        surface_id: fixture.surface,
+                    },
+                    principal,
+                    10,
+                )
+                .await
+                .unwrap();
+                fixture.stream = sqlx::query_scalar(
+                    "SELECT subscription_id FROM public_watch WHERE principal_id = $1",
+                )
+                .bind(principal.as_uuid())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+                let stored = append_discussion_and_project(
+                    pool,
+                    fixture.surface,
+                    &[post("new unread post")],
+                )
+                .await
+                .unwrap();
+                fixture.read_through = stored[0].seq;
+            }
+            CommunityFamily::Mute => {
+                let author = auxiliary_principal(9101);
+                ensure_auxiliary_principal(pool, author).await;
+                fixture.surface = create_auxiliary_profile(
+                    pool,
+                    author,
+                    "replay_target",
+                    "Replay Target",
+                    "Profile used by the concurrent mute proof",
+                    ProfileVisibility::Public,
+                    1,
+                )
+                .await;
+                projections::mute_public_profile(pool, principal, "replay_target", 10)
+                    .await
+                    .unwrap();
+                fixture.stream = sqlx::query_scalar(
+                    "SELECT relationship_id FROM profile_mute WHERE principal_id = $1",
+                )
+                .bind(principal.as_uuid())
+                .fetch_one(pool)
+                .await
+                .unwrap();
+            }
+            CommunityFamily::InboxCursor => {
+                fixture.stream = attention::inbox_cursor_stream_id(principal);
+                projections::advance_member_inbox_read_cursor(pool, principal, 4, 10)
+                    .await
+                    .unwrap();
+            }
+        }
+        fixture
+    }
+
+    async fn rebuild(self, pool: &PgPool) {
+        match self.family {
+            CommunityFamily::Moderation => {
+                projections::rebuild_moderation_stream(pool, self.stream).await
+            }
+            CommunityFamily::Subscription => {
+                projections::rebuild_subscription_stream(pool, self.stream).await
+            }
+            CommunityFamily::Mute => {
+                projections::rebuild_member_mute_stream(pool, self.stream).await
+            }
+            CommunityFamily::InboxCursor => {
+                projections::rebuild_member_inbox_cursor_stream(pool, self.stream).await
+            }
+        }
+        .unwrap();
+    }
+
+    // Exercise the ordinary application write paths, including their domain
+    // decisions, expected-version appends and synchronous projection folds.
+    async fn mutate(self, pool: &PgPool) {
+        match self.family {
+            CommunityFamily::Moderation => {
+                let state = projections::moderation_case_state(pool, self.stream)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let events = trust_safety::decide_moderation(
+                    Some(&state),
+                    ModerationCommand::Hide {
+                        reason: "confirmed".into(),
+                    },
+                )
+                .unwrap();
+                projections::append_moderation_and_project_expected(
+                    pool,
+                    self.stream,
+                    state.version,
+                    events,
+                    self.principal,
+                    11,
+                )
+                .await
+                .unwrap();
+            }
+            CommunityFamily::Subscription => {
+                projections::advance_subscription_read_cursor(
+                    pool,
+                    WatchTarget {
+                        surface_id: self.surface,
+                    },
+                    self.principal,
+                    self.read_through,
+                    11,
+                )
+                .await
+                .unwrap();
+            }
+            CommunityFamily::Mute => {
+                projections::unmute_public_profile(pool, self.principal, "replay_target", 11)
+                    .await
+                    .unwrap();
+            }
+            CommunityFamily::InboxCursor => {
+                projections::advance_member_inbox_read_cursor(
+                    pool,
+                    self.principal,
+                    self.read_through,
+                    11,
+                )
+                .await
+                .unwrap();
+            }
+        }
+    }
+
+    fn projection_lock(self) -> (&'static str, Uuid) {
+        match self.family {
+            CommunityFamily::Moderation => (
+                "SELECT case_id FROM moderation_case WHERE case_id = $1 FOR UPDATE",
+                self.stream,
+            ),
+            CommunityFamily::Subscription => (
+                "SELECT subscription_id FROM public_watch WHERE subscription_id = $1 FOR UPDATE",
+                self.stream,
+            ),
+            CommunityFamily::Mute => (
+                "SELECT relationship_id FROM profile_mute WHERE relationship_id = $1 FOR UPDATE",
+                self.stream,
+            ),
+            CommunityFamily::InboxCursor => (
+                "SELECT principal_id FROM member_inbox_cursor WHERE principal_id = $1 FOR UPDATE",
+                self.principal.as_uuid(),
+            ),
+        }
+    }
+
+    async fn assert_current(self, pool: &PgPool) {
+        let events = eventstore::load_stream(pool, self.stream).await.unwrap();
+        let last = events.last().unwrap();
+        let (sql, id, expected_value, expected_events) = match self.family {
+            CommunityFamily::Moderation => (
+                "SELECT status, updated_seq, version FROM moderation_case WHERE case_id = $1",
+                self.stream, "hidden".to_string(), 3,
+            ),
+            CommunityFamily::Subscription => (
+                "SELECT read_through_seq::text, updated_seq, version FROM public_watch WHERE subscription_id = $1",
+                self.stream, self.read_through.to_string(), 2,
+            ),
+            CommunityFamily::Mute => (
+                "SELECT active::text, updated_seq, version FROM profile_mute WHERE relationship_id = $1",
+                self.stream, "false".to_string(), 2,
+            ),
+            CommunityFamily::InboxCursor => (
+                "SELECT read_through_seq::text, updated_seq, version FROM member_inbox_cursor WHERE principal_id = $1",
+                self.principal.as_uuid(), self.read_through.to_string(), 2,
+            ),
+        };
+        assert_eq!(events.len(), expected_events);
+        let row: (String, i64, i64) = sqlx::query_as(sql).bind(id).fetch_one(pool).await.unwrap();
+        assert_eq!(row, (expected_value, last.seq, last.stream_seq));
+        if matches!(self.family, CommunityFamily::Moderation) {
+            let visible: bool =
+                sqlx::query_scalar("SELECT visible FROM public_publication WHERE surface_id = $1")
+                    .bind(self.surface)
+                    .fetch_one(pool)
+                    .await
+                    .unwrap();
+            assert!(!visible, "committed moderation must remain enforced");
+            let visibility: String = sqlx::query_scalar(
+                "SELECT visibility FROM moderation_target_state WHERE surface_id = $1",
+            )
+            .bind(self.surface)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            assert_eq!(visibility, "hidden");
+        }
+    }
+}
+
+async fn community_writer_first(pool: &PgPool, family: CommunityFamily) {
+    let fixture = CommunityFixture::create(pool, family).await;
+    let mut barrier = pool.begin().await.unwrap();
+    eventstore::lock_stream_in_tx(&mut barrier, fixture.stream)
+        .await
+        .unwrap();
+    let barrier_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let (writer, writer_pid) = replay_pool(pool).await;
+    let write = tokio::spawn(async move {
+        fixture.mutate(&writer).await;
+        writer.close().await;
+    });
+    wait_for_blocker(pool, writer_pid, barrier_pid).await;
+    let (replay, replay_pid) = replay_pool(pool).await;
+    let rebuild = tokio::spawn(async move {
+        fixture.rebuild(&replay).await;
+        replay.close().await;
+    });
+    // PostgreSQL reports the earlier queued writer as a soft blocker. Replay
+    // must queue behind it before reading any events, not just before DELETE.
+    wait_for_blocker(pool, replay_pid, writer_pid).await;
+    barrier.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        write.await.unwrap();
+        rebuild.await.unwrap();
+    })
+    .await
+    .unwrap();
+    fixture.assert_current(pool).await;
+    fixture.rebuild(pool).await;
+    fixture.assert_current(pool).await;
+}
+
+async fn community_rebuild_first(pool: &PgPool, family: CommunityFamily) {
+    let fixture = CommunityFixture::create(pool, family).await;
+    let mut barrier = pool.begin().await.unwrap();
+    let (sql, id) = fixture.projection_lock();
+    sqlx::query(sql)
+        .bind(id)
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let barrier_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let (replay, replay_pid) = replay_pool(pool).await;
+    let rebuild = tokio::spawn(async move {
+        fixture.rebuild(&replay).await;
+        replay.close().await;
+    });
+    wait_for_blocker(pool, replay_pid, barrier_pid).await;
+    // Probe before starting the writer so only replay can own this fence.
+    // A writer blocked later on projection rows must not satisfy this assertion.
+    let mut probe = pool.begin().await.unwrap();
+    assert!(
+        !eventstore::try_lock_stream_in_tx(&mut probe, fixture.stream)
+            .await
+            .unwrap()
+    );
+    probe.rollback().await.unwrap();
+    let (writer, writer_pid) = replay_pool(pool).await;
+    let write = tokio::spawn(async move {
+        fixture.mutate(&writer).await;
+        writer.close().await;
+    });
+    wait_for_blocker(pool, writer_pid, replay_pid).await;
+    barrier.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        rebuild.await.unwrap();
+        write.await.unwrap();
+    })
+    .await
+    .unwrap();
+    fixture.assert_current(pool).await;
+    fixture.rebuild(pool).await;
+    fixture.assert_current(pool).await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn moderation_rebuild_reads_after_writer_commit(pool: PgPool) {
+    community_writer_first(&pool, CommunityFamily::Moderation).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn moderation_rebuild_holds_fence_through_replacement(pool: PgPool) {
+    community_rebuild_first(&pool, CommunityFamily::Moderation).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn subscription_rebuild_reads_after_writer_commit(pool: PgPool) {
+    community_writer_first(&pool, CommunityFamily::Subscription).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn subscription_rebuild_holds_fence_through_replacement(pool: PgPool) {
+    community_rebuild_first(&pool, CommunityFamily::Subscription).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn mute_rebuild_reads_after_writer_commit(pool: PgPool) {
+    community_writer_first(&pool, CommunityFamily::Mute).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn mute_rebuild_holds_fence_through_replacement(pool: PgPool) {
+    community_rebuild_first(&pool, CommunityFamily::Mute).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn inbox_cursor_rebuild_reads_after_writer_commit(pool: PgPool) {
+    community_writer_first(&pool, CommunityFamily::InboxCursor).await;
+}
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn inbox_cursor_rebuild_holds_fence_through_replacement(pool: PgPool) {
+    community_rebuild_first(&pool, CommunityFamily::InboxCursor).await;
+}
