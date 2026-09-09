@@ -299,5 +299,7 @@ keeps the worker unhealthy; a later successful observation with no unresolved
 failures restores readiness, including when another replica performed recovery.
 Progress, backlog, and iteration outcome publish atomically. Structured failure
 telemetry includes pending/failed counts and the oldest due timestamp, without
-game payloads. This is execution-outcome health; batch duration and deadline
-lateness still require their own capacity qualification.
+game payloads. Each replica claims one game per free execution slot. One five-second
+deadline spans both runtime transactions, with a separate one-second cleanup
+reserve and one-second claim, completion, and health-observation budgets. Deadline
+lateness under sustained load still requires capacity qualification.
