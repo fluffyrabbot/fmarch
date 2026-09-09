@@ -1163,3 +1163,41 @@ test('the preempted-run pointer is only actionable when it names the pid the loc
   await writeFile(signalPath, JSON.stringify({ pid: 4242, competitors: ['cargo'], at: Date.now() }));
   assert.equal(readPreemptedRunReceiptPath(root), '/tmp/old/receipt.json');
 });
+
+test('focused failure blocks acceptance even with spare resources and keep-going', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    acceptance: { ...lane(['acceptance']), phase: 'acceptance' },
+    focused: { ...lane(['focused']), phase: 'focused' },
+    regression: lane(['regression']),
+  });
+  const started = [];
+  const result = await runExecutionPlan(['acceptance', 'focused', 'regression'], manifest, {
+    root, jobs: 3, keepGoing: true,
+    spawn(file) { started.push(file); return childThatCloses(file === 'focused' ? 1 : 0, 10); },
+    log() {},
+  });
+  assert.equal(result.success, false);
+  assert.deepEqual(started.sort(), ['focused', 'regression']);
+  assert.equal(result.receipt.lanes.acceptance.state, 'blocked');
+  assert.equal(result.receipt.lanes.acceptance.blocked_by, 'focused');
+});
+
+test('acceptance starts only after focused hard prerequisites finish', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    acceptance: { ...lane(['acceptance']), phase: 'acceptance' },
+    focused: { ...lane(['focused']), phase: 'focused', depends_on: ['prerequisite'] },
+    prerequisite: lane(['prerequisite']),
+  });
+  const order = [];
+  const result = await runExecutionPlan(['acceptance', 'focused'], manifest, {
+    root, jobs: 3,
+    spawn(file) { order.push(file); return childThatCloses(0, 10); },
+    log() {},
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(order, ['prerequisite', 'focused', 'acceptance']);
+});

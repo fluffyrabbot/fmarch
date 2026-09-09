@@ -1,9 +1,9 @@
-// Content-addressed proof reuse for frozen proof lanes.
+// Content-addressed proof reuse for isolated repository-owned proof lanes.
 //
 // A cache entry is a successful lane receipt plus its runner-scoped artifacts.
 // The key is deliberately lane-local: it covers canonical crate lanes' proof-
-// graph package closure, specialized lanes' explicitly owned source/fixture
-// paths, migrations, dependency locks, pinned/runtime toolchains, execution
+// graph package closure (including specialized executable targets), shared
+// source/fixture paths, migrations, dependency locks, pinned/runtime toolchains, execution
 // metadata, and the proof runner implementation. Unreadable or malformed
 // entries are misses, never passes.
 
@@ -83,6 +83,17 @@ export function frozenLaneIds(manifest) {
   );
 }
 
+// Tier controls selection, not evidence validity. Live external/network probes
+// remain execution-only; repository-owned isolated lanes can reuse exact keys.
+export function reusableLaneIds(manifest) {
+  return new Set(Object.entries(manifest.lanes)
+    .filter(([, lane]) => lane.cache !== false &&
+      lane.execution?.class !== 'network' &&
+      !(lane.execution?.resources ?? []).some((resource) =>
+        resource.kind === 'network' || (resource.kind === 'postgres' && resource.mode !== 'lane-isolated')))
+    .map(([id]) => id));
+}
+
 export function workspaceFiles(root) {
   const output = execFileSync(
     'git',
@@ -131,16 +142,32 @@ function transitivePackageRoots(laneIds, manifest, metadata, root) {
     : metadata.packages.filter((pkg) => workspaceMemberIds.has(pkg.id));
   const packages = new Map(workspacePackages.map((pkg) => [pkg.name, pkg]));
   const selectedLaneIds = new Set(laneIds);
-  // The selector's reverse-Cargo closure only lands on canonical `crate`
-  // areas. Specialized `closure_crate` and proof-source areas intentionally
-  // retain their narrower semantic ownership, so their cache keys must not
-  // silently widen back to the complete compile/link closure.
-  const selected = new Set(
-    manifest.areas
-      .filter((area) => area.crate && area.lanes.some((laneId) => selectedLaneIds.has(laneId)))
-      .map((area) => area.crate)
-      .filter((name) => packages.has(name)),
-  );
+  // A test target's executable depends on its complete Cargo closure, including
+  // dev/build dependencies, even when behavioral ownership is a narrow source.
+  const selected = new Set(manifest.areas
+    .filter((area) => area.lanes.some((id) => selectedLaneIds.has(id)))
+    .map((area) => area.crate ?? area.closure_crate)
+    .filter((name) => packages.has(name)));
+  for (const id of laneIds) {
+    const lane = manifest.lanes[id];
+    const roots = new Set(manifest.areas.filter((area) => area.lanes.includes(id))
+      .map((area) => area.crate ?? area.closure_crate).filter((name) => packages.has(name)));
+    for (const target of lane.assertion_targets ?? []) {
+      const name = target.split('/')[0];
+      if (packages.has(name)) roots.add(name);
+    }
+    const argv = lane.execution?.argv ?? [];
+    for (let index = 0; index < argv.length - 1; index += 1) {
+      if (['-p', '--package'].includes(argv[index]) && packages.has(argv[index + 1])) roots.add(argv[index + 1]);
+    }
+    for (const name of roots) selected.add(name);
+    // Browser/live acceptance executes the site. Cargo commands without a
+    // known package root fail closed to the complete workspace input set.
+    if (lane.execution?.class === 'browser' || argv.includes('--workspace') ||
+        ['cargo', 'postgres'].includes(lane.execution?.class) && roots.size === 0) {
+      for (const name of packages.keys()) selected.add(name);
+    }
+  }
   const queue = [...selected];
   while (queue.length > 0) {
     const pkg = packages.get(queue.shift());
@@ -184,6 +211,11 @@ export function computeLaneProofKey(laneId, manifest, {
   const lanes = dependencyLaneIds.map((id) => manifest.lanes[id]);
   const matchers = new Set([
     ...GLOBAL_INPUTS,
+    // Shared tooling, imported fixtures, packs, frontend assets, and root config
+    // are execution inputs regardless of behavioral ownership.
+    ...files.filter((file) => !file.startsWith('crates/') || file.endsWith('/Cargo.toml')),
+    // Static and live-tool commands can inspect arbitrary repository sources.
+    ...(lanes.every((lane) => ['cargo', 'postgres'].includes(lane.execution?.class)) ? [] : files),
     ...relevantAreaEntries(dependencyLaneIds, manifest),
     ...lanes.flatMap((lane) => [...(lane.inputs ?? []), ...(lane.outputs ?? [])]),
     ...transitivePackageRoots(dependencyLaneIds, manifest, metadata, root),
@@ -247,6 +279,16 @@ export function readProofCacheEntry(root, laneId, proofKey) {
       entry.lane_id !== laneId || entry.state !== 'passed' || entry.lane?.status !== 0) {
     throw new Error('cache entry identity or success state is invalid');
   }
+  if (sha256(JSON.stringify(canonical(entry.inputs))) !== proofKey) {
+    throw new Error('cache input fingerprint does not match its key');
+  }
+  if (typeof entry.source_receipt !== 'string' || sha256(entry.source_receipt) !== entry.source_receipt_sha256) {
+    throw new Error('cache source receipt digest does not match');
+  }
+  const source = JSON.parse(entry.source_receipt);
+  if (source.id !== entry.source_receipt_id || JSON.stringify(canonical(source.lanes?.[laneId])) !== JSON.stringify(canonical(entry.lane))) {
+    throw new Error('cache source receipt does not qualify this lane');
+  }
   if (!inside(paths.directory, paths.artifacts) || !lstatSync(paths.artifacts).isDirectory()) {
     throw new Error('cache artifact directory is invalid');
   }
@@ -267,6 +309,7 @@ export function loadProofCacheHits(laneIds, manifest, options = {}) {
       hits.set(laneId, {
         ...entry.lane,
         receipt_id: entry.source_receipt_id,
+        receipt_sha256: entry.source_receipt_sha256,
         proof_key: entry.proof_key,
         artifact_source_dir: paths.artifacts,
       });
@@ -301,6 +344,7 @@ export function persistProofCacheEntries(execution, laneKeys, { root, replaceLan
         created_at: new Date().toISOString(),
         source_receipt_id: execution.receipt.id,
         source_receipt_sha256: sha256(readFileSync(execution.run.receiptPath)),
+        source_receipt: readFileSync(execution.run.receiptPath, 'utf8'),
         artifact_sha256: proofCacheArtifactDigest(artifacts),
         lane,
         inputs: computed.payload,

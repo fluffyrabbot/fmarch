@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   computeLaneProofKey,
   frozenLaneIds,
+  reusableLaneIds,
   loadProofCacheHits,
   persistProofCacheEntries,
   workspaceMetadata,
@@ -117,7 +118,7 @@ test('frozen eligibility requires every owning area to be frozen', () => {
   assert.deepEqual([...frozenLaneIds(fixture)].sort(), ['canonical', 'shared']);
 });
 
-test('specialized proof keys exclude unrelated compile closure while canonical crate keys stay transitive', (t) => {
+test('specialized executable keys include transitive Cargo inputs and exclude unrelated crates', (t) => {
   const { root, files } = fixtureRoot(t);
   const original = key(root, files).proofKey;
 
@@ -128,7 +129,7 @@ test('specialized proof keys exclude unrelated compile closure while canonical c
     root, files, metadata: metadata(root), toolchain,
   }).proofKey;
   writeFileSync(join(root, 'crates/domain/src/lib.rs'), 'pub fn changed_domain() {}');
-  assert.equal(key(root, files).proofKey, original);
+  assert.notEqual(key(root, files).proofKey, original);
   assert.notEqual(computeLaneProofKey('canonical', manifest(), {
     root, files, metadata: metadata(root), toolchain,
   }).proofKey, canonical);
@@ -208,4 +209,33 @@ test('cache entries are immutable successful receipts and artifact corruption is
   const corrupt = loadProofCacheHits(['audit'], manifest(), options);
   assert.deepEqual([...corrupt.hits.keys()], []);
   assert.match(corrupt.misses.get('audit').reason, /digest/);
+});
+
+
+test('reuse eligibility is independent of tier but excludes changing external state', () => {
+  const example = manifest();
+  example.lanes.network = { execution: { class: 'network', resources: [] } };
+  example.lanes.sharedDb = { execution: { class: 'postgres', resources: [{ kind: 'postgres', mode: 'shared-serial' }] } };
+  example.lanes.auditCache = { cache: false, execution: { class: 'hermetic', resources: [] } };
+  assert.ok(reusableLaneIds(example).has('membership'), 'active ownership must not defeat matching fingerprints');
+  for (const id of ['network', 'sharedDb', 'auditCache']) assert.ok(!reusableLaneIds(example).has(id));
+});
+
+test('passing lane in a failed checkpoint can qualify a later checkpoint only with identical inputs', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const computed = key(root, files);
+  const runDir = join(root, 'target/proof-lanes/runs/failed-checkpoint');
+  const artifactDir = join(runDir, 'artifacts/audit');
+  mkdirSync(artifactDir, { recursive: true });
+  const receiptPath = join(runDir, 'receipt.json');
+  const receipt = { id: 'failed-checkpoint', state: 'failed', context: { commit: 'old' }, lanes: {
+    audit: { state: 'passed', status: 0, artifact_dir: artifactDir },
+    unrelated: { state: 'failed', status: 1 },
+  }};
+  writeFileSync(receiptPath, JSON.stringify(receipt));
+  persistProofCacheEntries({ run: { runDir, receiptPath }, receipt }, new Map([['audit', computed]]), { root });
+  const options = { root, files, metadata: metadata(root), toolchain };
+  assert.ok(loadProofCacheHits(['audit'], manifest(), options).hits.has('audit'));
+  writeFileSync(join(root, 'crates/domain/src/lib.rs'), 'changed dependency');
+  assert.equal(loadProofCacheHits(['audit'], manifest(), options).hits.size, 0);
 });

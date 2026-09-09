@@ -32,7 +32,7 @@ Commit and push a clean task branch, then run `npm run proof:remote` from that
 worktree. Use `npm run proof:remote -- --mode push` for the touched closure plus
 push sentinels, or `--mode sprint` for the active frontier. No arguments selects
 full. Use `npm run proof:remote -- --mode audit` for a forced full sweep: every
-lane executes even when frozen cache entries match. Commands come from the committed workflow, never arbitrary CLI text.
+lane executes even when fingerprinted cache entries match. Commands come from the committed workflow, never arbitrary CLI text.
 The controller pins origin/main as the comparison SHA at submission, and the
 worker uses that SHA even if main moves while queued.
 
@@ -223,3 +223,46 @@ provider credentials, screenshots, or account identifiers. It leaves two uniquel
 labelled posts in the dedicated test game on each run. Expired/missing sessions,
 missing configuration, partial journeys, and commit drift fail the gate. Linux
 proof contracts exercise gate validation; they do not count as live hosted proof.
+
+
+## Risk ownership and staged proof
+
+The selector separates source behavior from Cargo dependency coverage. Direct
+owners select their `lanes` and forward `also_triggers`. Reverse Cargo closure
+selects canonical `dependency_lanes` without forwarding behavioral edges.
+Missing metadata remains conservative. Direct wire changes still re-arm the
+frontend and proof tools; dependency-only wire touches retain Rust regression
+and generated-type freshness checks. Authentication and scheduler/runtime sources
+have explicit owners, distinct from frontend presentation.
+
+Focused lanes (including scheduler database races, server runtime tests, generated
+wire freshness, and proof infrastructure contracts) run before acceptance.
+Acceptance admission waits for every selected focused prerequisite to pass, even
+under `--keep-going`; a focused failure blocks the expensive sweep. Independent
+regression lanes may continue to collect useful failures. This uses the normal
+canonical queue and host lock, not a separate local or unqualified execution path.
+
+Push, sprint, and full runs may reuse isolated passing lanes across checkpoints
+only when complete input and execution fingerprints match. Test keys include
+transitive Cargo dependencies, including dev/build dependencies. Shared tooling,
+fixtures, migrations, locks, configuration, and toolchain/environment identity
+remain inputs. Static/live-tool keys conservatively include the whole repository;
+network/shared-database lanes and cache maintenance are execution-only. Successful
+lanes from a failed sweep remain reusable; failed or skipped lanes never are.
+Every cache entry embeds its source receipt, verifies its digest and lane record,
+and checks artifact integrity. Final qualification still names the final commit;
+there is no permission to land a previous commit's whole receipt.
+
+CLI and JSON plans show directly selected, hard-dependency-expanded, and deduplicated
+executable lane counts separately. These are lane counts, not test counts. Every
+lane reports phase, selection reasons, and an explicitly sourced cost estimate.
+Run receipts retain those reasons and actual lane timings. The terminal
+`qualification` record publishes the final commit, overall wall time, execution
+states, proof keys, and source receipt hashes for reused evidence into the fleet's
+signed output. Warm estimates are not wall-time promises or new measured baselines.
+
+Historical and negative selection cases live in
+[proof-selection-regressions.json](proof-selection-regressions.json), including
+the strict `CommandMsg` regression `32e8623b`, live protocol v3, and the scheduler
+checkpoint `f64bed5b`. Sprint qualification retains full sweeps; release and
+periodic exhaustive qualification retain forced full sweeps.

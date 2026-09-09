@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   assertMappedSelection,
+  explainSelection,
   MANIFEST_PATH,
   REPO_ROOT,
   artifactPathMatches,
@@ -774,7 +775,7 @@ test('Cargo test lanes select only inventoried assertion-bearing targets', () =>
     }
   }
 
-  assert.equal(cargoLaneCount, 25, 'every current cargo test lane must be inventoried');
+  assert.equal(cargoLaneCount, 26, 'every current cargo test lane must be inventoried');
   assert.equal(manifest.lanes['cargo:profile-application'], undefined);
 });
 
@@ -2005,3 +2006,49 @@ test('documentation changes select their bounded contract gate', () => {
   assert.doesNotThrow(() => assertMappedSelection(selectLanes({changed: ['unknown/file.rs'], manifest, crateGraph: null, mode: 'full'})));
   assert.throws(() => execFileSync(process.execPath, ['tools/proof_lane_select.mjs', '--mode', 'push', '--changed', 'unknown/file.rs', '--json'], {cwd: REPO_ROOT, stdio: 'pipe'}), error => error.status === 1 && /Unmapped changes block/.test(error.stderr));
  });
+
+test('historical selection regressions retain transport coverage without scheduler presentation triggers', () => {
+  const cases = JSON.parse(readFileSync(join(REPO_ROOT, 'docs/ops/proof-selection-regressions.json'), 'utf8')).cases;
+  for (const example of cases) {
+    const selection = selectLanes({ changed: example.changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'push' });
+    assertMappedSelection(selection);
+    const explained = explainSelection(selection, manifest);
+    const ids = new Set(explained.map((lane) => lane.id));
+    for (const id of example.requires) assert.ok(ids.has(id), `${example.name} must select ${id}`);
+    for (const id of example.excludes) assert.ok(!ids.has(id), `${example.name} must not select ${id}`);
+    for (const lane of explained) assert.ok(lane.reasons.length, `${lane.id} needs a selection reason`);
+  }
+});
+
+test('dependency-only touches never forward behavior, but a direct touch still forwards it', () => {
+  const scheduler = selectLanes({ changed: ['crates/commands/src/day_scheduler.rs'], manifest, crateGraph: FIXTURE_GRAPH });
+  assert.ok(scheduler.touched.some((area) => area.id === 'crate:wire'));
+  assert.ok(!scheduler.behavioralAreas.includes('crate:wire'));
+  assert.ok(!scheduler.behavioralAreas.includes('frontend:game'));
+  assert.ok(scheduler.laneReasons['cargo:wire'].some((reason) => reason.startsWith('dependency:')));
+  const both = selectLanes({ changed: ['crates/commands/src/day_scheduler.rs', 'crates/wire/src/lib.rs'], manifest, crateGraph: FIXTURE_GRAPH });
+  assert.ok(both.behavioralAreas.includes('frontend:game'));
+  const plan = explainSelection(both, manifest);
+  assert.ok(plan.find((lane) => lane.id === 'test:frontend-role-smoke').reasons.length > 0);
+});
+
+test('hard-dependency expansion reports its added lanes and focused ordering beats cost', () => {
+  const fixture = { lanes: {
+    focus: { kind: 'shell', command: 'focus', phase: 'focused' },
+    accept: { kind: 'shell', command: 'accept', phase: 'acceptance', depends_on: ['producer'] },
+    producer: { kind: 'shell', command: 'producer' },
+  }};
+  const plan = explainSelection({ mode: 'push', laneIds: ['accept', 'focus'] }, fixture, {
+    lanes: { accept: { seconds: 1 }, producer: { seconds: 1 }, focus: { seconds: 100 } },
+  });
+  assert.deepEqual(plan.map((lane) => lane.id), ['focus', 'producer', 'accept']);
+  assert.deepEqual(plan.find((lane) => lane.id === 'producer').reasons, ['hard-dependency:accept']);
+});
+
+
+test('dependency profiles name real regression lanes without presentation ownership', () => {
+  for (const area of manifest.areas.filter((area) => area.crate)) {
+    assert.ok(area.dependency_lanes?.length, `${area.id} must declare dependency coverage`);
+    for (const lane of area.dependency_lanes) assert.ok(manifest.lanes[lane], `${area.id}: ${lane}`);
+  }
+});

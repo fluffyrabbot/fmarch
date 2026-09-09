@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "name": "scheduler execution f64bed5b",
+      "commit": "f64bed5bbf2f33c96a13e17150aa8e1f9e8a1bb0",
+      "changed": [
+        "crates/api/src/mash_scale.rs",
+        "crates/commands/src/day_runtime.rs",
+        "crates/commands/src/day_scheduler.rs",
+        "crates/commands/tests/pipeline/day_events.rs",
+        "crates/server/src/main.rs",
+        "crates/server/src/runtime_supervisor.rs",
+        "docs/arch/12-capacity-and-overload.md",
+        "docs/arch/14-mash-and-manual-frontier.md",
+        "docs/arch/17-day-runtime-ownership.md"
+      ],
+      "requires": [
+        "cargo:day-event-runtime",
+        "cargo:commands-pg",
+        "cargo:server",
+        "cargo:api",
+        "cargo:wire",
+        "cargo:clippy-workspace",
+        "test:host-console-day-event-room-live-stack"
+      ],
+      "excludes": [
+        "test:frontend-cross-browser",
+        "test:frontend-visual-regression",
+        "test:auth-invite-role-proof",
+        "test:frontend-csp-browser"
+      ]
+    },
+    {
+      "name": "strict CommandMsg wire regression 32e8623b",
+      "commit": "32e8623bfbd10945671e50161f7718e7ed1ea9ef",
+      "scope": "Changed wire subset: removal of principal_user_id plus deny_unknown_fields; unrelated historical deployment paths have since moved.",
+      "changed": [
+        "crates/wire/src/lib.rs",
+        "crates/wire/generated/types.ts",
+        "frontend/src/lib/wire/types.ts"
+      ],
+      "requires": [
+        "check:wire-types",
+        "cargo:wire",
+        "test:frontend-contract",
+        "test:frontend-role-smoke",
+        "test:dev-test-game-contract",
+        "test:frontend-cross-browser"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "v3 live protocol 91f92b71",
+      "commit": "91f92b71c2a5608c7861c238b16d554cf6c3d562",
+      "scope": "Transport contract subset of the historical change.",
+      "changed": [
+        "crates/wire/src/lib.rs"
+      ],
+      "requires": [
+        "check:wire-types",
+        "cargo:wire",
+        "test:frontend-route-live-contract",
+        "test:frontend-role-smoke"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "authentication boundary",
+      "changed": [
+        "crates/api/src/authentication.rs"
+      ],
+      "requires": [
+        "cargo:api",
+        "test:auth-invite-role-proof",
+        "test:frontend-contract"
+      ],
+      "excludes": [
+        "test:frontend-visual-regression",
+        "test:frontend-cross-browser"
+      ]
+    }
+  ]
+}

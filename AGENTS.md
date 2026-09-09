@@ -55,12 +55,14 @@ on the canonical Cachy worker, task branches, and atomic history over PR ceremon
   when the change crosses boundaries.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
   (vs `origin/main`, including uncommitted work) to the required lane set via
-  `docs/ops/proof-lane-manifest.json`, expanding touched crates through the
-  reverse cargo dependency closure and `also_triggers` edges. Add `--run` to
+  `docs/ops/proof-lane-manifest.json`, using separate ownership for behavioral changes and dependency coverage.
+  Reverse Cargo closure selects each dependent's `dependency_lanes`; only direct
+  behavioral owners forward `also_triggers` edges. Generated contract checks
+  remain explicit. Focused lanes gate acceptance even with `--keep-going`. Add `--run` to
   execute the selected lanes: `--mode push --run` before ordinary pushes,
   `--mode sprint --run` for an active-frontier checkpoint, and
   `--mode full --run` for the content-addressed full sweep. Full mode selects
-  every lane, but may reuse an immutable passing result for a frozen lane when
+  every lane. Push, sprint, and full runs may reuse an immutable passing lane when
   its proof key still matches the lane's transitive sources, migrations, locks,
   toolchain, command, and fixtures. Use `--mode full --force --run` to execute
   every lane for release checkpoints and periodic exhaustive audits.
@@ -79,7 +81,7 @@ on the canonical Cachy worker, task branches, and atomic history over PR ceremon
   costs under ignored `target/proof-lanes/`; deliberately promote a stable cost
   into the tracked baseline with
   `node tools/proof_lane_select.mjs --record <lane-id>`.
-- Inspect a frozen lane's current cache decision with
+- Inspect a lane's current cache decision with
   `npm run proof:cache -- explain <lane-id>`. The explanation names every
   changed input fingerprint, toolchain field, or execution-contract component
   relative to the newest prior valid entry. Plan retention with

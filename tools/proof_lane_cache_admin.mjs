@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   computeLaneProofKey,
-  frozenLaneIds,
+  reusableLaneIds,
   proofToolchain,
   readProofCacheEntry,
   safeProofLaneSegment,
@@ -288,7 +288,7 @@ export function explainProofCacheLane(laneId, manifest, options) {
   } : { inputs: [], toolchain: [], contract: [] };
   return {
     lane_id: laneId,
-    eligible: frozenLaneIds(manifest).has(laneId),
+    eligible: reusableLaneIds(manifest).has(laneId),
     status: exact?.valid ? 'hit' : exact ? 'corrupt' : 'miss',
     proof_key: computed.proofKey,
     exact_entry: exact ? {
@@ -1191,7 +1191,7 @@ export async function main(argv = process.argv.slice(2), { root = REPO_ROOT } = 
     return explanation;
   }
   const currentProofKeys = new Map(
-    [...frozenLaneIds(manifest)].map((laneId) => [laneId, computeLaneProofKey(laneId, manifest, inputs)]),
+    [...reusableLaneIds(manifest)].map((laneId) => [laneId, computeLaneProofKey(laneId, manifest, inputs)]),
   );
   if (args.command === 'audit') {
     const recovery = writeProofCacheGcRecovery(args.recover, {

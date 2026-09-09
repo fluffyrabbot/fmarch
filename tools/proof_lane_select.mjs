@@ -37,7 +37,7 @@
 // failed, blocked, skipped, quarantined, or preempted.
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
-// the contract test). --run executes the selected lanes in cost order. It is
+// the contract test). --run prioritizes focused proof, then cost within phases. It is
 // serial by default; --jobs opts into the manifest-owned resource scheduler.
 // The scheduler writes one receipt under target/proof-lanes/runs/ and only
 // starts lanes whose hard dependencies and resource claims are satisfied.
@@ -71,10 +71,11 @@ import {
   runExecutionPlan,
   summarizeLaneStates,
   validateExecutionManifest,
+  executionPhases,
 } from './proof_lane_execution.mjs';
 import {
   computeLaneProofKey,
-  frozenLaneIds,
+  reusableLaneIds,
   loadProofCacheHits,
   persistProofCacheEntries,
   proofToolchain,
@@ -452,6 +453,7 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     else unmapped.push(file);
   }
 
+  const behavioral = new Set(touched.keys());
   const touchedCrates = [...touched.keys()]
     .map((id) => areasById.get(id))
     .map((area) => area?.crate ?? area?.closure_crate)
@@ -470,16 +472,18 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
       crateFallback = true;
       for (const area of areasByCrate.values()) {
         if (!touched.has(area.id)) touch(area.id, 'crate-graph-unavailable');
+        behavioral.add(area.id);
       }
     }
   }
 
-  const queue = [...touched.keys()];
+  const queue = [...behavioral];
   while (queue.length > 0) {
     const area = areasById.get(queue.shift());
     for (const target of area?.also_triggers ?? []) {
-      if (!touched.has(target)) {
+      if (!behavioral.has(target)) {
         touch(target, `also-triggers:${area.id}`);
+        behavioral.add(target);
         queue.push(target);
       }
     }
@@ -487,17 +491,31 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
 
   const artifactTriggers = generatedArtifactTriggers(changed, manifest);
   const laneIds = new Set();
-  const addAreaLanes = (area) => area.lanes.forEach((lane) => laneIds.add(lane));
+  const laneReasons = {};
+  const add = (lane, reason) => {
+    laneIds.add(lane);
+    laneReasons[lane] ??= [];
+    if (!laneReasons[lane].includes(reason)) laneReasons[lane].push(reason);
+  };
+  const addAreaLanes = (area, dependencyOnly = false) => {
+    for (const lane of dependencyOnly ? (area.dependency_lanes ?? area.lanes) : area.lanes) {
+      for (const reason of touched.get(area.id) ?? ['active-tier']) {
+        add(lane, `${dependencyOnly ? 'dependency' : 'behavior'}:${area.id}:${reason}`);
+      }
+    }
+  };
   if (mode === 'full') {
-    for (const lane of Object.keys(manifest.lanes)) laneIds.add(lane);
+    for (const lane of Object.keys(manifest.lanes)) add(lane, 'mode:full');
   } else {
-    for (const id of touched.keys()) addAreaLanes(areasById.get(id));
-    for (const { laneId } of artifactTriggers) laneIds.add(laneId);
+    for (const id of touched.keys()) addAreaLanes(areasById.get(id), !behavioral.has(id));
+    for (const { laneId, reasons } of artifactTriggers) {
+      for (const reason of reasons) add(laneId, `generated-artifact:${reason}`);
+    }
     if (mode === 'sprint') {
       for (const area of manifest.areas) if (area.tier === 'active') addAreaLanes(area);
     }
     if (mode === 'push' || mode === 'sprint') {
-      for (const lane of manifest.push_sentinels ?? []) laneIds.add(lane);
+      for (const lane of manifest.push_sentinels ?? []) add(lane, 'push-sentinel');
     }
   }
 
@@ -509,6 +527,8 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     mode,
     touched: [...touched.entries()].map(([id, reasons]) => ({ id, reasons })),
     artifactTriggers,
+    laneReasons,
+    behavioralAreas: [...behavioral],
     unmapped,
     crateFallback,
     laneIds: [...laneIds],
@@ -547,7 +567,8 @@ export function deduplicateLaneIds(laneIds, manifest) {
 export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} }) {
   const bySeconds = (a, b) =>
     (timings.lanes[a]?.seconds ?? Infinity) - (timings.lanes[b]?.seconds ?? Infinity);
-  const sorted = deduplicateLaneIds([...laneIds].sort(bySeconds), manifest);
+  const phases = executionPhases(laneIds, manifest);
+  const sorted = deduplicateLaneIds([...laneIds].sort((a, b) => phases[a] - phases[b] || bySeconds(a, b)), manifest);
   const selected = new Set(sorted);
   const visiting = new Set();
   const visited = new Set();
@@ -579,6 +600,27 @@ export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} })
 
   for (const laneId of sorted) visit(laneId);
   return ordered;
+}
+
+// The same closed plan feeds the CLI, execution context, and signed fleet log.
+export function explainSelection(selection, manifest, timings = { lanes: {} }) {
+  const expanded = expandHardDependencies(selection.laneIds, manifest);
+  const ordered = orderedExecutionPlan(expanded, manifest, timings);
+  const reasons = structuredClone(selection.laneReasons ?? {});
+  for (const id of expanded) {
+    reasons[id] ??= selection.laneIds.includes(id) ? [`mode:${selection.mode}`] : [];
+    for (const dependency of manifest.lanes[id].depends_on ?? []) {
+      reasons[dependency] ??= [];
+      reasons[dependency].push(`hard-dependency:${id}`);
+    }
+  }
+  const phases = executionPhases(ordered, manifest);
+  return ordered.map((id) => ({
+    id, phase: ['focused', 'regression', 'acceptance'][phases[id]],
+    reasons: [...new Set(reasons[id])],
+    coverage: manifest.lanes[id].coverage ?? manifest.lanes[id].assertion_targets ?? [],
+    command: laneCommand(id, manifest), timing: timings.lanes[id] ?? null,
+  }));
 }
 
 function elapsedSeconds(started, finished) {
@@ -967,6 +1009,7 @@ async function main(argv) {
     ? {
         mode: resume.receipt.context.mode,
         touched: [], artifactTriggers: [], unmapped: [], crateFallback: false,
+        laneReasons: Object.fromEntries((resume.receipt.context.lane_selection ?? []).map((lane) => [lane.id, lane.reasons])),
         laneIds: resume.selected,
         frozenSkipped: [],
       }
@@ -986,9 +1029,10 @@ async function main(argv) {
     ? resume.selected
     : orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
 
+  const explained = explainSelection(selection, manifest, timings);
   let cachePlan = null;
-  if (args.run && selection.mode === 'full' && !resume) {
-    const eligible = ordered.filter((laneId) => frozenLaneIds(manifest).has(laneId));
+  if (args.run && ['inner', 'push', 'sprint', 'full'].includes(selection.mode) && !resume) {
+    const eligible = ordered.filter((laneId) => reusableLaneIds(manifest).has(laneId));
     try {
       const sharedInputs = {
         root: REPO_ROOT,
@@ -1030,7 +1074,10 @@ async function main(argv) {
       directLaneIds: selection.laneIds,
       laneIds: dependencyExpandedLaneIds,
       changed,
-      lanes: ordered.map((id) => ({ id, command: laneCommand(id, manifest), timing: timings.lanes[id] ?? null })),
+      lanes: explained,
+      directLaneCount: selection.laneIds.length,
+      dependencyExpandedLaneCount: dependencyExpandedLaneIds.length,
+      executionLaneCount: ordered.length,
     }, null, 2));
     return;
   }
@@ -1042,9 +1089,9 @@ async function main(argv) {
   if (cachePlan) {
     const forced = args.force ? `; force reruns ${cachePlan.observedHits.size} reusable lane(s)` : '';
     console.log(
-      `  frozen proof cache: reuse ${cachePlan.hits.size}, execute ${cachePlan.eligible.length - cachePlan.hits.size}${forced}`,
+      `  fingerprinted proof cache: reuse ${cachePlan.hits.size}, execute ${cachePlan.eligible.length - cachePlan.hits.size}${forced}`,
     );
-    if (cachePlan.setupError) console.log(`    cache disabled; executing frozen lanes: ${cachePlan.setupError}`);
+    if (cachePlan.setupError) console.log(`    cache disabled; executing lanes: ${cachePlan.setupError}`);
     for (const [laneId, miss] of cachePlan.misses) {
       if (miss.reason !== 'not-found') console.log(`    cache miss ${laneId}: ${miss.reason}`);
     }
@@ -1062,9 +1109,11 @@ async function main(argv) {
     for (const file of selection.unmapped) console.log(`    ? ${file}`);
   }
   if (selection.crateFallback) console.log('  warning: crate graph unavailable; all crate lanes armed');
-  console.log(`required lanes (${ordered.length}), cheapest first:`);
-  for (const laneId of ordered) {
-    console.log(`  ${formatSeconds(timings.lanes[laneId]).padStart(10)}  ${laneCommand(laneId, manifest)}`);
+  console.log(`required lanes: ${selection.laneIds.length} directly selected, ${dependencyExpandedLaneIds.length} after hard dependencies, ${ordered.length} executable after deduplication (not test counts)`);
+  for (const lane of explained) {
+    console.log(`  ${formatSeconds(lane.timing).padStart(10)}  [${lane.phase}] ${lane.id}: ${lane.command}`);
+    console.log(`    why: ${lane.reasons.join('; ')}`);
+    if (lane.coverage.length) console.log(`    covers: ${lane.coverage.join('; ')}`);
   }
   if (selection.frozenSkipped.length > 0) {
     console.log(`frozen areas untouched, lanes skipped: ${selection.frozenSkipped.join(', ')}`);
@@ -1115,6 +1164,7 @@ async function main(argv) {
         ...context,
         mode: selection.mode,
         selected_lane_ids: ordered,
+        lane_selection: explained,
         changed,
         // Who authorized each non-gating red, and until when. The manifest hash
         // already binds the list; naming it here makes a receipt readable on its
@@ -1135,6 +1185,18 @@ async function main(argv) {
     });
     for (const [laneId, entry] of observations) runtimeTimings.lanes[laneId] = entry;
     writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
+    let stored = [];
+    if (cachePlan) {
+      try {
+        stored = persistProofCacheEntries(execution, cachePlan.laneKeys, {
+          root: REPO_ROOT,
+          replaceLaneIds: cachePlan.invalid,
+        });
+      } catch (error) {
+        console.error(`warning: lane cache persistence failed: ${error.message}`);
+      }
+    }
+    const reused = Object.values(execution.receipt.lanes).filter((lane) => lane.state === 'passed' && lane.reused_from_receipt).length;
     if (!execution.success) {
       if (execution.preempted) {
         console.error(`proof preempted by unregistered build work; resume: npm run proof:lanes -- --resume ${JSON.stringify(execution.run.receiptPath)}`);
@@ -1146,24 +1208,24 @@ async function main(argv) {
       if (failed) console.error(`focused: npm run proof:lanes -- --only ${JSON.stringify(failed)} --run`);
       throw new Error(`proof failed: inspect ${execution.run.receiptPath}`);
     }
-    let stored = [];
-    if (cachePlan) {
-      try {
-        stored = persistProofCacheEntries(execution, cachePlan.laneKeys, {
-          root: REPO_ROOT,
-          replaceLaneIds: cachePlan.invalid,
-        });
-      } catch (error) {
-        console.error(`warning: proof passed but frozen-lane cache persistence failed: ${error.message}`);
-      }
-    }
-    const reused = cachePlan?.hits.size ?? resume?.reusedLanes.size ?? 0;
     const cacheSummary = cachePlan ? `; reused ${reused}, cached ${stored.length}` : '';
     // A non-gating run still has to say what it did not prove. A quarantined or
     // skipped lane strands its dependents as `blocked`, and those dependents are
     // exactly as unproven as the lane that stranded them -- counting only the
     // plan length here is how a run with unproven lanes reads as fully green.
     const summary = summarizeLaneStates(execution.receipt);
+    const wallSeconds = elapsedSeconds(Date.parse(execution.receipt.started_at), Date.parse(execution.receipt.finished_at));
+    const qualification = {
+      commit: context.commit, manifest_sha256: context.manifest_sha256,
+      wall_seconds: wallSeconds, state: execution.receipt.state,
+      lanes: explained.map((lane) => ({
+        ...lane, ...execution.receipt.lanes[lane.id],
+        proof_key: cachePlan?.laneKeys.get(lane.id)?.proofKey ?? execution.receipt.lanes[lane.id].proof_key,
+        executed_seconds: execution.receipt.lanes[lane.id].reused_from_receipt ? 0 : execution.receipt.lanes[lane.id].seconds,
+      })),
+    };
+    console.log(`qualification: ${JSON.stringify(qualification)}`);
+    console.log(`wall time: ${wallSeconds}s; lane times include resource setup and cleanup; reused lanes name their source receipt`);
     const notGreen = Object.entries(summary.counts)
       .filter(([state]) => state !== 'passed')
       .sort(([left], [right]) => left.localeCompare(right))

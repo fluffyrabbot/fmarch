@@ -241,6 +241,18 @@ export function expandHardDependencies(selectedIds, manifest) {
   return result;
 }
 
+// Focused prerequisites gate acceptance even under --keep-going. A failed
+// focused phase may collect other focused/regression failures, never launch a
+// costly acceptance sweep. Hard dependencies of focused lanes join that phase.
+export function executionPhases(laneIds, manifest) {
+  const planned = expandHardDependencies(laneIds, manifest);
+  const focused = new Set(expandHardDependencies(planned.filter((id) => manifest.lanes[id].phase === 'focused'), manifest));
+  for (const id of focused) {
+    if (manifest.lanes[id].phase === 'acceptance') throw new Error(`focused proof depends on acceptance lane ${id}`);
+  }
+  return Object.fromEntries(planned.map((id) => [id, focused.has(id) ? 0 : manifest.lanes[id].phase === 'acceptance' ? 2 : 1]));
+}
+
 export function validateExecutionManifest(manifest) {
   if (!manifest?.lanes || typeof manifest.lanes !== 'object') {
     throw new Error('proof lane manifest must define a lanes object');
@@ -257,6 +269,7 @@ export function validateExecutionManifest(manifest) {
     positiveInteger(manifest.runner.max_parallel, 'runner max_parallel');
   }
 
+  executionPhases(Object.keys(manifest.lanes), manifest);
   const laneDirectoryNames = new Set();
   for (const [laneId, lane] of Object.entries(manifest.lanes)) {
     const directoryName = safePathSegment(laneId.replaceAll(':', '_'), `proof lane ${laneId} directory`);
@@ -264,6 +277,9 @@ export function validateExecutionManifest(manifest) {
       throw new Error(`proof lanes must not collide after ':' becomes '_': ${laneId}`);
     }
     laneDirectoryNames.add(directoryName);
+    if (lane.phase !== undefined && !['focused', 'regression', 'acceptance'].includes(lane.phase)) {
+      throw new Error(`proof lane ${laneId} has invalid phase ${lane.phase}`);
+    }
     const execution = laneExecution(laneId, lane);
     if (!EXECUTION_CLASSES.has(execution.class)) {
       throw new Error(`proof lane ${laneId} has unknown execution class ${execution.class}`);
@@ -964,6 +980,7 @@ function serializableLane(record) {
     cleanup_error: record.cleanupError ?? null,
     interrupted_by: record.interruptedBy ?? null,
     reused_from_receipt: record.reusedFromReceipt ?? null,
+    reused_from_receipt_sha256: record.reusedFromReceiptSha256 ?? null,
     reused_from_proof_key: record.reusedFromProofKey ?? null,
     proof_key: record.proofKey ?? null,
   };
@@ -1009,6 +1026,8 @@ export async function runExecutionPlan(
   }
   const capacities = manifest.runner?.lock_capacities;
   const planned = expandHardDependencies(laneIds, manifest);
+  const phases = executionPhases(planned, manifest);
+  const focused = planned.filter((id) => phases[id] === 0);
   const run = createRunContext({ root, runId });
   await mkdir(run.runDir, { recursive: true });
   await clearPreemptionSignal(preemptionSignalPath);
@@ -1028,6 +1047,7 @@ export async function runExecutionPlan(
             startedAt: reused.started_at ?? null,
             finishedAt: reused.finished_at ?? null,
             reusedFromReceipt: reused.receipt_id,
+            reusedFromReceiptSha256: reused.receipt_sha256 ?? null,
             reusedFromProofKey: reused.proof_key ?? null,
             proofKey: reused.proof_key ?? null,
           }
@@ -1364,7 +1384,8 @@ export async function runExecutionPlan(
       const record = records.get(laneId);
       if (record.state !== 'pending') continue;
       const dependencies = dependenciesFor(laneId, manifest);
-      const failedDependency = dependencies.find((dependency) => NON_PASSING_TERMINAL.has(records.get(dependency)?.state));
+      const failedFocus = phases[laneId] === 2 && focused.find((id) => NON_PASSING_TERMINAL.has(records.get(id)?.state));
+      const failedDependency = failedFocus || dependencies.find((dependency) => NON_PASSING_TERMINAL.has(records.get(dependency)?.state));
       if (failedDependency) {
         record.state = 'blocked';
         record.blockedBy = failedDependency;
@@ -1393,6 +1414,7 @@ export async function runExecutionPlan(
         if (running.size >= jobs) break;
         const record = records.get(laneId);
         if (record.state !== 'pending') continue;
+        if (phases[laneId] === 2 && !focused.every((id) => records.get(id)?.state === 'passed')) continue;
         if (!dependenciesFor(laneId, manifest).every((dependency) => records.get(dependency)?.state === 'passed')) continue;
         const claims = lockClaims(laneId, manifest.lanes[laneId], capacities);
         if (!hasCapacity(claims, used, capacities)) continue;
