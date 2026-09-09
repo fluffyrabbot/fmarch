@@ -7442,6 +7442,20 @@ pub async fn public_thread_view_after(
     .await
 }
 
+/// Whether a GameStarted event has ever been folded for this game. The retained
+/// marker survives completion and does not grow with the event stream.
+pub async fn game_started<'e, E>(executor: E, game_id: Uuid) -> Result<bool, ProjectionError>
+where
+    E: sqlx::Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM game_index WHERE game_id = $1 AND started_seq IS NOT NULL)",
+    )
+    .bind(game_id)
+    .fetch_one(executor)
+    .await?)
+}
+
 /// Read public active and completed games newest-first. Setup rows are kept for
 /// rebuildability but never leave this public discovery boundary.
 pub async fn game_index(

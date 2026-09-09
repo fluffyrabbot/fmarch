@@ -1186,7 +1186,7 @@ pub(crate) async fn require_game_not_completed(
     game: Uuid,
 ) -> Result<(), Reject> {
     let completed: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM events WHERE stream_id = $1 AND kind = 'GameCompleted')",
+        "SELECT EXISTS(SELECT 1 FROM game_index WHERE game_id = $1 AND completed_seq IS NOT NULL)",
     )
     .bind(game)
     .fetch_one(&mut **tx)
@@ -1201,7 +1201,7 @@ pub(crate) async fn require_game_not_completed(
 
 pub async fn game_completed(pool: &PgPool, game: Uuid) -> Result<bool, Reject> {
     sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM events WHERE stream_id = $1 AND kind = 'GameCompleted')",
+        "SELECT EXISTS(SELECT 1 FROM game_index WHERE game_id = $1 AND completed_seq IS NOT NULL)",
     )
     .bind(game)
     .fetch_one(pool)
@@ -1346,12 +1346,7 @@ async fn complete_game(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if stream.iter().any(|event| event.kind == "GameCompleted") {
-        return Err(Reject::GameAlreadyCompleted);
-    }
+    require_game_not_completed(tx, game).await?;
 
     persist(
         tx,
@@ -1378,10 +1373,7 @@ async fn host_phase_lifecycle(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
+    let pack = current_pack(tx, game).await?;
     validate_phase_id_for_policy(&pack.document().phases, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
@@ -2234,10 +2226,7 @@ async fn assign_role(
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
+    let pack = current_pack(tx, game).await?;
     let role = pack
         .document()
         .roles
@@ -2255,7 +2244,7 @@ async fn assign_role(
         ActorId::Host,
         0,
     )];
-    if stream.iter().any(|event| event.kind == "GameStarted")
+    if projections::game_started(&mut **tx, game).await?
         && projections::slot_occupant(&mut **tx, game, &slot)
             .await?
             .is_some()

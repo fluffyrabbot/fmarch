@@ -374,3 +374,22 @@ benchmark exceeds a declared latency or resource SLO.
   appending duplicate events.
 
 Continue to [03-backend](03-backend.md).
+
+### Bounded lifecycle control reads
+
+Completion guards read `game_index.completed_seq`; they no longer search event
+headers on every game command. `CompleteGame` uses that same retained marker.
+`AssignRole` reads the game-owned pack artifact and `game_index.started_seq`,
+while host phase opening reads the game-owned pack artifact. The markers are
+folded in the append transaction, survive completion, and are reconstructed by
+fenced game replay. A completed setup game is not treated as having started.
+These control reads do not load or decrypt historical event bodies.
+
+The pipeline lifecycle-read test checks equivalent role-PM, phase, completion,
+and replay behavior with 0, 128, and 2,048 additional sealed ballot events. Each
+measured command must complete within five seconds on the canonical worker;
+this is a bounded fixture regression gate, not a production latency guarantee.
+Start-game setup declarations and resolved/deadline phase advancement still
+read history. Removing those scans requires explicit setup/resolution state
+that preserves per-phase resolution evidence, including empty resolutions and
+phase revisits; the latest engine checkpoint alone is insufficient.
