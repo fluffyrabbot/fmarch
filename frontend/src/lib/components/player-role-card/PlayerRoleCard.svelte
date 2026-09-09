@@ -38,3 +38,5 @@
     </div>
   </details>
 {/if}
+
+<!-- Proof benchmark: presentation source fingerprint probe. -->
