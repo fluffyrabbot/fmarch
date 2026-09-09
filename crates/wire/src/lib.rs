@@ -4877,3 +4877,5 @@ mod live_json_map_tests {
         }
     }
 }
+
+// Proof benchmark: wire source fingerprint probe.
