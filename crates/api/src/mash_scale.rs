@@ -672,10 +672,7 @@ async fn race_scheduler_replicas(
     pool: &PgPool,
     observed_at: i64,
 ) -> Result<[DayEventSchedulerTickReport; 2], MashScaleError> {
-    let config = DayEventSchedulerConfig {
-        batch_size: 1,
-        ..DayEventSchedulerConfig::default()
-    };
+    let config = DayEventSchedulerConfig::default();
     let (left, right) = tokio::join!(
         run_day_event_scheduler_once(
             pool,

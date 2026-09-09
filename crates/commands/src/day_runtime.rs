@@ -7,12 +7,16 @@
 //! projections fold and wake only. See `docs/arch/17-day-runtime-ownership.md`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use caps::Principal;
 use eventstore::{ActorId, EventInput};
 use game_platform::day_schedule;
 use sha2::{Digest, Sha256};
-use sqlx::{postgres::PgPool, Postgres, Transaction};
+use sqlx::{
+    pool::PoolConnection, postgres::PgPool, Connection, PgConnection, Postgres, Transaction,
+};
+use tokio::time::{timeout, timeout_at, Instant};
 use uuid::Uuid;
 
 use crate::day_program;
@@ -37,28 +41,105 @@ pub async fn advance_day_event_automation_as_scheduler(
     observed_at: i64,
     seed_root: u64,
 ) -> Result<Ack, Reject> {
-    let mut stream_seqs =
-        advance_day_event_mechanics_as_scheduler(pool, game, observed_at, seed_root)
-            .await?
-            .stream_seqs;
-    // Narrative is deliberately a second transaction. Lifecycle mechanics are
-    // already durable even if host-notice publication fails and must retry.
-    stream_seqs.extend(
-        publish_day_event_narratives_as_scheduler(pool, game)
-            .await?
-            .stream_seqs,
-    );
-    Ok(Ack { stream_seqs })
+    let deadline = Instant::now() + DAY_EVENT_EXECUTION_TIMEOUT;
+    let mut connection = timeout_at(deadline, SchedulerConnection::acquire(pool))
+        .await
+        .map_err(|_| Reject::Internal("DayEvent execution deadline exceeded".into()))?
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    let result = timeout_at(deadline, async {
+        let mut stream_seqs = advance_day_event_mechanics_as_scheduler(
+            connection.connection_mut(),
+            game,
+            observed_at,
+            seed_root,
+        )
+        .await?
+        .stream_seqs;
+        // Mechanics remain durable if the independently committed narrative fails.
+        stream_seqs.extend(
+            publish_day_event_narratives_as_scheduler(connection.connection_mut(), game)
+                .await?
+                .stream_seqs,
+        );
+        Ok(Ack { stream_seqs })
+    })
+    .await
+    .unwrap_or_else(|_| {
+        Err(Reject::Internal(
+            "DayEvent execution deadline exceeded; committed stages will be observed on retry"
+                .into(),
+        ))
+    });
+    if result.is_ok() {
+        connection.release();
+    } else {
+        connection.close().await;
+    }
+    result
+}
+
+/// One deadline covers checkout, both transactions, lock waits, and commits.
+pub const DAY_EVENT_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
+pub const DAY_EVENT_CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// Cancellation must never return a connection with an unfinished transaction
+/// or an uncertain commit to the pool. Only confirmed success permits reuse.
+pub(crate) struct SchedulerConnection {
+    connection: Option<PoolConnection<Postgres>>,
+}
+
+impl SchedulerConnection {
+    pub(crate) async fn acquire(pool: &PgPool) -> Result<Self, sqlx::Error> {
+        let mut guarded = Self {
+            connection: Some(pool.acquire().await?),
+        };
+        // PostgreSQL must notice a dropped client even while waiting on a lock.
+        // This remains enabled when a confirmed-success connection is reused.
+        sqlx::query("SET client_connection_check_interval = '100ms'")
+            .execute(guarded.connection_mut())
+            .await?;
+        Ok(guarded)
+    }
+
+    pub(crate) fn connection_mut(&mut self) -> &mut PgConnection {
+        self.connection
+            .as_deref_mut()
+            .expect("scheduler connection is owned")
+    }
+
+    pub(crate) fn release(mut self) {
+        drop(self.connection.take());
+    }
+
+    async fn close(mut self) {
+        if let Some(mut connection) = self.connection.take() {
+            connection.close_on_drop();
+            if !matches!(
+                timeout(DAY_EVENT_CLEANUP_TIMEOUT, connection.close()).await,
+                Ok(Ok(()))
+            ) {
+                tracing::warn!("DayEvent connection cleanup did not complete within its reserve");
+            }
+        }
+    }
+}
+
+impl Drop for SchedulerConnection {
+    fn drop(&mut self) {
+        if let Some(connection) = self.connection.as_mut() {
+            connection.close_on_drop();
+        }
+    }
 }
 
 async fn advance_day_event_mechanics_as_scheduler(
-    pool: &PgPool,
+    connection: &mut PgConnection,
     game: Uuid,
     observed_at: i64,
     seed_root: u64,
 ) -> Result<Ack, Reject> {
     let command_id = Uuid::new_v4();
-    let mut tx = pool
+    let mut tx = connection
         .begin()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -86,11 +167,11 @@ async fn advance_day_event_mechanics_as_scheduler(
 }
 
 async fn publish_day_event_narratives_as_scheduler(
-    pool: &PgPool,
+    connection: &mut PgConnection,
     game: Uuid,
 ) -> Result<Ack, Reject> {
     let command_id = Uuid::new_v4();
-    let mut tx = pool
+    let mut tx = connection
         .begin()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;

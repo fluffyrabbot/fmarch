@@ -50,7 +50,8 @@ license for other modules to emit DayEvent lifecycle kinds.
 
 1. Projections fold DayEvent and phase facts into `day_event_schedule_work`
    (`next_due_at`, `wake_seq`, `auto_resolve_pending`, `narrative_pending`).
-2. `day_scheduler` claims due games with a short DB lease (`SKIP LOCKED`).
+2. `day_scheduler` claims exactly one due game when its execution slot is free
+   with a short DB lease (`SKIP LOCKED`).
    Leases bound duplicate work across replicas; they are not the correctness
    boundary.
 3. Claimed work calls sealed
@@ -62,6 +63,25 @@ license for other modules to emit DayEvent lifecycle kinds.
 5. Narrative transaction (deliberately separate): publish pending host notices +
    `DayEventNarrativePublished`. Lifecycle remains durable if narrative retries.
 6. Scheduler records success (advance observed wake) or failure (retry backoff).
+   Completion is fenced by both owner and monotonic attempt number, and rejects
+   an expired lease. Retry delays start from completion time, measured by elapsed
+   monotonic time from the observation's Unix timestamp.
+
+Each replica owns one sequential execution slot and drains ready work immediately,
+recording durable queue health after each game. Only idle or failed metadata
+iterations wait for the poll timer. Shutdown stops admission and drains the one
+in-flight operation. There is no detached alternative scheduler runtime.
+
+One five-second deadline spans connection checkout, stream locks, both transactions,
+and commits. An unsuccessful or cancelled operation discards its connection;
+explicit failure cleanup has a separate one-second reserve. Scheduler connections
+enable PostgreSQL client-disconnect checks every 100 ms so cancellation is
+observed even during database lock waits. Mechanics that committed
+before narrative failure remain durable and retry uses existing idempotent evidence.
+Claim, completion update, and queue observation each have a one-second database
+budget and discard uncertain connections on cancellation. The complete iteration
+budget is nine seconds. Configuration requires the lease and readiness grace to
+exceed it, and heartbeat staleness to exceed it plus the idle poll interval.
 
 Idempotency: due evidence and transitions are suppressed by projected
 observed-at / state; cancelled events are terminal.

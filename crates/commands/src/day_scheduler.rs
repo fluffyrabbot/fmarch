@@ -4,19 +4,23 @@
 //! boundary. Database leases only bound duplicate work across server replicas;
 //! an expired lease may cause a harmless second observation.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+
+use tokio::time::{timeout, Instant};
 
 use serde::Serialize;
 use sqlx::{postgres::PgPool, Row};
 use uuid::Uuid;
 
-use crate::day_runtime::advance_day_event_automation_as_scheduler;
+use crate::day_runtime::{
+    advance_day_event_automation_as_scheduler, SchedulerConnection, DAY_EVENT_CLEANUP_TIMEOUT,
+    DAY_EVENT_EXECUTION_TIMEOUT,
+};
 use crate::Reject;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DayEventSchedulerConfig {
     pub poll_interval: Duration,
-    pub batch_size: i64,
     pub lease_seconds: i64,
     pub retry_base_seconds: i64,
     pub retry_max_seconds: i64,
@@ -26,7 +30,6 @@ impl Default for DayEventSchedulerConfig {
     fn default() -> Self {
         Self {
             poll_interval: Duration::from_secs(1),
-            batch_size: 16,
             lease_seconds: 30,
             retry_base_seconds: 1,
             retry_max_seconds: 60,
@@ -41,14 +44,9 @@ impl DayEventSchedulerConfig {
                 "poll interval must be positive".to_string(),
             ));
         }
-        if !(1..=128).contains(&self.batch_size) {
+        if self.lease_seconds <= DAY_EVENT_ITERATION_TIMEOUT.as_secs() as i64 {
             return Err(SchedulerError::InvalidConfig(
-                "batch size must be between 1 and 128".to_string(),
-            ));
-        }
-        if self.lease_seconds <= 0 {
-            return Err(SchedulerError::InvalidConfig(
-                "lease duration must be positive".to_string(),
+                "lease duration must exceed the complete bounded scheduler iteration".to_string(),
             ));
         }
         if self.retry_base_seconds <= 0 || self.retry_max_seconds < self.retry_base_seconds {
@@ -68,14 +66,18 @@ pub enum SchedulerError {
     Db(#[from] sqlx::Error),
     #[error("system clock is before the Unix epoch")]
     InvalidClock,
+    #[error("DayEvent scheduler database deadline exceeded")]
+    Deadline,
+    #[error("DayEvent scheduler lease was superseded or expired")]
+    LeaseLost,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ClaimedGame {
     game_id: Uuid,
     wake_seq: i64,
-    next_due_at: Option<i64>,
     consecutive_failures: i32,
+    attempt: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -101,8 +103,10 @@ pub async fn day_event_scheduler_queue_health(
     pool: &PgPool,
     observed_at: i64,
 ) -> Result<DayEventSchedulerQueueHealth, SchedulerError> {
-    let (pending, failed, oldest_due_at): (i64, i64, Option<i64>) = sqlx::query_as(
-        r#"
+    timeout(DAY_EVENT_DATABASE_TIMEOUT, async {
+        let mut connection = SchedulerConnection::acquire(pool).await?;
+        let (pending, failed, oldest_due_at): (i64, i64, Option<i64>) = sqlx::query_as(
+            r#"
         SELECT COUNT(*) FILTER (WHERE w.next_due_at <= $1
                     OR w.wake_seq > s.last_observed_wake_seq
                     OR w.auto_resolve_pending OR w.narrative_pending),
@@ -112,15 +116,19 @@ pub async fn day_event_scheduler_queue_health(
         JOIN day_event_scheduler_state s ON s.game_id = w.game_id
         JOIN game_index g ON g.game_id = w.game_id AND g.status = 'active'
         "#,
-    )
-    .bind(observed_at)
-    .fetch_one(pool)
-    .await?;
-    Ok(DayEventSchedulerQueueHealth {
-        pending_games: pending as u64,
-        failed_games: failed as u64,
-        oldest_due_at,
+        )
+        .bind(observed_at)
+        .fetch_one(connection.connection_mut())
+        .await?;
+        connection.release();
+        Ok(DayEventSchedulerQueueHealth {
+            pending_games: pending as u64,
+            failed_games: failed as u64,
+            oldest_due_at,
+        })
     })
+    .await
+    .map_err(|_| SchedulerError::Deadline)?
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -145,44 +153,13 @@ pub struct DayEventSchedulerStatus {
     pub pending: bool,
 }
 
-pub fn spawn_day_event_scheduler(
-    pool: PgPool,
-    config: DayEventSchedulerConfig,
-) -> Result<tokio::task::JoinHandle<()>, SchedulerError> {
-    config.validate()?;
-    Ok(tokio::spawn(async move {
-        let worker_id = Uuid::new_v4();
-        let mut interval = tokio::time::interval(config.poll_interval);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            interval.tick().await;
-            let observed_at = match unix_seconds_now() {
-                Ok(observed_at) => observed_at,
-                Err(error) => {
-                    tracing::error!(worker_id = %worker_id, error = %error, "DayEvent scheduler clock failed");
-                    continue;
-                }
-            };
-            match run_day_event_scheduler_once(&pool, &config, worker_id, observed_at).await {
-                Ok(report) if report.claimed_games > 0 => {
-                    tracing::info!(
-                        worker_id = %worker_id,
-                        observed_at,
-                        claimed_games = report.claimed_games,
-                        succeeded_games = report.succeeded_games,
-                        failed_games = report.failed_games,
-                        appended_events = report.appended_events,
-                        "DayEvent scheduler tick completed"
-                    );
-                }
-                Ok(_) => {}
-                Err(error) => {
-                    tracing::error!(worker_id = %worker_id, observed_at, error = %error, "DayEvent scheduler tick failed");
-                }
-            }
-        }
-    }))
-}
+/// Claim, execution, cleanup, completion, and durable health observation budgets.
+pub const DAY_EVENT_DATABASE_TIMEOUT: Duration = Duration::from_secs(1);
+pub const DAY_EVENT_ITERATION_TIMEOUT: Duration = Duration::from_secs(
+    DAY_EVENT_EXECUTION_TIMEOUT.as_secs()
+        + DAY_EVENT_CLEANUP_TIMEOUT.as_secs()
+        + 3 * DAY_EVENT_DATABASE_TIMEOUT.as_secs(),
+);
 
 pub async fn run_day_event_scheduler_once(
     pool: &PgPool,
@@ -191,46 +168,60 @@ pub async fn run_day_event_scheduler_once(
     observed_at: i64,
 ) -> Result<DayEventSchedulerTickReport, SchedulerError> {
     config.validate()?;
-    let claims = claim_due_games(pool, config, worker_id, observed_at).await?;
+    let started = Instant::now();
+    let claim = timeout(
+        DAY_EVENT_DATABASE_TIMEOUT,
+        claim_due_game(pool, config, worker_id, observed_at),
+    )
+    .await
+    .map_err(|_| SchedulerError::Deadline)??;
     let mut report = DayEventSchedulerTickReport {
         worker_id,
         observed_at,
-        claimed_games: claims.len(),
+        claimed_games: usize::from(claim.is_some()),
         succeeded_games: 0,
         failed_games: 0,
         appended_events: 0,
     };
-    for claim in claims {
-        match advance_day_event_automation_as_scheduler(
+    if let Some(claim) = claim {
+        let result = advance_day_event_automation_as_scheduler(
             pool,
             claim.game_id,
             observed_at,
             fresh_seed_root(),
         )
+        .await;
+        let completed_at = observed_at
+            .checked_add(started.elapsed().as_secs() as i64)
+            .ok_or(SchedulerError::InvalidClock)?;
+        timeout(DAY_EVENT_DATABASE_TIMEOUT, async {
+            match result {
+                Ok(ack) => {
+                    finish_success(pool, worker_id, &claim, completed_at).await?;
+                    report.succeeded_games += 1;
+                    report.appended_events += ack.stream_seqs.len();
+                }
+                Err(Reject::GameAlreadyCompleted) => {
+                    finish_success(pool, worker_id, &claim, completed_at).await?;
+                    report.succeeded_games += 1;
+                }
+                Err(error) => {
+                    finish_failure(
+                        pool,
+                        config,
+                        worker_id,
+                        &claim,
+                        completed_at,
+                        &error.to_string(),
+                    )
+                    .await?;
+                    report.failed_games += 1;
+                }
+            }
+            Ok::<(), SchedulerError>(())
+        })
         .await
-        {
-            Ok(ack) => {
-                finish_success(pool, worker_id, &claim, observed_at).await?;
-                report.succeeded_games += 1;
-                report.appended_events += ack.stream_seqs.len();
-            }
-            Err(Reject::GameAlreadyCompleted) => {
-                finish_success(pool, worker_id, &claim, observed_at).await?;
-                report.succeeded_games += 1;
-            }
-            Err(error) => {
-                finish_failure(
-                    pool,
-                    config,
-                    worker_id,
-                    &claim,
-                    observed_at,
-                    &error.to_string(),
-                )
-                .await?;
-                report.failed_games += 1;
-            }
-        }
+        .map_err(|_| SchedulerError::Deadline)??;
     }
     Ok(report)
 }
@@ -284,16 +275,17 @@ pub async fn day_event_scheduler_status(
     }))
 }
 
-async fn claim_due_games(
+async fn claim_due_game(
     pool: &PgPool,
     config: &DayEventSchedulerConfig,
     worker_id: Uuid,
     observed_at: i64,
-) -> Result<Vec<ClaimedGame>, SchedulerError> {
+) -> Result<Option<ClaimedGame>, SchedulerError> {
     let lease_until = observed_at
         .checked_add(config.lease_seconds)
         .ok_or_else(|| SchedulerError::InvalidConfig("lease timestamp overflow".to_string()))?;
-    let rows = sqlx::query(
+    let mut connection = SchedulerConnection::acquire(pool).await?;
+    let row = sqlx::query(
         "WITH candidates AS ( \
            SELECT s.game_id, w.wake_seq, w.next_due_at, s.consecutive_failures \
            FROM day_event_scheduler_state s \
@@ -305,32 +297,29 @@ async fn claim_due_games(
              AND (s.retry_not_before IS NULL OR s.retry_not_before <= $1) \
            ORDER BY w.next_due_at ASC NULLS LAST, w.wake_seq ASC, s.game_id ASC \
            FOR UPDATE OF s SKIP LOCKED \
-           LIMIT $2 \
+           LIMIT 1 \
          ), claimed AS ( \
            UPDATE day_event_scheduler_state s SET \
-             lease_owner = $3, lease_until = $4, last_attempt_at = $1, \
+             lease_owner = $2, lease_until = $3, last_attempt_at = $1, \
              total_attempts = total_attempts + 1 \
            FROM candidates c WHERE s.game_id = c.game_id \
-           RETURNING s.game_id, c.wake_seq, c.next_due_at, c.consecutive_failures \
+           RETURNING s.game_id, c.wake_seq, c.next_due_at, c.consecutive_failures, s.total_attempts \
          ) \
-         SELECT game_id, wake_seq, next_due_at, consecutive_failures FROM claimed \
+         SELECT game_id, wake_seq, next_due_at, consecutive_failures, total_attempts FROM claimed \
          ORDER BY next_due_at ASC NULLS LAST, wake_seq ASC, game_id ASC",
     )
     .bind(observed_at)
-    .bind(config.batch_size)
     .bind(worker_id)
     .bind(lease_until)
-    .fetch_all(pool)
+    .fetch_optional(connection.connection_mut())
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| ClaimedGame {
-            game_id: row.get("game_id"),
-            wake_seq: row.get("wake_seq"),
-            next_due_at: row.get("next_due_at"),
-            consecutive_failures: row.get("consecutive_failures"),
-        })
-        .collect())
+    connection.release();
+    Ok(row.map(|row| ClaimedGame {
+        game_id: row.get("game_id"),
+        wake_seq: row.get("wake_seq"),
+        consecutive_failures: row.get("consecutive_failures"),
+        attempt: row.get("total_attempts"),
+    }))
 }
 
 async fn finish_success(
@@ -339,20 +328,26 @@ async fn finish_success(
     claim: &ClaimedGame,
     observed_at: i64,
 ) -> Result<(), SchedulerError> {
-    sqlx::query(
+    let mut connection = SchedulerConnection::acquire(pool).await?;
+    let result = sqlx::query(
         "UPDATE day_event_scheduler_state SET \
            last_observed_wake_seq = GREATEST(last_observed_wake_seq, $3), \
            lease_owner = NULL, lease_until = NULL, retry_not_before = NULL, \
            last_success_at = $4, consecutive_failures = 0, \
            total_successes = total_successes + 1, last_error = NULL \
-         WHERE game_id = $1 AND lease_owner = $2",
+         WHERE game_id = $1 AND lease_owner = $2 AND total_attempts = $5 AND lease_until > $4",
     )
     .bind(claim.game_id)
     .bind(worker_id)
     .bind(claim.wake_seq)
     .bind(observed_at)
-    .execute(pool)
+    .bind(claim.attempt)
+    .execute(connection.connection_mut())
     .await?;
+    connection.release();
+    if result.rows_affected() != 1 {
+        return Err(SchedulerError::LeaseLost);
+    }
     Ok(())
 }
 
@@ -369,11 +364,12 @@ async fn finish_failure(
         .checked_add(retry_delay_seconds(config, failures))
         .ok_or_else(|| SchedulerError::InvalidConfig("retry timestamp overflow".to_string()))?;
     let bounded_error: String = error.chars().take(1_000).collect();
-    sqlx::query(
+    let mut connection = SchedulerConnection::acquire(pool).await?;
+    let result = sqlx::query(
         "UPDATE day_event_scheduler_state SET \
            lease_owner = NULL, lease_until = NULL, retry_not_before = $3, \
            last_failure_at = $4, consecutive_failures = $5, last_error = $6 \
-         WHERE game_id = $1 AND lease_owner = $2",
+         WHERE game_id = $1 AND lease_owner = $2 AND total_attempts = $7 AND lease_until > $4",
     )
     .bind(claim.game_id)
     .bind(worker_id)
@@ -381,8 +377,13 @@ async fn finish_failure(
     .bind(observed_at)
     .bind(failures)
     .bind(bounded_error)
-    .execute(pool)
+    .bind(claim.attempt)
+    .execute(connection.connection_mut())
     .await?;
+    connection.release();
+    if result.rows_affected() != 1 {
+        return Err(SchedulerError::LeaseLost);
+    }
     Ok(())
 }
 
@@ -392,14 +393,6 @@ fn retry_delay_seconds(config: &DayEventSchedulerConfig, failures: i32) -> i64 {
         .retry_base_seconds
         .saturating_mul(1_i64.checked_shl(exponent).unwrap_or(i64::MAX))
         .min(config.retry_max_seconds)
-}
-
-fn unix_seconds_now() -> Result<i64, SchedulerError> {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| SchedulerError::InvalidClock)?
-        .as_secs();
-    i64::try_from(seconds).map_err(|_| SchedulerError::InvalidClock)
 }
 
 fn fresh_seed_root() -> u64 {
@@ -424,7 +417,7 @@ mod tests {
         assert_eq!(retry_delay_seconds(&config, 4), 10);
 
         let invalid = DayEventSchedulerConfig {
-            batch_size: 0,
+            lease_seconds: DAY_EVENT_ITERATION_TIMEOUT.as_secs() as i64,
             ..DayEventSchedulerConfig::default()
         };
         assert!(invalid.validate().is_err());

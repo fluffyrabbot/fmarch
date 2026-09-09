@@ -558,14 +558,22 @@ async fn run_day_event_worker(
     let worker_id = uuid::Uuid::new_v4();
     let mut interval = tokio::time::interval(config.poll_interval);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut drain_ready_work = false;
     loop {
         if *shutdown.borrow() {
             return Ok(());
         }
-        tokio::select! {
-            _ = interval.tick() => {}
-            _ = wait_for_shutdown(shutdown.clone()) => return Ok(()),
+        if !drain_ready_work {
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = wait_for_shutdown(shutdown.clone()) => return Ok(()),
+            }
         }
+        // Shutdown stops admission; the single in-flight game drains within its budget.
+        if *shutdown.borrow() {
+            return Ok(());
+        }
+        drain_ready_work = false;
         let observed_at = unix_now_seconds();
         match commands::day_scheduler::run_day_event_scheduler_once(
             &pool,
@@ -582,7 +590,10 @@ async fn run_day_event_worker(
                 )
                 .await
                 {
-                    Ok(queue) => record_day_event_health(&health, &report, &queue),
+                    Ok(queue) => {
+                        drain_ready_work = report.claimed_games > 0;
+                        record_day_event_health(&health, &report, &queue);
+                    }
                     Err(_) => {
                         tracing::error!(
                             event = "day_event_health_observation_failed",
@@ -674,6 +685,102 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{mpsc, watch};
+
+    #[sqlx::test(migrations = "../database_schema/migrations")]
+    async fn day_event_shutdown_drains_one_bounded_game_without_claiming_the_next(
+        pool: sqlx::PgPool,
+    ) {
+        let slow = uuid::Uuid::new_v4();
+        let ready = uuid::Uuid::new_v4();
+        // This fixture only needs durable queue admission: the held stream lock
+        // prevents execution from reaching domain state before its deadline.
+        for (game, due) in [(slow, 1_i64), (ready, 2_i64)] {
+            sqlx::query("INSERT INTO game_index (game_id, pack_key, status, created_seq, updated_seq, pack_version, pack_content_hash) VALUES ($1, 'fixture', 'active', 1, 1, 1, repeat('a', 64))")
+                .bind(game).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO day_event_schedule_work (game_id, next_due_at, updated_seq) VALUES ($1, $2, 1)")
+                .bind(game).bind(due).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO day_event_scheduler_state (game_id) VALUES ($1)")
+                .bind(game)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let mut barrier = pool.begin().await.unwrap();
+        eventstore::lock_stream_in_tx(&mut barrier, slow)
+            .await
+            .unwrap();
+        let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+            .fetch_one(&mut *barrier)
+            .await
+            .unwrap();
+        let worker_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .after_connect(|connection, _| {
+                Box::pin(async move {
+                    sqlx::query("SET statement_timeout = 0")
+                        .execute(connection)
+                        .await?;
+                    Ok(())
+                })
+            })
+            .connect_with((*pool.connect_options()).clone())
+            .await
+            .unwrap();
+        let waiter: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+            .fetch_one(&worker_pool)
+            .await
+            .unwrap();
+        let health = RuntimeWorkerHealth::default();
+        health.register(super::DAY_EVENT_WORKER, true);
+        let (shutdown, receiver) = watch::channel(false);
+        let worker = tokio::spawn(super::run_day_event_worker(
+            worker_pool,
+            commands::day_scheduler::DayEventSchedulerConfig::default(),
+            receiver,
+            health,
+        ));
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let blocked: bool = sqlx::query_scalar("SELECT $1 = ANY(pg_blocking_pids($2))")
+                    .bind(blocker)
+                    .bind(waiter)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                if blocked {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("worker reached stream lock");
+        shutdown.send(true).unwrap();
+        tokio::time::timeout(commands::day_scheduler::DAY_EVENT_ITERATION_TIMEOUT, worker)
+            .await
+            .expect("shutdown must drain within the bounded iteration")
+            .unwrap()
+            .unwrap();
+        let attempts: i64 = sqlx::query_scalar(
+            "SELECT total_attempts FROM day_event_scheduler_state WHERE game_id = $1",
+        )
+        .bind(ready)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(attempts, 0, "shutdown cannot admit another game");
+        let status = commands::day_scheduler::day_event_scheduler_status(
+            &pool,
+            slow,
+            super::unix_now_seconds(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(status.consecutive_failures, 1);
+        assert!(status.lease_owner.is_none());
+        barrier.rollback().await.unwrap();
+    }
 
     #[test]
     fn day_event_failures_survive_empty_ticks_and_clear_only_after_durable_recovery() {

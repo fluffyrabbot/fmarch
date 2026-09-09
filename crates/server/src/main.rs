@@ -424,8 +424,6 @@ impl RuntimeConfig {
                     100,
                     60_000,
                 )?),
-                batch_size: bounded_env("FMARCH_DAY_EVENT_SCHEDULER_BATCH_SIZE", 16, 1, 128)?
-                    as i64,
                 lease_seconds: bounded_env(
                     "FMARCH_DAY_EVENT_SCHEDULER_LEASE_SECONDS",
                     30,
@@ -506,7 +504,11 @@ impl RuntimeConfig {
         let longest_heartbeat_gap = self
             .workers
             .subject_erasure_idle_interval
-            .max(self.scheduler.poll_interval)
+            .max(
+                self.scheduler
+                    .poll_interval
+                    .saturating_add(commands::day_scheduler::DAY_EVENT_ITERATION_TIMEOUT),
+            )
             .max(
                 self.workers
                     .media_reconciliation_interval
@@ -539,6 +541,12 @@ impl RuntimeConfig {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "worker readiness grace must exceed one bounded database acquire and statement",
+            ));
+        }
+        if self.workers.readiness_grace <= commands::day_scheduler::DAY_EVENT_ITERATION_TIMEOUT {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "worker readiness grace must exceed one bounded DayEvent iteration",
             ));
         }
         if self.workers.readiness_grace <= reconciliation_batch_timeout {

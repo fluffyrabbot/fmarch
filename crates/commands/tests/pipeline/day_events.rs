@@ -555,10 +555,7 @@ async fn concurrent_scheduler_replicas_claim_one_game_without_duplicate_evidence
     .await
     .unwrap();
 
-    let config = DayEventSchedulerConfig {
-        batch_size: 1,
-        ..DayEventSchedulerConfig::default()
-    };
+    let config = DayEventSchedulerConfig::default();
     let (left, right) = tokio::join!(
         run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100),
         run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100),
@@ -1396,10 +1393,7 @@ async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_cla
     .await
     .unwrap();
 
-    let config = DayEventSchedulerConfig {
-        batch_size: 1,
-        ..DayEventSchedulerConfig::default()
-    };
+    let config = DayEventSchedulerConfig::default();
     let (left, right) = tokio::join!(
         run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 600),
         run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 600),
@@ -1869,4 +1863,293 @@ async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgP
     );
     assert_eq!(day_events(&pool, game).await.unwrap()[0].state, "locked");
     assert!(slot_effects(&pool, game).await.unwrap().is_empty());
+}
+
+// Each executor gets one identifiable backend so barriers observe real database
+// waits and cancellation can prove that the old connection was discarded.
+async fn scheduler_test_pool(pool: &PgPool) -> (PgPool, i32) {
+    let worker = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query("SET statement_timeout = 0")
+                    .execute(connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&worker)
+        .await
+        .unwrap();
+    (worker, pid)
+}
+
+async fn wait_for_scheduler_block(pool: &PgPool, pid: i32, blocker: i32) {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar("SELECT $1 = ANY(pg_blocking_pids($2))")
+                .bind(blocker)
+                .bind(pid)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+            if blocked {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("scheduler reached the held stream lock");
+}
+
+async fn schedule_due_test_game(pool: &PgPool, due: i64) -> Uuid {
+    let game = setup_game(pool, "host_h", "slot_1", "user_a").await;
+    let mut event = minimal_day_event("bounded-worker", "bomb");
+    event.participation.limits.minimum = 0;
+    event.schedule = game_platform::DayEventSchedule::Absolute {
+        open_at: game_platform::UnixSeconds::new(due),
+        lock_at: None,
+    };
+    handle(
+        pool,
+        &user("host_h"),
+        Command::ScheduleDayEvent { game, event },
+    )
+    .await
+    .unwrap();
+    game
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn scheduler_slow_game_does_not_preclaim_ready_game_and_retries_from_completion(
+    pool: PgPool,
+) {
+    let slow = schedule_due_test_game(&pool, 99).await;
+    let ready = schedule_due_test_game(&pool, 100).await;
+    let mut barrier = pool.begin().await.unwrap();
+    eventstore::lock_stream_in_tx(&mut barrier, slow)
+        .await
+        .unwrap();
+    let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let (worker, pid) = scheduler_test_pool(&pool).await;
+    let config = DayEventSchedulerConfig {
+        retry_base_seconds: 5,
+        ..Default::default()
+    };
+    let task_config = config.clone();
+    let task = tokio::spawn(async move {
+        run_day_event_scheduler_once(&worker, &task_config, Uuid::new_v4(), 100).await
+    });
+    wait_for_scheduler_block(&pool, pid, blocker).await;
+    let ready_status = day_event_scheduler_status(&pool, ready, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        ready_status.total_attempts, 0,
+        "busy worker cannot reserve another game"
+    );
+    let second = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 100)
+        .await
+        .unwrap();
+    assert_eq!(second.succeeded_games, 1);
+    assert_eq!(
+        stored_event_count_by_kind(&pool, ready, "DayEventOpenDue").await,
+        1
+    );
+    let report = tokio::time::timeout(std::time::Duration::from_secs(8), task)
+        .await
+        .expect("blocked game has a bounded execution lifetime")
+        .unwrap()
+        .unwrap();
+    assert_eq!(report.failed_games, 1);
+    let status = day_event_scheduler_status(&pool, slow, 110)
+        .await
+        .unwrap()
+        .unwrap();
+    let completed = status.last_failure_at.unwrap();
+    assert!(
+        completed >= 105,
+        "failure is stamped after the execution deadline"
+    );
+    assert_eq!(status.retry_not_before, Some(completed + 5));
+    assert!(status.lease_owner.is_none());
+    assert_eq!(
+        stored_event_count_by_kind(&pool, slow, "DayEventOpenDue").await,
+        0
+    );
+    barrier.rollback().await.unwrap();
+    let recovered = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), completed + 5)
+        .await
+        .unwrap();
+    assert_eq!(recovered.succeeded_games, 1);
+    assert_eq!(
+        stored_event_count_by_kind(&pool, slow, "DayEventOpenDue").await,
+        1
+    );
+}
+
+async fn scheduler_takeover_fences_old_completion(pool: &PgPool, fail: bool) {
+    let game = schedule_due_test_game(pool, 100).await;
+    if fail {
+        sqlx::query("UPDATE phase_state SET phase_id = 'invalid' WHERE game_id = $1")
+            .bind(game)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    let mut barrier = pool.begin().await.unwrap();
+    eventstore::lock_stream_in_tx(&mut barrier, game)
+        .await
+        .unwrap();
+    let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let (left, left_pid) = scheduler_test_pool(pool).await;
+    let (right, right_pid) = scheduler_test_pool(pool).await;
+    // Same owner deliberately exercises the ABA case; attempt identity must fence it.
+    let owner = Uuid::new_v4();
+    let first = tokio::spawn(async move {
+        run_day_event_scheduler_once(&left, &DayEventSchedulerConfig::default(), owner, 100).await
+    });
+    wait_for_scheduler_block(pool, left_pid, blocker).await;
+    sqlx::query("UPDATE day_event_scheduler_state SET lease_until = 100 WHERE game_id = $1")
+        .bind(game)
+        .execute(pool)
+        .await
+        .unwrap();
+    let second = tokio::spawn(async move {
+        run_day_event_scheduler_once(&right, &DayEventSchedulerConfig::default(), owner, 100).await
+    });
+    wait_for_scheduler_block(pool, right_pid, blocker).await;
+    barrier.rollback().await.unwrap();
+    assert!(matches!(
+        first.await.unwrap(),
+        Err(commands::day_scheduler::SchedulerError::LeaseLost)
+    ));
+    let report = second.await.unwrap().unwrap();
+    assert_eq!(report.failed_games, usize::from(fail));
+    let status = day_event_scheduler_status(pool, game, 100)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(status.total_attempts, 2);
+    assert_eq!(status.total_successes, i64::from(!fail));
+    assert_eq!(status.consecutive_failures, i32::from(fail));
+    assert!(status.lease_owner.is_none());
+    assert_eq!(
+        stored_event_count_by_kind(pool, game, "DayEventOpenDue").await,
+        usize::from(!fail)
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn scheduler_takeover_fences_stale_success_even_with_same_owner(pool: PgPool) {
+    scheduler_takeover_fences_old_completion(&pool, false).await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn scheduler_takeover_fences_stale_failure_even_with_same_owner(pool: PgPool) {
+    scheduler_takeover_fences_old_completion(&pool, true).await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn scheduler_cancellation_discards_connection_and_expired_lease_recovers(pool: PgPool) {
+    let game = schedule_due_test_game(&pool, 100).await;
+    let mut barrier = pool.begin().await.unwrap();
+    eventstore::lock_stream_in_tx(&mut barrier, game)
+        .await
+        .unwrap();
+    let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let (worker, pid) = scheduler_test_pool(&pool).await;
+    let task_pool = worker.clone();
+    let task = tokio::spawn(async move {
+        run_day_event_scheduler_once(
+            &task_pool,
+            &DayEventSchedulerConfig::default(),
+            Uuid::new_v4(),
+            100,
+        )
+        .await
+    });
+    wait_for_scheduler_block(&pool, pid, blocker).await;
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let present: bool =
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1)")
+                    .bind(pid)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            if !present {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("cancelled transaction backend must close even while the blocker remains");
+    barrier.rollback().await.unwrap();
+    assert_eq!(
+        stored_event_count_by_kind(&pool, game, "DayEventOpenDue").await,
+        0
+    );
+    let recovered = run_day_event_scheduler_once(
+        &worker,
+        &DayEventSchedulerConfig::default(),
+        Uuid::new_v4(),
+        130,
+    )
+    .await
+    .unwrap();
+    assert_eq!(recovered.succeeded_games, 1);
+    assert_eq!(
+        stored_event_count_by_kind(&pool, game, "DayEventOpenDue").await,
+        1
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn scheduler_claim_and_health_bound_pool_starvation(pool: PgPool) {
+    let (worker, _) = scheduler_test_pool(&pool).await;
+    let held = worker.acquire().await.unwrap();
+    let config = DayEventSchedulerConfig::default();
+    let (claim, health) = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        tokio::join!(
+            run_day_event_scheduler_once(&worker, &config, Uuid::new_v4(), 100),
+            day_event_scheduler_queue_health(&worker, 100),
+        )
+    })
+    .await
+    .expect("metadata deadlines include pool checkout");
+    assert!(matches!(
+        claim,
+        Err(commands::day_scheduler::SchedulerError::Deadline)
+    ));
+    assert!(matches!(
+        health,
+        Err(commands::day_scheduler::SchedulerError::Deadline)
+    ));
+    drop(held);
+    assert_eq!(
+        day_event_scheduler_queue_health(&worker, 100)
+            .await
+            .unwrap()
+            .pending_games,
+        0
+    );
 }
