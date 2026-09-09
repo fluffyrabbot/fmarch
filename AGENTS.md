@@ -12,6 +12,22 @@ on the canonical Cachy worker, task branches, and atomic history over PR ceremon
   change.
 - Give every task a named branch and its own worktree. Preserve unexpected dirty
   or unpublished work on a named branch before reconciling it.
+- On the editing Mac, create task worktrees only under
+  `/Users/fluffypro/apps/.fleet-worktrees/fmarch-<task>-<date>`. Keep
+  `/Users/fluffypro/apps/fmarch` as the main checkout; do not create sibling
+  `fmarch-*` directories directly in `/Users/fluffypro/apps`. Canonical workers
+  retain their fleet-managed worktree locations.
+- At task completion, retire inactive, clean worktrees whose commits are
+  contained in freshly fetched `origin/main`, using `git worktree remove` from
+  outside the checkout. First check active task references and open files or
+  process working directories, unpublished commits, and untracked/ignored
+  files. Preserve unexpected files and unfinished work; do not force removal.
+  Retain published branches independently of checkout cleanup. Keep unfinished
+  experiment checkouts under the standard worktree root, using
+  `git worktree move` only after checking that they are inactive.
+- Worktree retirement does not authorize deleting external build targets,
+  databases, proof receipts, or benchmark evidence. Review those resources
+  separately, and report retained worktrees and their reason at task completion.
 - Push the task checkpoint to origin before verification. Fast-forward `main`
   only after the required canonical proof passes.
 - Treat `main` as the sole development trunk. Railway staging follows `main`;
