@@ -7446,7 +7446,7 @@ pub async fn public_thread_view_after(
 /// marker survives completion and does not grow with the event stream.
 pub async fn game_started<'e, E>(executor: E, game_id: Uuid) -> Result<bool, ProjectionError>
 where
-    E: sqlx::Executor<'e, Database = Postgres>,
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
     Ok(sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM game_index WHERE game_id = $1 AND started_seq IS NOT NULL)",
