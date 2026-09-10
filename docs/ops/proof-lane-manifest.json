@@ -89,8 +89,9 @@
     "cargo:server": { "coverage": ["Runtime shutdown, health reporting, and configuration"], "phase": "focused", "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server --lib --bin fmarch-event-key-admin --bin fmarch-profile-index-admin --bin fmarch-schema-epoch-reset --bin fmarch-schema-gate --bin server --test event_key_admin_rehearsal --test profile_index_admin_rehearsal --test runtime_composition_boundary --test schema_epoch_reset_recovery --test staging_search_corpus -- --test-threads=1", "assertion_targets": ["server/lib", "server/bin/fmarch-event-key-admin", "server/bin/fmarch-profile-index-admin", "server/bin/fmarch-schema-epoch-reset", "server/bin/fmarch-schema-gate", "server/bin/server", "server/test/event_key_admin_rehearsal", "server/test/profile_index_admin_rehearsal", "server/test/runtime_composition_boundary", "server/test/schema_epoch_reset_recovery", "server/test/staging_search_corpus"], "execution": { "class": "postgres", "timeout_seconds": 1200, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "admin_rejects_non_deployable_key_configuration_before_database_access", "--required", "deployed_admin_rehearses_old_key_removal_before_retirement", "--required", "committed_reset_recovers_without_a_second_drop_and_rejects_a_changed_inventory", "--required", "shared_lock_contention_is_bounded_and_leaves_no_database_side_effects", "--", "cargo", "test", "-p", "server", "--lib", "--bin", "fmarch-event-key-admin", "--bin", "fmarch-profile-index-admin", "--bin", "fmarch-schema-epoch-reset", "--bin", "fmarch-schema-gate", "--bin", "server", "--test", "event_key_admin_rehearsal", "--test", "profile_index_admin_rehearsal", "--test", "runtime_composition_boundary", "--test", "schema_epoch_reset_recovery", "--test", "staging_search_corpus", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:frontend-contract"], "resources": [] } },
     "test:frontend-static-role-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-static-role-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "test:frontend-cross-browser": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 1800, "argv": ["npm", "run", "test:frontend-cross-browser"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "test:frontend-role-smoke": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:frontend-role-smoke"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:frontend-cross-browser": { "depends_on": ["test:frontend-themes"], "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 1800, "argv": ["npm", "run", "test:frontend-cross-browser"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:frontend-themes": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 2600, "argv": ["npm", "run", "test:frontend-themes"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:frontend-role-smoke": { "depends_on": ["test:frontend-themes"], "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:frontend-role-smoke"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-route-live-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-live-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-route-state-render": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-state-render"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-tablet-interaction": { "kind": "npm", "depends_on": ["test:frontend-route-state-render"], "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-tablet-interaction"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }, { "kind": "artifact-input", "from": "test:frontend-route-state-render", "env": "FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR" }] } },
@@ -1008,17 +1009,37 @@
       ]
     },
     {
+      "id": "proof:frontend-themes",
+      "tier": "frozen",
+      "paths": [
+        "tools/frontend_theme_proof.mjs",
+        "tools/frontend_theme_browser.mjs",
+        "tools/frontend_themes.mjs",
+        "tools/frontend_theme_evidence.mjs"
+      ],
+      "lanes": [
+        "test:frontend-themes",
+        "test:frontend-role-smoke",
+        "test:frontend-cross-browser",
+        "test:frontend-visual-regression"
+      ],
+      "capabilities": [
+        "product.game.core-loop"
+      ]
+    },
+    {
       "id": "proof:frontend-role-smoke",
       "tier": "frozen",
       "paths": [
         "tools/frontend_role_smoke.mjs",
-        "tools/frontend_theme_proof.mjs",
+        "tools/frontend_phase_contrast.mjs",
+        "tools/frontend_container_browser.mjs",
         "tools/frontend_cross_browser.mjs",
         "tools/fixtures/frontend-media.png",
         "tools/frontend_role_smoke_scenarios.mjs",
         "tools/frontend_role_smoke_flows.mjs"
       ],
-      "lanes": ["test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
+      "lanes": ["test:frontend-themes", "test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
       "capabilities": [
         "foundation.wire-live-delivery",
         "product.game.setup",
@@ -1107,7 +1128,7 @@
         "tools/frontend_screenshot_pixels.mjs",
         "tools/fixtures/frontend-visual-baselines/"
       ],
-      "lanes": ["test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
+      "lanes": ["test:frontend-themes", "test:frontend-role-smoke", "test:frontend-cross-browser", "test:frontend-visual-regression"],
       "capabilities": [
         "foundation.wire-live-delivery",
         "product.game.setup",

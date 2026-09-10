@@ -852,6 +852,7 @@ test('the real visual lane declares a hard producer dependency and runner-scoped
   const visual = manifest.lanes['test:frontend-visual-regression'];
   assert.deepEqual(visual.depends_on, ['test:frontend-role-smoke']);
   assert.deepEqual(expandHardDependencies(['test:frontend-visual-regression'], manifest), [
+    'test:frontend-themes',
     'test:frontend-role-smoke',
     'test:frontend-visual-regression',
   ]);
@@ -1200,4 +1201,22 @@ test('acceptance starts only after focused hard prerequisites finish', async (t)
   });
   assert.equal(result.success, true);
   assert.deepEqual(order, ['prerequisite', 'focused', 'acceptance']);
+});
+
+test('theme failure blocks both real broad browser lanes even with keep-going', async t => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, {recursive: true, force: true}));
+  const actual = loadManifest();
+  const ids = ['test:frontend-themes', 'test:frontend-role-smoke', 'test:frontend-cross-browser'];
+  const manifest = fixture(Object.fromEntries(ids.map(id => [id, {
+    ...lane([id]), depends_on: actual.lanes[id].depends_on ?? [],
+  }])));
+  const started = [];
+  const result = await runExecutionPlan(ids.slice(1), manifest, {
+    root, jobs: 2, keepGoing: true,
+    spawn(file) { started.push(file); return childThatCloses(1); }, log() {},
+  });
+  assert.deepEqual(started, ['test:frontend-themes']);
+  assert.equal(result.success, false);
+  for (const id of ids.slice(1)) assert.equal(result.receipt.lanes[id].state, 'blocked');
 });

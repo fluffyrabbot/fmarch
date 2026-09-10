@@ -36,6 +36,9 @@
       "resourceClass": "heavy",
       "stepTimeoutMs": 14400000,
       "verificationModes": {
+        "themes": [
+          "bash scripts/linux-proof.sh --only test:frontend-themes"
+        ],
         "cross-browser": [
           "bash scripts/linux-proof.sh --only test:frontend-cross-browser"
         ],

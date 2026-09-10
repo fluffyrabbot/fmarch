@@ -51,18 +51,27 @@ unless fixture mode is enabled; production rejects fixture mode at startup.
 
 ## Verification
 
-The existing canonical role-smoke lane includes `tools/frontend_theme_proof.mjs`.
-It drives real routes and the healthy workbench without changing theme DOM
-attributes, checking both themes, responsive geometry, live phase transitions,
-route teardown, preference persistence, independent system/light/dark behavior,
-and semantic contrast. Screenshots are written under that lane's `themes/`
-artifact directory. These are deterministic browser evidence, not hosted or
-native Safari acceptance.
+The canonical `test:frontend-themes` lane runs the full theme matrix in Chromium,
+Firefox, and WebKit before either broad role-smoke or cross-browser journeys.
+Both broad lanes declare it as a hard dependency: a theme failure blocks those
+journeys even under `--keep-going`. Theme changes still select all three browser
+lanes and visual regression for landing; the broad journeys no longer repeat
+the theme matrix.
 
-For focused Firefox/WebKit diagnosis, the fleet profile also provides the
-`cross-browser` verification mode. It runs only that lane through the same
-Linux wrapper and shared admission lock. A focused receipt does not replace the
-normal diff-selected push proof required for landing. The browser harness
+The theme harness drives real routes and the healthy workbench, checking both
+themes, responsive geometry, live phase transitions, route teardown, preference
+persistence, independent system/light/dark behavior, and semantic contrast.
+Each engine writes `theme-browser.json` and 36 screenshots under its `themes/`
+subdirectory; the lane validates the complete matrix, contrasts, preferences,
+and screenshot files before writing `themes.json`. These are fixture-backed
+browser artifacts, separate from hosted or native Safari acceptance. Palette
+behavior assertions use real application inputs; the shared contrast sampler
+reads each CSS palette directly.
+
+For focused diagnosis, the fleet `themes` verification mode runs only the theme
+lane through the normal Linux wrapper and shared admission lock. The
+`cross-browser` mode also includes its theme prerequisite. Focused receipts do
+not replace normal diff-selected push proof for landing. The browser harness
 reapplies native system-appearance emulation after document navigation and
 verifies the media query before asserting application state.
 
