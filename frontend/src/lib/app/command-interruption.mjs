@@ -177,6 +177,13 @@ export function isCommandInterruptionStatus(status) {
   );
 }
 
+export function isRetryableCommandRejection(status) {
+  return status?.state === "reject" && status.retryable === true &&
+    typeof status.commandId === "string" && status.commandId.trim() !== "" &&
+    typeof status.error === "string" && status.error.trim() !== "" &&
+    typeof status.message === "string" && status.message.trim() !== "";
+}
+
 function isConnectionLoss(error) {
   return (
     error?.name === "AbortError" ||

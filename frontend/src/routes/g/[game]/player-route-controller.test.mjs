@@ -16,6 +16,10 @@ import {
   playerAllowMediaOnlyPost,
   playerActionConfig,
   playerCommandInterruptedStatus,
+  playerAttemptBeforeDispatch,
+  playerCommandRecoveryAfterConfirmation,
+  playerCommandRetryAvailable,
+  dispatchPlayerRouteCommand,
   playerCommandPendingStatus,
   playerCommandTrace,
   playerRefreshKeysForAction,
@@ -174,6 +178,113 @@ test("player interrupted commands survive sessionStorage reload with the same co
   assert.equal(restored.commandStatus.commandId, "player-command-1");
   assert.equal(restored.commandStatus.state, "interrupted");
   assert.equal(restored.commandReceipts[0].actionId, "submit_vote");
+});
+
+function rejectedVoteFixture() {
+  const data = fixtureData();
+  const attempt = {
+    action: "submit_vote",
+    commandId: "retained-vote-id",
+    command: buildPlayerCommandRequest({ data, action: "submit_vote" }).command,
+    interruption: "connection_lost",
+  };
+  const status = {
+    state: "reject", error: "StreamConflict", retryable: true,
+    commandId: attempt.commandId, message: "Reject StreamConflict: another writer committed first",
+  };
+  const confirmed = playerCommandRecoveryAfterConfirmation({
+    attempts: { submit_vote: attempt }, action: "submit_vote", attempt, commandStatus: status,
+  });
+  return { data, attempt, status, confirmed };
+}
+
+test("confirmed retryable rejection retains one exact request and restores as rejection", () => {
+  const { attempt, confirmed } = rejectedVoteFixture();
+  const storage = memoryStorage();
+  const scope = { storage, game: "midsummer", principalId: "principal-a", actorSlot: "slot-7" };
+  assert.equal(playerCommandRetryAvailable(confirmed.commandStatus, confirmed.attempts), true);
+  assert.equal(confirmed.attempts.submit_vote.interruption, undefined);
+  assert.equal(persistPlayerInterruptedCommands({ ...scope, attempts: confirmed.attempts }), true);
+  const restored = restorePlayerInterruptedCommands(scope);
+  assert.equal(restored.commandStatus.state, "reject");
+  assert.equal(restored.commandStatus.error, "StreamConflict");
+  assert.equal(restored.commandStatus.interruption, undefined);
+  assert.equal(restored.commandStatus.commandId, attempt.commandId);
+  assert.deepEqual(restored.attempts.submit_vote.command, attempt.command);
+  assert.equal(playerCommandRetryAvailable(restored.commandStatus, restored.attempts), true);
+  assert.deepEqual(restorePlayerInterruptedCommands({ ...scope, principalId: "another-account" }).attempts, {});
+});
+
+test("retry submission replaces prior rejection with unknown outcome before transport", () => {
+  const { confirmed } = rejectedVoteFixture();
+  const pending = playerAttemptBeforeDispatch(confirmed.attempts.submit_vote);
+  assert.equal(pending.confirmedRejection, undefined);
+  assert.equal(pending.interruption, "connection_lost");
+  const scope = { storage: memoryStorage(), game: "midsummer", principalId: "principal-a", actorSlot: "slot-7" };
+  persistPlayerInterruptedCommands({ ...scope, attempts: { submit_vote: pending } });
+  const restored = restorePlayerInterruptedCommands(scope);
+  assert.equal(restored.commandStatus.state, "interrupted");
+  assert.equal(restored.commandStatus.commandId, pending.commandId);
+  assert.match(restored.commandStatus.message, /may still have reached/);
+  assert.equal(playerCommandRetryAvailable(restored.commandStatus, restored.attempts), false);
+});
+
+test("confirmed ACK and final rejection clear retry identity; mismatched outcomes cannot enable retry", () => {
+  const { attempt, confirmed, status } = rejectedVoteFixture();
+  for (const outcome of [
+    { ...status, state: "ack" },
+    { ...status, error: "PhaseLocked", retryable: false },
+    { ...status, commandId: "another-command" },
+  ]) {
+    const result = playerCommandRecoveryAfterConfirmation({
+      attempts: confirmed.attempts, action: "submit_vote", attempt, commandStatus: outcome,
+    });
+    assert.deepEqual(result.attempts, {});
+    assert.equal(playerCommandRetryAvailable(result.commandStatus, result.attempts), false);
+  }
+  assert.equal(playerCommandRetryAvailable(confirmed.commandStatus, {}), false);
+  assert.equal(playerCommandRetryAvailable({ ...confirmed.commandStatus, actionId: "submit_post" }, confirmed.attempts), false);
+});
+
+test("retry after StreamConflict sends the original command id and body then clears on ACK", async () => {
+  const { data, attempt, confirmed } = rejectedVoteFixture();
+  const retry = playerAttemptBeforeDispatch(confirmed.attempts.submit_vote);
+  let sent;
+  const outcome = await dispatchPlayerRouteCommand({
+    action: retry.action, data, projectionStore: fakeProjectionStore(),
+    preparedCommand: retry.command, commandIdFactory: () => retry.commandId,
+    sendCommandImpl: async ({ command, commandIdFactory }) => {
+      sent = { command, commandId: commandIdFactory() };
+      return { state: "ack", commandId: sent.commandId, streamSeqs: [42], message: "Ack" };
+    },
+  });
+  assert.deepEqual(sent, { command: attempt.command, commandId: attempt.commandId });
+  const finished = playerCommandRecoveryAfterConfirmation({
+    attempts: confirmed.attempts, action: retry.action, attempt: retry, commandStatus: outcome,
+  });
+  assert.deepEqual(finished.attempts, {});
+});
+
+test("confirmed rejection remains known if projection recovery fails, while dispatch stays gated", async () => {
+  const { data, confirmed } = rejectedVoteFixture();
+  const store = createProjectionStore({
+    initialSnapshot: { votecount: data.votecount, commandState: data.commandState },
+    coldLoads: { votecount: { url: "/votecount" }, commandState: { url: "/player-command-state" } },
+  });
+  const result = await recoverPlayerRouteCommand({
+    action: "submit_vote", data, projectionStore: store,
+    commandStatus: confirmed.commandStatus, fetchImpl: async () => ({ ok: false, status: 503 }),
+  });
+  assert.equal(result.commandStatus.state, "reject");
+  assert.equal(result.commandStatus.retryable, true);
+  assert.equal(result.commandStatus.projectionUnavailable, true);
+  assert.equal(playerCommandRetryAvailable(result.commandStatus, confirmed.attempts), true);
+  assert.equal(store.isReady(), false);
+  await assert.rejects(dispatchPlayerRouteCommand({
+    action: "submit_vote", data, projectionStore: store,
+    preparedCommand: confirmed.attempts.submit_vote.command,
+    sendCommandImpl: async () => { throw new Error("must not send"); },
+  }), /projection freshness is restored/);
 });
 
 test("player route controller builds projection store boundaries from route data", () => {

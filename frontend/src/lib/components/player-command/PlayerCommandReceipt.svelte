@@ -7,6 +7,8 @@
 
   export let receipts = [];
   export let currentStatus = null;
+  export let retryAvailable = false;
+  export let retryEnabled = true;
   export let onRetry = () => {};
   export let onCancel = () => {};
 
@@ -60,6 +62,8 @@
             {#if item.current}
               <CommandRecovery
                 status={currentStatus}
+                {retryAvailable}
+                {retryEnabled}
                 {onRetry}
                 {onCancel}
               />
