@@ -303,12 +303,156 @@ async fn topic_snapshot(pool: &sqlx::PgPool, topic: Uuid) -> serde_json::Value {
         "search": search,
         "publications": publications,
         "topic": {
+            "title": topic_row.title,
             "updated_seq": topic_row.updated_seq,
             "post_count": topic_row.post_count,
             "version": topic_row.version,
             "last_post_seq": topic_row.last_post_seq,
         },
     })
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn invalid_forum_batches_do_not_append_or_project_even_if_caller_commits(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(340);
+    let topic = Uuid::from_u128(341);
+    let author = test_principal(40);
+    ensure_test_principal(&pool, author).await;
+    let profile = create_test_profile(&pool, author, "codec_author", 1).await;
+    let post = create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
+    let before = topic_snapshot(&pool, topic).await;
+    let stream_before = eventstore::load_stream(&pool, topic).await.unwrap();
+    let expected_version = stream_before.last().unwrap().stream_seq;
+
+    for (kind, version, payload) in [
+        ("DiscussionUnknownFact", 1, serde_json::json!({})),
+        (
+            "DiscussionTopicRenamed",
+            2,
+            serde_json::json!({ "title": "Future shape" }),
+        ),
+        (
+            "DiscussionPostEdited",
+            1,
+            serde_json::json!({ "source_seq": post, "body": "Truncated revision", "revision": u64::MAX }),
+        ),
+        (
+            "DiscussionTopicPinnedChanged",
+            1,
+            serde_json::json!({ "pinned": "true" }),
+        ),
+    ] {
+        let events = [
+            EventInput::new(
+                "DiscussionTopicRenamed",
+                1,
+                serde_json::json!({ "title": "Must not persist" }),
+                ActorId::Principal(author),
+                5,
+            ),
+            EventInput::new(kind, version, payload, ActorId::Principal(author), 6),
+        ];
+        // Complete preflight matters for externally owned transactions: a
+        // caller retaining its other work must not commit a partial batch.
+        let mut tx = pool.begin().await.unwrap();
+        let result =
+            projections::append_discussion_and_project_in_tx(&mut tx, topic, &events).await;
+        assert!(matches!(
+            result,
+            Err(projections::ProjectionError::ForumCodec(_))
+        ));
+        tx.commit().await.unwrap();
+
+        let result = append_discussion_and_project(&pool, topic, &events).await;
+        assert!(matches!(
+            result,
+            Err(projections::ProjectionError::ForumCodec(_))
+        ));
+        let result = projections::append_discussion_and_project_expected(
+            &pool,
+            topic,
+            expected_version,
+            &events,
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(projections::ProjectionError::ForumCodec(_))
+        ));
+
+        assert_eq!(
+            eventstore::load_stream(&pool, topic).await.unwrap(),
+            stream_before
+        );
+        assert_eq!(topic_snapshot(&pool, topic).await, before);
+    }
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn unsupported_durable_forum_event_stops_rebuild_without_destroying_projection(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(342);
+    let topic = Uuid::from_u128(343);
+    let author = test_principal(41);
+    ensure_test_principal(&pool, author).await;
+    let profile = create_test_profile(&pool, author, "codec_replay", 1).await;
+    create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
+    let before = topic_snapshot(&pool, topic).await;
+    // The existing untyped journal admits a future schema. Replay must stop at
+    // the forum-owned decoder even though its fields resemble version 1.
+    eventstore::append(
+        &pool,
+        topic,
+        &[EventInput::new(
+            "DiscussionTopicRenamed",
+            2,
+            serde_json::json!({ "title": "Do not interpret v2 as v1" }),
+            ActorId::Principal(author),
+            5,
+        )],
+    )
+    .await
+    .unwrap();
+    let stream_before = eventstore::load_stream(&pool, topic).await.unwrap();
+    let result = rebuild_discussion_stream(&pool, topic).await;
+    assert!(matches!(
+        result,
+        Err(projections::ProjectionError::ForumCodec(
+            forum::ForumDecodeError::UnsupportedVersion { version: 2, .. }
+        ))
+    ));
+    assert_eq!(topic_snapshot(&pool, topic).await, before);
+    assert_eq!(
+        eventstore::load_stream(&pool, topic).await.unwrap(),
+        stream_before
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn historical_v1_forum_rows_rebuild_without_inventing_authors_or_references(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(344);
+    let topic = Uuid::from_u128(345);
+    append_discussion_and_project(&pool, area, &[EventInput::new(
+        "DiscussionAreaCreated", 1, serde_json::json!({ "slug": "historical", "title": "Historical", "description": "History" }), ActorId::System, 1,
+    )]).await.unwrap();
+    append_discussion_and_project(&pool, topic, &[
+        EventInput::new("DiscussionTopicCreated", 1, serde_json::json!({ "area_id": area, "title": "  Original title  " }), ActorId::System, 2),
+        EventInput::new("DiscussionPostSubmitted", 1, serde_json::json!({ "body": "  Original body  ", "quotations": null, "mentions": null }), ActorId::System, 3),
+    ]).await.unwrap();
+    let before = topic_snapshot(&pool, topic).await;
+    rebuild_discussion_stream(&pool, area).await.unwrap();
+    rebuild_discussion_stream(&pool, topic).await.unwrap();
+    assert_eq!(topic_snapshot(&pool, topic).await, before);
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
+    assert_eq!(page.posts[0].body, "  Original body  ");
+    assert!(page.posts[0].author.is_none());
+    assert!(page.posts[0].quotations.is_empty());
+    assert!(page.posts[0].mentions.is_empty());
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
