@@ -176,6 +176,7 @@ async fn replay_pack_golden(
         pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: pack.into(),
             cohost_denied: vec![],

@@ -888,6 +888,8 @@ pub enum Command {
         pack: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         cohost_denied: Vec<CohostPermissionClass>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin: Option<PublicContentRef>,
     },
     AddSlot {
         game: Uuid,
@@ -1111,10 +1113,14 @@ impl Command {
                 game,
                 pack,
                 cohost_denied,
+                origin,
             } => commands::Command::CreateGame {
                 game,
                 pack,
                 cohost_denied: cohost_denied.into_iter().map(Into::into).collect(),
+                origin: origin.map(|origin| {
+                    content_reference::PublicContentRef::new(origin.surface_id, origin.source_seq)
+                }),
             },
             Command::AddSlot { game, slot } => commands::Command::AddSlot { game, slot },
             Command::SeatPersona {
@@ -3161,6 +3167,38 @@ impl From<projections::ThreadViewPage> for ThreadPage {
     }
 }
 
+/// A public surface has source_seq zero; positive values identify its posts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicContentRef {
+    pub surface_id: Uuid,
+    pub source_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GameOriginTopic {
+    pub topic: Uuid,
+    pub title: String,
+    pub href: String,
+}
+
+impl From<projections::GameOriginTopicRow> for GameOriginTopic {
+    fn from(origin: projections::GameOriginTopicRow) -> Self {
+        Self {
+            topic: origin.topic_id,
+            title: origin.title,
+            href: origin.href,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SpawnedGame {
+    pub game: Uuid,
+    pub pack: String,
+    pub status: String,
+    pub href: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GameIndexEntry {
     pub game: Uuid,
@@ -3169,6 +3207,7 @@ pub struct GameIndexEntry {
     pub phase_id: Option<PhaseId>,
     pub updated_seq: i64,
     pub completed_seq: Option<i64>,
+    pub origin_topic: Option<GameOriginTopic>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3186,6 +3225,7 @@ impl From<projections::GameIndexRow> for GameIndexEntry {
             phase_id: row.phase_id,
             updated_seq: row.updated_seq,
             completed_seq: row.completed_seq,
+            origin_topic: row.origin_topic.map(Into::into),
         }
     }
 }
@@ -3322,6 +3362,7 @@ pub struct DiscussionTopic {
     /// GlobalMod curation: pinned topics lead their area's first page.
     #[serde(default)]
     pub pinned: bool,
+    pub spawned_games: Vec<SpawnedGame>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3514,6 +3555,16 @@ impl From<projections::DiscussionTopicRow> for DiscussionTopic {
             last_post_seq: topic.last_post_seq,
             last_post_at: topic.last_post_at,
             pinned: topic.pinned,
+            spawned_games: topic
+                .spawned_games
+                .into_iter()
+                .map(|game| SpawnedGame {
+                    game: game.game_id,
+                    pack: game.pack,
+                    status: game.status,
+                    href: format!("/games/{}", game.game_id),
+                })
+                .collect(),
         }
     }
 }
@@ -4241,7 +4292,7 @@ pub mod typescript {
         DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionPostMention,
         DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster, EmbedProvider,
-        EmbedSnapshot, GameIndexEntry, GameIndexPage, GameThreadAuthor, Hello,
+        EmbedSnapshot, GameIndexEntry, GameIndexPage, GameOriginTopic, GameThreadAuthor, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
@@ -4258,14 +4309,14 @@ pub mod typescript {
         ModerationSlotMention, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
         PlayerNotification, PlayerNotificationsDelta, PostCitation, PostCitationPage,
         PostCitationsChangedDelta, PostEmbed, PostKind, PostRef, ProfileEditor, ProjectionDelta,
-        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
-        PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment, PublicSearchFilterValue,
-        PublicSearchPage, PublicSearchResult, PublicSearchResultKind, Quotation, RejectCode,
-        RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        PublicContentRef, PublicGameThreadPage, PublicInboxItem, PublicInboxPage,
+        PublicPostCitation, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
+        PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
+        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
         ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle,
-        SlotMentionNotification, SlotMentionsDelta, SubmitPostEmbed, SubmitPostMedia,
+        SlotMentionNotification, SlotMentionsDelta, SpawnedGame, SubmitPostEmbed, SubmitPostMedia,
         SubmitPostMention, SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia,
         ThreadPostMediaVariant, ThreadPostMention, ThreadPostRemovedDelta, ThreadPostsDelta,
         VoteCountClearedDelta, VoteCountDelta, VoteTarget,
@@ -4391,6 +4442,9 @@ pub mod typescript {
         push::<ThreadPostMedia>(&mut out, &config);
         push::<ThreadPostMediaVariant>(&mut out, &config);
         push::<ThreadPage>(&mut out, &config);
+        push::<PublicContentRef>(&mut out, &config);
+        push::<GameOriginTopic>(&mut out, &config);
+        push::<SpawnedGame>(&mut out, &config);
         push::<GameIndexEntry>(&mut out, &config);
         push::<GameIndexPage>(&mut out, &config);
         push::<PublicGameThreadPage>(&mut out, &config);

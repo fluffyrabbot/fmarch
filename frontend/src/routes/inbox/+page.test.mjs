@@ -143,3 +143,18 @@ test("inbox unmute action removes the private member relationship", async () => 
     authorization: "Bearer member-session",
   });
 });
+
+
+test("signup announcements retain their reason and game destination", async () => {
+  const data = await load({
+    cookies: { get: () => "member-session" }, locals: { principalId: "member_b", resolvedCapabilities: [] },
+    url: new URL("http://localhost/inbox"),
+    fetch: async (url) => Response.json(url.startsWith("/mutes") ? { members: [] } : {
+      items: [{ surface_id: "topic", source_seq: 80, delivery_seq: 100, reason: "game_spawned_from_watched_topic", href: "/games/new-game" }],
+      unread_count: 1,
+    }),
+  });
+  assert.equal(data.inbox.items[0].reason, "game_spawned_from_watched_topic");
+  assert.equal(data.inbox.items[0].reasonLabel, "Game started from a watched topic");
+  assert.equal(data.inbox.items[0].href, "/games/new-game");
+});

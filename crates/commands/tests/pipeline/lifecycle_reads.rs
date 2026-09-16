@@ -92,6 +92,7 @@ async fn lifecycle_markers_distinguish_setup_start_and_completion(pool: PgPool) 
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],

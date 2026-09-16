@@ -606,24 +606,68 @@ pub async fn lock_command_stream_in_tx(
 ) -> Result<(), Reject> {
     eventstore::lock_stream_in_tx(tx, command_game(command))
         .await
-        .map_err(|error| Reject::Internal(error.to_string()))
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    lock_existing_origin_stream_in_tx(tx, command, false).await
 }
 
-/// Fail-fast network admission for the first lock in the command order. A
-/// caller that does not acquire the stream owns no other durable lock, so it
-/// can safely return the typed retryable conflict without tying up a pool
-/// connection behind another command.
+/// Fail-fast network admission owns all source streams before the HTTP boundary
+/// locks identities. It returns a retryable conflict without holding a pool
+/// connection behind another source writer.
 pub async fn try_lock_command_stream_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     command: &Command,
 ) -> Result<(), Reject> {
-    match eventstore::try_lock_stream_in_tx(tx, command_game(command))
+    if !eventstore::try_lock_stream_in_tx(tx, command_game(command))
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?
     {
-        true => Ok(()),
-        false => Err(Reject::StreamConflict),
+        return Err(Reject::StreamConflict);
     }
+    lock_existing_origin_stream_in_tx(tx, command, true).await
+}
+
+async fn lock_existing_origin_stream_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &Command,
+    fail_fast: bool,
+) -> Result<(), Reject> {
+    let Command::CreateGame {
+        game,
+        origin: Some(origin),
+        ..
+    } = command
+    else {
+        return Ok(());
+    };
+    // Occupied games may be receipt replays; do not revalidate their origin.
+    if eventstore::next_stream_seq_in_tx(tx, *game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?
+        != 1
+    {
+        return Ok(());
+    }
+    // Reject empty candidates now: otherwise two swapped fresh UUIDs could
+    // deadlock, or a topic could appear before under-lock command validation.
+    if origin.source_seq != 0
+        || origin.surface_id == *game
+        || !projections::game_origin_topic_exists(tx, origin.surface_id).await?
+    {
+        return Err(Reject::InvalidTarget);
+    }
+    if fail_fast {
+        if !eventstore::try_lock_stream_in_tx(tx, origin.surface_id)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?
+        {
+            return Err(Reject::StreamConflict);
+        }
+    } else {
+        eventstore::lock_stream_in_tx(tx, origin.surface_id)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?;
+    }
+    Ok(())
 }
 
 /// Bound waits while the HTTP boundary acquires the canonical authority lock
@@ -654,7 +698,8 @@ async fn handle_command(
             game,
             pack,
             cohost_denied,
-        } => create_game(tx, principal, game, pack, cohost_denied).await,
+            origin,
+        } => create_game(tx, principal, game, pack, cohost_denied, origin).await,
         Command::AddSlot { game, slot } => add_slot(tx, principal, game, slot).await,
         Command::SeatPersona {
             game,
@@ -1218,9 +1263,33 @@ async fn create_game(
     game: Uuid,
     pack: String,
     cohost_denied: Vec<CohostPermissionClass>,
+    origin: Option<content_reference::PublicContentRef>,
 ) -> Result<Ack, Reject> {
     if projections::game_exists(&mut **tx, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
+    }
+    // The command already owns the new game stream lock. Origins are existing
+    // topic streams; refusing a nonempty game stream prevents a caller-chosen
+    // UUID from turning two topic ids into inverted game/topic lock orders.
+    if eventstore::next_stream_seq_in_tx(tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?
+        != 1
+    {
+        return Err(Reject::InvalidTarget);
+    }
+    if let Some(origin) = origin {
+        if origin.source_seq != 0 || origin.surface_id == game {
+            return Err(Reject::InvalidTarget);
+        }
+        // All source locks precede HTTP identity locks. The command admission
+        // helper only locks committed topic candidates; this check rejects all
+        // other addresses and validates ownership/visibility under that fence.
+        if !projections::game_origin_topic_is_eligible(tx, origin.surface_id, principal.id())
+            .await?
+        {
+            return Err(Reject::InvalidTarget);
+        }
     }
     let pack_artifact = selected_pack_artifact(&pack)?;
     let pack_ref = pack_artifact.pack_ref.clone();
@@ -1235,6 +1304,7 @@ async fn create_game(
             "pack_ref": pack_ref,
             "pack_artifact": pack_artifact,
             "cohost_denied": denied,
+            "origin": origin,
         }),
         ActorId::Principal(host_principal_id),
         0,

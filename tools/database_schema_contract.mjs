@@ -21,6 +21,7 @@ const requiredCatalogMarkers = Object.freeze([
   "CREATE FUNCTION public.events_forbid_mutation()",
   "CREATE FUNCTION public.event_direct_envelope_write_guard()",
   "CREATE VIEW public.event_direct_key_reference AS",
+  "CREATE VIEW public.attention_destination AS",
   "CREATE TRIGGER events_no_update",
 ]);
 
@@ -144,7 +145,7 @@ export async function inspectDatabaseSchema({
   const triggerCount = countLines(currentSchema, /^CREATE TRIGGER /u);
   const functionCount = countLines(currentSchema, /^CREATE FUNCTION /u);
   const viewCount = countLines(currentSchema, /^CREATE VIEW /u);
-  if (tableCount !== 104 || triggerCount !== 38 || functionCount !== 17 || viewCount !== 1) {
+  if (tableCount !== 105 || triggerCount !== 38 || functionCount !== 17 || viewCount !== 2) {
     throw new Error(
       `canonical catalog counts drifted: tables=${tableCount} triggers=${triggerCount} functions=${functionCount} views=${viewCount}`,
     );

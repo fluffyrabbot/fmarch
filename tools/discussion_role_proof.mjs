@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -108,6 +109,7 @@ try {
       frontendBaseUrl,
       topic: browserTopic.topic,
     });
+    const signup = await proveSignupOrigin({ member, moderator, frontendBaseUrl, apiBaseUrl, sessions });
     const evidence = {
       version: 1,
       proof: "discussion-role-proof",
@@ -116,12 +118,12 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, locked-topic recovery, and a host-selected signup origin through private setup, public start, game/topic links and watched-topic inbox delivery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
         pageSize,
-        publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"],
+        publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned", "spawned_games"],
         publicPostFieldNames: ["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"],
       },
       directory,
@@ -134,6 +136,7 @@ try {
       draftIdentity,
       curation,
       moderation,
+      signup,
     };
     assertProof(evidence);
     await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -162,6 +165,65 @@ try {
   if (proofDatabase !== undefined) await dropScratchDatabase(proofDatabase);
   if (previousApiBaseUrl === undefined) delete process.env.FMARCH_API_BASE_URL;
   else process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
+}
+
+async function proveSignupOrigin({ member, moderator, frontendBaseUrl, apiBaseUrl, sessions }) {
+  const headers = (token) => ({ authorization: `Bearer ${token}`, "content-type": "application/json" });
+  const topic = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics`, {
+    method: "POST", headers: headers(sessions.moderatorToken),
+    body: JSON.stringify({ title: "Signup for our game", body: "An ordinary host-authored discussion." }),
+  });
+  await fetchJson(`${apiBaseUrl}/subscriptions/${topic.topic}`, { method: "PUT", headers: headers(sessions.memberToken) });
+  const hostPage = await moderator.newPage();
+  const readerPage = await member.newPage();
+  try {
+    await hostPage.goto(`${frontendBaseUrl}/admin`, { waitUntil: "networkidle" });
+    const picker = hostPage.getByTestId("admin-game-origin-topic");
+    await picker.selectOption(topic.topic);
+    const optionLabels = await picker.locator("option").allTextContents();
+    if (optionLabels.some((label) => label.startsWith("Seed topic"))) throw new Error("origin picker exposed another author's topic");
+    await Promise.all([
+      hostPage.waitForURL(/\/g\/[0-9a-f-]+\/setup$/u),
+      hostPage.getByTestId("admin-game-bootstrap-submit").click(),
+    ]);
+    const game = new URL(hostPage.url()).pathname.split("/")[2];
+    await hostPage.getByTestId("host-setup-origin-topic").waitFor({ state: "visible" });
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${topic.topic}`;
+    await readerPage.goto(topicUrl, { waitUntil: "networkidle" });
+    if (await readerPage.getByTestId("discussion-spawned-games").count() !== 0) throw new Error("setup game leaked through topic banner");
+    const setup = await fetch(`${apiBaseUrl}/games/${game}`);
+    if (setup.status !== 404) throw new Error(`setup game unexpectedly public: ${setup.status}`);
+    const before = await fetchJson(`${apiBaseUrl}/inbox`, { headers: headers(sessions.memberToken) });
+    if (before.items.some((item) => item.href === `/games/${game}`)) throw new Error("setup game leaked through inbox");
+    const command = await fetchJson(`${apiBaseUrl}/commands`, {
+      method: "POST", headers: headers(sessions.moderatorToken),
+      body: JSON.stringify({ v: 3, id: 90001, body: { kind: "Command", body: { command_id: randomUUID(), command: { StartGame: { game, phase: "D01" } } } } }),
+    });
+    if (command.body?.kind !== "Ack") throw new Error(`signup game start rejected: ${JSON.stringify(command)}`);
+    await readerPage.reload({ waitUntil: "networkidle" });
+    const banner = readerPage.getByTestId("discussion-spawned-games");
+    await banner.waitFor({ state: "visible" });
+    await banner.locator(`a[href="/games/${game}"]`).click();
+    await readerPage.getByTestId("public-game-origin-topic").waitFor({ state: "visible" });
+    if (await readerPage.getByTestId("public-game-origin-topic").locator("a").getAttribute("href") !== `/discussions/general/t/${topic.topic}`) throw new Error("public game lost origin link");
+    await readerPage.goto(`${frontendBaseUrl}/inbox`, { waitUntil: "networkidle" });
+    const gameLink = readerPage.locator(`a[href="/games/${game}"]`);
+    if (await gameLink.count() !== 1) throw new Error("signup game delivery missing or duplicated");
+    if (!(await readerPage.locator("body").innerText()).includes("Game started from a watched topic")) throw new Error("signup reason label missing");
+    await readerPage.getByTestId("community-inbox-mark-all-read").click();
+    await readerPage.waitForLoadState("networkidle");
+    const after = await fetchJson(`${apiBaseUrl}/inbox`, { headers: headers(sessions.memberToken) });
+    const delivery = after.items.find((item) => item.href === `/games/${game}`);
+    if (!delivery || delivery.unread) throw new Error("signup delivery did not accept its delivery cursor");
+    const thread = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic.topic}`);
+    if (thread.topic.posting_state !== "open") throw new Error("starting game auto-locked signup topic");
+    const watch = await fetchJson(`${apiBaseUrl}/subscriptions/${game}`, { headers: headers(sessions.memberToken) });
+    if (watch.subscribed) throw new Error("starting game auto-subscribed topic watcher");
+    return { status: "passed", topic: topic.topic, game, setupPrivate: true, inboxRead: true, noAutoWatchOrLock: true };
+  } finally {
+    await hostPage.close();
+    await readerPage.close();
+  }
 }
 
 async function createSessions(apiBaseUrl) {
@@ -344,7 +406,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberPrinc
 function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
-  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned", "spawned_games"]);
   const allowedPost = new Set(["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"]);
   if (
     thread?.area === null ||
@@ -368,7 +430,7 @@ function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
 function assertPublicDiscussionPage(page, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
-  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned", "spawned_games"]);
   if (
     page?.area === null ||
     typeof page?.area !== "object" ||
@@ -827,7 +889,8 @@ function assertProof(evidence) {
     evidence.curation?.pinnedFirst !== true ||
     evidence.curation?.memberCurationStatus !== 403 ||
     evidence.curation?.redirectedToCanonical !== true ||
-    evidence.moderation?.status !== "passed"
+    evidence.moderation?.status !== "passed" ||
+    evidence.signup?.status !== "passed"
   ) {
     throw new Error("discussion role proof must remain local, paginated, session-backed, and capability-safe");
   }

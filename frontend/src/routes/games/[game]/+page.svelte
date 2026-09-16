@@ -31,6 +31,9 @@
       <header class="public-game-masthead" data-testid={data.publication.metadata.testId}>
         <p class="fm-eyebrow">{data.publication.metadata.eyebrow}</p>
         <h2>{data.publication.metadata.title}</h2>
+        {#if data.publicGame.game?.origin_topic}
+          <p data-testid="public-game-origin-topic">From <a href={data.publicGame.game.origin_topic.href}>{data.publicGame.game.origin_topic.title}</a></p>
+        {/if}
         <p class="public-game-deck">{data.publication.metadata.deck}</p>
         <div class="public-game-meta" data-testid="public-game-summary">
           <span><strong>{data.publication.metadata.statusLabel}</strong></span>

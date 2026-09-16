@@ -37,6 +37,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "discussion_post",
     "discussion_post_revision",
     "discussion_topic",
+    "discussion_topic_spawned_game",
     "engine_snapshot_checkpoint",
     "event_direct_key_sentinel",
     "event_stream_key_state",
@@ -112,6 +113,8 @@ const EXPECTED_TABLES: &[&str] = &[
     "workos_subject_tombstone",
 ];
 
+const EXPECTED_VIEWS: &[&str] = &["attention_destination", "event_direct_key_reference"];
+
 const EXPECTED_EVENT_COLUMNS: &[&str] = &[
     "seq:bigint",
     "stream_id:uuid",
@@ -184,6 +187,7 @@ const EXPECTED_GAME_INDEX_COLUMNS: &[&str] = &[
     "updated_seq:bigint",
     "pack_version:bigint",
     "pack_content_hash:text",
+    "origin_topic_id:uuid",
 ];
 
 const EXPECTED_PACK_ARTIFACT_COLUMNS: &[&str] = &[
@@ -268,6 +272,7 @@ const EXPECTED_CANONICAL_PRINCIPAL_COLUMNS: &[&str] = &[
     "authentication_method.principal_id:uuid",
     "command_receipt.principal_id:uuid",
     "community_membership.active_principal_id:uuid",
+    "discussion_topic_spawned_game.host_principal_id:uuid",
     "external_identity.principal_id:uuid",
     "game_authority.principal_id:uuid",
     "game_invitation.principal_id:uuid",
@@ -386,6 +391,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "discussion_topic_area_page_idx",
     "discussion_topic_area_pinned_idx",
     "discussion_topic_pkey",
+    "discussion_topic_spawned_game_pkey",
+    "discussion_topic_spawned_game_topic_idx",
     "engine_snapshot_checkpoint_pkey",
     "event_direct_key_sentinel_lifecycle_idx",
     "event_direct_key_sentinel_pkey",
@@ -726,6 +733,9 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "discussion_topic_author_profile_id_fkey:f",
     "discussion_topic_pkey:p",
     "discussion_topic_posting_state_check:c",
+    "discussion_topic_spawned_game_game_id_fkey:f",
+    "discussion_topic_spawned_game_pkey:p",
+    "discussion_topic_spawned_game_start_shape:c",
     "discussion_topic_visibility_check:c",
     "engine_snapshot_checkpoint_pkey:p",
     "event_direct_key_sentinel_ciphertext_check:c",
@@ -1154,6 +1164,7 @@ async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
                ('authentication_method', 'principal_id'), \
                ('command_receipt', 'principal_id'), \
                ('community_membership', 'active_principal_id'), \
+               ('discussion_topic_spawned_game', 'host_principal_id'), \
                ('external_identity', 'principal_id'), \
                ('game_authority', 'principal_id'), \
                ('identity_lifecycle_audit', 'actor_principal_id'), \
@@ -1203,6 +1214,15 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .await
     .expect("read baseline table inventory");
     assert_inventory("table", &tables, EXPECTED_TABLES);
+
+    let views: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name FROM information_schema.views \
+         WHERE table_schema = 'public' ORDER BY table_name",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read baseline view inventory");
+    assert_inventory("view", &views, EXPECTED_VIEWS);
 
     let indexes: Vec<String> = sqlx::query_scalar(
         "SELECT indexname \

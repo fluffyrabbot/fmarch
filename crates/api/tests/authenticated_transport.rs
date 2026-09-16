@@ -512,6 +512,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
             id,
             token,
             Command::CreateGame {
+                origin: None,
                 game: Uuid::new_v4(),
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -540,6 +541,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         6,
         Some(MEMBER_TOKEN),
         Command::CreateGame {
+            origin: None,
             game: Uuid::new_v4(),
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -595,6 +597,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         8,
         Some(ACTIVE_TOKEN),
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -849,6 +852,7 @@ async fn command_authority_lease_cannot_starve_workos_key_retirement(pool: sqlx:
             98,
             Some(command_token.as_str()),
             Command::CreateGame {
+                origin: None,
                 game: blocked_game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -927,6 +931,7 @@ async fn command_authority_lease_cannot_starve_workos_key_retirement(pool: sqlx:
             98,
             Some(session_token.as_str()),
             Command::CreateGame {
+                origin: None,
                 game: blocked_game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -978,6 +983,7 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
             110,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1084,6 +1090,7 @@ async fn busy_command_stream_is_a_retryable_http_conflict_without_side_effects(p
             120,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1231,6 +1238,7 @@ async fn prove_capacity_rejection_preserves_websocket_ticket(pool: sqlx::PgPool,
             1,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1357,6 +1365,7 @@ async fn websocket_ticket_cannot_outwait_its_expiry_behind_the_session_lock(pool
             20,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1483,6 +1492,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         1,
         Some(HOST_TOKEN),
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -1689,6 +1699,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
             1,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1786,6 +1797,7 @@ async fn idle_socket_heartbeat_closes_after_session_revocation(pool: sqlx::PgPoo
             1,
             Some(HOST_TOKEN),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -1999,6 +2011,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             1,
             Some(host_token.as_str()),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],

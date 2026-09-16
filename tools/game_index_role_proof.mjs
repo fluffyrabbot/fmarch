@@ -85,6 +85,7 @@ try {
         "phase_id",
         "updated_seq",
         "completed_seq",
+        "origin_topic",
       ],
     },
     empty,
@@ -247,6 +248,7 @@ function assertPublicApiPage(page, expectedCount, hostPrincipalAlias) {
     "phase_id",
     "updated_seq",
     "completed_seq",
+    "origin_topic",
   ]);
   for (const game of page.games) {
     if (

@@ -72,6 +72,7 @@ async fn reject_game_creation_with_invalid_pack(
         pool,
         &user(host_id),
         Command::CreateGame {
+            origin: None,
             game,
             pack: pack.to_string(),
             cohost_denied: vec![],
@@ -279,6 +280,7 @@ async fn setup_audit_resolution_inputs(pool: &PgPool, user_prefix: &str) -> Uuid
         pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -7130,6 +7132,7 @@ async fn setup_chinese_wolf_faction_vote_game(
         pool,
         host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -7223,6 +7226,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -7451,6 +7455,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -7696,6 +7701,7 @@ async fn assert_mafia_universe_bomber_case(
         pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],

@@ -94,12 +94,41 @@ each thread source owns: community forum threads are editable within a bounded
 window, game channel threads never are (posts are slot-authored evidence, and
 the absence of a game edit command is a proven contract asserted by
 `api::public_platform_http_boundary::game_threads_have_no_edit_or_retract_path`),
-and any future signup or recruitment thread kind declares its own policy when
-added. Signup threads (`product.community.signup-threads`) follow forum editing:
-a signup thread is an ordinary forum topic that a game names as its immutable
-origin on `GameCreated`; the kind is derived from that edge, the reverse index
-is a projection, and a dedicated `Signup` context is introduced only when
-enrolment must be machine-readable. RFC 0003 §4 gates community spaces on
+and signup topics use the ordinary forum editing policy. Signup threads
+(`product.community.signup-threads`) are ordinary visible, host-authored forum
+topics that a game names as its immutable `origin` on `GameCreated`. There is no
+new topic kind and no forum-to-game dependency. A topic may originate several
+games; changing or hiding it never rewrites a game's recorded origin.
+
+The host selects an optional topic in the admin game-creation form. Setup shows
+the fixed origin privately. Only `GameStarted` exposes the reverse game link on
+the topic and delivers `game_spawned_from_watched_topic` to members who watched
+the topic at that start event (excluding the host). The game-creation sequence
+identifies this destination; the start sequence orders delivery and read cursors.
+`attention_destination` adapts these announcements beside public publications,
+without manufacturing a post, quotation target, or moderation target. Topic or
+game visibility suppresses the link and inbox row at read time. Starting a game
+neither watches the game for anyone nor locks its topic.
+
+The reverse edge and launch delivery replay from the game source; forum replay
+preserves game-owned delivery, and subscription replay uses start-time watch
+periods. The game rebuild audit includes scoped launch-delivery corruption.
+Launch delivery and watch-period folds share a per-origin attention gate after
+their own source-stream lock. Each fold reconciles both missing and obsolete
+launch recipients, so lower-sequence subscribe/unsubscribe events that commit
+after a start still converge to event-time membership. Game replay and audit
+acquire this gate from the canonical creation event before clearing projections
+or taking audit snapshots, even if the reverse projection is missing. Nothing
+behind this gate acquires another event stream. This gate covers the origin
+adapter only; ordinary post-watch fanout still needs its own commit-order
+convergence followup.
+Origin admission takes the new game stream lock first, then an existing topic's
+source lock before HTTP identity locks. It skips occupied streams for idempotent
+receipt replay and never waits on an empty origin candidate; the command rejects
+occupied game streams or invalid origins and checks ownership/visibility under
+the source lock. Thus two caller-selected empty IDs
+cannot become an inverted pair of game/topic locks. A dedicated `Signup` context
+is introduced only when enrolment must be machine-readable. RFC 0003 §4 gates community spaces on
 admission-controlled membership entering the roadmap; RFC 0005 added global closed admission, so
 whether that crosses the gate is an open owner ruling, not an implementation
 backlog.

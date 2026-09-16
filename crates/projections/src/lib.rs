@@ -93,8 +93,13 @@ mod attention_writes;
 mod reading_checkpoints;
 pub use reading_checkpoints::{reading_checkpoint, set_reading_checkpoint};
 mod effect_projection;
+mod game_origin;
 mod moderation_writes;
 mod private_channel_projection;
+pub use game_origin::{
+    game_origin_topic, game_origin_topic_exists, game_origin_topic_is_eligible,
+    game_origin_topic_options, GameOriginTopicRow, SpawnedGameRow,
+};
 mod publications;
 mod social_writes;
 pub use attention_writes::{
@@ -542,6 +547,7 @@ pub struct GameIndexRow {
     /// `events.seq` for the lifecycle event that last changed this public row.
     pub updated_seq: i64,
     pub completed_seq: Option<i64>,
+    pub origin_topic: Option<GameOriginTopicRow>,
 }
 
 /// Stable keyset cursor for the public game index.
@@ -704,6 +710,7 @@ pub struct DiscussionTopicRow {
     pub version: i64,
     /// GlobalMod curation: pinned topics lead an area's first page.
     pub pinned: bool,
+    pub spawned_games: Vec<SpawnedGameRow>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1190,7 +1197,25 @@ async fn fold_event(
                 ));
             }
             install_pack_artifact_in_tx(tx, &pack_artifact).await?;
-            insert_game_index_setup(tx, game_id, &pack_ref, ev.seq).await?;
+            let origin = game_origin::creation_origin(ev, game_id)?;
+            insert_game_index_setup(
+                tx,
+                game_id,
+                &pack_ref,
+                ev.seq,
+                origin.map(|origin| origin.surface_id),
+            )
+            .await?;
+            if let Some(origin) = origin {
+                publications::record_game_origin(
+                    tx,
+                    game_id,
+                    origin.surface_id,
+                    ev.seq,
+                    host_principal_id,
+                )
+                .await?;
+            }
             let denied = cohost_denied_from_payload(&ev.payload);
             upsert_cohost_policy(tx, game_id, &denied, ev.seq).await?;
         }
@@ -1294,6 +1319,7 @@ async fn fold_event(
             set_phase(tx, game_id, &phase_id, phase_opened_at).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
             publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
+            publications::publish_game_origin(tx, game_id, ev.seq, ev.occurred_at).await?;
         }
         "PhaseAdvanced" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
@@ -3387,7 +3413,7 @@ async fn public_subscription_target_latest_delivery_seq(
         SELECT GREATEST(COALESCE(MAX(publication.source_seq), 0),
                         COALESCE(MAX(item.delivery_seq), 0))::bigint
         FROM publication_surface AS surface
-        LEFT JOIN public_publication AS publication
+        LEFT JOIN attention_destination AS publication
           ON publication.surface_id = surface.surface_id
          AND publication.visible
         LEFT JOIN member_inbox_item AS item
@@ -3443,6 +3469,7 @@ async fn fold_subscription_event(
                         source,
                     }
                 })?;
+            game_origin::lock_attention(tx, payload.target.surface_id).await?;
             sqlx::query(
                 r#"
                 INSERT INTO public_watch (
@@ -3476,6 +3503,13 @@ async fn fold_subscription_event(
             .await?;
         }
         attention::SUBSCRIPTION_DISABLED => {
+            let topic: Uuid = sqlx::query_scalar(
+                "SELECT surface_id FROM public_watch WHERE subscription_id = $1",
+            )
+            .bind(subscription_id)
+            .fetch_one(&mut **tx)
+            .await?;
+            game_origin::lock_attention(tx, topic).await?;
             sqlx::query(
                 "UPDATE public_watch SET active = FALSE, updated_seq = $2, version = $3 WHERE subscription_id = $1",
             )
@@ -3514,6 +3548,12 @@ async fn fold_subscription_event(
             .await?;
         }
         _ => {}
+    }
+    if matches!(
+        event.kind.as_str(),
+        attention::SUBSCRIPTION_ENABLED | attention::SUBSCRIPTION_DISABLED
+    ) {
+        game_origin::reconcile_subscription(tx, subscription_id).await?;
     }
     Ok(())
 }
@@ -3929,7 +3969,7 @@ pub async fn rebuild_discussion_stream(
         forum::decode_event(&event.kind, event.version, &event.payload)?;
     }
     if is_topic_stream {
-        sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1")
+        sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1 AND reason IN ('watch', 'mention')")
             .bind(stream_id)
             .execute(&mut *tx)
             .await?;
@@ -4012,12 +4052,24 @@ pub async fn rebuild_subscription_stream(
 ) -> Result<(), ProjectionError> {
     let mut tx = pool.begin().await?;
     let events = load_fenced_rebuild_events(&mut tx, subscription_id).await?;
-    if !events
+    let Some(enabled) = events
         .iter()
-        .any(|event| event.kind == attention::SUBSCRIPTION_ENABLED)
-    {
+        .find(|event| event.kind == attention::SUBSCRIPTION_ENABLED)
+    else {
         return Ok(());
-    }
+    };
+    let target: WatchTarget = serde_json::from_value(
+        enabled
+            .payload
+            .get("target")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(|source| ProjectionError::Payload {
+        kind: enabled.kind.clone(),
+        source,
+    })?;
+    game_origin::lock_attention(&mut tx, target.surface_id).await?;
     sqlx::query("DELETE FROM public_watch WHERE subscription_id = $1")
         .bind(subscription_id)
         .execute(&mut *tx)
@@ -4032,13 +4084,14 @@ pub async fn rebuild_subscription_stream(
         WHERE subscription.subscription_id = $1
           AND item.principal_id = subscription.principal_id
           AND item.surface_id = subscription.surface_id
-          AND item.reason = 'watch'
+          AND item.reason IN ('watch', 'game_spawned_from_watched_topic')
         "#,
     )
     .bind(subscription_id)
     .execute(&mut *tx)
     .await?;
     backfill_subscription_inbox(&mut tx, subscription_id).await?;
+    game_origin::reconcile_subscription(&mut tx, subscription_id).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -5183,6 +5236,8 @@ async fn rebuild_game_from_events_in_tx(
     game_id: Uuid,
     events: &[StoredEvent],
 ) -> Result<(), ProjectionError> {
+    game_origin::fence_rebuild(tx, game_id, events).await?;
+    game_origin::clear_origin_attention(tx, game_id, events).await?;
     sqlx::query("DELETE FROM game_private_citation WHERE game_id = $1")
         .bind(game_id)
         .execute(&mut **tx)
@@ -5345,6 +5400,12 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection::game("post_policy", "channel_id"),
     AuditProjection::game("thread_view", "source_seq"),
     AuditProjection::game("game_index", "game_id"),
+    AuditProjection::game("discussion_topic_spawned_game", "game_id"),
+    AuditProjection {
+        table: "member_inbox_item",
+        order_by: "principal_id, surface_id, source_seq, reason",
+        key_predicate: "reason = 'game_spawned_from_watched_topic' AND EXISTS (SELECT 1 FROM discussion_topic_spawned_game AS origin WHERE origin.game_id = $1 AND origin.topic_id = member_inbox_item.surface_id AND origin.created_seq = member_inbox_item.source_seq)",
+    },
     AuditProjection::surface("publication_surface", "surface_id"),
     AuditProjection::surface("public_publication", "source_seq"),
     AuditProjection {
@@ -5378,6 +5439,7 @@ async fn audit_rebuild_in_tx(
     // Fence before the baseline as well as replay: otherwise an append can
     // create a false audit mismatch between two READ COMMITTED statements.
     let events = load_fenced_rebuild_events(tx, game_id).await?;
+    game_origin::fence_rebuild(tx, game_id, &events).await?;
     let mut before = Vec::with_capacity(AUDIT_PROJECTIONS.len());
     for projection in AUDIT_PROJECTIONS {
         before.push(projection_snapshot(tx, projection, game_id).await?);
@@ -7754,7 +7816,7 @@ pub async fn game_index(
         }
     };
     let has_more = rows.len() as i64 > limit;
-    let games: Vec<_> = rows
+    let mut games: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
         .map(|row| {
@@ -7765,9 +7827,11 @@ pub async fn game_index(
                 phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
+                origin_topic: None,
             })
         })
         .collect::<Result<_, ProjectionError>>()?;
+    game_origin::fill_game_origins(pool, &mut games).await?;
     let next_cursor = has_more.then(|| {
         let last = games.last().expect("full page has a final game");
         GameIndexCursor {
@@ -7821,7 +7885,7 @@ pub async fn operator_game_index(
         }
     };
     let has_more = rows.len() as i64 > limit;
-    let games: Vec<_> = rows
+    let mut games: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
         .map(|row| {
@@ -7832,9 +7896,11 @@ pub async fn operator_game_index(
                 phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
+                origin_topic: None,
             })
         })
         .collect::<Result<_, ProjectionError>>()?;
+    game_origin::fill_game_origins(pool, &mut games).await?;
     let next_cursor = has_more.then(|| {
         let last = games.last().expect("full operator page has a final game");
         GameIndexCursor {
@@ -7861,17 +7927,23 @@ pub async fn public_game_by_id(
     .bind(game_id)
     .fetch_optional(pool)
     .await?;
-    row.map(|row| {
-        Ok(GameIndexRow {
-            game_id: row.get("game_id"),
-            pack_ref: stored_pack_ref(&row)?,
-            status: row.get("status"),
-            phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
-            updated_seq: row.get("updated_seq"),
-            completed_seq: row.get("completed_seq"),
+    let mut game = row
+        .map(|row| -> Result<GameIndexRow, ProjectionError> {
+            Ok(GameIndexRow {
+                game_id: row.get("game_id"),
+                pack_ref: stored_pack_ref(&row)?,
+                status: row.get("status"),
+                phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
+                updated_seq: row.get("updated_seq"),
+                completed_seq: row.get("completed_seq"),
+                origin_topic: None,
+            })
         })
-    })
-    .transpose()
+        .transpose()?;
+    if let Some(game) = game.as_mut() {
+        game_origin::fill_game_origins(pool, std::slice::from_mut(game)).await?;
+    }
+    Ok(game)
 }
 
 /// Production public-search statement. Plan tests EXPLAIN this exact text so a
@@ -8162,11 +8234,12 @@ pub async fn discussion_topics(
             topic_id: last.topic_id,
         }
     });
-    let topics = pinned
+    let mut topics: Vec<_> = pinned
         .into_iter()
         .map(discussion_topic_row)
         .chain(unpinned)
         .collect();
+    game_origin::fill_spawned_games(pool, &mut topics).await?;
     Ok(DiscussionTopicPage {
         topics,
         next_cursor,
@@ -8196,7 +8269,11 @@ pub async fn discussion_topic_by_id(
     .bind(topic_id)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(discussion_topic_row))
+    let mut topic = row.map(discussion_topic_row);
+    if let Some(topic) = topic.as_mut() {
+        game_origin::fill_spawned_games(pool, std::slice::from_mut(topic)).await?;
+    }
+    Ok(topic)
 }
 
 /// Read one visible topic's posts oldest-first. Callers can page older posts by
@@ -8833,7 +8910,7 @@ async fn visible_subscription_inbox_count(
         r#"
         SELECT COUNT(DISTINCT (item.surface_id, item.source_seq))
         FROM member_inbox_item AS item
-        JOIN public_publication AS publication
+        JOIN attention_destination AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
@@ -8874,7 +8951,9 @@ pub async fn public_inbox(
         WITH deliveries AS (
             SELECT surface_id, source_seq, MAX(delivery_seq) AS delivery_seq,
                    MAX(occurred_at) FILTER (WHERE delivery_seq = newest_delivery_seq) AS occurred_at,
-                   CASE WHEN BOOL_OR(reason = 'mention') THEN 'mention' ELSE 'watch' END AS reason
+                   CASE WHEN BOOL_OR(reason = 'mention') THEN 'mention'
+                        WHEN BOOL_OR(reason = 'game_spawned_from_watched_topic') THEN 'game_spawned_from_watched_topic'
+                        ELSE 'watch' END AS reason
             FROM (
                 SELECT item.*, MAX(delivery_seq) OVER (PARTITION BY surface_id, source_seq) AS newest_delivery_seq
                 FROM member_inbox_item AS item WHERE principal_id = $1
@@ -8892,7 +8971,7 @@ pub async fn public_inbox(
         LEFT JOIN public_watch AS subscription
           ON subscription.principal_id = $1
          AND subscription.surface_id = item.surface_id
-        JOIN public_publication AS publication
+        JOIN attention_destination AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
@@ -8937,7 +9016,7 @@ pub async fn public_inbox(
         LEFT JOIN public_watch AS subscription
           ON subscription.principal_id = $1
          AND subscription.surface_id = item.surface_id
-        JOIN public_publication AS publication
+        JOIN attention_destination AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
@@ -9234,6 +9313,7 @@ fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
         last_post_at: row.get("last_post_at"),
         version: row.get("version"),
         pinned: row.get("pinned"),
+        spawned_games: Vec::new(),
     }
 }
 
@@ -10697,13 +10777,14 @@ async fn insert_game_index_setup(
     game_id: Uuid,
     pack_ref: &PackRef,
     event_seq: i64,
+    origin_topic_id: Option<Uuid>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
         INSERT INTO game_index
             (game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
-             created_seq, started_seq, completed_seq, updated_seq)
-        VALUES ($1, $2, $3, $4, 'setup', NULL, $5, NULL, NULL, $5)
+             created_seq, started_seq, completed_seq, updated_seq, origin_topic_id)
+        VALUES ($1, $2, $3, $4, 'setup', NULL, $5, NULL, NULL, $5, $6)
         ON CONFLICT (game_id) DO NOTHING
         "#,
     )
@@ -10712,6 +10793,7 @@ async fn insert_game_index_setup(
     .bind(i64::from(pack_ref.version))
     .bind(pack_ref.content_hash.as_str())
     .bind(event_seq)
+    .bind(origin_topic_id)
     .execute(&mut **tx)
     .await?;
     Ok(())

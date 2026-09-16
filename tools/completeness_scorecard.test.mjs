@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 48,
+    complete: 49,
     partial: 1,
-    open: 8,
+    open: 7,
     blocked: 0,
     deferred: 0,
     total: 57,
@@ -41,8 +41,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  // Signup threads and the 2026-09-22 forum readiness gaps are stated open
-  // product items.
+  // Signup linkage is complete; the 2026-09-22 forum readiness gaps remain
+  // stated open product items.
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
@@ -53,14 +53,14 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   );
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.community.signup-threads",
+    "foundation.executable-bounded-contexts",
   );
   assert.equal(
     registry.items.find((item) => item.id === "product.community.forum-editing-curation")
       ?.status,
     "complete",
   );
-  // RFC 0006 is a sequenced architecture migration with one landed step; its
+  // RFC 0006 is a sequenced architecture migration with two landed steps; its
   // registry item resolves the RFC's status pointer without implying closure.
   assert.equal(
     registry.items.find((item) => item.id === "foundation.executable-bounded-contexts")

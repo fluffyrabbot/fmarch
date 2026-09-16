@@ -380,6 +380,7 @@ pub async fn setup_game_with_pack_and_denied(
         pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: pack.into(),
             cohost_denied,

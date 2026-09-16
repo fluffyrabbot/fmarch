@@ -415,3 +415,24 @@ pub(super) async fn record_public_citations(
     }
     Ok(())
 }
+
+/// Game source adapter: origin is an immutable creation fact; its public
+/// announcement is emitted only once the game has a readable public surface.
+pub(super) async fn record_game_origin(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    topic_id: Uuid,
+    created_seq: i64,
+    host: principal::PrincipalId,
+) -> Result<(), ProjectionError> {
+    crate::game_origin::record_origin(tx, game_id, topic_id, created_seq, host).await
+}
+
+pub(super) async fn publish_game_origin(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    started_seq: i64,
+    at: i64,
+) -> Result<(), ProjectionError> {
+    crate::game_origin::publish_origin(tx, game_id, started_seq, at).await
+}
