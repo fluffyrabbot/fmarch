@@ -4,6 +4,7 @@ import { actions, load } from "./+page.server.js";
 import {
   DISCUSSION_EDIT_WINDOW_SECONDS,
   buildDiscussionPostView,
+  buildDiscussionEditDraft,
   buildDiscussionThreadView,
   canonicalAreaSlug,
   discussionComposerHref,
@@ -531,4 +532,52 @@ test("retractPost uses DELETE on the typed post route", async () => {
   });
   assert.equal(forbidden.status, 403);
   assert.match(forbidden.data.message, /only the post author/u);
+});
+
+test("post and edit-draft identities bind topic, source post, and base revision independently", () => {
+  const original = {
+    source_seq: 40,
+    author: { handle: "member_a" },
+    body: "@member_b Original",
+    mentions: [{ profile: { handle: "member_b" }, offset: 0, len: 9 }],
+    revision: 2,
+  };
+  const build = (post, topicId = topic) => buildDiscussionThreadView({
+    thread: { topic: { topic: topicId, posting_state: "open" }, posts: [post] },
+    slug: "general",
+    topicId,
+  }).posts[0];
+  const draft = (view, topicId = topic) => ({
+    ...view,
+    editDraft: buildDiscussionEditDraft(topicId, view),
+  });
+  const initial = draft(build(original));
+  const refreshed = draft(build({ ...original }));
+  const newer = draft(build({ ...original, revision: 3, body: "Latest", mentions: [] }));
+  const otherPost = draft(build({ ...original, source_seq: 41 }));
+  const anotherTopic = "00000000-0000-0000-0000-000000000222";
+  const otherTopic = draft(build(original, anotherTopic), anotherTopic);
+
+  assert.equal(initial.identity, refreshed.identity);
+  assert.equal(initial.editDraft.identity, refreshed.editDraft.identity,
+    "unrelated invalidation retains the same draft owner");
+  assert.equal(initial.identity, newer.identity,
+    "a changed post preserves its editor so the old draft can be recovered");
+  assert.notEqual(initial.editDraft.identity, newer.editDraft.identity);
+  assert.notEqual(initial.identity, otherPost.identity,
+    "pagination must never assign one post's editor to another post");
+  assert.notEqual(initial.identity, otherTopic.identity,
+    "source sequence alone is not a post identity across topics");
+  assert.notEqual(initial.editDraft.identity, otherPost.editDraft.identity);
+  assert.notEqual(initial.editDraft.identity, otherTopic.editDraft.identity);
+  assert.equal(initial.editDraft.topic, topic);
+  assert.equal(initial.editDraft.sourceSeq, 40);
+  assert.equal(initial.editDraft.baseRevision, 2);
+  assert.equal(initial.editDraft.body, "@member_b Original");
+  assert.deepEqual(initial.editDraft.mentionHandles, ["member_b"]);
+  assert.equal(newer.editDraft.baseRevision, 3);
+  assert.equal(newer.editDraft.body, "Latest");
+  assert.deepEqual(newer.editDraft.mentionHandles, []);
+  assert.ok(Object.isFrozen(initial.editDraft));
+  assert.ok(Object.isFrozen(initial.editDraft.mentionHandles));
 });

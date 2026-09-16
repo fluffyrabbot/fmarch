@@ -1,6 +1,7 @@
 <script>
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import MentionComposer from "$lib/components/discussion/MentionComposer.svelte";
+  import DiscussionPostEditor from "./DiscussionPostEditor.svelte";
   export let data;
   export let form;
 
@@ -47,7 +48,7 @@
           </a>
         </div>
       {/if}
-      {#each discussion.posts as post}
+      {#each discussion.posts as post (post.identity)}
         <article id={`post-${post.sourceSeq}`} class="discussion-post" data-testid={`discussion-post-${post.sourceSeq}`}>
           <header>
             {#if post.author.kind === "profile"}
@@ -125,19 +126,7 @@
             {#if post.canEdit}
               <details class="discussion-edit" data-testid={`discussion-edit-${post.sourceSeq}`}>
                 <summary>Edit</summary>
-                <form method="POST" action="?/editPost" class="discussion-form" data-testid={`discussion-edit-form-${post.sourceSeq}`}>
-                  <input type="hidden" name="source_seq" value={post.sourceSeq} />
-                  <input type="hidden" name="expected_revision" value={post.revision} />
-                  <MentionComposer
-                    label="Edit post"
-                    required={post.quotations.length === 0}
-                    initial={post.body}
-                    initialMentions={post.mentionHandles}
-                    testid={`discussion-edit-body-${post.sourceSeq}`}
-                    mentionsTestid={`discussion-edit-mentions-${post.sourceSeq}`}
-                  />
-                  <button type="submit" class="fm-touch-button" data-testid={`discussion-edit-submit-${post.sourceSeq}`}>Save edit</button>
-                </form>
+                <DiscussionPostEditor topic={thread.topic.topic} {post} />
               </details>
             {/if}
             {#if post.canRetract}

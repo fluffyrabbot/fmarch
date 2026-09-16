@@ -280,6 +280,7 @@ export function buildDiscussionThreadView({
           : [...attachedSeqs, Number(post.source_seq)].slice(0, DISCUSSION_MAX_QUOTATIONS);
         return Object.freeze({
           ...view,
+          identity: JSON.stringify([topic, view.sourceSeq]),
           quoteHref: quoteEnabled && !view.retracted
             ? discussionComposerHref({
                 slug,
@@ -305,4 +306,18 @@ function postsBySeq(posts) {
 
 function attachedSeqsWithout(quoteSeqs, removedSeq) {
   return quoteSeqs.filter((seq) => Number(seq) !== Number(removedSeq));
+}
+
+// Capture content and its optimistic revision together. The editor keeps its
+// chosen snapshot until the author explicitly loads the latest post.
+export function buildDiscussionEditDraft(topic, post) {
+  return Object.freeze({
+    identity: JSON.stringify([topic, post.sourceSeq, post.revision]),
+    topic,
+    sourceSeq: post.sourceSeq,
+    baseRevision: post.revision,
+    body: post.body,
+    mentionHandles: Object.freeze([...post.mentionHandles]),
+    requiresBody: post.quotations.length === 0,
+  });
 }

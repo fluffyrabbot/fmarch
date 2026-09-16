@@ -88,6 +88,12 @@ try {
       moderatorToken: sessions.moderatorToken,
       topic: browserTopic.topic,
     });
+    const draftIdentity = await proveDraftIdentity({
+      member,
+      frontendBaseUrl,
+      apiBaseUrl,
+      memberToken: sessions.memberToken,
+    });
     const curation = await proveCuration({
       moderator,
       frontendBaseUrl,
@@ -110,7 +116,7 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
@@ -125,6 +131,7 @@ try {
       pagination,
       quotations,
       editing,
+      draftIdentity,
       curation,
       moderation,
     };
@@ -536,6 +543,143 @@ async function proveEditing({ member, moderator, frontendBaseUrl, apiBaseUrl, me
   }
 }
 
+// A single mounted route must not transfer drafts between paginated posts,
+// or silently pair an old body/mention selection with a refreshed revision.
+async function proveDraftIdentity({ member, frontendBaseUrl, apiBaseUrl, memberToken }) {
+  const headers = { authorization: `Bearer ${memberToken}`, "content-type": "application/json" };
+  const created = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics`, {
+    method: "POST", headers,
+    body: JSON.stringify({ title: "Draft identity counterexamples", body: "Oldest post with no mention." }),
+  });
+  const topic = created.topic;
+  const handle = "moderator_profile";
+  const mention = { handle, offset: 0, len: handle.length + 1 };
+  for (let index = 1; index <= 51; index += 1) {
+    await fetchJson(`${apiBaseUrl}/discussions/topics/${topic}/posts`, {
+      method: "POST", headers,
+      body: JSON.stringify({ body: `@${handle} Distinct post ${index}.`, mentions: [mention] }),
+    });
+  }
+  const readThread = (query = "") => fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic}?limit=50${query}`);
+  const newest = await readThread();
+  const newerPost = newest.posts[0];
+  const older = await readThread(`&before_seq=${newest.next_before_seq}`);
+  const olderPost = older.posts[0];
+  if (newest.posts.length !== 50 || older.posts.length !== 2) {
+    throw new Error("draft identity proof must cross the real post pagination boundary");
+  }
+  const page = await member.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${topic}`;
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    const documentIdentity = await page.evaluate(() => {
+      window.__discussionDraftDocument = crypto.randomUUID();
+      return window.__discussionDraftDocument;
+    });
+    const assertSameDocument = async () => {
+      if (await page.evaluate(() => window.__discussionDraftDocument) !== documentIdentity) {
+        throw new Error("draft identity counterexample accidentally used a full document reload");
+      }
+    };
+    const openEditor = async (seq) => {
+      const details = page.getByTestId(`discussion-edit-${seq}`);
+      if (await details.getAttribute("open") === null) await details.locator("summary").click();
+      await page.getByTestId(`discussion-edit-body-${seq}`).waitFor({ state: "visible" });
+    };
+    const assertDraft = async (seq, body, revision, expectedMentions) => {
+      const form = page.getByTestId(`discussion-edit-form-${seq}`);
+      if (await page.getByTestId(`discussion-edit-body-${seq}`).inputValue() !== body
+        || await form.locator('[name="source_seq"]').inputValue() !== String(seq)
+        || await form.locator('[name="expected_revision"]').inputValue() !== String(revision)
+        || JSON.stringify(JSON.parse(await page.getByTestId(`discussion-edit-mentions-${seq}`).inputValue())) !== JSON.stringify(expectedMentions)) {
+        throw new Error(`draft body, mentions, target, and base revision separated for post ${seq}`);
+      }
+    };
+    const newerSeq = newerPost.source_seq;
+    const olderSeq = olderPost.source_seq;
+    await openEditor(newerSeq);
+    const unsaved = `@${handle} Unsaved newer-page draft.`;
+    await page.getByTestId(`discussion-edit-body-${newerSeq}`).fill(unsaved);
+    await Promise.all([
+      page.waitForURL((url) => url.searchParams.has("before_seq")),
+      page.getByTestId("discussion-posts-older").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await assertSameDocument();
+    await openEditor(olderSeq);
+    await assertDraft(olderSeq, olderPost.body, olderPost.revision, []);
+    await Promise.all([
+      page.waitForURL((url) => !url.searchParams.has("before_seq")),
+      page.getByRole("link", { name: "Newest posts", exact: true }).click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await assertSameDocument();
+    await openEditor(newerSeq);
+    await assertDraft(newerSeq, newerPost.body, newerPost.revision, [mention]);
+
+    // A quote query reruns this same route's load without destroying the page.
+    // With an unchanged post revision it must retain the local edit exactly.
+    await page.getByTestId(`discussion-edit-body-${newerSeq}`).fill(unsaved);
+    await Promise.all([
+      page.waitForURL((url) => url.searchParams.has("quote")),
+      page.getByTestId(`discussion-quote-${newerSeq}`).click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await assertSameDocument();
+    await assertDraft(newerSeq, unsaved, newerPost.revision, [mention]);
+
+    // A second tab's edit is modeled by its real authenticated API command.
+    // Another same-route query refresh must mark conflict and keep the old CAS.
+    const latestBody = "Latest saved elsewhere, with no mention.";
+    await fetchJson(`${apiBaseUrl}/discussions/topics/${topic}/posts/${newerSeq}`, {
+      method: "PUT", headers,
+      body: JSON.stringify({ body: latestBody, mentions: [], expected_revision: newerPost.revision }),
+    });
+    await Promise.all([
+      page.waitForURL((url) => !url.searchParams.has("quote")),
+      page.getByRole("link", { name: "Newest posts", exact: true }).click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await assertSameDocument();
+    await page.getByTestId(`discussion-edit-conflict-${newerSeq}`).waitFor({ state: "visible" });
+    await assertDraft(newerSeq, unsaved, newerPost.revision, [mention]);
+    if (!await page.getByTestId(`discussion-edit-submit-${newerSeq}`).isDisabled()) {
+      throw new Error("refreshed post revision left the stale edit submit enabled");
+    }
+    await page.getByTestId(`discussion-edit-reset-${newerSeq}`).click();
+    await assertDraft(newerSeq, latestBody, newerPost.revision + 1, []);
+    if (await page.getByTestId(`discussion-edit-submit-${newerSeq}`).isDisabled()
+      || await page.getByTestId(`discussion-edit-conflict-${newerSeq}`).count() !== 0) {
+      throw new Error("explicit latest-post reset did not resolve the draft conflict");
+    }
+    const finalBody = "Latest post revised after explicit draft reset.";
+    await page.getByTestId(`discussion-edit-body-${newerSeq}`).fill(finalBody);
+    await Promise.all([
+      page.waitForURL((url) => url.hash === `#post-${newerSeq}`),
+      page.getByTestId(`discussion-edit-submit-${newerSeq}`).click(),
+    ]);
+    const after = await readThread();
+    const saved = after.posts.find((post) => post.source_seq === newerSeq);
+    if (saved?.body !== finalBody || saved?.revision !== newerPost.revision + 2 || saved?.mentions?.length !== 0) {
+      throw new Error("reset draft did not save its own body and mentions against its own base revision");
+    }
+    const afterOlder = await readThread(`&before_seq=${newest.next_before_seq}`);
+    if (afterOlder.posts.find((post) => post.source_seq === olderSeq)?.body !== olderPost.body) {
+      throw new Error("paginated draft changed an unrelated post");
+    }
+    return {
+      status: "passed", topic,
+      sameDocumentNavigation: true,
+      paginationDraftIsolated: true,
+      unchangedRefreshPreserved: true,
+      changedRevisionBlocked: true,
+      resetBodyMentionsAndRevision: true,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 // GlobalMod curation from the topic page: rename, pin (the topic then leads
 // the area's first page), and move to a second area, after which the old
 // area URL redirects to the canonical one. A member is refused at the API.
@@ -673,6 +817,12 @@ function assertProof(evidence) {
     evidence.editing?.foreignEditStatus !== 403 ||
     evidence.editing?.retractedPlaceholder !== true ||
     evidence.editing?.citedExcerptPreserved !== true ||
+    evidence.draftIdentity?.status !== "passed" ||
+    evidence.draftIdentity?.sameDocumentNavigation !== true ||
+    evidence.draftIdentity?.paginationDraftIsolated !== true ||
+    evidence.draftIdentity?.unchangedRefreshPreserved !== true ||
+    evidence.draftIdentity?.changedRevisionBlocked !== true ||
+    evidence.draftIdentity?.resetBodyMentionsAndRevision !== true ||
     evidence.curation?.status !== "passed" ||
     evidence.curation?.pinnedFirst !== true ||
     evidence.curation?.memberCurationStatus !== 403 ||
