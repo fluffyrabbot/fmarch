@@ -33,6 +33,7 @@ import {
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
+import { readPlayerCommandStateResponse } from "./live_stack/player_command_state_evidence.mjs";
 import {
   assertSameVoteRetry,
   classifyContendedVoteRace,
@@ -4201,25 +4202,7 @@ async function openStalePlayerVoteBrowser(
       return;
     }
     commandStateResponseTasks.push(
-      response.json().then((body) => {
-        commandStateResponses.push({
-          url: response.url(),
-          pathname,
-          status: response.status(),
-          ok: response.ok(),
-          actorSlot: body.actor_slot ?? null,
-          roleKey: body.role_key ?? null,
-          phaseId: body.phase?.phase_id ?? null,
-          phaseKind: body.phase?.phase_kind ?? null,
-          locked: body.phase?.locked ?? null,
-          actions: (body.actions ?? []).map((action) => ({
-            templateId: action.template_id,
-            targets: action.targets,
-            targetOptions: action.target_options,
-          })),
-          boundary: body.boundary ?? null,
-        });
-      }),
+      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
     );
   });
   await context.addCookies([
@@ -4324,24 +4307,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       return;
     }
     commandStateResponseTasks.push(
-      response.json().then((body) => {
-        commandStateResponses.push({
-          url: response.url(),
-          pathname,
-          status: response.status(),
-          ok: response.ok(),
-          actorSlot: body.actor_slot ?? null,
-          roleKey: body.role_key ?? null,
-          phaseId: body.phase?.phase_id ?? null,
-          phaseKind: body.phase?.phase_kind ?? null,
-          actions: (body.actions ?? []).map((action) => ({
-            templateId: action.template_id,
-            targets: action.targets,
-            targetOptions: action.target_options,
-          })),
-          boundary: body.boundary ?? null,
-        });
-      }),
+      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
     );
   });
   await context.addCookies([
@@ -4375,28 +4341,12 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     const response = await context.request.get(commandStateUrl, {
       headers: { accept: "application/json" },
     });
-    const body = await response.json();
     commandStateRequests.push({
       url: commandStateUrl,
       pathname: new URL(commandStateUrl).pathname,
       method: "GET",
     });
-    commandStateResponses.push({
-      url: commandStateUrl,
-      pathname: new URL(commandStateUrl).pathname,
-      status: response.status(),
-      ok: response.ok(),
-      actorSlot: body.actor_slot ?? null,
-      roleKey: body.role_key ?? null,
-      phaseId: body.phase?.phase_id ?? null,
-      phaseKind: body.phase?.phase_kind ?? null,
-      actions: (body.actions ?? []).map((action) => ({
-        templateId: action.template_id,
-        targets: action.targets,
-        targetOptions: action.target_options,
-      })),
-      boundary: body.boundary ?? null,
-    });
+    commandStateResponses.push(await readPlayerCommandStateResponse(response));
   }
   await Promise.allSettled(commandStateResponseTasks);
   assertPlayerCommandStateEvidence({
@@ -4654,25 +4604,7 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
       return;
     }
     commandStateResponseTasks.push(
-      response.json().then((body) => {
-        commandStateResponses.push({
-          url: response.url(),
-          pathname,
-          status: response.status(),
-          ok: response.ok(),
-          actorSlot: body.actor_slot ?? null,
-          roleKey: body.role_key ?? null,
-          phaseId: body.phase?.phase_id ?? null,
-          phaseKind: body.phase?.phase_kind ?? null,
-          locked: body.phase?.locked ?? null,
-          actions: (body.actions ?? []).map((action) => ({
-            templateId: action.template_id,
-            targets: action.targets,
-            targetOptions: action.target_options,
-          })),
-          boundary: body.boundary ?? null,
-        });
-      }),
+      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
     );
   });
   await context.addCookies([
