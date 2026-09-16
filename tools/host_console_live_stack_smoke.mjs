@@ -595,7 +595,9 @@ try {
   evidence.readiness = readiness;
   const summary = dayEventRoomOnly
     ? readiness
-    : buildLiveStackProofSummary(evidence);
+    : buildLiveStackProofSummary(evidence, {
+        proofPath: path.relative(repoRoot, evidencePath),
+      });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
   await writeFile(
