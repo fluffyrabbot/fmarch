@@ -126,7 +126,7 @@ async function provePlayerRouteSource() {
   );
   assert.match(
     source,
-    /const recoveryPersisted = commitPlayerCommandRecovery\(\{[\s\S]*?\[action\]:[\s\S]*?attempt[\s\S]*?\}\);\s*if \(recoveryPersisted !== true\) \{[\s\S]*?same-ID reload recovery is unavailable[\s\S]*?\}\s*const confirmedStatus = await executeCommandAttempt[\s\S]*?delete nextAttempts\[action\];\s*commitPlayerCommandRecovery\(nextAttempts\);\s*const result = await recoverPlayerRouteCommand/u,
+    /attempt = playerAttemptBeforeDispatch\(attempt\);\s*const recoveryPersisted = commitPlayerCommandRecovery\(\{[\s\S]*?\[action\]: attempt,[\s\S]*?\}\);\s*if \(recoveryPersisted !== true\) \{[\s\S]*?same-ID reload recovery is unavailable[\s\S]*?\}\s*const confirmedStatus = await executeCommandAttempt[\s\S]*?const confirmedRecovery = playerCommandRecoveryAfterConfirmation\([\s\S]*?commitPlayerCommandRecovery\(confirmedRecovery.attempts\);\s*const result = await recoverPlayerRouteCommand/u,
   );
   return {
     route: "frontend/src/routes/g/[game]/+page.svelte",

@@ -3,13 +3,19 @@
   import {
     COMMAND_INTERRUPTION_CONTRACT,
     isCommandInterruptionStatus,
+    isRetryableCommandRejection,
   } from "./command-interruption.mjs";
 
   export let status = null;
+  // Confirmed rejection recovery is opt-in: the caller must retain the exact
+  // attempt. Existing interruption-only callers cannot offer a no-op retry.
+  export let retryAvailable = false;
+  export let retryEnabled = true;
   export let onRetry = () => {};
   export let onCancel = () => {};
 
-  $: visible = isCommandInterruptionStatus(status);
+  $: confirmedRejection = retryAvailable && isRetryableCommandRejection(status);
+  $: visible = isCommandInterruptionStatus(status) || confirmedRejection;
 
   let retryButton;
   let focusedCommandId = null;
@@ -51,19 +57,23 @@
     class="fm-command-recovery"
     aria-label="Command recovery"
     data-interruption={status.interruption}
+    data-outcome={confirmedRejection ? "confirmed-rejection" : "unknown"}
     data-command-id={status.commandId}
     data-testid={`command-recovery-${status.actionId}`}
   >
-    <p>Retry uses the original command identity, so it will not create duplicate work.</p>
+    <p>{confirmedRejection
+      ? "The server rejected this attempt. Retry sends the same request again."
+      : "Retry uses the original command identity, so it will not create duplicate work."}</p>
     <div class="fm-touch-row">
       <button
         type="button"
         class="fm-touch-button"
         data-testid={`command-recovery-retry-${status.actionId}`}
         bind:this={retryButton}
+        disabled={!retryEnabled}
         on:click={() => settle(onRetry)}
       >
-        {COMMAND_INTERRUPTION_CONTRACT.retryLabel}
+        {confirmedRejection ? "Retry request" : COMMAND_INTERRUPTION_CONTRACT.retryLabel}
       </button>
       <button
         type="button"
