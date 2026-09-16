@@ -1307,8 +1307,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(html.contains("Operator Index"));
-    assert!(html.contains("Projection Rebuild Audit"));
-    assert!(html.contains("Resolution Replay Audit"));
+    assert!(!html.contains("Projection Rebuild Audit"));
+    assert!(!html.contains("Resolution Replay Audit"));
     assert!(html.contains("Resolution Trace Inspection"));
     assert!(html.contains("Host Phase-Control Audit"));
     assert!(html.contains("Operator Proof-Run Index"));
