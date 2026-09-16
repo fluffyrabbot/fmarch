@@ -32,6 +32,7 @@ import {
   createLiveStackCommandSender,
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
+import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   capturePlayerLiveBoundary,
   recoverPlayerHistory,
@@ -363,6 +364,7 @@ let smokeDatabase;
 let subjectKeyRoot;
 let serverOutput = "";
 let primaryError = null;
+const heldBrowserPosts = [];
 const moderatorSocketDiagnostics = [];
 const moderatorTicketDiagnostics = [];
 const moderatorConsoleDiagnostics = [];
@@ -632,6 +634,7 @@ try {
     throw error;
   }
 } finally {
+  await Promise.allSettled(heldBrowserPosts.map((held) => held.dispose()));
   if (browser !== undefined) {
     await browser.close();
   }
@@ -3668,6 +3671,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   });
   const duplicateVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
   const staleVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
+  await stagePlayerSubmission(duplicateVoteSession, {
+    commandKind: "SubmitVote", commandId: duplicateVoteCommandId,
+  });
   await page.evaluate((commandId) => {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicateVoteCommandId);
@@ -3707,6 +3713,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     commandId: duplicateVoteCommandId,
     label: "first player SubmitVote",
   });
+  await releaseHeldSubmission(duplicateVoteSession, voteOutcome);
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
@@ -3748,7 +3755,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         () => window.__fmarchPlayerProjection,
       ),
       proof:
-        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the stale race page ended its live generation, reconnected, and recovered authoritative votecount 3.",
+        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the second live page explicitly reconnected and recovered authoritative votecount 3.",
     };
 
     playerStep = "duplicate-vote-retry";
@@ -3982,11 +3989,12 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       ),
     };
     playerStep = "lock-for-stale-vote";
+    await stagePlayerSubmission(staleVoteSession, { commandKind: "SubmitVote" });
     staleVoteLockCommand = await sendCommand("host_h", {
       LockThread: { game },
     });
     playerStep = "stale-vote-reject";
-    staleVoteRecovery = await submitStalePlayerVote(staleVoteSession);
+    staleVoteRecovery = await submitStalePlayerVote(staleVoteSession, staleVoteLockCommand);
     playerStep = "unlock-after-stale-vote";
     staleVoteUnlockCommand = await sendCommand("host_h", {
       UnlockThread: { game },
@@ -4049,7 +4057,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       voteRows: duplicateVoteRows,
       receiptRows: duplicateVoteReceiptRows,
       proof:
-        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 3, and vote_ballot retained exactly one current ballot for slot-7.",
+        "A second recovered player page emitted the same-ID SubmitVote while the control was valid. Its original HTTP request was held until the first vote ACK, then released unchanged and received the original command_receipt stream seqs; the refreshed votecount was 3 and vote_ballot retained exactly one current ballot for slot-7.",
     },
     reconnect: reconnectEvidence,
     staleVoteRecovery: {
@@ -4057,7 +4065,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       recovery: staleVoteRecovery,
       unlockCommand: staleVoteUnlockCommand,
       proof:
-        "A stale seeded player page loaded /g/{game} with live WebSocket disabled before LockThread, kept the old vote control, submitted it after the host locked D01, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to D01 locked for slot-7, and the host unlocked the phase before the moderator proof continued.",
+        "A recovered player page emitted a real SubmitVote request while D01 was open. The proof held that unchanged HTTP request until LockThread committed, then released it and observed Reject PhaseLocked, stale-projection recovery guidance, and refreshed locked controls before unlocking the phase.",
     },
   };
 }
@@ -4067,12 +4075,8 @@ async function submitDuplicatePlayerVote(
   { firstOutcome, commandId, expectedCount = 2 },
 ) {
   const { page } = duplicateSession;
-  await page.evaluate((fixedCommandId) => {
-    window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
-  }, commandId);
-  const staleButton = page.locator('[data-action="submit_vote"]');
-  assertHitTarget(await staleButton.boundingBox(), "duplicate player vote button");
-  await staleButton.click();
+  const heldRequest = await releaseHeldSubmission(duplicateSession, firstOutcome);
+  await duplicateSession.heldSubmission.completion;
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -4099,6 +4103,7 @@ async function submitDuplicatePlayerVote(
     expectedCount,
   );
   return {
+    heldRequest,
     outcome,
     duplicatePlayerSubmit,
     statusMessage,
@@ -4115,9 +4120,6 @@ async function openStalePlayerVoteBrowser(
   const commandStateResponses = [];
   const commandStateResponseTasks = [];
   const context = await browser.newContext({ viewport: smokeViewport });
-  await context.addInitScript(() => {
-    window.WebSocket = undefined;
-  });
   context.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.endsWith("/player-command-state")) {
@@ -4174,6 +4176,7 @@ async function openStalePlayerVoteBrowser(
     );
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  await capturePlayerLiveBoundary(page, { game, channelId: "main" });
   await page.locator('[data-action="submit_vote"]').waitFor({
     state: "visible",
   });
@@ -4186,12 +4189,11 @@ async function openStalePlayerVoteBrowser(
   };
 }
 
-async function submitStalePlayerVote(staleSession) {
+async function submitStalePlayerVote(staleSession, competingOutcome) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     staleSession;
-  const staleButton = page.locator('[data-action="submit_vote"]');
-  assertHitTarget(await staleButton.boundingBox(), "stale player vote button");
-  await staleButton.click();
+  const heldRequest = await releaseHeldSubmission(staleSession, competingOutcome);
+  await staleSession.heldSubmission.completion;
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -4223,6 +4225,7 @@ async function submitStalePlayerVote(staleSession) {
       response.locked === true,
   );
   return {
+    heldRequest,
     outcome,
     statusMessage,
     commandState: {
@@ -4356,6 +4359,11 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const stalePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
 
   const duplicatePlayerSubmitCommandId = crypto.randomUUID();
+  await stagePlayerSubmission(duplicatePlayerSession, {
+    commandKind: "SubmitAction", commandId: duplicatePlayerSubmitCommandId, targetGame: actionGame,
+  });
+  await stagePlayerSubmission(racePlayerSession, { commandKind: "SubmitAction", targetGame: actionGame });
+  await stagePlayerSubmission(stalePlayerSession, { commandKind: "SubmitAction", targetGame: actionGame });
   await page.evaluate((commandId) => {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicatePlayerSubmitCommandId);
@@ -4378,6 +4386,8 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     commandId: duplicatePlayerSubmitCommandId,
     label: "first player SubmitAction",
   });
+  await releaseHeldSubmission(duplicatePlayerSession, legalOutcome);
+  await releaseHeldSubmission(racePlayerSession, legalOutcome);
 
   const duplicateRetry = await submitDuplicatePlayerAction(duplicatePlayerSession, {
     firstOutcome: legalOutcome,
@@ -4388,6 +4398,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   });
   const staleSameActionRecovery = await submitRacingPlayerAction(racePlayerSession, {
     winningCommandId: legalOutcome.commandId,
+    competingOutcome: legalOutcome,
   });
 
   const duplicateReceiptRows = await runSql(
@@ -4425,6 +4436,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const resolveCommand = await sendCommand("host_h", {
     ResolvePhase: { game: actionGame, seed: 918273 },
   });
+  await releaseHeldSubmission(stalePlayerSession, resolveCommand);
   await Promise.allSettled(commandStateResponseTasks);
   await page.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
@@ -4441,10 +4453,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       response.phaseKind === "Night" &&
       response.actions.length === 0,
   );
-  await stalePlayerSession.page
-    .locator('[data-action="submit_action:factional_kill"]')
-    .waitFor({ state: "visible" });
-  const staleActionRecovery = await submitStalePlayerAction(stalePlayerSession);
+  const staleActionRecovery = await submitStalePlayerAction(stalePlayerSession, resolveCommand);
   const advanceCommand = await sendCommand("host_h", {
     AdvancePhase: { game: actionGame },
   });
@@ -4532,6 +4541,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     duplicateLegalOutcome: duplicateRetry.outcome,
     duplicatePlayerSubmit: {
       ...duplicateRetry.duplicatePlayerSubmit,
+      heldRequest: duplicateRetry.heldRequest,
       statusMessage: duplicateRetry.statusMessage,
       receiptRows: duplicateReceiptRows,
       commandState: duplicateRetry.commandState,
@@ -4553,7 +4563,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the explicit offline resolution audit matched both sealed envelopes and the host-authorized trace-inspection API read their stored trace. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the explicit offline resolution audit matched both sealed envelopes and the host-authorized trace-inspection API read their stored trace. Each competing player page first completed real Hello recovery and emitted a valid SubmitAction request. The proof held those HTTP requests unchanged until the winning action or ResolvePhase committed, then released them for real duplicate ACK, ActionAlreadySubmitted, or PhaseLocked outcomes. Live updates and authority checks remained enabled throughout; the phase rejection refreshed locked N01/no-actions without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 
@@ -4562,9 +4572,6 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
   const commandStateResponses = [];
   const commandStateResponseTasks = [];
   const context = await browser.newContext({ viewport: smokeViewport });
-  await context.addInitScript(() => {
-    window.WebSocket = undefined;
-  });
   context.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.endsWith("/player-command-state")) {
@@ -4621,6 +4628,7 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
     );
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  await capturePlayerLiveBoundary(page, { game: actionGame, channelId: "main" });
   await page.locator('[data-action="submit_action:factional_kill"]').waitFor({
     state: "visible",
   });
@@ -4642,13 +4650,11 @@ async function confirmPlayerActionThroughDialog(page, label) {
   await confirmButton.click();
 }
 
-async function submitStalePlayerAction(staleSession) {
+async function submitStalePlayerAction(staleSession, competingOutcome) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     staleSession;
-  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
-  assertHitTarget(await staleButton.boundingBox(), "stale player action button");
-  await staleButton.click();
-  await confirmPlayerActionThroughDialog(page, "stale player action confirm");
+  const heldRequest = await releaseHeldSubmission(staleSession, competingOutcome);
+  await staleSession.heldSubmission.completion;
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -4687,6 +4693,7 @@ async function submitStalePlayerAction(staleSession) {
       response.actions.length === 0,
   );
   return {
+    heldRequest,
     outcome,
     statusMessage,
     commandState: {
@@ -4702,13 +4709,8 @@ async function submitStalePlayerAction(staleSession) {
 async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, commandId }) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     duplicateSession;
-  await page.evaluate((fixedCommandId) => {
-    window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
-  }, commandId);
-  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
-  assertHitTarget(await staleButton.boundingBox(), "duplicate player action button");
-  await staleButton.click();
-  await confirmPlayerActionThroughDialog(page, "duplicate player action confirm");
+  const heldRequest = await releaseHeldSubmission(duplicateSession, firstOutcome);
+  await duplicateSession.heldSubmission.completion;
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -4756,6 +4758,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
       response.actions.length === 0,
   );
   return {
+    heldRequest,
     outcome,
     duplicatePlayerSubmit,
     statusMessage,
@@ -4769,13 +4772,11 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
   };
 }
 
-async function submitRacingPlayerAction(raceSession, { winningCommandId }) {
+async function submitRacingPlayerAction(raceSession, { winningCommandId, competingOutcome }) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     raceSession;
-  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
-  assertHitTarget(await staleButton.boundingBox(), "racing player action button");
-  await staleButton.click();
-  await confirmPlayerActionThroughDialog(page, "racing player action confirm");
+  const heldRequest = await releaseHeldSubmission(raceSession, competingOutcome);
+  await raceSession.heldSubmission.completion;
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -4816,6 +4817,7 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId }) {
       response.actions.length === 0,
   );
   return {
+    heldRequest,
     outcome,
     statusMessage,
     commandState: {
@@ -4907,6 +4909,11 @@ async function driveModeratorBrowser(
           `stale player invite fixture was not pre-replacement: ${JSON.stringify(stalePlayerInviteBefore)}`,
         );
       }
+      stalePlayerInviteSession.heldSubmission = await holdBrowserPost(stalePlayerInviteSession.page, {
+        game, kind: "issuePlayerInvite",
+        initialRecovery: await captureHostLiveBoundary(stalePlayerInviteSession.page),
+        trigger: () => rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page),
+      });
     }
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
@@ -4980,10 +4987,17 @@ async function driveModeratorBrowser(
       })}`,
     );
   }
-  const stalePlayerInviteReject =
-    stalePlayerInviteSession === null
-      ? null
-      : await rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page);
+  let stalePlayerInviteReject = null;
+  if (stalePlayerInviteSession !== null) {
+    const replacementOutcome = await page.evaluate(
+      () => window.__fmarchHostCommandStatuses.process_replacement,
+    );
+    const heldRequest = await stalePlayerInviteSession.heldSubmission.releaseAfter(replacementOutcome);
+    stalePlayerInviteReject = {
+      ...await stalePlayerInviteSession.heldSubmission.completion,
+      heldRequest,
+    };
+  }
   await stalePlayerInviteSession?.context.close();
   const apiStateBeforePrompt = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
@@ -5151,15 +5165,15 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
   const staleSession = await openStaleModeratorBrowser(pageUrl);
   await expectHostPhaseActions(page, ["resolve_phase", "lock_thread"]);
   await expectHostPhaseActions(staleSession.page, ["resolve_phase", "lock_thread"]);
+  const heldLock = await holdBrowserPost(staleSession.page, {
+    game, kind: "LockThread", initialRecovery: await captureHostLiveBoundary(staleSession.page),
+    trigger: () => confirmHostAction(staleSession.page, "lock_thread", "reject"),
+  });
   const lockEvidence = await confirmHostAction(page, "lock_thread");
+  const heldRequest = await heldLock.releaseAfter(lockEvidence.commandStatus);
   await waitForHostConsolePhaseLocked(page, true);
   await expectHostPhaseActions(page, ["unlock_thread", "advance_phase"]);
-  await expectHostPhaseActions(staleSession.page, ["resolve_phase", "lock_thread"]);
-  const staleLockEvidence = await confirmHostAction(
-    staleSession.page,
-    "lock_thread",
-    "reject",
-  );
+  const staleLockEvidence = { ...await heldLock.completion, heldRequest };
   await waitForHostProjectionPhaseLocked(staleSession.page, true);
   await expectHostPhaseActions(staleSession.page, ["unlock_thread", "advance_phase"]);
   const unlockEvidence = await confirmHostAction(page, "unlock_thread");
@@ -5177,15 +5191,12 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
     staleLockReject: staleLockEvidence,
     unlock: unlockEvidence,
     proof:
-      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Resolve and Lock, LockThread ACK refreshed the live page to locked controls with Unlock and Advance, a second stale host page with its live websocket blocked submitted the old Lock control and recovered through a rendered Reject PhaseLocked plus host projection refresh to Unlock/Advance, and UnlockThread ACK restored Resolve and Lock without a page reload.",
+      "Both recovered host pages exposed Resolve and Lock. The second page emitted LockThread while D01 was open; its unchanged request was held until the first page's LockThread ACK, then released for a real Reject PhaseLocked and projection refresh. Live authority and updates remained enabled, and UnlockThread restored Resolve and Lock without reloading.",
   };
 }
 
 async function openStaleModeratorBrowser(pageUrl) {
   const context = await browser.newContext({ viewport: smokeViewport });
-  await context.addInitScript(() => {
-    window.WebSocket = undefined;
-  });
   await context.addCookies([
     {
       name: "fmarch_session",
@@ -5206,7 +5217,55 @@ async function openStaleModeratorBrowser(pageUrl) {
   await openHostConsoleDrawer(page, "host-supporting-evidence");
   await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
+  await captureHostLiveBoundary(page);
   return { context, page };
+}
+
+async function captureHostLiveBoundary(page) {
+  await page.waitForFunction((expectedGame) =>
+    window.__fmarchHostLiveProjectionEvents?.some((event) =>
+      event.kind === "hello" && event.state === "recovered" &&
+      event.body?.protocol_v === 3 && event.body.scope?.game === expectedGame &&
+      event.body.scope?.channel === "main"), game);
+  return await page.evaluate((expectedGame) => ({
+    game: expectedGame, channelId: "main",
+    hello: window.__fmarchHostLiveProjectionEvents.findLast((event) =>
+      event.kind === "hello" && event.state === "recovered" &&
+      event.body?.protocol_v === 3 && event.body.scope?.game === expectedGame &&
+      event.body.scope?.channel === "main"),
+    eventCount: window.__fmarchHostLiveProjectionEvents.length,
+  }), game);
+}
+
+async function holdBrowserPost(page, options) {
+  const held = await captureHeldBrowserPost(page, options);
+  heldBrowserPosts.push(held);
+  return held;
+}
+
+async function stagePlayerSubmission(session, { commandKind, commandId, targetGame = game }) {
+  const { page } = session;
+  if (commandId !== undefined) {
+    await page.evaluate((id) => { window.__fmarchPlayerCommandIdFactory = () => id; }, commandId);
+  }
+  const initialRecovery = await capturePlayerLiveBoundary(page, { game: targetGame, channelId: "main" });
+  session.heldSubmission = await holdBrowserPost(page, {
+    game: targetGame, kind: commandKind, initialRecovery,
+    trigger: async () => {
+      const action = commandKind === "SubmitVote" ? "submit_vote" : "submit_action:factional_kill";
+      const button = page.locator(`[data-action="${action}"]`);
+      assertHitTarget(await button.boundingBox(), `held ${commandKind} button`);
+      await button.click();
+      if (commandKind === "SubmitAction") {
+        await confirmPlayerActionThroughDialog(page, "held player action confirm");
+      }
+    },
+  });
+}
+
+async function releaseHeldSubmission(session, competingOutcome) {
+  session.heldRequest ??= await session.heldSubmission.releaseAfter(competingOutcome);
+  return session.heldRequest;
 }
 
 async function openHostConsoleDrawer(page, testId) {
