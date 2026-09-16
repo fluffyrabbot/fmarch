@@ -16,7 +16,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use content_reference::{self, Quotation, DEFAULT_POST_CITATION_LIMIT};
 use eventstore::{ActorId, EventInput};
 use forum::{
-    self, ForumReject, PostingState, TopicCommand, TopicEvent, TopicState, TopicVisibility,
+    self, ForumReject, PostBody, PostCommand, PostContent, PostDecisionContext, PostingState,
+    TopicCommand, TopicEvent, TopicState, TopicTitle, TopicVisibility,
 };
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
@@ -951,8 +952,8 @@ async fn create_discussion_topic(
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
-    let title = validate_discussion_text(request.title.as_str(), "discussion topic title", 180)?;
-    let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
+    let title = TopicTitle::new(&request.title).map_err(forum_reject_api_error)?;
+    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
     let topic_id = Uuid::new_v4();
     let events = forum::decide_topic(
         None,
@@ -981,41 +982,29 @@ async fn create_discussion_post(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current, Vec::new())?;
+    let topic_state = forum_topic_state(&current)?;
     let thread = projections::quotation_thread_for_discussion(
         &state.pool,
         topic,
         Some(profile.principal_id),
     )
     .await?;
-    let quotations = content_reference::decide_quotations(&thread, &request.quotations)
-        .map_err(content_reference_reject_api_error)?;
     if request.mentions.len() > content_reference::MAX_MENTIONS_PER_POST {
         return Err(content_reference_reject_api_error(
             content_reference::ContentReferenceReject::TooManyMentions,
         ));
     }
-    let body = if request.body.trim().is_empty() {
-        if quotations.is_empty() && request.mentions.is_empty() {
-            validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
-        }
-        String::new()
-    } else {
-        validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
-    };
+    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
     let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
         .await
-        .and_then(|candidates| {
-            content_reference::decide_profile_mentions(body.as_str(), candidates.as_slice())
-        })
         .map_err(content_reference_reject_api_error)?;
+    let content = PostContent::new(&thread, body, &request.quotations, &mentions)
+        .map_err(forum_reject_api_error)?;
     let events = forum::decide_topic(
         Some(&topic_state),
         TopicCommand::SubmitPost {
-            body,
+            content,
             author_profile_id: profile.profile_id,
-            quotations,
-            mentions,
         },
     )
     .map_err(forum_reject_api_error)?;
@@ -1035,7 +1024,7 @@ async fn create_discussion_post(
 
 /// Author edit of an own forum post. The route is keyed by a discussion topic
 /// id and loads its write state from `discussion_topic`, so a game id has no
-/// topic row here and cannot reach `decide_topic`; game posts have no edit
+/// topic row here and cannot reach `decide_post`; game posts have no edit
 /// path anywhere.
 async fn edit_discussion_post(
     State(state): State<PublicPlatformHttpState>,
@@ -1054,27 +1043,15 @@ async fn edit_discussion_post(
             content_reference::ContentReferenceReject::TooManyMentions,
         ));
     }
-    // Same emptiness rule as submission: the quotations fixed on the post are
-    // the only thing that can stand in for a body.
-    let body = if request.body.trim().is_empty() {
-        if !post.has_quotations {
-            validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
-        }
-        String::new()
-    } else {
-        validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
-    };
+    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
     let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
         .await
-        .and_then(|candidates| {
-            content_reference::decide_profile_mentions(body.as_str(), candidates.as_slice())
-        })
         .map_err(content_reference_reject_api_error)?;
-    let topic_state = forum_topic_state(&current, vec![post])?;
-    let events = forum::decide_topic(
-        Some(&topic_state),
-        TopicCommand::EditPost {
-            source_seq,
+    let topic_state = forum_topic_state(&current)?;
+    let context = PostDecisionContext::new(&topic_state, &post).map_err(forum_reject_api_error)?;
+    let events = forum::decide_post(
+        context,
+        PostCommand::Edit {
             body,
             mentions,
             author_profile_id: profile.profile_id,
@@ -1110,11 +1087,11 @@ async fn retract_discussion_post(
     let post = projections::discussion_post_write_state(&state.pool, topic, source_seq)
         .await?
         .ok_or_else(|| discussion_not_found("discussion post"))?;
-    let topic_state = forum_topic_state(&current, vec![post])?;
-    let events = forum::decide_topic(
-        Some(&topic_state),
-        TopicCommand::RetractPost {
-            source_seq,
+    let topic_state = forum_topic_state(&current)?;
+    let context = PostDecisionContext::new(&topic_state, &post).map_err(forum_reject_api_error)?;
+    let events = forum::decide_post(
+        context,
+        PostCommand::Retract {
             author_profile_id: profile.profile_id,
         },
     )
@@ -1161,7 +1138,7 @@ async fn moderate_discussion_topic(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current, Vec::new())?;
+    let topic_state = forum_topic_state(&current)?;
     let command = match (
         request.posting_state.as_deref(),
         request.visibility.as_deref(),
@@ -1203,14 +1180,14 @@ async fn curate_discussion_topic(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current, Vec::new())?;
+    let topic_state = forum_topic_state(&current)?;
     let command = match (
         request.title.as_deref(),
         request.area_slug.as_deref(),
         request.pinned,
     ) {
         (Some(title), None, None) => TopicCommand::Rename {
-            title: validate_discussion_text(title, "discussion topic title", 180)?,
+            title: TopicTitle::new(title).map_err(forum_reject_api_error)?,
         },
         (None, Some(area_slug), None) => {
             let area = projections::discussion_area_by_slug(&state.pool, area_slug)
@@ -1577,10 +1554,7 @@ fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<
     Ok(text.to_string())
 }
 
-fn forum_topic_state(
-    topic: &projections::DiscussionTopicRow,
-    posts: Vec<forum::PostState>,
-) -> Result<TopicState, ApiError> {
+fn forum_topic_state(topic: &projections::DiscussionTopicRow) -> Result<TopicState, ApiError> {
     Ok(TopicState {
         topic_id: topic.topic_id,
         area_id: topic.area_id,
@@ -1591,7 +1565,6 @@ fn forum_topic_state(
         visibility: TopicVisibility::parse(topic.visibility.as_str())
             .map_err(forum_reject_api_error)?,
         version: topic.version,
-        posts,
     })
 }
 
@@ -1633,9 +1606,13 @@ async fn append_forum_events(
 
 fn forum_reject_api_error(reject: ForumReject) -> ApiError {
     let status = match reject {
-        ForumReject::InvalidPostingState | ForumReject::InvalidVisibility => {
-            StatusCode::BAD_REQUEST
-        }
+        ForumReject::ContentReference(reject) => return content_reference_reject_api_error(reject),
+        ForumReject::InvalidPostingState
+        | ForumReject::InvalidVisibility
+        | ForumReject::InvalidTitle
+        | ForumReject::BodyTooLong
+        | ForumReject::EmptyPost
+        | ForumReject::InvalidRevision => StatusCode::BAD_REQUEST,
         ForumReject::TopicNotFound | ForumReject::PostNotFound => StatusCode::NOT_FOUND,
         ForumReject::NotAuthor => StatusCode::FORBIDDEN,
         _ => StatusCode::CONFLICT,

@@ -186,12 +186,15 @@ fn game_threads_have_no_edit_or_retract_path() {
         assert!(body.contains("DiscussionProfileAuthentication(profile)"));
         assert!(body.contains("projections::discussion_topic_by_id(&state.pool, topic)"));
         assert!(body.contains("projections::discussion_post_write_state(&state.pool, topic, source_seq)"));
-        assert!(body.contains("forum::decide_topic("));
+        assert!(body.contains("PostDecisionContext::new(&topic_state, &post)"));
+        assert!(body.contains("forum::decide_post("));
         assert!(!body.contains("game"), "{handler} must not reach for game state");
     }
     for source in [&game_http, &command_http] {
         for forbidden in [
             "decide_topic",
+            "decide_post",
+            "PostDecisionContext",
             "EditPost",
             "RetractPost",
             "edit_discussion_post",
