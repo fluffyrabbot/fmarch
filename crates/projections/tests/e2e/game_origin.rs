@@ -19,7 +19,7 @@ async fn signup_origin_is_private_until_start_and_rebuilds_without_duplicate_del
         host,
         "signup_host",
         "Signup Host",
-        "",
+        "Hosts games from community signup topics.",
         ProfileVisibility::Public,
         1,
     )
