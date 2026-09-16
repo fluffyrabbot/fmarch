@@ -56,6 +56,9 @@
           "bash scripts/linux-proof.sh --only test:dev-test-game-discussion",
           "bash scripts/linux-proof.sh --only test:dev-test-game-community-moderation",
           "bash scripts/linux-proof.sh --only test:dev-test-game-community-subscriptions"
+        ],
+        "host-regression": [
+          "bash scripts/linux-proof.sh --only test:host-console-live-stack-smoke"
         ]
       }
     }
