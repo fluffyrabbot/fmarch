@@ -214,7 +214,15 @@ async function proveSignupOrigin({ member, moderator, frontendBaseUrl, apiBaseUr
     await readerPage.goto(`${frontendBaseUrl}/inbox`, { waitUntil: "networkidle" });
     const gameLink = readerPage.locator(`a[href="/games/${game}"]`);
     if (await gameLink.count() !== 1) throw new Error("signup game delivery missing or duplicated");
-    if (!(await readerPage.locator("body").innerText()).includes("Game started from a watched topic")) throw new Error("signup reason label missing");
+    const gameRow = readerPage.locator('[data-testid^="community-inbox-item-"]').filter({ has: gameLink });
+    const reason = gameRow.locator('[data-testid^="community-inbox-reason-"]');
+    await reason.waitFor({ state: "visible" });
+    // The eyebrow styles uppercase rendered innerText; the semantic label and
+    // unread marker must still match this exact game's visible delivery.
+    const reasonText = (await reason.textContent())?.trim();
+    if (reasonText !== "Game started from a watched topic · Unread") {
+      throw new Error(`signup reason label drifted: ${JSON.stringify(reasonText)}`);
+    }
     await readerPage.getByTestId("community-inbox-mark-all-read").click();
     await readerPage.waitForLoadState("networkidle");
     const after = await fetchJson(`${apiBaseUrl}/inbox`, { headers: headers(sessions.memberToken) });
