@@ -37,7 +37,11 @@ import {
   createLiveStackFixtureTools,
   sqlLiteral,
 } from "./live_stack/fixture.mjs";
-import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
+import {
+  fixturePrincipalAuthorityId,
+  isPrincipalId,
+  principalFixtureId,
+} from "./principal_fixture.mjs";
 import {
   buildSetupCommandEvidence,
   selectHostSetupStage,
@@ -99,8 +103,8 @@ const {
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fixtureAliasByPrincipalId = new Map();
-const PLAYER_MIRA_PRINCIPAL_ID = principalFixtureId("player-mira");
-const PLAYER_ROWAN_PRINCIPAL_ID = principalFixtureId("player-rowan");
+const PLAYER_MIRA_PRINCIPAL_ID = fixturePrincipalAuthorityId("player-mira");
+const PLAYER_ROWAN_PRINCIPAL_ID = fixturePrincipalAuthorityId("player-rowan");
 
 function authorityPrincipalId(aliasOrId) {
   const value = String(aliasOrId);
@@ -5334,7 +5338,10 @@ async function rejectStalePlayerInviteFromBrowser(page) {
         ?.getAttribute("data-state") === "reject",
   );
   const message = await status.innerText();
-  if (!message.includes("Invite target is stale") || !message.includes("player-rowan")) {
+  if (
+    !message.includes("Invite target is stale") ||
+    !message.includes(PLAYER_ROWAN_PRINCIPAL_ID)
+  ) {
     throw new Error(`stale player invite rejection copy was not specific: ${message}`);
   }
   if ((await page.getByTestId("host-player-invite-url").count()) !== 0) {
@@ -5622,14 +5629,14 @@ async function modkillSlotFromBrowser(page) {
     slotId: "slot-7",
     status: "modkilled",
   });
-  await page.waitForFunction(() => {
+  await page.waitForFunction((expectedPrincipalId) => {
     const replacement = window.__fmarchHostProjection?.replacement;
     return (
       replacement?.slotId === "slot-7" &&
-      replacement?.assignedPrincipalId === "player-rowan" &&
+      replacement?.assignedPrincipalId === expectedPrincipalId &&
       replacement?.lifecycleLabel === "Modkilled"
     );
-  });
+  }, PLAYER_ROWAN_PRINCIPAL_ID);
 
   assertModkillCommandStatus(commandStatus);
   const apiStateAfter = await fetchJson(
