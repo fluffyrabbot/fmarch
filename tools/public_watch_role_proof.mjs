@@ -405,7 +405,11 @@ async function inspectEditedMention(page, {
   const item = matching[0];
   const rows = page.locator('[data-testid^="community-inbox-item-"]');
   const row = page.getByTestId(`community-inbox-item-${sourceSeq}`);
-  const reason = await page.getByTestId(`community-inbox-reason-${sourceSeq}`).innerText();
+  const reasonLabel = row.getByTestId(`community-inbox-reason-${sourceSeq}`);
+  await reasonLabel.waitFor({ state: "visible" });
+  // Eyebrow CSS uppercases innerText; compare this visible row's semantic
+  // reason and unread marker without changing their exact expected copy.
+  const reason = (await reasonLabel.textContent())?.trim();
   const firstRow = await rows.first().getAttribute("data-testid");
   const displayedHref = await row.locator("h2 a").getAttribute("href");
   const summary = await page.getByTestId("community-inbox-summary").innerText();
