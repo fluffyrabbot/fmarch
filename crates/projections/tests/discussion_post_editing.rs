@@ -388,6 +388,187 @@ async fn invalid_forum_batches_do_not_append_or_project_even_if_caller_commits(p
     }
 }
 
+/// Full rows for every projection an edit can affect, including publication
+/// metadata and attention delivery fields added by independently owned areas.
+async fn append_transaction_snapshot(pool: &sqlx::PgPool, topics: &[Uuid]) -> serde_json::Value {
+    let mut snapshot = serde_json::Map::new();
+    for (table, scope) in [
+        ("discussion_topic", "topic_id = ANY($1)"),
+        ("discussion_post", "topic_id = ANY($1)"),
+        (
+            "discussion_post_revision",
+            "source_seq IN (SELECT source_seq FROM discussion_post WHERE topic_id = ANY($1))",
+        ),
+        ("publication_surface", "surface_id = ANY($1)"),
+        ("public_publication", "surface_id = ANY($1)"),
+        ("public_search_document", "surface_id = ANY($1)"),
+        ("member_inbox_item", "surface_id = ANY($1)"),
+    ] {
+        let query = format!("SELECT COALESCE(jsonb_agg(to_jsonb(entry) ORDER BY to_jsonb(entry)::text), '[]'::jsonb) FROM {table} AS entry WHERE {scope}");
+        // Identifiers and predicates come only from the fixed list above;
+        // topic values remain bound parameters.
+        let rows: serde_json::Value = sqlx::query_scalar(sqlx::AssertSqlSafe(query))
+            .bind(topics)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        snapshot.insert(table.into(), rows);
+    }
+    snapshot.into()
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn semantic_batch_failure_rolls_back_its_savepoint_before_outer_commit(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(346);
+    let topic = Uuid::from_u128(347);
+    let other_topic = Uuid::from_u128(348);
+    let author = test_principal(42);
+    let target = test_principal(43);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, target).await;
+    let profile = create_test_profile(&pool, author, "atomic_author", 1).await;
+    let target_profile = create_test_profile(&pool, target, "atomic_target", 1).await;
+    let own_post = create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
+    let other_post = append_discussion_and_project(&pool, other_topic, &[
+        EventInput::new(forum::TOPIC_CREATED, 1, serde_json::json!({ "area_id": area, "title": "Other", "author_profile_id": profile }), ActorId::Principal(author), 5),
+        EventInput::new(forum::POST_SUBMITTED, 1, serde_json::json!({ "body": "Other opening", "author_profile_id": profile }), ActorId::Principal(author), 6),
+    ]).await.unwrap()[1].seq;
+    sqlx::query("CREATE TABLE discussion_append_marker (label TEXT PRIMARY KEY)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before = append_transaction_snapshot(&pool, &[topic, other_topic]).await;
+    let topic_events = eventstore::load_stream(&pool, topic).await.unwrap();
+    let other_events = eventstore::load_stream(&pool, other_topic).await.unwrap();
+    let events = [
+        EventInput::new(
+            forum::POST_EDITED,
+            1,
+            serde_json::json!({
+                "source_seq": own_post, "revision": 1, "body": "@atomic_target replacement",
+                "mentions": [{ "profile_id": target_profile, "span": { "offset": 0, "len": 14 } }]
+            }),
+            ActorId::Principal(author),
+            7,
+        ),
+        EventInput::new(
+            forum::POST_EDITED,
+            1,
+            serde_json::json!({
+                "source_seq": other_post, "revision": 1, "body": "Cross-topic replacement"
+            }),
+            ActorId::Principal(author),
+            8,
+        ),
+    ];
+    for event in &events {
+        forum::decode_event(&event.kind, event.version, &event.payload).unwrap();
+    }
+    let mut outer = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO discussion_append_marker VALUES ('before')")
+        .execute(&mut *outer)
+        .await
+        .unwrap();
+    let result = projections::append_discussion_and_project_in_tx(&mut outer, topic, &events).await;
+    match result {
+        Err(projections::ProjectionError::Db(sqlx::Error::Protocol(message))) => {
+            assert_eq!(
+                message,
+                format!("DiscussionPostEdited names post {other_post} outside topic {topic}")
+            );
+        }
+        other => panic!("expected original semantic fold error, got {other:?}"),
+    }
+    sqlx::query("INSERT INTO discussion_append_marker VALUES ('after')")
+        .execute(&mut *outer)
+        .await
+        .unwrap();
+    outer.commit().await.unwrap();
+    let markers: Vec<String> =
+        sqlx::query_scalar("SELECT label FROM discussion_append_marker ORDER BY label")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(markers, ["after", "before"]);
+    assert_eq!(
+        eventstore::load_stream(&pool, topic).await.unwrap(),
+        topic_events
+    );
+    assert_eq!(
+        eventstore::load_stream(&pool, other_topic).await.unwrap(),
+        other_events
+    );
+    assert_eq!(
+        append_transaction_snapshot(&pool, &[topic, other_topic]).await,
+        before
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn successful_nested_append_remains_owned_by_outer_commit_or_rollback(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(349);
+    let topic = Uuid::from_u128(350);
+    let author = test_principal(44);
+    ensure_test_principal(&pool, author).await;
+    let profile = create_test_profile(&pool, author, "nested_author", 1).await;
+    let post = create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
+    let before = append_transaction_snapshot(&pool, &[topic]).await;
+    let events_before = eventstore::load_stream(&pool, topic).await.unwrap();
+    for commit in [false, true] {
+        let mut outer = pool.begin().await.unwrap();
+        let stored = projections::append_discussion_and_project_in_tx(
+            &mut outer,
+            topic,
+            &[EventInput::new(
+                forum::POST_EDITED,
+                1,
+                serde_json::json!({ "source_seq": post, "revision": 1, "body": "Nested edit" }),
+                ActorId::Principal(author),
+                5,
+            )],
+        )
+        .await
+        .unwrap();
+        assert_eq!(stored.len(), 1);
+        let body: String =
+            sqlx::query_scalar("SELECT body FROM discussion_post WHERE source_seq = $1")
+                .bind(post)
+                .fetch_one(&mut *outer)
+                .await
+                .unwrap();
+        assert_eq!(body, "Nested edit");
+        // Releasing the savepoint must not make the nested write visible to a
+        // separate connection or commit its caller's transaction.
+        assert_eq!(append_transaction_snapshot(&pool, &[topic]).await, before);
+        assert_eq!(
+            eventstore::load_stream(&pool, topic).await.unwrap(),
+            events_before
+        );
+        if commit {
+            outer.commit().await.unwrap();
+            let mut expected_events = events_before.clone();
+            expected_events.extend(stored);
+            assert_eq!(
+                eventstore::load_stream(&pool, topic).await.unwrap(),
+                expected_events
+            );
+            let state = discussion_post_write_state(&pool, topic, post)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(state.body, "Nested edit");
+            assert_eq!(state.revision, 1);
+        } else {
+            outer.rollback().await.unwrap();
+            assert_eq!(append_transaction_snapshot(&pool, &[topic]).await, before);
+            assert_eq!(
+                eventstore::load_stream(&pool, topic).await.unwrap(),
+                events_before
+            );
+        }
+    }
+}
+
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn unsupported_durable_forum_event_stops_rebuild_without_destroying_projection(
     pool: sqlx::PgPool,
