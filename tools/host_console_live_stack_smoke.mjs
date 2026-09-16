@@ -33,6 +33,11 @@ import {
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import {
+  capturePlayerLiveBoundary,
+  recoverPlayerHistory,
+  waitForPlayerDelivery,
+} from "./live_stack/player_live_scenario.mjs";
+import {
   createLiveStackViteLogger,
   createLiveStackFixtureTools,
   sqlLiteral,
@@ -1722,6 +1727,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     await outgoingPostButton.boundingBox(),
     `${room.kind} outgoing post button`,
   );
+  const outgoingBoundary = await capturePlayerLiveBoundary(outgoingPage, { game: additionalRoomsGame, channelId: room.channelId });
   await outgoingPostButton.click();
   const outgoingStatus = outgoingPage.getByTestId("player-command-status");
   await outgoingStatus.waitFor({ state: "visible" });
@@ -1733,8 +1739,9 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     null,
     { timeout: 180_000 },
   );
-  await waitForPrivateThreadLiveDelta(outgoingPage, {
-    channelId: room.channelId,
+  const outgoingLiveDelta = await waitForPlayerDelivery(outgoingPage, {
+    boundary: outgoingBoundary,
+    kind: "ThreadPostsChanged",
     body: room.historyBody,
   });
   const outgoingOutcome = await outgoingPage.evaluate(
@@ -1759,10 +1766,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     throw new Error(`${room.kind} browser command leaked non-handle media fields`);
   }
   const contentId = outgoingCommand.media[0].content_id;
-  const outgoingLiveDelta = await privateThreadLiveDelta(
-    outgoingPage,
-    room.historyBody,
-  );
+
   const initialThread = await fetchJson(
     `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?limit=50`,
     { headers: { authorization: `Bearer ${room.outgoing.sessionToken}` } },
@@ -1841,14 +1845,12 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
   if (!(await incomingHistoricalPost.innerText()).includes(room.historyBody)) {
     throw new Error(`${room.kind} replacement lost slot-authored history`);
   }
-  await waitForPrivateThreadLiveDelta(incomingPage, {
+  const initialRecovery = await recoverPlayerHistory(incomingPage, {
+    game: additionalRoomsGame,
     channelId: room.channelId,
+    sourceSeq: mediaPostSeq,
     body: room.historyBody,
   });
-  const incomingInitialLiveDelta = await privateThreadLiveDelta(
-    incomingPage,
-    room.historyBody,
-  );
   const incomingMedia = await incomingContext.request.get(
     `${frontendBaseUrl}${privateMediaUrl}`,
     { headers: { accept: "image/avif" } },
@@ -1866,6 +1868,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     await incomingPostButton.boundingBox(),
     `${room.kind} incoming post button`,
   );
+  const incomingBoundary = await capturePlayerLiveBoundary(incomingPage, { game: additionalRoomsGame, channelId: room.channelId });
   await incomingPostButton.click();
   const incomingStatus = incomingPage.getByTestId("player-command-status");
   await incomingStatus.waitFor({ state: "visible" });
@@ -1875,8 +1878,9 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
   );
-  await waitForPrivateThreadLiveDelta(incomingPage, {
-    channelId: room.channelId,
+  const incomingCommandLiveDelta = await waitForPlayerDelivery(incomingPage, {
+    boundary: incomingBoundary,
+    kind: "ThreadPostsChanged",
     body: room.incomingBody,
   });
   const incomingOutcome = await incomingPage.evaluate(
@@ -1892,10 +1896,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
   ) {
     throw new Error(`${room.kind} incoming browser post drifted: ${JSON.stringify(incomingOutcome)}`);
   }
-  const incomingCommandLiveDelta = await privateThreadLiveDelta(
-    incomingPage,
-    room.incomingBody,
-  );
+
   const incomingReload = await incomingPage.reload({
     waitUntil: "networkidle",
     timeout: 180_000,
@@ -1974,7 +1975,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     incoming: {
       principalId: room.incoming.principalId,
       submitOutcome: incomingOutcome,
-      initialLiveDelta: incomingInitialLiveDelta,
+      initialRecovery,
       commandLiveDelta: incomingCommandLiveDelta,
       reloadedPostBodies: finalThread.posts.map((post) => post.body),
       mediaStatus: incomingMedia.status(),
@@ -2187,6 +2188,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     .locator('[data-testid="player-composer"] textarea')
     .fill(deadChatDefinition.historyBody);
   assertHitTarget(await outgoingPostButton.boundingBox(), "dead-chat outgoing post button");
+  const outgoingBoundary = await capturePlayerLiveBoundary(outgoingPage, { game: deadChatGame, channelId: "dead" });
   await outgoingPostButton.click();
   await outgoingPage.getByTestId("player-command-status").waitFor({ state: "visible" });
   await outgoingPage.waitForFunction(
@@ -2197,8 +2199,9 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     null,
     { timeout: 180_000 },
   );
-  await waitForPrivateThreadLiveDelta(outgoingPage, {
-    channelId: "dead",
+  const outgoingLiveDelta = await waitForPlayerDelivery(outgoingPage, {
+    boundary: outgoingBoundary,
+    kind: "ThreadPostsChanged",
     body: deadChatDefinition.historyBody,
   });
   const outgoingOutcome = await outgoingPage.evaluate(
@@ -2225,10 +2228,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     throw new Error("dead-chat browser command leaked non-handle media fields");
   }
   const contentId = outgoingCommand.media[0].content_id;
-  const outgoingLiveDelta = await privateThreadLiveDelta(
-    outgoingPage,
-    deadChatDefinition.historyBody,
-  );
+
   const initialThread = await fetchJson(
     `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?limit=50`,
     { headers: { authorization: `Bearer ${deadChatDefinition.outgoing.sessionToken}` } },
@@ -2306,14 +2306,12 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   if (!(await incomingHistoricalPost.innerText()).includes(deadChatDefinition.historyBody)) {
     throw new Error("incoming dead-slot replacement lost dead-chat history");
   }
-  await waitForPrivateThreadLiveDelta(incomingPage, {
+  const initialRecovery = await recoverPlayerHistory(incomingPage, {
+    game: deadChatGame,
     channelId: "dead",
+    sourceSeq: mediaPostSeq,
     body: deadChatDefinition.historyBody,
   });
-  const incomingInitialLiveDelta = await privateThreadLiveDelta(
-    incomingPage,
-    deadChatDefinition.historyBody,
-  );
   const incomingMedia = await incomingContext.request.get(
     `${frontendBaseUrl}${privateMediaUrl}`,
     { headers: { accept: "image/avif" } },
@@ -2331,6 +2329,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     throw new Error("incoming dead occupant did not receive an enabled post control");
   }
   assertHitTarget(await incomingPostButton.boundingBox(), "dead-chat incoming post button");
+  const incomingBoundary = await capturePlayerLiveBoundary(incomingPage, { game: deadChatGame, channelId: "dead" });
   await incomingPostButton.click();
   await incomingPage.waitForFunction(
     () =>
@@ -2338,8 +2337,9 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
   );
-  await waitForPrivateThreadLiveDelta(incomingPage, {
-    channelId: "dead",
+  const incomingCommandLiveDelta = await waitForPlayerDelivery(incomingPage, {
+    boundary: incomingBoundary,
+    kind: "ThreadPostsChanged",
     body: deadChatDefinition.incomingBody,
   });
   const incomingOutcome = await incomingPage.evaluate(
@@ -2355,10 +2355,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   ) {
     throw new Error(`incoming dead-chat post drifted: ${JSON.stringify(incomingOutcome)}`);
   }
-  const incomingCommandLiveDelta = await privateThreadLiveDelta(
-    incomingPage,
-    deadChatDefinition.incomingBody,
-  );
+
   const incomingReload = await incomingPage.reload({
     waitUntil: "networkidle",
     timeout: 180_000,
@@ -2465,7 +2462,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     incoming: {
       principalId: deadChatDefinition.incoming.principalId,
       submitOutcome: incomingOutcome,
-      initialLiveDelta: incomingInitialLiveDelta,
+      initialRecovery,
       commandLiveDelta: incomingCommandLiveDelta,
       reloadedPostBodies: finalThread.posts.map((post) => post.body),
       mediaStatus: incomingMedia.status(),
@@ -2483,7 +2480,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     restoration,
     restoredAlive,
     proof:
-      "A real dead transition derived DeadViewer for the current occupant, enabled only dead-chat posting, accepted canonical browser-uploaded media, delivered channel-scoped initial and command deltas, retained encrypted slot history through reload and replacement, denied living and stale accounts at route/thread/media/append boundaries, then a real alive restoration revoked the same surfaces with zero media bytes.",
+      "A real dead transition derived DeadViewer for the current occupant, enabled only dead-chat posting, accepted canonical browser-uploaded media, recovered channel-scoped history after Hello and delivered fresh command deltas, retained encrypted slot history through reload and replacement, denied living and stale accounts at route/thread/media/append boundaries, then a real alive restoration revoked the same surfaces with zero media bytes.",
   };
 }
 
@@ -2620,14 +2617,12 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   if (!(await loadedHistory.innerText()).includes(spectatorDefinition.historyBody)) {
     throw new Error("spectator role URL did not render host history");
   }
-  await waitForPrivateThreadLiveDelta(page, {
+  const initialRecovery = await recoverPlayerHistory(page, {
+    game: spectatorGame,
     channelId: spectatorDefinition.channelId,
+    sourceSeq: mediaPostSeq,
     body: spectatorDefinition.historyBody,
   });
-  const initialLiveDelta = await privateThreadLiveDelta(
-    page,
-    spectatorDefinition.historyBody,
-  );
   const allowedMedia = await context.request.get(`${frontendBaseUrl}${mediaUrl}`, {
     headers: { accept: "image/avif" },
   });
@@ -2636,6 +2631,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     throw new Error("spectator did not receive canonical room media bytes");
   }
 
+  const liveBoundary = await capturePlayerLiveBoundary(page, { game: spectatorGame, channelId: spectatorDefinition.channelId });
   const liveNotice = await sendCommand("host_h", {
     PublishSpectatorPost: {
       game: spectatorGame,
@@ -2643,11 +2639,11 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
       media: [],
     },
   });
-  await waitForPrivateThreadLiveDelta(page, {
-    channelId: spectatorDefinition.channelId,
+  const liveDelta = await waitForPlayerDelivery(page, {
+    boundary: liveBoundary,
+    kind: "ThreadPostsChanged",
     body: spectatorDefinition.liveBody,
   });
-  const liveDelta = await privateThreadLiveDelta(page, spectatorDefinition.liveBody);
   const finalThread = await fetchJson(
     `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?limit=50`,
     { headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` } },
@@ -2812,7 +2808,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     historyNotice,
     liveNotice,
     initialMediaBodyBytes: allowedMediaBytes.byteLength,
-    initialLiveDelta,
+    initialRecovery,
     liveDelta,
     reloadedPostBodies: [spectatorDefinition.historyBody, spectatorDefinition.liveBody],
     appendReject: postReject.body.body,
@@ -2936,34 +2932,6 @@ async function browserContextWithSession(token) {
     },
   ]);
   return context;
-}
-
-async function waitForPrivateThreadLiveDelta(page, { channelId, body }) {
-  await page.waitForFunction(
-    ({ expectedChannel, expectedBody }) =>
-      (window.__fmarchLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "ThreadPostsChanged" &&
-          event.delta.body?.posts?.some(
-            (post) =>
-              post.channel_id === expectedChannel && post.body === expectedBody,
-          ),
-      ),
-    { expectedChannel: channelId, expectedBody: body },
-    { timeout: 60_000 },
-  );
-}
-
-async function privateThreadLiveDelta(page, body) {
-  return await page.evaluate(
-    (expectedBody) =>
-      (window.__fmarchLiveProjectionEvents ?? []).find(
-        (event) =>
-          event?.delta?.kind === "ThreadPostsChanged" &&
-          event.delta.body?.posts?.some((post) => post.body === expectedBody),
-      ),
-    body,
-  );
 }
 
 async function seedRolePmHistory(contentId) {
@@ -3159,21 +3127,12 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     `thread-post-media-${fixture.media.contentId}`,
     { timeout: 120_000 },
   );
-  await incomingPage.waitForFunction(
-    (expectedBody) =>
-      (window.__fmarchLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "ThreadPostsChanged" &&
-          event.delta.body?.posts?.some((post) => post.body === expectedBody),
-      ),
-    rolePmHistoryBody,
-  );
-  const initialLiveDelta = await incomingPage.evaluate((expectedBody) =>
-    (window.__fmarchLiveProjectionEvents ?? []).find(
-      (event) =>
-        event?.delta?.kind === "ThreadPostsChanged" &&
-        event.delta.body?.posts?.some((post) => post.body === expectedBody),
-    ), rolePmHistoryBody);
+  const initialRecovery = await recoverPlayerHistory(incomingPage, {
+    game,
+    channelId: rolePmChannel,
+    sourceSeq: fixture.media.mediaPostSeq,
+    body: rolePmHistoryBody,
+  });
 
   const incomingMediaResponse = await incomingContext.request.get(
     `${frontendBaseUrl}${fixture.media.privateUrl}`,
@@ -3190,6 +3149,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   await textarea.fill(rolePmIncomingBody);
   const postButton = incomingPage.locator('[data-action="submit_post"]');
   assertHitTarget(await postButton.boundingBox(), "incoming Role PM post button");
+  const incomingBoundary = await capturePlayerLiveBoundary(incomingPage, { game, channelId: rolePmChannel });
   await postButton.click();
   const status = incomingPage.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
@@ -3199,15 +3159,11 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
   );
-  await incomingPage.waitForFunction(
-    (expectedBody) =>
-      (window.__fmarchLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "ThreadPostsChanged" &&
-          event.delta.body?.posts?.some((post) => post.body === expectedBody),
-      ),
-    rolePmIncomingBody,
-  );
+  const commandLiveDelta = await waitForPlayerDelivery(incomingPage, {
+    boundary: incomingBoundary,
+    kind: "ThreadPostsChanged",
+    body: rolePmIncomingBody,
+  });
   const submitOutcome = await incomingPage.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
@@ -3221,12 +3177,6 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   ) {
     throw new Error(`incoming Role PM SubmitPost drifted: ${JSON.stringify(submitOutcome)}`);
   }
-  const commandLiveDelta = await incomingPage.evaluate((expectedBody) =>
-    (window.__fmarchLiveProjectionEvents ?? []).find(
-      (event) =>
-        event?.delta?.kind === "ThreadPostsChanged" &&
-        event.delta.body?.posts?.some((post) => post.body === expectedBody),
-    ), rolePmIncomingBody);
 
   const reloadResponse = await incomingPage.reload({
     waitUntil: "networkidle",
@@ -3342,7 +3292,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
       principalId: "player-rowan",
       commandStatus,
       submitOutcome,
-      initialLiveDelta,
+      initialRecovery,
       commandLiveDelta,
       reloadedPostBodies: apiThread.posts.map((post) => post.body),
       mediaStatus: incomingMediaResponse.status(),
@@ -3676,13 +3626,14 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   }
 
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const initialRecovery = await capturePlayerLiveBoundary(page, { game, channelId: "main" });
   await page.waitForFunction(() =>
-    window.__fmarchLiveProjectionEvents?.some(
-      (event) =>
-        event?.delta?.kind === "VoteCountChanged" &&
-        event.delta.body?.candidate_slot === "slot_1" &&
-        event.delta.body?.count === 1,
+    window.__fmarchPlayerProjection?.votecount?.some(
+      (row) => row.target === "slot_1" && row.count === 1,
     ),
+  );
+  initialRecovery.votecount = await page.evaluate(
+    () => window.__fmarchPlayerProjection.votecount,
   );
   const capability = await page.getByTestId("player-capability").innerText();
   if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
@@ -3706,6 +3657,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   let duplicateVoteReceiptRows;
   let concurrentVoteRace;
   let concurrentVoteRows;
+  let freshVoteDelivery;
+  let primaryWithdrawDelivery;
+  let raceWithdrawDelivery;
   let raceVoteWithdrawCommand;
   const duplicateVoteCommandId = crypto.randomUUID();
   const raceVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl, {
@@ -3725,6 +3679,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   assertHitTarget(await raceVoteButton.boundingBox(), "racing player vote button");
   const raceStatus = raceVoteSession.page.getByTestId("player-command-status");
   const status = page.getByTestId("player-command-status");
+  const voteBoundary = await capturePlayerLiveBoundary(page, { game, channelId: "main" });
   try {
     await Promise.all([voteButton.click(), raceVoteButton.click()]);
     await status.waitFor({ state: "visible" });
@@ -3757,19 +3712,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   });
   try {
     playerStep = "wait-live-vote-race-count-3";
-    await page.waitForFunction(() => {
-      return window.__fmarchLiveProjectionEvents?.some(
-        (event) =>
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot_1" &&
-          event.delta.body?.count === 3,
-      );
-    });
-    await page.waitForFunction(() => {
-      const projection = window.__fmarchPlayerProjection;
-      return projection?.votecount?.some(
-        (row) => row.target === "slot_1" && row.count === 3,
-      );
+    freshVoteDelivery = await waitForPlayerDelivery(page, {
+      boundary: voteBoundary,
+      kind: "VoteCountChanged",
+      count: 3,
     });
     await raceVoteSession.page.waitForFunction(() =>
       typeof window.__fmarchReconnectPlayerLiveProjectionNow === "function",
@@ -3838,60 +3784,31 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     const withdrawButton = page.getByText("Withdraw vote", { exact: true });
     const withdrawButtonBox = await withdrawButton.boundingBox();
     assertHitTarget(withdrawButtonBox, "player withdraw button");
+    const primaryWithdrawBoundary = await capturePlayerLiveBoundary(page, { game, channelId: "main" });
     await withdrawButton.click();
     playerStep = "wait-live-vote-count-2-after-primary-withdraw";
-    await page.waitForFunction(() => {
-      const events = window.__fmarchLiveProjectionEvents ?? [];
-      const countThreeIndex = events.findIndex(
-        (event) =>
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot_1" &&
-          event.delta.body?.count === 3,
-      );
-      return events.some(
-        (event, index) =>
-          index > countThreeIndex &&
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot_1" &&
-          event.delta.body?.count === 2,
-      );
-    });
-    await page.waitForFunction(() => {
-      const projection = window.__fmarchPlayerProjection;
-      return projection?.votecount?.some(
-        (row) => row.target === "slot_1" && row.count === 2,
-      );
+    primaryWithdrawDelivery = await waitForPlayerDelivery(page, {
+      boundary: primaryWithdrawBoundary,
+      kind: "VoteCountChanged",
+      count: 2,
     });
     playerStep = "withdraw-racing-vote";
+    const raceWithdrawBoundary = await capturePlayerLiveBoundary(page, { game, channelId: "main" });
     raceVoteWithdrawCommand = await sendCommand("player-goon-a", {
       WithdrawVote: { game, actor_slot: "slot_4" },
     });
     playerStep = "wait-live-vote-count-1-after-race-withdraw";
-    await page.waitForFunction(() => {
-      const events = window.__fmarchLiveProjectionEvents ?? [];
-      const countTwoIndex = events.findIndex(
-        (event) =>
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot_1" &&
-          event.delta.body?.count === 2,
-      );
-      return events.some(
-        (event, index) =>
-          index > countTwoIndex &&
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot_1" &&
-          event.delta.body?.count === 1,
-      );
-    });
-    await page.waitForFunction(() => {
-      const projection = window.__fmarchPlayerProjection;
-      return projection?.votecount?.some(
-        (row) => row.target === "slot_1" && row.count === 1,
-      );
+    raceWithdrawDelivery = await waitForPlayerDelivery(page, {
+      boundary: raceWithdrawBoundary,
+      kind: "VoteCountChanged",
+      count: 1,
     });
     playerStep = "drop-live-projection";
     await page.waitForFunction(
       () => typeof window.__fmarchDropPlayerLiveProjection === "function",
+    );
+    const reconnectEventStart = await page.evaluate(
+      () => (window.__fmarchLiveProjectionEvents ?? []).length,
     );
     await page.evaluate(() => window.__fmarchDropPlayerLiveProjection());
     await page.waitForFunction(
@@ -3904,10 +3821,11 @@ async function drivePlayerBrowser(frontendBaseUrl) {
           .querySelector('[data-testid="player-live-status"]')
           ?.getAttribute("data-state") === "reconnecting",
     );
-    await page.waitForFunction(() =>
-      (window.__fmarchLiveProjectionEvents ?? []).some(
+    await page.waitForFunction((eventStart) =>
+      (window.__fmarchLiveProjectionEvents ?? []).slice(eventStart).some(
         (event) => event?.kind === "close",
       ),
+      reconnectEventStart,
     );
     const reconnectingStatus = await page.evaluate(
       () => window.__fmarchLiveProjectionStatus,
@@ -3999,23 +3917,25 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     }
     playerStep = "wait-automatic-reconnect-recovery";
     await page.waitForFunction(
-      () => {
+      (eventStart) => {
         const events = window.__fmarchLiveProjectionEvents ?? [];
-        return events.some(
+        return events.slice(eventStart).some(
           (event) =>
             event?.kind === "reconnect" &&
             event.attempt === 1 &&
             event.state === "recovered",
         );
-      }
+      },
+      reconnectEventStart,
     );
-    const reconnectRecoveryEvent = await page.evaluate(() =>
-      (window.__fmarchLiveProjectionEvents ?? []).find(
+    const reconnectRecoveryEvent = await page.evaluate((eventStart) =>
+      (window.__fmarchLiveProjectionEvents ?? []).slice(eventStart).find(
         (event) =>
           event?.kind === "reconnect" &&
           event.attempt === 1 &&
           event.state === "recovered",
       ),
+      reconnectEventStart,
     );
     playerStep = "wait-post-after-automatic-reconnect";
     await page.waitForFunction(
@@ -4044,6 +3964,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     reconnectEvidence = {
       boundary:
         "player route can expose a reconnecting live-projection state, accept a server-side projection change while the socket is dropped, and automatically recover the thread snapshot through the seeded role URL reconnect path without reloading",
+      reconnectEventStart,
       reconnectingStatus,
       renderedReconnectingStatus,
       reconnectCommand,
@@ -4111,6 +4032,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   return {
     url: pageUrl,
     capability,
+    initialRecovery,
+    freshVoteDelivery,
+    primaryWithdrawDelivery,
+    raceWithdrawDelivery,
     firstPostText,
     commandStatus,
     projection,
@@ -4124,7 +4049,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       voteRows: duplicateVoteRows,
       receiptRows: duplicateVoteReceiptRows,
       proof:
-        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 2, and vote_ballot retained exactly one current ballot for slot-7.",
+        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 3, and vote_ballot retained exactly one current ballot for slot-7.",
     },
     reconnect: reconnectEvidence,
     staleVoteRecovery: {
