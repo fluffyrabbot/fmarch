@@ -3580,6 +3580,8 @@ pub struct ModerationCase {
     pub source_seq: i64,
     pub target_href: String,
     pub target_body: String,
+    pub target_revision: i64,
+    pub target_retracted: bool,
     pub status: String,
     pub report_count: i64,
     pub opened_at: i64,
@@ -3596,6 +3598,8 @@ impl From<projections::ModerationCaseRow> for ModerationCase {
             source_seq: row.source_seq,
             target_href: row.target_href,
             target_body: row.target_body,
+            target_revision: row.target_revision,
+            target_retracted: row.target_retracted,
             status: row.status,
             report_count: row.report_count,
             opened_at: row.opened_at,
@@ -3607,6 +3611,43 @@ impl From<projections::ModerationCaseRow> for ModerationCase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationProfileMention {
+    pub profile_id: Uuid,
+    pub offset: i64,
+    pub len: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationSlotMention {
+    pub slot_id: String,
+    pub offset: i64,
+    pub len: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationContentSnapshot {
+    pub revision: i64,
+    pub body: String,
+    pub quotations: Vec<Quotation>,
+    pub profile_mentions: Vec<ModerationProfileMention>,
+    pub slot_mentions: Vec<ModerationSlotMention>,
+    pub retracted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ModerationEvidence {
+    Captured { content: ModerationContentSnapshot },
+    NotCaptured,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ModerationContentRevision {
+    pub content: ModerationContentSnapshot,
+    pub superseded_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ModerationReport {
     pub report_id: Uuid,
     pub reporter_principal_id: PrincipalId,
@@ -3614,19 +3655,7 @@ pub struct ModerationReport {
     pub details: String,
     pub active: bool,
     pub submitted_at: i64,
-}
-
-impl From<projections::ModerationReportRow> for ModerationReport {
-    fn from(row: projections::ModerationReportRow) -> Self {
-        Self {
-            report_id: row.report_id,
-            reporter_principal_id: row.reporter_principal_id,
-            reason_family: row.reason_family,
-            details: row.details,
-            active: row.active,
-            submitted_at: row.submitted_at,
-        }
-    }
+    pub evidence: ModerationEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3655,16 +3684,7 @@ pub struct ModerationCaseDetail {
     pub case: ModerationCase,
     pub reports: Vec<ModerationReport>,
     pub history: Vec<ModerationHistory>,
-}
-
-impl From<projections::ModerationCaseDetailRow> for ModerationCaseDetail {
-    fn from(row: projections::ModerationCaseDetailRow) -> Self {
-        Self {
-            case: row.case.into(),
-            reports: row.reports.into_iter().map(Into::into).collect(),
-            history: row.history.into_iter().map(Into::into).collect(),
-        }
-    }
+    pub content_history: Vec<ModerationContentRevision>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -4231,13 +4251,15 @@ pub mod typescript {
         InvestigationResultFields, ItaSessionControlKind, JsonAtom, LiveAudience,
         LiveProjectionDelta, LiveResyncRequired, LiveScope, MemberMutePage, MemberMuteState,
         MentionSuggestionPage, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
-        PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
-        PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
-        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxItem, PublicInboxPage,
-        PublicPostCitation, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
-        PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
-        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ModerationContentRevision, ModerationContentSnapshot, ModerationEvidence,
+        ModerationHistory, ModerationProfileMention, ModerationReport, ModerationReportReceipt,
+        ModerationSlotMention, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
+        PlayerNotification, PlayerNotificationsDelta, PostCitation, PostCitationPage,
+        PostCitationsChangedDelta, PostEmbed, PostKind, PostRef, ProfileEditor, ProjectionDelta,
+        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
+        PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment, PublicSearchFilterValue,
+        PublicSearchPage, PublicSearchResult, PublicSearchResultKind, Quotation, RejectCode,
+        RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
         ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle,
@@ -4392,6 +4414,11 @@ pub mod typescript {
         push::<MemberMutePage>(&mut out, &config);
         push::<ModerationReportReceipt>(&mut out, &config);
         push::<ModerationCase>(&mut out, &config);
+        push::<ModerationProfileMention>(&mut out, &config);
+        push::<ModerationSlotMention>(&mut out, &config);
+        push::<ModerationContentSnapshot>(&mut out, &config);
+        push::<ModerationEvidence>(&mut out, &config);
+        push::<ModerationContentRevision>(&mut out, &config);
         push::<ModerationReport>(&mut out, &config);
         push::<ModerationHistory>(&mut out, &config);
         push::<ModerationCaseDetail>(&mut out, &config);

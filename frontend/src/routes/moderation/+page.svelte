@@ -24,6 +24,7 @@
         <article class="fm-panel" data-testid={`moderation-case-${item.case_id}`}>
           <p class="fm-eyebrow">{item.status} · public content</p>
           <h2>{item.report_count} report{item.report_count === 1 ? "" : "s"}</h2>
+          <p class="fm-eyebrow">Current content · revision {item.target_revision ?? 0}{item.target_retracted ? " · retracted by author" : ""}</p>
           <p>{item.target_body}</p>
           <div class="case-links">
             <a href={item.target_href}>Open public destination</a>
@@ -42,14 +43,41 @@
     <section class="fm-panel case-detail" data-testid="moderation-case-detail">
       <p class="fm-eyebrow">Case {detail.case.case_id}</p>
       <h2>{detail.case.status}: public content</h2>
-      <p>{detail.case.target_body}</p>
+      <h3>Current content</h3>
+      <p>Revision {detail.case.target_revision ?? 0}{detail.case.target_retracted ? " · retracted by author" : ""}</p>
+      <p data-testid="moderation-current-content">{detail.case.target_body}</p>
       <h3>Reports</h3>
       {#each detail.reports as report}
         <article data-testid={`moderation-report-${report.report_id}`}>
           <strong>{report.reason_family}</strong> · {report.reporter_principal_id}
           {#if report.details}<p>{report.details}</p>{/if}
+          {#if report.evidence?.status === "captured"}
+            <section aria-label="Content captured with report" data-testid="moderation-report-evidence">
+              <h4>Content captured with report · revision {report.evidence.content.revision}</h4>
+              {#if report.evidence.content.retracted}<p>Already retracted when reported.</p>{/if}
+              <p>{report.evidence.content.body}</p>
+              {#each report.evidence.content.quotations as quotation}
+                <blockquote>{quotation.excerpt}</blockquote>
+              {/each}
+            </section>
+          {:else}
+            <p data-testid="moderation-evidence-not-captured">This historical report did not capture content evidence.</p>
+          {/if}
         </article>
       {/each}
+      <h3>Content revisions</h3>
+      <ol data-testid="moderation-content-history">
+        {#each detail.content_history ?? [] as revision}
+          <li>
+            <h4>Revision {revision.content.revision}{revision.superseded_at === null ? " · current" : " · superseded"}</h4>
+            {#if revision.content.retracted}<p>Retracted by author.</p>{/if}
+            <p>{revision.content.body}</p>
+            {#each revision.content.quotations as quotation}
+              <blockquote>{quotation.excerpt}</blockquote>
+            {/each}
+          </li>
+        {/each}
+      </ol>
       <h3>Audit history</h3>
       <ol data-testid="moderation-case-history">
         {#each detail.history as event}

@@ -73,6 +73,13 @@ counterpart because a game post is slot-authored evidence, and
 `commands::Command` / `wire::Command` carrying no edit or retract variant is
 asserted by a boundary test rather than left implicit.
 
+`ModerationReportSubmitted` v2 adds required `evidence: { status: "captured", content }`.
+The content snapshot contains `revision`, `body`, `quotations`, `profile_mentions`,
+`slot_mentions`, and `retracted`; report admission captures it while holding the source
+stream serialization lock. v1 reports record historical absence (`NotCaptured`) on replay;
+they never borrow current content as evidence. Other versions and incomplete v2 snapshots
+are rejected. The snapshot is visible only through moderator-authorized case reads.
+
 For game-thread `PostSubmitted`, `author` is a closed, public game-author
 sum type: `{ kind: "slot", slot_id }` for player posts,
 `{ kind: "host_narrator" }` for official host notices and votecounts, or

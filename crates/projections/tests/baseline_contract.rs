@@ -843,6 +843,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "moderation_case_target_key:u",
     "moderation_report_case_id_fkey:f",
     "moderation_report_pkey:p",
+    "moderation_report_evidence_shape:c",
     "moderation_report_reason_family_check:c",
     "moderation_target_state_pkey:p",
     "moderation_target_state_visibility_check:c",

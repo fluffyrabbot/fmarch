@@ -266,6 +266,16 @@ discussion and game-thread reads exclude only targets whose overlay is hidden. T
 and case events remain immutable, so rebuilding a case reproduces both audit history and final
 public/search visibility. Private-channel targets are rejected before a case can open.
 
+Report admission holds the source aggregate's stream lock before its target and case locks,
+so edits, retraction, curation, and source replay cannot split evidence capture across revisions.
+`ModerationReportSubmitted` v2 carries a required immutable public-content snapshot (revision,
+body, quotation snapshots, source-specific mention edges, and retraction state). Moderator-only
+reads show that per-report evidence separately from current content and revision history.
+Historical v1 reports and migration 0014's pre-existing rows explicitly carry `NotCaptured`;
+no backfill infers what someone reported from today's text. Current commands cannot submit
+`NotCaptured`, and missing or malformed v2 evidence fails closed during replay. No epoch reset
+is needed, and private-channel data never enters these snapshots.
+
 Community watches are also event-sourced. Each authenticated member and public target pair owns
 one durable subscription stream with explicit enable, disable, and read-cursor events. The current
 projection keeps one membership row plus append-only active periods, so unsubscribe/resubscribe

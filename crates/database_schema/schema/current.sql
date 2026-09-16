@@ -1933,6 +1933,8 @@ CREATE TABLE public.moderation_report (
     active boolean DEFAULT true NOT NULL,
     submitted_seq bigint NOT NULL,
     submitted_at bigint NOT NULL,
+    evidence jsonb NOT NULL,
+    CONSTRAINT moderation_report_evidence_shape CHECK (((jsonb_typeof(evidence) = 'object'::text) AND (evidence ? 'status'::text) AND ((evidence = '{"status": "not_captured"}'::jsonb) OR (((evidence ->> 'status'::text) = 'captured'::text) AND (evidence ? 'content'::text) AND (jsonb_typeof((evidence -> 'content'::text)) = 'object'::text))))),
     CONSTRAINT moderation_report_reason_family_check CHECK ((reason_family = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual_content'::text, 'self_harm'::text, 'mention_abuse'::text, 'other'::text])))
 );
 

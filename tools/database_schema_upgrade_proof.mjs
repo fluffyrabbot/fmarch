@@ -734,6 +734,28 @@ const migrationFixtures = [
       },
     ],
   },
+  {
+    version: 14,
+    assertions: [
+      {
+        sql: String.raw`SELECT evidence::text FROM moderation_report LIMIT 1`,
+        expected: '{"status": "not_captured"}',
+        message: "0014 must preserve historical absence instead of inventing report evidence",
+      },
+      {
+        sql: String.raw`SELECT is_nullable || ':' || COALESCE(column_default, 'none')
+          FROM information_schema.columns WHERE table_schema = 'public'
+          AND table_name = 'moderation_report' AND column_name = 'evidence'`,
+        expected: "NO:none",
+        message: "0014 must require explicit evidence on every new report row",
+      },
+      {
+        rejectedSql: String.raw`UPDATE moderation_report SET evidence = '{}'::jsonb`,
+        expectedError: /moderation_report_evidence_shape/iu,
+        message: "0014 must reject unclassified evidence",
+      },
+    ],
+  },
 ];
 
 const postMigrationAuthorityInvariantSql = String.raw`

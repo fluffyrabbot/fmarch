@@ -1,6 +1,6 @@
 //! Reports, case decisions, and public-content visibility overlays.
 
-use content_reference::PublicContentRef;
+use content_reference::{ProfileMention, PublicContentRef, Quotation, SlotMention};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -30,6 +30,29 @@ pub enum TrustSafetyReject {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModerationTarget {
     pub public: PublicContentRef,
+}
+
+/// Immutable public content admitted with one report. No private channel data or
+/// resolved profile presentation is copied into this evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModerationContentSnapshot {
+    pub revision: i64,
+    pub body: String,
+    pub quotations: Vec<Quotation>,
+    pub profile_mentions: Vec<ProfileMention>,
+    pub slot_mentions: Vec<SlotMention>,
+    pub retracted: bool,
+}
+
+/// Historical absence is explicit: an old report cannot acquire invented
+/// evidence from today's publication. Current commands require a snapshot and
+/// cannot submit `NotCaptured`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ModerationEvidence {
+    Captured { content: ModerationContentSnapshot },
+    NotCaptured,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,11 +140,13 @@ pub enum ModerationCommand {
         report_id: Uuid,
         reason: ReportReasonFamily,
         details: String,
+        evidence: ModerationContentSnapshot,
     },
     SubmitReport {
         report_id: Uuid,
         reason: ReportReasonFamily,
         details: String,
+        evidence: ModerationContentSnapshot,
     },
     Hide {
         reason: String,
@@ -143,6 +168,7 @@ pub enum ModerationEvent {
         report_id: Uuid,
         reason: ReportReasonFamily,
         details: String,
+        evidence: ModerationContentSnapshot,
     },
     ContentHidden {
         reason: String,
@@ -172,8 +198,9 @@ impl ModerationEvent {
                 report_id,
                 reason,
                 details,
+                evidence,
             } => {
-                serde_json::json!({"report_id": report_id, "reason": reason.as_str(), "details": details})
+                serde_json::json!({"report_id": report_id, "reason": reason.as_str(), "details": details, "evidence": ModerationEvidence::Captured { content: evidence.clone() }})
             }
             Self::ContentHidden { reason }
             | Self::CaseDismissed { reason }
@@ -194,6 +221,7 @@ pub fn decide_moderation(
                 report_id,
                 reason,
                 details,
+                evidence,
             },
         ) => Ok(vec![
             ModerationEvent::CaseOpened { target },
@@ -201,6 +229,7 @@ pub fn decide_moderation(
                 report_id,
                 reason,
                 details,
+                evidence,
             },
         ]),
         (Some(_), ModerationCommand::OpenReport { .. }) => {
@@ -213,6 +242,7 @@ pub fn decide_moderation(
                 report_id,
                 reason,
                 details,
+                evidence,
             },
         ) => {
             if state.status == ModerationCaseStatus::Hidden {
@@ -222,6 +252,7 @@ pub fn decide_moderation(
                 report_id,
                 reason,
                 details,
+                evidence,
             }])
         }
         (Some(state), ModerationCommand::Hide { reason })
@@ -286,6 +317,14 @@ mod tests {
                     report_id: Uuid::from_u128(4),
                     reason: ReportReasonFamily::Spam,
                     details: "spam".to_string(),
+                    evidence: ModerationContentSnapshot {
+                        revision: 0,
+                        body: "reported content".to_string(),
+                        quotations: Vec::new(),
+                        profile_mentions: Vec::new(),
+                        slot_mentions: Vec::new(),
+                        retracted: false,
+                    },
                 },
             ),
             Err(TrustSafetyReject::ModerationTargetHidden),
