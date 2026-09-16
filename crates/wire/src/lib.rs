@@ -3346,6 +3346,10 @@ pub struct DiscussionPostMention {
     pub len: i64,
 }
 
+/// One public discussion post. `revision` counts author edits (`0` is the
+/// submitted text) and doubles as the optimistic token an edit must present.
+/// A retracted post keeps its seat in the thread with an empty body, no
+/// quotations, and no mentions; readers render a placeholder in its place.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DiscussionPost {
     pub source_seq: i64,
@@ -3358,6 +3362,12 @@ pub struct DiscussionPost {
     #[serde(default)]
     pub citation_count: i64,
     pub created_at: i64,
+    #[serde(default)]
+    pub revision: i64,
+    #[serde(default)]
+    pub edited_at: Option<i64>,
+    #[serde(default)]
+    pub retracted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3516,6 +3526,9 @@ impl From<projections::DiscussionPostRow> for DiscussionPost {
                 .collect(),
             citation_count: post.citation_count,
             created_at: post.created_at,
+            revision: post.revision,
+            edited_at: post.edited_at,
+            retracted: post.retracted,
         }
     }
 }

@@ -67,9 +67,10 @@ WebSocket compatibility mode.
 
 Read `recommended_slice` and dependencies in the
 [completion registry](../ops/completion-registry.json) before starting work.
-The active slice is forum post editing and retraction; the resolver
-night-action extraction is queued behind it as `remaining` text on
-`foundation.maintainable-core`.
+The active slice is forum topic curation (rename, move, pin); author post
+editing and retraction landed on 2026-09-16 as slice 1 of the same item, and
+the resolver night-action extraction is queued behind it as `remaining` text
+on `foundation.maintainable-core`.
 [16-maintainable-core](16-maintainable-core.md) owns the module inventory. The
 resolver's action, outcome, and trace families are extracted; broad stage
 coordination, other projection families, physical command-test families, and
@@ -83,14 +84,18 @@ policy in [AGENTS.md](../../AGENTS.md).
 Accepted RFCs deliver product capability outside the registry's original
 inventory; each landed RFC must be recorded as a registry item with its proof
 anchors before its `Accepted` status is treated as shipped. The forum write
-model still lacks post editing, author retraction, and topic rename/move/pin;
-that gap is the open registry item `product.community.forum-editing-curation`,
-ruled 1.0-required on 2026-09-16 and now the recommended coding slice ahead of
-the remaining `foundation.maintainable-core` extractions. Editability is a
-policy each thread source owns: community forum threads are editable within a
-bounded window, game channel threads never are (posts are slot-authored
-evidence, and the absence of a game edit command is a proven contract), and any
-future signup or recruitment thread kind declares its own policy when added. Signup threads (`product.community.signup-threads`) follow forum editing:
+model now has author post editing (bounded by `forum::FORUM_EDIT_WINDOW_SECONDS`,
+append-only revision history) and author retraction (a read-time overlay that
+keeps cited excerpts), but still lacks topic rename/move/pin; that gap is the
+open registry item `product.community.forum-editing-curation`, ruled
+1.0-required on 2026-09-16 and the recommended coding slice ahead of the
+remaining `foundation.maintainable-core` extractions. Editability is a policy
+each thread source owns: community forum threads are editable within a bounded
+window, game channel threads never are (posts are slot-authored evidence, and
+the absence of a game edit command is a proven contract asserted by
+`api::public_platform_http_boundary::game_threads_have_no_edit_or_retract_path`),
+and any future signup or recruitment thread kind declares its own policy when
+added. Signup threads (`product.community.signup-threads`) follow forum editing:
 a signup thread is an ordinary forum topic that a game names as its immutable
 origin on `GameCreated`; the kind is derived from that edge, the reverse index
 is a projection, and a dedicated `Signup` context is introduced only when

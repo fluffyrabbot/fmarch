@@ -48,7 +48,7 @@ events
   the current `stream_seq`, computes new events at `stream_seq+1…`, and the unique
   constraint rejects a conflicting concurrent append. Retry on conflict.
 - Append-only. There is no `UPDATE` and no `DELETE` on `events`. Ever. Corrections are new
-  events (a `PostEdited`, a `VoteWithdrawn`), not mutations.
+  events (a `DiscussionPostEdited`, a `VoteWithdrawn`), not mutations.
 
 ## Physical database ownership
 
@@ -117,7 +117,10 @@ in the private persona projection and never become slot-authorship facts.
 **Phase:** `PhaseAdvanced` (typed), `DeadlineSet`, `DeadlineExtended`, `ThreadLocked`,
 `ThreadUnlocked`
 
-**Posting:** `PostSubmitted`, `PostEdited`, `PostRetracted`
+**Posting:** `PostSubmitted`. Game channel posts are slot-authored evidence in a live game and
+have no edit or retract event; that absence is a proven contract
+(`api::public_platform_http_boundary::game_threads_have_no_edit_or_retract_path`), not an
+omission. Editability is a policy each thread source owns; the forum's is below.
 
 **Voting:** `VoteSubmitted`, `VoteWithdrawn` (platform stream kinds; see
 [10-event-schema](10-event-schema.md)). Official vote outcome is engine
@@ -186,9 +189,21 @@ private-channel, command, or audit data. The board uses the event stream's
 lifecycle events arrive.
 
 Non-game discussion uses independent area and topic streams in the same append-only event log.
-`DiscussionAreaCreated`, `DiscussionTopicCreated`, `DiscussionPostSubmitted`, and
-the orthogonal `DiscussionTopicPostingStateChanged` / `DiscussionTopicVisibilityChanged` events
-fold synchronously into their own projection tables. The pure `community` write model decides
+`DiscussionAreaCreated`, `DiscussionTopicCreated`, `DiscussionPostSubmitted`,
+`DiscussionPostEdited`, `DiscussionPostRetracted`, and the orthogonal
+`DiscussionTopicPostingStateChanged` / `DiscussionTopicVisibilityChanged` events
+fold synchronously into their own projection tables. Edit and retraction are the forum's own
+edit policy: an author may edit their post's body and mentions for
+`forum::FORUM_EDIT_WINDOW_SECONDS` after submission (measured from submission, so edits cannot
+chain past the window) and may retract it at any time while the topic is visible and open.
+Quotations are fixed at submission. The fold moves the live `discussion_post` row to the new
+revision and appends the superseded content to `discussion_post_revision`, so history is
+never rewritten; search reindexes the current body; newly addressed mentions deliver through
+the reason-derived inbox while removed ones are not undelivered; and neither event fans out as
+a watch update or reorders the area index. Retraction is a read-time overlay: `retracted_at` is
+set, the row and its `public_publication` stay so incoming citations keep their target and
+cited excerpts keep their snapshots (RFC 0002), the search document is dropped, and readers see
+an attributed placeholder. The pure `community` write model decides
 those events from typed commands before the persistence adapter appends them against the topic's
 expected stream version. A concurrent lock or hide therefore invalidates a stale reply rather
 than allowing it across the moderation boundary. Public queries expose profile-backed authorship

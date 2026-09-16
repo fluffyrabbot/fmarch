@@ -97,3 +97,110 @@ fn public_platform_http_has_one_typed_owner_without_transport_or_persistence_dri
         "the public-platform HTTP boundary must not own persistence or hide ownership/lint debt"
     );
 }
+
+/// Editability is a per-thread-source policy. The forum owns post edit and
+/// retraction; game channels have no counterpart because their posts are
+/// slot-authored evidence in a live game. This test makes that absence a
+/// contract rather than an omission: the game command boundary rejects every
+/// edit-shaped input at deserialization, the command enums carry no such
+/// variant, and the only edit routes are keyed by a discussion topic whose
+/// write state is loaded from `discussion_topic`, so a game `PostRef` cannot
+/// reach `forum::decide_topic`.
+#[test]
+fn game_threads_have_no_edit_or_retract_path() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let wire_source = std::fs::read_to_string(repo_root.join("wire/src/lib.rs")).unwrap();
+    let commands_source =
+        std::fs::read_to_string(repo_root.join("commands/src/model.rs")).unwrap();
+    let public_platform_http = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/public_platform_http.rs"),
+    )
+    .unwrap();
+    let game_http =
+        std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/game_http.rs"))
+            .unwrap();
+    let command_http = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/command_http.rs"),
+    )
+    .unwrap();
+
+    // Runtime proof: every edit-shaped command is refused at the wire and
+    // pipeline boundaries before any authority check could run.
+    let game = uuid::Uuid::new_v4();
+    for variant in ["EditPost", "RetractPost", "PostEdited", "PostRetracted", "DeletePost"] {
+        let payload = serde_json::json!({
+            variant: {
+                "game": game,
+                "channel_id": "main",
+                "actor_slot": "slot_1",
+                "source_seq": 7,
+                "body": "rewritten",
+                "expected_revision": 0
+            }
+        });
+        let wire_error = serde_json::from_value::<wire::Command>(payload.clone())
+            .expect_err("wire Command must not admit a game post edit");
+        assert!(
+            wire_error.to_string().contains("unknown variant"),
+            "wire rejected {variant} for the wrong reason: {wire_error}"
+        );
+        let commands_error = serde_json::from_value::<commands::Command>(payload)
+            .expect_err("commands Command must not admit a game post edit");
+        assert!(
+            commands_error.to_string().contains("unknown variant"),
+            "commands rejected {variant} for the wrong reason: {commands_error}"
+        );
+    }
+
+    // Declaration proof: the enums themselves carry no edit or retract variant.
+    for (name, source) in [("wire", &wire_source), ("commands", &commands_source)] {
+        let command_enum = source
+            .split("pub enum Command {")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .unwrap_or_else(|| panic!("{name} must declare pub enum Command"));
+        for forbidden in ["EditPost", "RetractPost", "DeletePost", "Edit {", "Retract {"] {
+            assert!(
+                !command_enum.contains(forbidden),
+                "{name}::Command grew a game post edit path: {forbidden}"
+            );
+        }
+        assert!(
+            command_enum.contains("SubmitPost {"),
+            "{name}::Command still submits game posts"
+        );
+    }
+
+    // Route proof: the only edit and retract handlers live on the discussion
+    // topic route, load the topic through discussion_topic_by_id, and are
+    // decided by the forum write model. Game HTTP owns none of them.
+    assert!(public_platform_http.contains(
+        "\"/discussions/topics/{topic}/posts/{source_seq}\",\n            axum::routing::put(edit_discussion_post).delete(retract_discussion_post),"
+    ));
+    for handler in ["async fn edit_discussion_post(", "async fn retract_discussion_post("] {
+        let body = public_platform_http
+            .split(handler)
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .unwrap_or_else(|| panic!("public platform HTTP must own {handler}"));
+        assert!(body.contains("DiscussionProfileAuthentication(profile)"));
+        assert!(body.contains("projections::discussion_topic_by_id(&state.pool, topic)"));
+        assert!(body.contains("projections::discussion_post_write_state(&state.pool, topic, source_seq)"));
+        assert!(body.contains("forum::decide_topic("));
+        assert!(!body.contains("game"), "{handler} must not reach for game state");
+    }
+    for source in [&game_http, &command_http] {
+        for forbidden in [
+            "decide_topic",
+            "EditPost",
+            "RetractPost",
+            "edit_discussion_post",
+            "retract_discussion_post",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "game or command HTTP acquired a post edit path: {forbidden}"
+            );
+        }
+    }
+}

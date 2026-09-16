@@ -56,7 +56,17 @@
             <a class="discussion-post__permalink" href={`#post-${post.sourceSeq}`} aria-label={`Permalink to post ${post.sourceSeq}`}>
               #{post.sourceSeq} · {occurredAt(post.createdAt)}
             </a>
+            {#if post.editedAt !== null && !post.retracted}
+              <span class="discussion-post__edited" data-testid={`discussion-post-edited-${post.sourceSeq}`}>
+                edited {occurredAt(post.editedAt)}
+              </span>
+            {/if}
           </header>
+          {#if post.retracted}
+            <p class="discussion-post__retracted" data-testid={`discussion-post-retracted-${post.sourceSeq}`}>
+              Retracted by the author.
+            </p>
+          {:else}
           {#each post.quotations as quotation}
             <blockquote class="discussion-quote" data-testid={`discussion-quote-block-${post.sourceSeq}-${quotation.sourceSeq}`}>
               <p>{quotation.excerpt}</p>
@@ -98,6 +108,7 @@
               {/if}
             </details>
           {/if}
+          {/if}
           <div class="discussion-post__actions">
             {#if post.quoteHref !== null}
               <a
@@ -109,7 +120,38 @@
                 Quote
               </a>
             {/if}
-            {#if discussion.hasSession}
+            {#if post.canEdit}
+              <details class="discussion-edit" data-testid={`discussion-edit-${post.sourceSeq}`}>
+                <summary>Edit</summary>
+                <form method="POST" action="?/editPost" class="discussion-form" data-testid={`discussion-edit-form-${post.sourceSeq}`}>
+                  <input type="hidden" name="source_seq" value={post.sourceSeq} />
+                  <input type="hidden" name="expected_revision" value={post.revision} />
+                  <MentionComposer
+                    label="Edit post"
+                    required={post.quotations.length === 0}
+                    initial={post.body}
+                    initialMentions={post.mentionHandles}
+                    testid={`discussion-edit-body-${post.sourceSeq}`}
+                    mentionsTestid={`discussion-edit-mentions-${post.sourceSeq}`}
+                  />
+                  <button type="submit" class="fm-touch-button" data-testid={`discussion-edit-submit-${post.sourceSeq}`}>Save edit</button>
+                </form>
+              </details>
+            {/if}
+            {#if post.canRetract}
+              <form method="POST" action="?/retractPost" class="discussion-retract">
+                <input type="hidden" name="source_seq" value={post.sourceSeq} />
+                <button
+                  type="submit"
+                  class="fm-touch-button fm-touch-button--secondary"
+                  data-min-touch-target-px="44"
+                  data-testid={`discussion-retract-${post.sourceSeq}`}
+                >
+                  Retract
+                </button>
+              </form>
+            {/if}
+            {#if discussion.hasSession && !post.retracted}
               <details class="discussion-report" data-testid={`discussion-report-${post.sourceSeq}`}>
                 <summary>Report this post</summary>
                 <form method="POST" action="?/report" class="discussion-form">
@@ -202,6 +244,10 @@
   .discussion-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .discussion-post p { margin-block-end: 0; white-space: pre-wrap; }
   .discussion-post__permalink { color: var(--fm-ink-muted); font-size: 13px; }
+  .discussion-post__edited { color: var(--fm-ink-muted); font-size: 13px; font-style: italic; }
+  .discussion-post__retracted { color: var(--fm-ink-muted); font-style: italic; }
+  .discussion-edit { flex-basis: 100%; }
+  .discussion-retract { display: inline; }
   .discussion-post__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 10px; }
   .discussion-quote {
     border-inline-start: 4px solid var(--fm-line-strong, var(--fm-border));

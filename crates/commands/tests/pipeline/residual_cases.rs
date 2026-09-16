@@ -13165,3 +13165,83 @@ async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_
     assert_eq!(ack.stream_seqs.len(), 1);
     wait_for_no_command_runtime_resources(&pool).await;
 }
+
+/// Editability is a per-thread-source policy: forum posts edit inside a
+/// window, game channel posts never do. The forum's edit routes load their
+/// write state through `discussion_topic_by_id` and
+/// `discussion_post_write_state`, both keyed by a discussion topic. A real
+/// game post therefore resolves to nothing on that path, so no `PostRef`
+/// into a game thread can be handed to `forum::decide_topic`, and the only
+/// way a game post changes is the moderation overlay it already has.
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn game_posts_are_unreachable_by_the_forum_edit_path(pool: PgPool) {
+    let host = "host_edit_boundary";
+    let occupant = "player_edit_boundary";
+    let game = setup_game(&pool, host, "slot_1", occupant).await;
+    handle(
+        &pool,
+        &user(occupant),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "evidence as posted".into(),
+            media: Vec::new(),
+            quotations: Vec::new(),
+            mentions: Vec::new(),
+            embed_url: None,
+            embed_snapshot: None,
+        },
+    )
+    .await
+    .expect("game post");
+    let source_seq: i64 = sqlx::query_scalar(
+        "SELECT source_seq FROM thread_view WHERE game_id = $1 AND channel_id = 'main' AND body = 'evidence as posted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        projections::discussion_topic_by_id(&pool, game)
+            .await
+            .unwrap()
+            .is_none(),
+        "a game id is not a discussion topic, so the forum edit route 404s before deciding"
+    );
+    assert!(
+        projections::discussion_post_write_state(&pool, game, source_seq)
+            .await
+            .unwrap()
+            .is_none(),
+        "a game post has no forum write state to edit or retract"
+    );
+    let forum_columns: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'thread_view' AND column_name IN ('revision', 'edited_at', 'retracted_at')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        forum_columns, 0,
+        "the game thread projection carries no edit or retraction overlay"
+    );
+    let body: String =
+        sqlx::query_scalar("SELECT body FROM thread_view WHERE game_id = $1 AND source_seq = $2")
+            .bind(game)
+            .bind(source_seq)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(body, "evidence as posted");
+    assert_eq!(
+        stored_event_count_by_kinds(
+            &pool,
+            game,
+            &["DiscussionPostEdited", "DiscussionPostRetracted", "PostEdited", "PostRetracted"],
+        )
+        .await,
+        0
+    );
+}

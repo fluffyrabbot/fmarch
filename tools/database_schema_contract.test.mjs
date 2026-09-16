@@ -65,11 +65,11 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0011_identity_delivery_provider_authority.sql");
-  assert.equal(report.migration_file_count, 11);
+  assert.equal(report.migration_head, "0012_discussion_post_editing.sql");
+  assert.equal(report.migration_file_count, 12);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 103);
+  assert.equal(report.table_count, 104);
   assert.equal(report.trigger_count, 38);
   assert.equal(report.function_count, 17);
   assert.doesNotMatch(checkedSnapshot, /admin_grant/u);
@@ -166,6 +166,26 @@ test("identity delivery claims persist one valid provenance shape", () => {
     checkedSnapshot,
     /CREATE TRIGGER auth_delivery_intent_attempt_count_guard BEFORE UPDATE OF attempt_count ON public\.auth_delivery_intent[\s\S]*auth_delivery_intent_attempt_count_monotonic\(\)/u,
   );
+});
+
+test("forum post editing is an append-only overlay on the post row", () => {
+  const editingMigration = checkedMigrations["0012_discussion_post_editing.sql"];
+  assert.equal(typeof editingMigration, "string");
+  assert.match(
+    editingMigration,
+    /ALTER TABLE public\.discussion_post[\s\S]*ADD COLUMN revision bigint DEFAULT 0 NOT NULL,[\s\S]*ADD COLUMN edited_at bigint,[\s\S]*ADD COLUMN retracted_at bigint;/u,
+  );
+  assert.match(editingMigration, /CHECK \(\(\(revision = 0\) = \(edited_at IS NULL\)\)\)/u);
+  assert.match(
+    editingMigration,
+    /CREATE TABLE public\.discussion_post_revision[\s\S]*source_seq bigint NOT NULL,[\s\S]*revision bigint NOT NULL,[\s\S]*body text NOT NULL,[\s\S]*mentions jsonb[\s\S]*superseded_seq bigint NOT NULL,[\s\S]*superseded_at bigint NOT NULL/u,
+  );
+  assert.match(
+    editingMigration,
+    /REFERENCES public\.discussion_post\(source_seq\) ON DELETE CASCADE/u,
+  );
+  assert.doesNotMatch(editingMigration, /thread_view/u, "game posts carry no edit overlay");
+  assert.doesNotMatch(editingMigration, /DROP COLUMN|DELETE FROM|UPDATE public\.discussion_post SET/u);
 });
 
 test("identity delivery provider generations are retained and exactly fenced", () => {

@@ -728,6 +728,9 @@ pub struct DiscussionPostMentionRow {
     pub len: i64,
 }
 
+/// One discussion post as it reads today. A retracted post keeps its row so
+/// the thread stays addressable and cited excerpts keep their snapshots, but
+/// its body, quotations, and mentions are withheld at read time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscussionPostRow {
     pub source_seq: i64,
@@ -737,6 +740,10 @@ pub struct DiscussionPostRow {
     pub mentions: Vec<DiscussionPostMentionRow>,
     pub citation_count: i64,
     pub created_at: i64,
+    /// Number of author edits applied; `0` is the submitted text.
+    pub revision: i64,
+    pub edited_at: Option<i64>,
+    pub retracted: bool,
 }
 
 /// One visible incoming citation of a public post.
@@ -4084,6 +4091,9 @@ async fn fold_discussion_event(
     stream_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
+    // Edits and retractions are post-level overlays: they bump the stream
+    // version but never re-record the topic surface, so an edit does not
+    // reorder the area index or refresh the topic's search document.
     let is_topic_event = matches!(
         event.kind.as_str(),
         forum::TOPIC_CREATED
@@ -4220,6 +4230,114 @@ async fn fold_discussion_event(
                 &mentions,
             )
             .await?;
+        }
+        forum::POST_EDITED => {
+            let source_seq = i64_field(&event.payload, "source_seq", &event.kind)?;
+            let revision = i64_field(&event.payload, "revision", &event.kind)?;
+            let body = str_field(&event.payload, "body", &event.kind)?;
+            let mentions = mentions_from_event(&event.payload, &event.kind)?;
+            let mentions_json =
+                serde_json::to_value(&mentions).map_err(|source| ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source,
+                })?;
+            // Append the superseded content first so history is never
+            // rewritten, then move the live row to the new revision.
+            sqlx::query(
+                r#"
+                INSERT INTO discussion_post_revision
+                    (source_seq, revision, body, mentions, superseded_seq, superseded_at)
+                SELECT source_seq, revision, body, mentions, $3, $4
+                FROM discussion_post
+                WHERE source_seq = $1 AND topic_id = $2
+                "#,
+            )
+            .bind(source_seq)
+            .bind(stream_id)
+            .bind(event.seq)
+            .bind(event.occurred_at)
+            .execute(&mut **tx)
+            .await?;
+            let updated = sqlx::query(
+                r#"
+                UPDATE discussion_post
+                SET body = $3, mentions = $4, revision = $5, edited_at = $6
+                WHERE source_seq = $1 AND topic_id = $2
+                "#,
+            )
+            .bind(source_seq)
+            .bind(stream_id)
+            .bind(&body)
+            .bind(&mentions_json)
+            .bind(revision)
+            .bind(event.occurred_at)
+            .execute(&mut **tx)
+            .await?;
+            if updated.rows_affected() != 1 {
+                return Err(ProjectionError::Db(sqlx::Error::Protocol(format!(
+                    "DiscussionPostEdited names post {source_seq} outside topic {stream_id}"
+                ))));
+            }
+            sqlx::query("UPDATE discussion_topic SET version = $2 WHERE topic_id = $1")
+                .bind(stream_id)
+                .bind(event.stream_seq)
+                .execute(&mut **tx)
+                .await?;
+            let author_profile_id: Option<Uuid> = sqlx::query_scalar(
+                "SELECT author_profile_id FROM discussion_post WHERE source_seq = $1",
+            )
+            .bind(source_seq)
+            .fetch_one(&mut **tx)
+            .await?;
+            let author_principal_id = match &event.actor {
+                eventstore::ActorId::Principal(principal) => Some(*principal),
+                _ => None,
+            };
+            publications::record_publication_revision(
+                tx,
+                stream_id,
+                source_seq,
+                &body,
+                event.seq,
+            )
+            .await?;
+            // Newly addressed profiles are delivered; the inbox key makes an
+            // already-delivered mention a no-op, and mentions the edit removed
+            // are never undelivered. Watchers are not notified of edits.
+            fan_out_profile_mentions(
+                tx,
+                stream_id,
+                source_seq,
+                event.occurred_at,
+                author_profile_id,
+                author_principal_id,
+                &mentions,
+            )
+            .await?;
+        }
+        forum::POST_RETRACTED => {
+            let source_seq = i64_field(&event.payload, "source_seq", &event.kind)?;
+            let updated = sqlx::query(
+                "UPDATE discussion_post SET retracted_at = $3 WHERE source_seq = $1 AND topic_id = $2",
+            )
+            .bind(source_seq)
+            .bind(stream_id)
+            .bind(event.occurred_at)
+            .execute(&mut **tx)
+            .await?;
+            if updated.rows_affected() != 1 {
+                return Err(ProjectionError::Db(sqlx::Error::Protocol(format!(
+                    "DiscussionPostRetracted names post {source_seq} outside topic {stream_id}"
+                ))));
+            }
+            sqlx::query("UPDATE discussion_topic SET version = $2 WHERE topic_id = $1")
+                .bind(stream_id)
+                .bind(event.stream_seq)
+                .execute(&mut **tx)
+                .await?;
+            // The publication row stays so incoming citations and moderation
+            // evidence keep their target; only discovery is withdrawn.
+            publications::withdraw_publication_search_document(tx, stream_id, source_seq).await?;
         }
         forum::POSTING_STATE_CHANGED => {
             let posting_state = str_field(&event.payload, "posting_state", &event.kind)?;
@@ -7901,7 +8019,7 @@ pub async fn discussion_posts(
     let rows = sqlx::query(
         r#"
         SELECT post.source_seq, post.body, post.quotations, post.mentions,
-               post.created_at,
+               post.created_at, post.revision, post.edited_at, post.retracted_at,
                author.profile_id AS author_profile_id,
                author.handle AS author_handle, author.display_name AS author_display_name,
                (
@@ -7950,26 +8068,45 @@ pub async fn discussion_posts(
     .await?;
     let has_more = rows.len() as i64 > limit;
     let rows: Vec<_> = rows.into_iter().take(limit as usize).collect();
+    // Retraction is a read-time overlay: the stored content stays for history
+    // and cited excerpts, but nothing of it leaves this read.
     let mentions: Vec<Vec<ProfileMention>> = rows
         .iter()
-        .map(|row| mentions_from_json(row.get("mentions"), "DiscussionPostSubmitted"))
+        .map(|row| {
+            if row.get::<Option<i64>, _>("retracted_at").is_some() {
+                return Ok(Vec::new());
+            }
+            mentions_from_json(row.get("mentions"), "DiscussionPostSubmitted")
+        })
         .collect::<Result<Vec<_>, ProjectionError>>()?;
     let directory = mention_target_directory(pool, mentions.iter().flatten()).await?;
     let mut posts: Vec<_> = rows
         .into_iter()
         .zip(mentions)
         .map(|(row, mentions)| {
+            let retracted = row.get::<Option<i64>, _>("retracted_at").is_some();
             Ok(DiscussionPostRow {
                 source_seq: row.get("source_seq"),
                 author: discussion_author_row(&row),
-                body: row.get("body"),
-                quotations: quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?,
+                body: if retracted {
+                    String::new()
+                } else {
+                    row.get("body")
+                },
+                quotations: if retracted {
+                    Vec::new()
+                } else {
+                    quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?
+                },
                 mentions: mentions
                     .into_iter()
                     .map(|mention| resolve_mention_row(&mention, &directory))
                     .collect(),
                 citation_count: row.get("citation_count"),
                 created_at: row.get("created_at"),
+                revision: row.get("revision"),
+                edited_at: row.get("edited_at"),
+                retracted,
             })
         })
         .collect::<Result<Vec<_>, ProjectionError>>()?;
@@ -7982,6 +8119,43 @@ pub async fn discussion_posts(
     })
 }
 
+/// Load the slice of one discussion post the forum write model needs to decide
+/// an author edit or retraction. Moderation and mute state are deliberately
+/// absent: the author's own post is addressable to them regardless of who
+/// else can see it, and `decide_topic` owns the admission rules.
+pub async fn discussion_post_write_state(
+    pool: &PgPool,
+    topic_id: Uuid,
+    source_seq: i64,
+) -> Result<Option<forum::PostState>, ProjectionError> {
+    let Some(row) = sqlx::query(
+        r#"
+        SELECT source_seq, author_profile_id, body, mentions, created_at, revision,
+               jsonb_array_length(quotations) > 0 AS has_quotations,
+               retracted_at IS NOT NULL AS retracted
+        FROM discussion_post
+        WHERE topic_id = $1 AND source_seq = $2
+        "#,
+    )
+    .bind(topic_id)
+    .bind(source_seq)
+    .fetch_optional(pool)
+    .await?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(forum::PostState {
+        source_seq: row.get("source_seq"),
+        author_profile_id: row.get("author_profile_id"),
+        body: row.get("body"),
+        mentions: mentions_from_json(row.get("mentions"), "DiscussionPostSubmitted")?,
+        has_quotations: row.get("has_quotations"),
+        created_at: row.get("created_at"),
+        revision: row.get("revision"),
+        retracted: row.get("retracted"),
+    }))
+}
+
 /// Load every discussion post in a topic so the write model can decide quotations.
 pub async fn quotation_thread_for_discussion(
     pool: &PgPool,
@@ -7992,7 +8166,8 @@ pub async fn quotation_thread_for_discussion(
     let rows = sqlx::query(
         r#"
         SELECT post.source_seq, post.body, post.quotations,
-               NOT EXISTS (
+               post.retracted_at IS NULL
+               AND NOT EXISTS (
                    SELECT 1 FROM profile_mute AS mute
                    WHERE $2::uuid IS NOT NULL
                      AND mute.principal_id = $2

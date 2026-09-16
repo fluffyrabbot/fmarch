@@ -227,6 +227,57 @@ pub(super) async fn record_publication(
     Ok(())
 }
 
+/// Move an existing publication and its search document to a later body. The
+/// href, author, and publication time are facts of the original submission and
+/// stay put; only the text and the search cursor position advance.
+pub(super) async fn record_publication_revision(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface_id: Uuid,
+    source_seq: i64,
+    body: &str,
+    updated_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "UPDATE public_publication SET body = $3 WHERE surface_id = $1 AND source_seq = $2",
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .bind(body)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        UPDATE public_search_document
+        SET body = $3, updated_seq = $4
+        WHERE surface_id = $1 AND source_seq = $2 AND source_seq > 0
+        "#,
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .bind(body)
+    .bind(updated_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Withdraw one post from discovery without touching its publication row, so
+/// incoming citations keep a target and moderation keeps its evidence.
+pub(super) async fn withdraw_publication_search_document(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface_id: Uuid,
+    source_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM public_search_document WHERE surface_id = $1 AND source_seq = $2 AND source_seq > 0",
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 async fn record_surface(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     surface_id: Uuid,

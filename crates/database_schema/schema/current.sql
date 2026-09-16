@@ -1119,7 +1119,27 @@ CREATE TABLE public.discussion_post (
     author_profile_id uuid,
     created_at bigint DEFAULT 0 NOT NULL,
     quotations jsonb DEFAULT '[]'::jsonb NOT NULL,
-    mentions jsonb DEFAULT '[]'::jsonb NOT NULL
+    mentions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    revision bigint DEFAULT 0 NOT NULL,
+    edited_at bigint,
+    retracted_at bigint,
+    CONSTRAINT discussion_post_edited_check CHECK (((revision = 0) = (edited_at IS NULL))),
+    CONSTRAINT discussion_post_revision_check CHECK ((revision >= 0))
+);
+
+
+--
+-- Name: discussion_post_revision; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discussion_post_revision (
+    source_seq bigint NOT NULL,
+    revision bigint NOT NULL,
+    body text NOT NULL,
+    mentions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    superseded_seq bigint NOT NULL,
+    superseded_at bigint NOT NULL,
+    CONSTRAINT discussion_post_revision_revision_check CHECK ((revision >= 0))
 );
 
 
@@ -2762,6 +2782,14 @@ ALTER TABLE ONLY public.discussion_area
 
 ALTER TABLE ONLY public.discussion_post
     ADD CONSTRAINT discussion_post_pkey PRIMARY KEY (source_seq);
+
+
+--
+-- Name: discussion_post_revision discussion_post_revision_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discussion_post_revision
+    ADD CONSTRAINT discussion_post_revision_pkey PRIMARY KEY (source_seq, revision);
 
 
 --
@@ -4834,6 +4862,14 @@ ALTER TABLE ONLY public.day_event_participation
 
 ALTER TABLE ONLY public.discussion_post
     ADD CONSTRAINT discussion_post_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.member_profile(profile_id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: discussion_post_revision discussion_post_revision_source_seq_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discussion_post_revision
+    ADD CONSTRAINT discussion_post_revision_source_seq_fkey FOREIGN KEY (source_seq) REFERENCES public.discussion_post(source_seq) ON DELETE CASCADE;
 
 
 --

@@ -53,6 +53,8 @@ export async function load({ params, locals, cookies, fetch, url }) {
         slug: params.slug,
         topicId: params.topic,
         beforeSeq,
+        viewerHandle: typeof profile?.handle === "string" ? profile.handle : null,
+        now: Math.floor(Date.now() / 1000),
       });
   return {
     shellOwner: "layout",
@@ -187,6 +189,41 @@ export const actions = {
     const anchor = topic.last_post_seq === null ? "" : `#post-${topic.last_post_seq}`;
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}${anchor}`);
   },
+  editPost: async ({ locals, cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const sourceSeq = optionalSequence(form.get("source_seq"));
+    const expectedRevision = optionalRevision(form.get("expected_revision"));
+    if (sourceSeq === null || expectedRevision === null) {
+      return fail(400, { id: "discussion-mutation", state: "reject", message: "Invalid discussion post" });
+    }
+    const mentions = parseSubmittedMentions(form);
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      method: "PUT",
+      path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts/${sourceSeq}`,
+      body: { body: text(form.get("body")), mentions, expected_revision: expectedRevision },
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to edit this post");
+    throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}#post-${sourceSeq}`);
+  },
+  retractPost: async ({ locals, cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const sourceSeq = optionalSequence(form.get("source_seq"));
+    if (sourceSeq === null) {
+      return fail(400, { id: "discussion-mutation", state: "reject", message: "Invalid discussion post" });
+    }
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      method: "DELETE",
+      path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts/${sourceSeq}`,
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to retract this post");
+    throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}#post-${sourceSeq}`);
+  },
   postingState: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const response = await mutation({
@@ -255,7 +292,7 @@ async function mutation({ locals, cookies, fetch, path, body = undefined, method
 
 async function mutationFailure(response, fallback) {
   const payload = await response.json().catch(() => null);
-  return fail([400, 401, 403, 409].includes(response.status) ? response.status : 502, {
+  return fail([400, 401, 403, 404, 409].includes(response.status) ? response.status : 502, {
     id: "discussion-mutation",
     state: "reject",
     message: typeof payload?.message === "string" ? payload.message : fallback,
@@ -264,6 +301,10 @@ async function mutationFailure(response, fallback) {
 
 function optionalSequence(value) {
   return typeof value === "string" && /^[1-9][0-9]*$/u.test(value) ? value : null;
+}
+
+function optionalRevision(value) {
+  return typeof value === "string" && /^(0|[1-9][0-9]*)$/u.test(value) ? Number(value) : null;
 }
 
 function text(value) {

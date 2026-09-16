@@ -50,7 +50,7 @@ the corresponding command and projector modules):
 |---|---|
 | Game and occupancy | `GameCreated`, `SlotAdded`, `GamePersonaRegistered`, `GamePersonaRenamed`, `SlotOccupancyStarted`, `SlotOccupancyEnded`, `GameStarted`, `GameCompleted` |
 | Slot and role state | `RoleAssigned`, `SlotStatusChanged` |
-| Posting | `PostSubmitted`, `PostEdited`, `PostRetracted` |
+| Posting | `PostSubmitted` (game channels have no edit or retract event; see below) |
 | Private rooms | `PrivateChannelDeclared`, `PrivateChannelMemberGranted`, `PrivateChannelMemberRevoked`, `PrivateChannelRevoked` |
 | Vote/action intake | `VoteSubmitted`, `VoteWithdrawn`, `ActionSubmitted`, `ActionWithdrawn` |
 | Phase control | `DeadlineSet`, `DeadlineExtended`, `PhaseDeadlineElapsed`, `ThreadLocked`, `ThreadUnlocked`, `PhaseAdvanced` |
@@ -62,6 +62,14 @@ Replacement is a paired occupancy-end/start transition. Host modkill uses
 `SlotStatusChanged`; it is not a separate `SlotModkilled` submission to the
 engine. Community discussion events have their own bounded context under
 [RFC 0003](../rfcs/0003-community-platform-v2.md).
+
+Editability is a per-thread-source policy, not a platform capability. The forum
+owns `DiscussionPostEdited { source_seq, body, mentions?, revision }` and
+`DiscussionPostRetracted { source_seq }` on the topic stream
+([`crates/forum`](../../crates/forum/src/lib.rs)); game channels own no
+counterpart because a game post is slot-authored evidence, and
+`commands::Command` / `wire::Command` carrying no edit or retract variant is
+asserted by a boundary test rather than left implicit.
 
 For game-thread `PostSubmitted`, `author` is a closed, public game-author
 sum type: `{ kind: "slot", slot_id }` for player posts,

@@ -293,7 +293,7 @@ export type MentionSuggestionPage = { suggestions: Array<DiscussionAuthor>, };
 
 export type DiscussionPostMention = { profile: DiscussionAuthor | null, offset: bigint, len: bigint, };
 
-export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | null, body: string, quotations: Array<Quotation>, mentions: Array<DiscussionPostMention>, citation_count: bigint, created_at: bigint, };
+export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | null, body: string, quotations: Array<Quotation>, mentions: Array<DiscussionPostMention>, citation_count: bigint, created_at: bigint, revision: bigint, edited_at: bigint | null, retracted: boolean, };
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 

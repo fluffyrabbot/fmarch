@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "97cb34a02afe7f5f527ee47f45726f9536b8f42e10aba45531a25c1f383b8bc3",
+  "current_schema_sha256": "942a07330b14c3aaf86027b7d6a3ba2b6a308a2d2ec75b137c68cddca09f01ef",
   "migrations": [
     {
       "version": 1,
@@ -57,7 +57,12 @@
       "version": 11,
       "filename": "0011_identity_delivery_provider_authority.sql",
       "sha256": "93d82f95136f87c6b6d60fd1192b1968204c71da988452cac78b6bbba73909ee"
+    },
+    {
+      "version": 12,
+      "filename": "0012_discussion_post_editing.sql",
+      "sha256": "03f05f7ffb0c73c5852a17fd0a00344264880a401fffc541aaf95896f6378be6"
     }
   ],
-  "authority_fingerprint_sha256": "7d68e53f2d9afc42bafedf67fdcd1e4ecf8f4bdc211d0de298255a79b0a16c0a"
+  "authority_fingerprint_sha256": "7fc1f6453b29ea00d01d70f500467b001e928b4b5f9f40ce19cb61c5a4f47f77"
 }

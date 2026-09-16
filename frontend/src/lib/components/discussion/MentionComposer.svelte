@@ -17,16 +17,22 @@
   } from "$lib/app/mention-model.mjs";
 
   export let name = "body";
+  export let label = "Reply";
   export let required = false;
   export let maxlength = 10000;
   export let testid = "discussion-post-body";
+  export let mentionsTestid = "discussion-mentions-field";
   export let suggestionsEndpoint = "/api/mention-suggestions";
+  // Editing seeds the textarea with the current text and its decided mention
+  // handles; spans are still re-derived from the body before submit.
+  export let initial = "";
+  export let initialMentions = [];
 
-  let body = "";
+  let body = initial;
   let textarea;
   let query = null;
   let suggestions = [];
-  let selected = [];
+  let selected = [...initialMentions];
   let pending = 0;
 
   $: spans = deriveMentionSpans(body, selected);
@@ -68,7 +74,7 @@
 </script>
 
 <label class="fm-field">
-  <span>Reply</span>
+  <span>{label}</span>
   <textarea
     bind:this={textarea}
     bind:value={body}
@@ -82,7 +88,7 @@
     on:blur={() => { suggestions = []; }}
   ></textarea>
 </label>
-<input type="hidden" name="mentions" value={mentionsJson} data-testid="discussion-mentions-field" />
+<input type="hidden" name="mentions" value={mentionsJson} data-testid={mentionsTestid} />
 {#if suggestions.length > 0}
   <ul class="mention-suggestions" data-testid="discussion-mention-suggestions">
     {#each suggestions as suggestion}

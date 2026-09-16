@@ -79,6 +79,15 @@ try {
       browserTopic.topic,
     );
     const quotations = await proveQuotations(member, frontendBaseUrl, browserTopic.topic);
+    const editing = await proveEditing({
+      member,
+      moderator,
+      frontendBaseUrl,
+      apiBaseUrl,
+      memberToken: sessions.memberToken,
+      moderatorToken: sessions.moderatorToken,
+      topic: browserTopic.topic,
+    });
     const moderation = await proveModeration({
       member,
       moderator,
@@ -93,13 +102,13 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
         pageSize,
         publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"],
-        publicPostFieldNames: ["source_seq", "author", "body", "quotations", "citation_count", "created_at"],
+        publicPostFieldNames: ["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"],
       },
       directory,
       empty,
@@ -107,6 +116,7 @@ try {
       seeded,
       pagination,
       quotations,
+      editing,
       moderation,
     };
     assertProof(evidence);
@@ -319,7 +329,7 @@ function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
   const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
-  const allowedPost = new Set(["source_seq", "author", "body", "quotations", "citation_count", "created_at"]);
+  const allowedPost = new Set(["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"]);
   if (
     thread?.area === null ||
     Object.keys(thread.area).some((key) => !allowedArea.has(key)) ||
@@ -413,6 +423,110 @@ async function proveQuotations(context, frontendBaseUrl, topic) {
   }
 }
 
+// Author editing and retraction from the canonical topic page, plus the API
+// boundary refusals the page relies on: a stale revision is a 409 and a
+// non-author is a 403, both without touching the post.
+async function proveEditing({ member, moderator, frontendBaseUrl, apiBaseUrl, memberToken, moderatorToken, topic }) {
+  const page = await member.newPage({ viewport: { width: 1024, height: 768 } });
+  const otherPage = await moderator.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${encodeURIComponent(topic)}`;
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    const articles = page.locator('article[data-testid^="discussion-post-"]');
+    // The opening post is cited by the quotation proof; retracting it later
+    // must keep that excerpt. The reply (second post) is edited.
+    const openingSeq = discussionPostSeq(await articles.nth(0).getAttribute("data-testid"));
+    const replySeq = discussionPostSeq(await articles.nth(1).getAttribute("data-testid"));
+
+    // Edit the member's own reply from the page.
+    await page.getByTestId(`discussion-edit-${replySeq}`).locator("summary").click();
+    const editBody = page.getByTestId(`discussion-edit-body-${replySeq}`);
+    await editBody.waitFor({ state: "visible" });
+    if ((await editBody.inputValue()) !== "Browser reply from the authenticated member.") {
+      throw new Error("edit form did not seed the current post body");
+    }
+    await editBody.fill("Browser reply, corrected by its author.");
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId(`discussion-edit-submit-${replySeq}`).click(),
+    ]);
+    await page.getByTestId(`discussion-post-edited-${replySeq}`).waitFor({ state: "visible" });
+    const editedBody = await page.getByTestId(`discussion-post-body-${replySeq}`).innerText();
+    if (!editedBody.includes("corrected by its author")) throw new Error("edited body did not render");
+
+    // The public read reports the revision and the API refuses a stale one.
+    const thread = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic}?limit=50`);
+    const edited = thread.posts.find((post) => String(post.source_seq) === replySeq);
+    if (edited?.revision !== 1 || typeof edited?.edited_at !== "number" || edited?.retracted !== false) {
+      throw new Error(`edited post did not report revision 1: ${JSON.stringify(edited)}`);
+    }
+    const stale = await fetch(`${apiBaseUrl}/discussions/topics/${topic}/posts/${replySeq}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${memberToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ body: "Second edit on a stale read", mentions: [], expected_revision: 0 }),
+    });
+    const foreign = await fetch(`${apiBaseUrl}/discussions/topics/${topic}/posts/${replySeq}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${moderatorToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ body: "Moderator rewrite", mentions: [], expected_revision: 1 }),
+    });
+    const afterRefusals = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic}?limit=50`);
+    const untouched = afterRefusals.posts.find((post) => String(post.source_seq) === replySeq);
+    if (untouched?.revision !== 1 || untouched?.body !== "Browser reply, corrected by its author.") {
+      throw new Error("a refused edit changed the post");
+    }
+
+    // Another member sees no edit or retract control on someone else's post.
+    await otherPage.goto(topicUrl, { waitUntil: "networkidle" });
+    if (await otherPage.getByTestId(`discussion-edit-${replySeq}`).count() !== 0) {
+      throw new Error("another member was offered an edit control on a foreign post");
+    }
+    if (await otherPage.getByTestId(`discussion-retract-${replySeq}`).count() !== 0) {
+      throw new Error("another member was offered a retract control on a foreign post");
+    }
+
+    // Retract the cited opening post; the placeholder replaces it and the
+    // quoting post keeps the excerpt it cited.
+    const quoteBlock = page.locator(`[data-testid^="discussion-quote-block-"][data-testid$="-${openingSeq}"]`).first();
+    const citedExcerpt = (await quoteBlock.locator("p").innerText()).trim();
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId(`discussion-retract-${openingSeq}`).click(),
+    ]);
+    await page.getByTestId(`discussion-post-retracted-${openingSeq}`).waitFor({ state: "visible" });
+    if (await page.getByTestId(`discussion-post-body-${openingSeq}`).count() !== 0) {
+      throw new Error("retracted post still rendered its body");
+    }
+    if (await page.getByTestId(`discussion-quote-${openingSeq}`).count() !== 0) {
+      throw new Error("retracted post still offered a quote control");
+    }
+    if (await page.getByTestId(`discussion-edit-${openingSeq}`).count() !== 0) {
+      throw new Error("retracted post still offered an edit control");
+    }
+    const preservedExcerpt = (await page.locator(`[data-testid^="discussion-quote-block-"][data-testid$="-${openingSeq}"]`).first().locator("p").innerText()).trim();
+    const retractedRead = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic}?limit=50`);
+    const retracted = retractedRead.posts.find((post) => String(post.source_seq) === openingSeq);
+    if (retracted?.retracted !== true || retracted?.body !== "" || retracted?.quotations?.length !== 0) {
+      throw new Error(`retracted post leaked content: ${JSON.stringify(retracted)}`);
+    }
+    return {
+      status: "passed",
+      editedSeq: replySeq,
+      editedRevision: edited.revision,
+      editedMarkerTestId: `discussion-post-edited-${replySeq}`,
+      staleEditStatus: stale.status,
+      foreignEditStatus: foreign.status,
+      retractedSeq: openingSeq,
+      retractedPlaceholder: true,
+      retractedPlaceholderTestId: `discussion-post-retracted-${openingSeq}`,
+      citedExcerptPreserved: citedExcerpt !== "" && preservedExcerpt === citedExcerpt,
+    };
+  } finally {
+    await page.close();
+    await otherPage.close();
+  }
+}
+
 function discussionPostSeq(testId) {
   const seq = String(testId ?? "").replace(/^discussion-post-/, "");
   if (!/^[1-9][0-9]*$/u.test(seq)) {
@@ -473,6 +587,12 @@ function assertProof(evidence) {
     evidence.quotations?.status !== "passed" ||
     evidence.quotations?.quotedCount !== 1 ||
     evidence.quotations?.multiQuoteCount !== 2 ||
+    evidence.editing?.status !== "passed" ||
+    evidence.editing?.editedRevision !== 1 ||
+    evidence.editing?.staleEditStatus !== 409 ||
+    evidence.editing?.foreignEditStatus !== 403 ||
+    evidence.editing?.retractedPlaceholder !== true ||
+    evidence.editing?.citedExcerptPreserved !== true ||
     evidence.moderation?.status !== "passed"
   ) {
     throw new Error("discussion role proof must remain local, paginated, session-backed, and capability-safe");

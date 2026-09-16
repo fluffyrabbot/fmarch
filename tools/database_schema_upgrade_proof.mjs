@@ -681,6 +681,37 @@ const migrationFixtures = [
       },
     ],
   },
+  {
+    version: 12,
+    assertions: [
+      {
+        sql: String.raw`SELECT revision::text || ':' || coalesce(edited_at::text, 'null') || ':' ||
+          coalesce(retracted_at::text, 'null') || ':' || body
+        FROM discussion_post WHERE source_seq = 1`,
+        expected: "0:null:null:hello",
+        message:
+          "0012 must backfill existing discussion posts as unedited revision 0 with no overlay",
+      },
+      {
+        sql: String.raw`SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint WHERE conname = 'discussion_post_revision_pkey'`,
+        expected: "PRIMARY KEY (source_seq, revision)",
+        message: "0012 must key superseded revisions by the post and its revision number",
+      },
+      {
+        rejectedSql: String.raw`UPDATE discussion_post SET revision = 1 WHERE source_seq = 1`,
+        expectedError: /discussion_post_edited_check/iu,
+        message: "0012 must tie a non-zero revision to a recorded edit time",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO discussion_post_revision
+          (source_seq, revision, body, mentions, superseded_seq, superseded_at)
+        VALUES (999999, 0, 'orphan', '[]'::jsonb, 2, 2)`,
+        expectedError: /discussion_post_revision_source_seq_fkey/iu,
+        message: "0012 must refuse revision history that names no post",
+      },
+    ],
+  },
 ];
 
 const postMigrationAuthorityInvariantSql = String.raw`

@@ -4,6 +4,10 @@ import { buildMentionSegments } from "../../../../../lib/app/mention-model.mjs";
 export const DISCUSSION_QUOTATION_EXCERPT_BYTES = 1000;
 export const DISCUSSION_CITATION_PREVIEW_LIMIT = 5;
 export const DISCUSSION_MAX_QUOTATIONS = 8;
+// Mirrors forum::FORUM_EDIT_WINDOW_SECONDS for the edit affordance only; the
+// API decides admission, so a stale page can at most show a control that
+// the server then refuses.
+export const DISCUSSION_EDIT_WINDOW_SECONDS = 30 * 60;
 
 export function parseQuoteSeqs(searchParams) {
   const values = typeof searchParams?.getAll === "function" ? searchParams.getAll("quote") : [];
@@ -129,8 +133,30 @@ export function discussionComposerHref({
   return `${path}${query === "" ? "" : `?${query}`}${hash ? `#${hash}` : ""}`;
 }
 
-export function buildDiscussionPostView(post, { posts = [], citations = null } = {}) {
+/**
+ * Whether the viewer may edit this post right now: their own, not retracted,
+ * inside the forum edit window measured from submission, on an open topic.
+ * Retraction has no window, so `canRetract` drops only the time check.
+ */
+export function ownPostAffordances(post, { viewerHandle = null, now = null, topicOpen = false } = {}) {
+  const handle = typeof post?.author?.handle === "string" ? post.author.handle : null;
+  const own = viewerHandle !== null && handle !== null && handle === viewerHandle;
+  const retracted = post?.retracted === true;
+  const createdAt = Number(post?.created_at ?? post?.createdAt);
+  const withinWindow =
+    Number.isFinite(createdAt) &&
+    Number.isFinite(now) &&
+    now - createdAt <= DISCUSSION_EDIT_WINDOW_SECONDS;
+  const canRetract = own && !retracted && topicOpen;
+  return Object.freeze({ canEdit: canRetract && withinWindow, canRetract });
+}
+
+export function buildDiscussionPostView(
+  post,
+  { posts = [], citations = null, viewerHandle = null, now = null, topicOpen = false } = {},
+) {
   const bySeq = postsBySeq(posts);
+  const retracted = post?.retracted === true;
   const outgoing = Array.isArray(post?.quotations) ? post.quotations : [];
   const quotations = Object.freeze(
     outgoing
@@ -168,6 +194,13 @@ export function buildDiscussionPostView(post, { posts = [], citations = null } =
       .filter(Boolean)
       .slice(0, DISCUSSION_CITATION_PREVIEW_LIMIT),
   );
+  const revision = Number(post?.revision ?? 0);
+  const affordances = ownPostAffordances(post, { viewerHandle, now, topicOpen });
+  const mentionHandles = Object.freeze(
+    (Array.isArray(post?.mentions) ? post.mentions : [])
+      .map((mention) => mention?.profile?.handle)
+      .filter((handle) => typeof handle === "string" && handle !== ""),
+  );
   return Object.freeze({
     sourceSeq: Number(post?.source_seq),
     author: buildCommunityAuthorView(post?.author),
@@ -179,6 +212,12 @@ export function buildDiscussionPostView(post, { posts = [], citations = null } =
     incomingCitations,
     moreCitationCount: Math.max(0, citationCount - incomingCitations.length),
     quoteHref: null,
+    revision: Number.isFinite(revision) ? revision : 0,
+    editedAt: post?.edited_at ?? null,
+    retracted,
+    mentionHandles,
+    canEdit: affordances.canEdit,
+    canRetract: affordances.canRetract,
   });
 }
 
@@ -190,13 +229,17 @@ export function buildDiscussionThreadView({
   slug,
   topicId,
   beforeSeq = null,
+  viewerHandle = null,
+  now = null,
 }) {
   const posts = Array.isArray(thread?.posts) ? thread.posts : [];
-  const quoteEnabled = canPost && thread?.topic?.posting_state === "open";
+  const topicOpen = thread?.topic?.posting_state === "open";
+  const quoteEnabled = canPost && topicOpen;
   const topic = topicId ?? thread?.topic?.topic;
   const attachedQuotations = Object.freeze(
     buildAttachedQuotations({
-      posts,
+      // A retracted post has nothing left to quote.
+      posts: posts.filter((post) => post?.retracted !== true),
       quoteSeqs,
       topicId: topic,
     }).map((quotation) =>
@@ -218,13 +261,16 @@ export function buildDiscussionThreadView({
         const view = buildDiscussionPostView(post, {
           posts,
           citations: citationPages[Number(post.source_seq)] ?? null,
+          viewerHandle,
+          now,
+          topicOpen,
         });
         const nextQuotes = attachedSeqs.includes(Number(post.source_seq))
           ? attachedSeqs
           : [...attachedSeqs, Number(post.source_seq)].slice(0, DISCUSSION_MAX_QUOTATIONS);
         return Object.freeze({
           ...view,
-          quoteHref: quoteEnabled
+          quoteHref: quoteEnabled && !view.retracted
             ? discussionComposerHref({
                 slug,
                 topic: topicId ?? thread?.topic?.topic,

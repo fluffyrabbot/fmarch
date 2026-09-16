@@ -107,6 +107,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             post(create_discussion_post),
         )
         .route(
+            "/discussions/topics/{topic}/posts/{source_seq}",
+            axum::routing::put(edit_discussion_post).delete(retract_discussion_post),
+        )
+        .route(
             "/discussions/topics/{topic}/posts/{source_seq}/citations",
             get(discussion_post_citations),
         )
@@ -768,6 +772,17 @@ struct CreateDiscussionPostRequest {
     mentions: Vec<DiscussionPostMentionInput>,
 }
 
+/// Author edit of an own post. Quotations are fixed at submission and are
+/// deliberately absent; `expected_revision` must equal the post's current
+/// revision or the edit is refused as stale.
+#[derive(Debug, Clone, Deserialize)]
+struct EditDiscussionPostRequest {
+    body: String,
+    #[serde(default)]
+    mentions: Vec<DiscussionPostMentionInput>,
+    expected_revision: i64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct ModerateDiscussionTopicRequest {
     posting_state: Option<String>,
@@ -953,7 +968,7 @@ async fn create_discussion_post(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current)?;
+    let topic_state = forum_topic_state(&current, Vec::new())?;
     let thread = projections::quotation_thread_for_discussion(
         &state.pool,
         topic,
@@ -1005,6 +1020,106 @@ async fn create_discussion_post(
     Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
 }
 
+/// Author edit of an own forum post. The route is keyed by a discussion topic
+/// id and loads its write state from `discussion_topic`, so a game id has no
+/// topic row here and cannot reach `decide_topic`; game posts have no edit
+/// path anywhere.
+async fn edit_discussion_post(
+    State(state): State<PublicPlatformHttpState>,
+    Path((topic, source_seq)): Path<(Uuid, i64)>,
+    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+    Json(request): Json<EditDiscussionPostRequest>,
+) -> Result<Json<DiscussionTopic>, ApiError> {
+    let current = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    let post = projections::discussion_post_write_state(&state.pool, topic, source_seq)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion post"))?;
+    if request.mentions.len() > content_reference::MAX_MENTIONS_PER_POST {
+        return Err(content_reference_reject_api_error(
+            content_reference::ContentReferenceReject::TooManyMentions,
+        ));
+    }
+    // Same emptiness rule as submission: the quotations fixed on the post are
+    // the only thing that can stand in for a body.
+    let body = if request.body.trim().is_empty() {
+        if !post.has_quotations {
+            validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
+        }
+        String::new()
+    } else {
+        validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
+    };
+    let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
+        .await
+        .and_then(|candidates| {
+            content_reference::decide_profile_mentions(body.as_str(), candidates.as_slice())
+        })
+        .map_err(content_reference_reject_api_error)?;
+    let topic_state = forum_topic_state(&current, vec![post])?;
+    let events = forum::decide_topic(
+        Some(&topic_state),
+        TopicCommand::EditPost {
+            source_seq,
+            body,
+            mentions,
+            author_profile_id: profile.profile_id,
+            expected_revision: request.expected_revision,
+            now: unix_now_seconds(),
+        },
+    )
+    .map_err(forum_reject_api_error)?;
+    append_forum_events(
+        &state.pool,
+        topic,
+        current.version,
+        events,
+        profile.principal_id,
+    )
+    .await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok(Json(DiscussionTopic::from(topic)))
+}
+
+/// Author retraction of an own forum post: a read-time overlay, never a
+/// delete. History and cited excerpts survive; the placeholder remains.
+async fn retract_discussion_post(
+    State(state): State<PublicPlatformHttpState>,
+    Path((topic, source_seq)): Path<(Uuid, i64)>,
+    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+) -> Result<Json<DiscussionTopic>, ApiError> {
+    let current = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    let post = projections::discussion_post_write_state(&state.pool, topic, source_seq)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion post"))?;
+    let topic_state = forum_topic_state(&current, vec![post])?;
+    let events = forum::decide_topic(
+        Some(&topic_state),
+        TopicCommand::RetractPost {
+            source_seq,
+            author_profile_id: profile.profile_id,
+        },
+    )
+    .map_err(forum_reject_api_error)?;
+    append_forum_events(
+        &state.pool,
+        topic,
+        current.version,
+        events,
+        profile.principal_id,
+    )
+    .await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok(Json(DiscussionTopic::from(topic)))
+}
+
 async fn discussion_post_citations(
     State(state): State<PublicPlatformHttpState>,
     Path((topic, source_seq)): Path<(Uuid, i64)>,
@@ -1033,7 +1148,7 @@ async fn moderate_discussion_topic(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current)?;
+    let topic_state = forum_topic_state(&current, Vec::new())?;
     let command = match (
         request.posting_state.as_deref(),
         request.visibility.as_deref(),
@@ -1335,7 +1450,10 @@ fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<
     Ok(text.to_string())
 }
 
-fn forum_topic_state(topic: &projections::DiscussionTopicRow) -> Result<TopicState, ApiError> {
+fn forum_topic_state(
+    topic: &projections::DiscussionTopicRow,
+    posts: Vec<forum::PostState>,
+) -> Result<TopicState, ApiError> {
     Ok(TopicState {
         topic_id: topic.topic_id,
         area_id: topic.area_id,
@@ -1344,6 +1462,7 @@ fn forum_topic_state(topic: &projections::DiscussionTopicRow) -> Result<TopicSta
         visibility: TopicVisibility::parse(topic.visibility.as_str())
             .map_err(forum_reject_api_error)?,
         version: topic.version,
+        posts,
     })
 }
 
@@ -1388,12 +1507,13 @@ fn forum_reject_api_error(reject: ForumReject) -> ApiError {
         ForumReject::InvalidPostingState | ForumReject::InvalidVisibility => {
             StatusCode::BAD_REQUEST
         }
-        ForumReject::TopicNotFound => StatusCode::NOT_FOUND,
+        ForumReject::TopicNotFound | ForumReject::PostNotFound => StatusCode::NOT_FOUND,
+        ForumReject::NotAuthor => StatusCode::FORBIDDEN,
         _ => StatusCode::CONFLICT,
     };
     ApiError::Reject {
         status,
-        error: if status == StatusCode::NOT_FOUND {
+        error: if status == StatusCode::NOT_FOUND || status == StatusCode::FORBIDDEN {
             RejectCode::NotAuthorized
         } else if status == StatusCode::BAD_REQUEST {
             RejectCode::Internal

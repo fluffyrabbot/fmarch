@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 import {
+  DISCUSSION_EDIT_WINDOW_SECONDS,
   buildDiscussionPostView,
   buildDiscussionThreadView,
   discussionComposerHref,
   excerptFromBody,
+  ownPostAffordances,
   parseQuoteSeqs,
   parseSubmittedQuotations,
 } from "./discussion-thread-model.mjs";
@@ -293,4 +295,157 @@ test("discussion quotation helpers keep no-JS quote URLs and hidden originals ho
   );
   const locked = buildDiscussionPostView(posts[0], { posts });
   assert.equal(locked.quoteHref, null);
+});
+
+test("own posts inside the edit window carry edit and retract affordances; others do not", () => {
+  const now = 1_800_000_900;
+  const posts = [
+    { source_seq: 40, author: { handle: "member_a", display_name: "Member A" }, body: "Mine", created_at: now - 60, revision: 2, edited_at: now - 30, retracted: false },
+    { source_seq: 41, author: { handle: "member_b", display_name: "Member B" }, body: "Theirs", created_at: now - 60 },
+    { source_seq: 42, author: { handle: "member_a", display_name: "Member A" }, body: "Old", created_at: now - DISCUSSION_EDIT_WINDOW_SECONDS - 1 },
+    { source_seq: 43, author: { handle: "member_a", display_name: "Member A" }, body: "", created_at: now - 10, retracted: true, mentions: [] },
+    {
+      source_seq: 44,
+      author: { handle: "member_a", display_name: "Member A" },
+      body: "@member_b hi",
+      created_at: now - 10,
+      mentions: [{ profile: { handle: "member_b", display_name: "Member B" }, offset: 0, len: 9 }],
+    },
+  ];
+  const view = buildDiscussionThreadView({
+    thread: { topic: { topic, posting_state: "open" }, posts },
+    canPost: true,
+    slug: "general",
+    topicId: topic,
+    viewerHandle: "member_a",
+    now,
+    quoteSeqs: [43],
+  });
+  const [mine, theirs, old, retracted, mentioning] = view.posts;
+  assert.equal(mine.canEdit, true);
+  assert.equal(mine.canRetract, true);
+  assert.equal(mine.revision, 2);
+  assert.equal(mine.editedAt, now - 30);
+  assert.equal(theirs.canEdit, false);
+  assert.equal(theirs.canRetract, false);
+  assert.equal(old.canEdit, false, "the window is measured from submission");
+  assert.equal(old.canRetract, true, "retraction has no window");
+  assert.equal(retracted.retracted, true);
+  assert.equal(retracted.canEdit, false);
+  assert.equal(retracted.canRetract, false);
+  assert.equal(retracted.quoteHref, null, "a retracted post cannot be quoted");
+  assert.deepEqual(view.attachedQuotations, [], "quote query for a retracted post seeds nothing");
+  assert.deepEqual(mentioning.mentionHandles, ["member_b"]);
+
+  const locked = buildDiscussionThreadView({
+    thread: { topic: { topic, posting_state: "locked" }, posts },
+    canPost: true,
+    slug: "general",
+    topicId: topic,
+    viewerHandle: "member_a",
+    now,
+  });
+  assert.equal(locked.posts[0].canEdit, false, "a locked topic is frozen for authors too");
+  assert.equal(locked.posts[0].canRetract, false);
+  assert.deepEqual(
+    ownPostAffordances(posts[0], { viewerHandle: null, now, topicOpen: true }),
+    { canEdit: false, canRetract: false },
+  );
+  assert.equal(buildDiscussionPostView(posts[1]).revision, 0);
+  assert.equal(buildDiscussionPostView(posts[1]).editedAt, null);
+});
+
+test("editPost sends the optimistic revision to the typed post route and lands on the post anchor", async () => {
+  let mutation;
+  await assert.rejects(
+    () => actions.editPost({
+      cookies: { get: () => "member-session" },
+      params: { slug: "general", topic },
+      request: new Request("http://localhost/discussions/general/t/topic?/editPost", {
+        method: "POST",
+        body: new URLSearchParams({
+          source_seq: "40",
+          expected_revision: "2",
+          body: "Corrected reply",
+          mentions: JSON.stringify([{ handle: "member_b", offset: 0, len: 9 }]),
+        }),
+      }),
+      fetch: async (url, options) => {
+        mutation = { url, method: options.method, body: JSON.parse(options.body) };
+        return Response.json({ last_post_seq: 81 }, { status: 200 });
+      },
+    }),
+    (error) => error?.status === 303 && String(error?.location).endsWith(`/t/${topic}#post-40`),
+  );
+  assert.equal(mutation.url, `/discussions/topics/${topic}/posts/40`);
+  assert.equal(mutation.method, "PUT");
+  assert.deepEqual(mutation.body, {
+    body: "Corrected reply",
+    mentions: [{ handle: "member_b", offset: 0, len: 9 }],
+    expected_revision: 2,
+  });
+
+  const stale = await actions.editPost({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/editPost", {
+      method: "POST",
+      body: new URLSearchParams({ source_seq: "40", expected_revision: "1", body: "Late" }),
+    }),
+    fetch: async () => Response.json(
+      { error: "stream_conflict", message: "discussion post changed since it was read; refresh and try again" },
+      { status: 409 },
+    ),
+  });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.data.id, "discussion-mutation");
+  assert.match(stale.data.message, /changed since it was read/u);
+
+  const malformed = await actions.editPost({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/editPost", {
+      method: "POST",
+      body: new URLSearchParams({ source_seq: "40", expected_revision: "-1", body: "x" }),
+    }),
+    fetch: async () => { throw new Error("must not reach the API"); },
+  });
+  assert.equal(malformed.status, 400);
+});
+
+test("retractPost uses DELETE on the typed post route", async () => {
+  let mutation;
+  await assert.rejects(
+    () => actions.retractPost({
+      cookies: { get: () => "member-session" },
+      params: { slug: "general", topic },
+      request: new Request("http://localhost/discussions/general/t/topic?/retractPost", {
+        method: "POST",
+        body: new URLSearchParams({ source_seq: "40" }),
+      }),
+      fetch: async (url, options) => {
+        mutation = { url, method: options.method, body: options.body };
+        return Response.json({ last_post_seq: 81 }, { status: 200 });
+      },
+    }),
+    (error) => error?.status === 303 && String(error?.location).endsWith("#post-40"),
+  );
+  assert.equal(mutation.url, `/discussions/topics/${topic}/posts/40`);
+  assert.equal(mutation.method, "DELETE");
+  assert.equal(mutation.body, undefined);
+
+  const forbidden = await actions.retractPost({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/retractPost", {
+      method: "POST",
+      body: new URLSearchParams({ source_seq: "41" }),
+    }),
+    fetch: async () => Response.json(
+      { error: "not_authorized", message: "only the post author may change this post" },
+      { status: 403 },
+    ),
+  });
+  assert.equal(forbidden.status, 403);
+  assert.match(forbidden.data.message, /only the post author/u);
 });
