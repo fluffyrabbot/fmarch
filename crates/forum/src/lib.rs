@@ -4,8 +4,10 @@ use content_reference::{
     mentions_payload, quotations_payload, ContentReferenceReject, ProfileMention, Quotation,
 };
 
+mod codec;
 mod content;
 mod post;
+pub use codec::{decode_event, DecodedForumEvent, ForumDecodeError};
 pub use content::{PostBody, PostContent, TopicTitle};
 pub use post::{decide_post, PostCommand, PostDecisionContext};
 use serde::{Deserialize, Serialize};

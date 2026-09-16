@@ -64,10 +64,19 @@ submission window, expected revision, checked revision advancement, and the
 fixed quotation content allowance. A refreshed clock before submission or an
 overflowing elapsed-time calculation fails closed.
 
-This is a preparatory contract cut, not the RFC 0006 application migration.
+`forum::decode_event` owns the persisted kind/version contract for all ten
+forum event kinds. Version 1 explicitly retains missing historical profile
+attribution and absent/null quotation and mention lists; all other required
+fields remain required. Historical text is preserved verbatim rather than
+revalidated against current command policy. Unknown kinds, unsupported versions,
+and malformed payloads are explicit errors. Forum append batches are decoded
+before writing, retained forum streams before destructive rebuild, and the
+projector matches decoded variants exhaustively instead of inspecting raw JSON.
+
+These are preparatory contract cuts, not the RFC 0006 application migration.
 HTTP still loads projection state and orchestrates the current event append;
 the journal still uses its existing envelopes. The typed neutral journal,
-forum aggregate replay/codec, repository/application ownership, and projector
+forum aggregate replay, repository/application ownership, and full projector
 cutover in RFC 0006 steps 3 and 4 remain incomplete. No compatibility wrapper,
 new write path, schema reset, or event/wire encoding was introduced here.
 

@@ -1,6 +1,55 @@
 use std::path::PathBuf;
 
 #[test]
+fn forum_projection_consumes_owner_decoded_events_exhaustively() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+    let source = std::fs::read_to_string(root).unwrap();
+    let fold = source
+        .split("async fn fold_discussion_event(")
+        .nth(1)
+        .unwrap()
+        .split("/// Append profile events")
+        .next()
+        .unwrap();
+    assert!(fold.contains("forum::decode_event(&event.kind, event.version, &event.payload)?"));
+    assert!(fold.contains("match decoded {"));
+    for forbidden in [
+        "match event.kind",
+        "_ => {}",
+        "str_field(",
+        "uuid_field(",
+        "i64_field(",
+        "bool_field(",
+        "quotations_from_event(",
+        "mentions_from_event(",
+        "discussion_author_profile_id(",
+        "event.payload.get(",
+        "event.payload[",
+    ] {
+        assert!(
+            !fold.contains(forbidden),
+            "forum fold bypasses typed owner: {forbidden}"
+        );
+    }
+    for adapter in [
+        "pub async fn append_discussion_and_project_in_tx(",
+        "pub async fn append_discussion_and_project_expected(",
+    ] {
+        let body = source
+            .split(adapter)
+            .nth(1)
+            .unwrap()
+            .split("\npub async fn ")
+            .next()
+            .unwrap();
+        assert!(
+            body.contains("validate_discussion_events(events)?"),
+            "missing complete-batch preflight: {adapter}"
+        );
+    }
+}
+
+#[test]
 fn effect_and_private_channel_families_have_bounded_typed_owners() {
     let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let composition_root = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();

@@ -73,7 +73,6 @@ use content_reference::{
 use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
 use domain::phase::PhaseId;
 use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
-use forum::{self, PostingState, TopicVisibility};
 use identity::{
     active_subject_key_store, open_subject_claim, ClaimId, SubjectClaimEnvelope, SubjectId,
     SubjectKeyStore,
@@ -927,6 +926,8 @@ pub struct PublicProfileRow {
 pub enum ProjectionError {
     #[error(transparent)]
     Store(#[from] StoreError),
+    #[error(transparent)]
+    ForumCodec(#[from] forum::ForumDecodeError),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
     #[error("subject privacy boundary failed: {0}")]
@@ -3191,6 +3192,7 @@ pub async fn append_discussion_and_project_in_tx(
     stream_id: Uuid,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
+    validate_discussion_events(events)?;
     let stored = append_in_tx(tx, stream_id, events).await?;
     for event in &stored {
         fold_discussion_event(tx, stream_id, event).await?;
@@ -3207,6 +3209,7 @@ pub async fn append_discussion_and_project_expected(
     expected_stream_seq: i64,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
+    validate_discussion_events(events)?;
     let mut tx = pool.begin().await?;
     let stored =
         eventstore::append_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
@@ -3215,6 +3218,13 @@ pub async fn append_discussion_and_project_expected(
     }
     tx.commit().await?;
     Ok(stored)
+}
+
+fn validate_discussion_events(events: &[EventInput]) -> Result<(), ProjectionError> {
+    for event in events {
+        forum::decode_event(&event.kind, event.version, &event.payload)?;
+    }
+    Ok(())
 }
 
 pub async fn member_mute_state(
@@ -3894,6 +3904,12 @@ pub async fn rebuild_discussion_stream(
     if !is_topic_stream && !is_area_stream {
         return Ok(());
     }
+    // Validate the entire retained stream before replacing any projected row.
+    // The shared journal upcaster passes unknown kinds/versions through; this
+    // source-owned codec must reject them rather than silently skip a fact.
+    for event in &events {
+        forum::decode_event(&event.kind, event.version, &event.payload)?;
+    }
     if is_topic_stream {
         sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1")
             .bind(stream_id)
@@ -4156,24 +4172,29 @@ async fn fold_discussion_event(
     stream_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
+    use forum::DecodedForumEvent;
+
+    let decoded = forum::decode_event(&event.kind, event.version, &event.payload)?;
     // Edits and retractions are post-level overlays: they bump the stream
-    // version but never re-record the topic surface, so an edit does not
-    // reorder the area index or refresh the topic's search document.
-    let is_topic_event = matches!(
-        event.kind.as_str(),
-        forum::TOPIC_CREATED
-            | forum::POST_SUBMITTED
-            | forum::POSTING_STATE_CHANGED
-            | forum::VISIBILITY_CHANGED
-            | forum::TOPIC_RENAMED
-            | forum::TOPIC_MOVED
-            | forum::TOPIC_PINNED_CHANGED
-    );
-    match event.kind.as_str() {
-        forum::AREA_CREATED => {
-            let slug = str_field(&event.payload, "slug", &event.kind)?;
-            let title = str_field(&event.payload, "title", &event.kind)?;
-            let description = str_field(&event.payload, "description", &event.kind)?;
+    // version but do not refresh the topic surface or reorder the area index.
+    let (refresh_surface, rehome_publications) = match &decoded {
+        DecodedForumEvent::AreaCreated { .. }
+        | DecodedForumEvent::PostEdited { .. }
+        | DecodedForumEvent::PostRetracted { .. } => (false, false),
+        DecodedForumEvent::TopicCreated { .. }
+        | DecodedForumEvent::PostSubmitted { .. }
+        | DecodedForumEvent::PostingStateChanged { .. }
+        | DecodedForumEvent::VisibilityChanged { .. }
+        | DecodedForumEvent::TopicRenamed { .. }
+        | DecodedForumEvent::PinnedChanged { .. } => (true, false),
+        DecodedForumEvent::TopicMoved { .. } => (true, true),
+    };
+    match decoded {
+        DecodedForumEvent::AreaCreated {
+            slug,
+            title,
+            description,
+        } => {
             sqlx::query(
                 "INSERT INTO discussion_area (area_id, slug, title, description, created_seq) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (area_id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, description = EXCLUDED.description, created_seq = EXCLUDED.created_seq",
             )
@@ -4185,10 +4206,11 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        forum::TOPIC_CREATED => {
-            let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
-            let title = str_field(&event.payload, "title", &event.kind)?;
-            let author_profile_id = discussion_author_profile_id(event)?;
+        DecodedForumEvent::TopicCreated {
+            area_id,
+            title,
+            author_profile_id,
+        } => {
             sqlx::query(
                 r#"
                 INSERT INTO discussion_topic
@@ -4208,11 +4230,12 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        forum::POST_SUBMITTED => {
-            let body = str_field(&event.payload, "body", &event.kind)?;
-            let quotations = quotations_from_event(&event.payload, &event.kind)?;
-            let mentions = mentions_from_event(&event.payload, &event.kind)?;
-            let author_profile_id = discussion_author_profile_id(event)?;
+        DecodedForumEvent::PostSubmitted {
+            body,
+            quotations,
+            mentions,
+            author_profile_id,
+        } => {
             sqlx::query(
                 "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, quotations, mentions, created_seq, created_at) VALUES ($1, $2, $3, $4, $5, $6, $1, $7)",
             )
@@ -4302,11 +4325,12 @@ async fn fold_discussion_event(
             )
             .await?;
         }
-        forum::POST_EDITED => {
-            let source_seq = i64_field(&event.payload, "source_seq", &event.kind)?;
-            let revision = i64_field(&event.payload, "revision", &event.kind)?;
-            let body = str_field(&event.payload, "body", &event.kind)?;
-            let mentions = mentions_from_event(&event.payload, &event.kind)?;
+        DecodedForumEvent::PostEdited {
+            source_seq,
+            revision,
+            body,
+            mentions,
+        } => {
             let mentions_json =
                 serde_json::to_value(&mentions).map_err(|source| ProjectionError::Payload {
                     kind: event.kind.clone(),
@@ -4383,8 +4407,7 @@ async fn fold_discussion_event(
             )
             .await?;
         }
-        forum::POST_RETRACTED => {
-            let source_seq = i64_field(&event.payload, "source_seq", &event.kind)?;
+        DecodedForumEvent::PostRetracted { source_seq } => {
             let updated = sqlx::query(
                 "UPDATE discussion_post SET retracted_at = $3 WHERE source_seq = $1 AND topic_id = $2",
             )
@@ -4407,15 +4430,12 @@ async fn fold_discussion_event(
             // evidence keep their target; only discovery is withdrawn.
             publications::withdraw_publication_search_document(tx, stream_id, source_seq).await?;
         }
-        forum::POSTING_STATE_CHANGED => {
-            let posting_state = str_field(&event.payload, "posting_state", &event.kind)?;
-            PostingState::parse(posting_state.as_str())
-                .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
+        DecodedForumEvent::PostingStateChanged { posting_state } => {
             sqlx::query(
                 "UPDATE discussion_topic SET posting_state = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
             )
             .bind(stream_id)
-            .bind(posting_state)
+            .bind(posting_state.as_str())
             .bind(event.seq)
             .bind(event.occurred_at)
             .bind(event.stream_seq)
@@ -4426,8 +4446,7 @@ async fn fold_discussion_event(
         // updated_seq so the area index does not treat filing as activity;
         // the surface href follows the area so every post link stays
         // canonical. Pin likewise leaves the keyset untouched.
-        forum::TOPIC_RENAMED => {
-            let title = str_field(&event.payload, "title", &event.kind)?;
+        DecodedForumEvent::TopicRenamed { title } => {
             sqlx::query(
                 "UPDATE discussion_topic SET title = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
             )
@@ -4438,8 +4457,7 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        forum::TOPIC_MOVED => {
-            let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
+        DecodedForumEvent::TopicMoved { area_id } => {
             sqlx::query(
                 "UPDATE discussion_topic SET area_id = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
             )
@@ -4450,8 +4468,7 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        forum::TOPIC_PINNED_CHANGED => {
-            let pinned = bool_field(&event.payload, "pinned", &event.kind)?;
+        DecodedForumEvent::PinnedChanged { pinned } => {
             sqlx::query(
                 "UPDATE discussion_topic SET pinned = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
             )
@@ -4462,37 +4479,26 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        forum::VISIBILITY_CHANGED => {
-            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
-            TopicVisibility::parse(visibility.as_str())
-                .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
+        DecodedForumEvent::VisibilityChanged { visibility } => {
             sqlx::query(
                 "UPDATE discussion_topic SET visibility = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
             )
             .bind(stream_id)
-            .bind(visibility)
+            .bind(visibility.as_str())
             .bind(event.seq)
             .bind(event.occurred_at)
             .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
         }
-        _ => {}
     }
-    if is_topic_event {
+    if refresh_surface {
         publications::record_forum_surface(tx, stream_id, event.seq, event.occurred_at).await?;
     }
-    if event.kind == forum::TOPIC_MOVED {
+    if rehome_publications {
         publications::rehome_forum_publications(tx, stream_id).await?;
     }
     Ok(())
-}
-
-fn discussion_author_profile_id(event: &StoredEvent) -> Result<Option<Uuid>, ProjectionError> {
-    if event.payload.get("author_profile_id").is_some() {
-        return uuid_field(&event.payload, "author_profile_id", &event.kind).map(Some);
-    }
-    Ok(None)
 }
 
 /// Append profile events that have already crossed the profile application
@@ -10798,16 +10804,6 @@ fn slot_mentions_from_event(
     })
 }
 
-fn mentions_from_event(
-    payload: &serde_json::Value,
-    kind: &str,
-) -> Result<Vec<ProfileMention>, ProjectionError> {
-    content_reference::mentions_from_payload(payload).map_err(|source| ProjectionError::Payload {
-        kind: kind.to_string(),
-        source,
-    })
-}
-
 /// Fan out decided profile mentions into the reason-derived inbox. Publicity
 /// was decided at write time against `public_profile`; the fold resolves only
 /// the addressed profile's current active principal via `member_profile`, the
@@ -11481,15 +11477,6 @@ fn i64_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<i64, Projec
         .ok_or_else(|| ProjectionError::Payload {
             kind: kind.to_string(),
             source: serde::de::Error::custom(format!("missing integer field `{key}`")),
-        })
-}
-
-fn bool_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<bool, ProjectionError> {
-    p.get(key)
-        .and_then(serde_json::Value::as_bool)
-        .ok_or_else(|| ProjectionError::Payload {
-            kind: kind.to_string(),
-            source: serde::de::Error::custom(format!("missing boolean field `{key}`")),
         })
 }
 
