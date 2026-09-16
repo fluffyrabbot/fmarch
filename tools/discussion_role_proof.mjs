@@ -88,6 +88,14 @@ try {
       moderatorToken: sessions.moderatorToken,
       topic: browserTopic.topic,
     });
+    const curation = await proveCuration({
+      moderator,
+      frontendBaseUrl,
+      apiBaseUrl,
+      memberToken: sessions.memberToken,
+      moderatorToken: sessions.moderatorToken,
+      topic: browserTopic.topic,
+    });
     const moderation = await proveModeration({
       member,
       moderator,
@@ -102,12 +110,12 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, and locked-topic recovery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
         pageSize,
-        publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"],
+        publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"],
         publicPostFieldNames: ["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"],
       },
       directory,
@@ -117,6 +125,7 @@ try {
       pagination,
       quotations,
       editing,
+      curation,
       moderation,
     };
     assertProof(evidence);
@@ -328,7 +337,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberPrinc
 function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
-  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"]);
   const allowedPost = new Set(["source_seq", "author", "body", "quotations", "mentions", "citation_count", "created_at", "revision", "edited_at", "retracted"]);
   if (
     thread?.area === null ||
@@ -352,7 +361,7 @@ function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
 function assertPublicDiscussionPage(page, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
-  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
+  const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at", "pinned"]);
   if (
     page?.area === null ||
     typeof page?.area !== "object" ||
@@ -527,6 +536,77 @@ async function proveEditing({ member, moderator, frontendBaseUrl, apiBaseUrl, me
   }
 }
 
+// GlobalMod curation from the topic page: rename, pin (the topic then leads
+// the area's first page), and move to a second area, after which the old
+// area URL redirects to the canonical one. A member is refused at the API.
+async function proveCuration({ moderator, frontendBaseUrl, apiBaseUrl, memberToken, moderatorToken, topic }) {
+  const page = await moderator.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await fetchJson(`${apiBaseUrl}/discussions/areas`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${moderatorToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ slug: "archive", title: "Archive", description: "Filed topics." }),
+    });
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${encodeURIComponent(topic)}`;
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("discussion-rename-title").fill("Browser-created topic (filed)");
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId("discussion-rename-submit").click(),
+    ]);
+    const heading = (await page.getByTestId("discussion-topic-heading").innerText()).trim();
+    if (heading !== "Browser-created topic (filed)") throw new Error(`rename did not render: ${heading}`);
+
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId("discussion-pin-submit").click(),
+    ]);
+    await page.getByTestId("discussion-topic-pinned").waitFor({ state: "visible" });
+    await page.goto(`${frontendBaseUrl}/discussions/general`, { waitUntil: "networkidle" });
+    const firstCard = page.locator('article[data-testid^="discussion-topic-"]').first();
+    const firstId = String(await firstCard.getAttribute("data-testid")).replace(/^discussion-topic-/, "");
+    const pinnedFirst = firstId === topic
+      && (await page.getByTestId(`discussion-topic-pinned-${topic}`).count()) === 1;
+    if (!pinnedFirst) throw new Error(`pinned topic did not lead the area page: ${firstId}`);
+
+    const memberCuration = await fetch(`${apiBaseUrl}/discussions/topics/${topic}/curation`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${memberToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ pinned: false }),
+    });
+
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("discussion-move-area").selectOption("archive");
+    await Promise.all([
+      page.waitForURL(/\/discussions\/archive\/t\//, { timeout: 15000 }),
+      page.getByTestId("discussion-move-submit").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    const redirectedToCanonical = new URL(page.url()).pathname === `/discussions/archive/t/${topic}`;
+    if (!redirectedToCanonical) throw new Error(`old area URL did not redirect: ${page.url()}`);
+    await page.getByTestId("discussion-thread").waitFor({ state: "visible" });
+    const moved = await fetchJson(`${apiBaseUrl}/discussions/areas/archive?limit=${pageSize}`);
+    if (!moved.topics.some((entry) => entry.topic === topic && entry.pinned === true && entry.title === "Browser-created topic (filed)")) {
+      throw new Error("moved topic is not filed under the new area with its curation intact");
+    }
+    const general = await fetchJson(`${apiBaseUrl}/discussions/areas/general?limit=${pageSize}`);
+    if (general.topics.some((entry) => entry.topic === topic)) {
+      throw new Error("moved topic still listed in its old area");
+    }
+    return {
+      status: "passed",
+      renamedTitle: heading,
+      pinnedFirst,
+      memberCurationStatus: memberCuration.status,
+      redirectedToCanonical,
+      canonicalPath: `/discussions/archive/t/${topic}`,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 function discussionPostSeq(testId) {
   const seq = String(testId ?? "").replace(/^discussion-post-/, "");
   if (!/^[1-9][0-9]*$/u.test(seq)) {
@@ -593,6 +673,10 @@ function assertProof(evidence) {
     evidence.editing?.foreignEditStatus !== 403 ||
     evidence.editing?.retractedPlaceholder !== true ||
     evidence.editing?.citedExcerptPreserved !== true ||
+    evidence.curation?.status !== "passed" ||
+    evidence.curation?.pinnedFirst !== true ||
+    evidence.curation?.memberCurationStatus !== 403 ||
+    evidence.curation?.redirectedToCanonical !== true ||
     evidence.moderation?.status !== "passed"
   ) {
     throw new Error("discussion role proof must remain local, paginated, session-backed, and capability-safe");

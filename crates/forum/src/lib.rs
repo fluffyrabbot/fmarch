@@ -12,6 +12,9 @@ pub const POST_EDITED: &str = "DiscussionPostEdited";
 pub const POST_RETRACTED: &str = "DiscussionPostRetracted";
 pub const POSTING_STATE_CHANGED: &str = "DiscussionTopicPostingStateChanged";
 pub const VISIBILITY_CHANGED: &str = "DiscussionTopicVisibilityChanged";
+pub const TOPIC_RENAMED: &str = "DiscussionTopicRenamed";
+pub const TOPIC_MOVED: &str = "DiscussionTopicMoved";
+pub const TOPIC_PINNED_CHANGED: &str = "DiscussionTopicPinnedChanged";
 
 /// How long after submission a forum post stays editable by its author,
 /// measured from the original submission rather than the last edit so a
@@ -128,6 +131,8 @@ pub struct PostState {
 pub struct TopicState {
     pub topic_id: Uuid,
     pub area_id: Uuid,
+    pub title: String,
+    pub pinned: bool,
     pub posting_state: PostingState,
     pub visibility: TopicVisibility,
     pub version: i64,
@@ -173,6 +178,18 @@ pub enum TopicCommand {
     SetVisibility {
         visibility: TopicVisibility,
     },
+    /// Curation transitions. Capability is decided at the boundary
+    /// (GlobalMod); the write model only refuses no-ops. Curation is
+    /// independent of posting state: a locked topic can still be filed.
+    Rename {
+        title: String,
+    },
+    Move {
+        area_id: Uuid,
+    },
+    SetPinned {
+        pinned: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,6 +220,15 @@ pub enum TopicEvent {
     VisibilityChanged {
         visibility: TopicVisibility,
     },
+    Renamed {
+        title: String,
+    },
+    Moved {
+        area_id: Uuid,
+    },
+    PinnedChanged {
+        pinned: bool,
+    },
 }
 impl TopicEvent {
     pub fn kind(&self) -> &'static str {
@@ -213,6 +239,9 @@ impl TopicEvent {
             Self::PostRetracted { .. } => POST_RETRACTED,
             Self::PostingStateChanged { .. } => POSTING_STATE_CHANGED,
             Self::VisibilityChanged { .. } => VISIBILITY_CHANGED,
+            Self::Renamed { .. } => TOPIC_RENAMED,
+            Self::Moved { .. } => TOPIC_MOVED,
+            Self::PinnedChanged { .. } => TOPIC_PINNED_CHANGED,
         }
     }
     pub fn payload(&self) -> serde_json::Value {
@@ -265,6 +294,9 @@ impl TopicEvent {
             Self::VisibilityChanged { visibility } => {
                 serde_json::json!({"visibility": visibility.as_str()})
             }
+            Self::Renamed { title } => serde_json::json!({"title": title}),
+            Self::Moved { area_id } => serde_json::json!({"area_id": area_id}),
+            Self::PinnedChanged { pinned } => serde_json::json!({"pinned": pinned}),
         }
     }
 }
@@ -368,6 +400,15 @@ pub fn decide_topic(
         {
             Ok(vec![TopicEvent::VisibilityChanged { visibility }])
         }
+        (Some(state), TopicCommand::Rename { title }) if state.title != title => {
+            Ok(vec![TopicEvent::Renamed { title }])
+        }
+        (Some(state), TopicCommand::Move { area_id }) if state.area_id != area_id => {
+            Ok(vec![TopicEvent::Moved { area_id }])
+        }
+        (Some(state), TopicCommand::SetPinned { pinned }) if state.pinned != pinned => {
+            Ok(vec![TopicEvent::PinnedChanged { pinned }])
+        }
         _ => Err(ForumReject::NoStateChange),
     }
 }
@@ -444,6 +485,8 @@ mod tests {
         TopicState {
             topic_id: Uuid::from_u128(0x70),
             area_id: Uuid::from_u128(0x71),
+            title: "Revisable claims".to_string(),
+            pinned: false,
             posting_state: PostingState::Open,
             visibility: TopicVisibility::Visible,
             version: 3,
@@ -677,6 +720,91 @@ mod tests {
         assert_eq!(
             decide_topic(Some(&state), retract(stranger())),
             Err(ForumReject::NotAuthor)
+        );
+    }
+
+    #[test]
+    fn curation_emits_one_event_per_real_change_and_ignores_posting_state() {
+        let mut state = topic(Vec::new());
+        state.posting_state = PostingState::Locked;
+        let other_area = Uuid::from_u128(0x72);
+        assert_eq!(
+            decide_topic(
+                Some(&state),
+                TopicCommand::Rename {
+                    title: "Filed claims".to_string()
+                }
+            ),
+            Ok(vec![TopicEvent::Renamed {
+                title: "Filed claims".to_string()
+            }])
+        );
+        assert_eq!(
+            decide_topic(
+                Some(&state),
+                TopicCommand::Move {
+                    area_id: other_area
+                }
+            ),
+            Ok(vec![TopicEvent::Moved {
+                area_id: other_area
+            }])
+        );
+        let pinned = decide_topic(Some(&state), TopicCommand::SetPinned { pinned: true }).unwrap();
+        assert_eq!(pinned, vec![TopicEvent::PinnedChanged { pinned: true }]);
+        assert_eq!(pinned[0].kind(), TOPIC_PINNED_CHANGED);
+        assert_eq!(pinned[0].payload(), serde_json::json!({ "pinned": true }));
+        assert_eq!(
+            TopicEvent::Moved {
+                area_id: other_area
+            }
+            .payload(),
+            serde_json::json!({ "area_id": other_area })
+        );
+        assert_eq!(
+            TopicEvent::Renamed {
+                title: "Filed claims".to_string()
+            }
+            .kind(),
+            TOPIC_RENAMED
+        );
+        assert_eq!(
+            TopicEvent::Moved {
+                area_id: other_area
+            }
+            .kind(),
+            TOPIC_MOVED
+        );
+    }
+
+    #[test]
+    fn curation_no_ops_are_rejected() {
+        let state = topic(Vec::new());
+        assert_eq!(
+            decide_topic(
+                Some(&state),
+                TopicCommand::Rename {
+                    title: "Revisable claims".to_string()
+                }
+            ),
+            Err(ForumReject::NoStateChange)
+        );
+        assert_eq!(
+            decide_topic(
+                Some(&state),
+                TopicCommand::Move {
+                    area_id: state.area_id
+                }
+            ),
+            Err(ForumReject::NoStateChange)
+        );
+        assert_eq!(
+            decide_topic(Some(&state), TopicCommand::SetPinned { pinned: false }),
+            Err(ForumReject::NoStateChange)
+        );
+        assert_eq!(
+            decide_topic(None, TopicCommand::SetPinned { pinned: true }),
+            Err(ForumReject::TopicNotFound)
         );
     }
 }

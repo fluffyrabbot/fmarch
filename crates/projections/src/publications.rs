@@ -227,6 +227,42 @@ pub(super) async fn record_publication(
     Ok(())
 }
 
+/// After a topic moves between areas, point every post publication and its
+/// search document at the topic surface's new href. The fragment is the
+/// post's own sequence, so the rewrite is purely mechanical.
+pub(super) async fn rehome_forum_publications(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    topic_id: Uuid,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        UPDATE public_publication AS publication
+        SET href = surface.href || '#post-' || publication.source_seq::text
+        FROM publication_surface AS surface
+        WHERE surface.surface_id = publication.surface_id
+          AND publication.surface_id = $1
+        "#,
+    )
+    .bind(topic_id)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        UPDATE public_search_document AS document
+        SET href = publication.href
+        FROM public_publication AS publication
+        WHERE publication.surface_id = document.surface_id
+          AND publication.source_seq = document.source_seq
+          AND document.surface_id = $1
+          AND document.source_seq > 0
+        "#,
+    )
+    .bind(topic_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// Move an existing publication and its search document to a later body. The
 /// href, author, and publication time are facts of the original submission and
 /// stay put; only the text and the search cursor position advance.

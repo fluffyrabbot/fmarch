@@ -190,9 +190,14 @@ lifecycle events arrive.
 
 Non-game discussion uses independent area and topic streams in the same append-only event log.
 `DiscussionAreaCreated`, `DiscussionTopicCreated`, `DiscussionPostSubmitted`,
-`DiscussionPostEdited`, `DiscussionPostRetracted`, and the orthogonal
-`DiscussionTopicPostingStateChanged` / `DiscussionTopicVisibilityChanged` events
-fold synchronously into their own projection tables. Edit and retraction are the forum's own
+`DiscussionPostEdited`, `DiscussionPostRetracted`, the orthogonal
+`DiscussionTopicPostingStateChanged` / `DiscussionTopicVisibilityChanged` events, and the
+GlobalMod curation events `DiscussionTopicRenamed` / `DiscussionTopicMoved` /
+`DiscussionTopicPinnedChanged` fold synchronously into their own projection tables. Curation
+is filing, not activity: it never touches `updated_seq`, so the area keyset does not reorder;
+pinned topics lead an area's first page and are absent from cursor pages; a moved topic's
+surface and post publication hrefs follow it to the new area while the topic id keeps
+resolving under the old area URL and the page redirects to the canonical one. Edit and retraction are the forum's own
 edit policy: an author may edit their post's body and mentions for
 `forum::FORUM_EDIT_WINDOW_SECONDS` after submission (measured from submission, so edits cannot
 chain past the window) and may retract it at any time while the topic is visible and open.

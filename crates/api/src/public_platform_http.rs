@@ -118,6 +118,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             "/discussions/topics/{topic}/moderation",
             post(moderate_discussion_topic),
         )
+        .route(
+            "/discussions/topics/{topic}/curation",
+            post(curate_discussion_topic),
+        )
         .route("/profiles", post(create_profile))
         .route("/profiles/me/editor", get(current_member_profile))
         .route("/profiles/me", axum::routing::put(update_profile))
@@ -789,6 +793,14 @@ struct ModerateDiscussionTopicRequest {
     visibility: Option<String>,
 }
 
+/// GlobalMod curation: exactly one of rename, move (by area slug), or pin.
+#[derive(Debug, Clone, Deserialize)]
+struct CurateDiscussionTopicRequest {
+    title: Option<String>,
+    area_slug: Option<String>,
+    pinned: Option<bool>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct SubmitModerationReportRequest {
     surface_id: Uuid,
@@ -856,17 +868,18 @@ async fn discussion_area_topics(
 
 async fn discussion_topic_thread(
     State(state): State<PublicPlatformHttpState>,
-    Path((slug, topic)): Path<(String, Uuid)>,
+    Path((_linked_slug, topic)): Path<(String, Uuid)>,
     Query(query): Query<DiscussionPostQuery>,
     OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
-    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+    // The topic id is the identity; the slug in the URL is where the topic
+    // was filed when the link was made. A moved topic keeps resolving under
+    // its old area so links stay stable, and the page carries the current
+    // area so the client can move to the canonical URL.
+    let topic = visible_discussion_topic(&state, topic).await?;
+    let area = projections::discussion_area_by_id(&state.pool, topic.area_id)
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
-    let topic = visible_discussion_topic(&state, topic).await?;
-    if topic.area_id != area.area_id {
-        return Err(discussion_not_found("discussion topic"));
-    }
     let page = projections::discussion_posts(
         &state.pool,
         topic.topic_id,
@@ -1178,6 +1191,54 @@ async fn moderate_discussion_topic(
     Ok(Json(DiscussionTopic::from(topic)))
 }
 
+/// GlobalMod topic curation. Rename, move, and pin are filing decisions, so
+/// they are independent of posting state; a locked topic can still be filed.
+async fn curate_discussion_topic(
+    State(state): State<PublicPlatformHttpState>,
+    Path(topic): Path<Uuid>,
+    auth: AuthenticatedRequest,
+    Json(request): Json<CurateDiscussionTopicRequest>,
+) -> Result<Json<DiscussionTopic>, ApiError> {
+    let principal_id = require_global_mod(&state, &auth.bearer, "discussion curation").await?;
+    let current = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .ok_or_else(|| discussion_not_found("discussion topic"))?;
+    let topic_state = forum_topic_state(&current, Vec::new())?;
+    let command = match (
+        request.title.as_deref(),
+        request.area_slug.as_deref(),
+        request.pinned,
+    ) {
+        (Some(title), None, None) => TopicCommand::Rename {
+            title: validate_discussion_text(title, "discussion topic title", 180)?,
+        },
+        (None, Some(area_slug), None) => {
+            let area = projections::discussion_area_by_slug(&state.pool, area_slug)
+                .await?
+                .ok_or_else(|| discussion_not_found("discussion area"))?;
+            TopicCommand::Move {
+                area_id: area.area_id,
+            }
+        }
+        (None, None, Some(pinned)) => TopicCommand::SetPinned { pinned },
+        _ => {
+            return Err(ApiError::Reject {
+                status: StatusCode::BAD_REQUEST,
+                error: RejectCode::Internal,
+                message: "discussion curation must change exactly one of title, area_slug, or pinned"
+                    .to_string(),
+            })
+        }
+    };
+    let events =
+        forum::decide_topic(Some(&topic_state), command).map_err(forum_reject_api_error)?;
+    append_forum_events(&state.pool, topic, current.version, events, principal_id).await?;
+    let topic = projections::discussion_topic_by_id(&state.pool, topic)
+        .await?
+        .expect("projected discussion topic is readable");
+    Ok(Json(DiscussionTopic::from(topic)))
+}
+
 async fn submit_moderation_report(
     State(state): State<PublicPlatformHttpState>,
     MemberAuthentication(principal_id): MemberAuthentication,
@@ -1457,6 +1518,8 @@ fn forum_topic_state(
     Ok(TopicState {
         topic_id: topic.topic_id,
         area_id: topic.area_id,
+        title: topic.title.clone(),
+        pinned: topic.pinned,
         posting_state: PostingState::parse(topic.posting_state.as_str())
             .map_err(forum_reject_api_error)?,
         visibility: TopicVisibility::parse(topic.visibility.as_str())

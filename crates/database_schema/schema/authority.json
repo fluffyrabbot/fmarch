@@ -990,6 +990,13 @@
     {
       "acl": "",
       "kind": "relation",
+      "name": "discussion_topic_area_pinned_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
       "name": "discussion_topic_pkey",
       "owner": "$schema_owner",
       "namespace": "public"

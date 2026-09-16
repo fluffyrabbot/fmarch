@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 46,
+    complete: 47,
     partial: 0,
-    open: 3,
+    open: 2,
     blocked: 0,
     deferred: 0,
     total: 49,
@@ -41,7 +41,7 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  // Forum editing and curation is a stated open product gap.
+  // Signup threads are a stated open product gap.
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
@@ -52,7 +52,12 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   );
   assert.equal(
     nextBuildableCodeItem(registry)?.id,
-    "product.community.forum-editing-curation",
+    "product.community.signup-threads",
+  );
+  assert.equal(
+    registry.items.find((item) => item.id === "product.community.forum-editing-curation")
+      ?.status,
+    "complete",
   );
   assert.equal(
     registry.items.find((item) => item.id === "product.game.persona-occupancy")

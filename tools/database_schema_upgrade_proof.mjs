@@ -712,6 +712,28 @@ const migrationFixtures = [
       },
     ],
   },
+  {
+    version: 13,
+    assertions: [
+      {
+        sql: String.raw`SELECT pinned::text || ':' ||
+          (SELECT is_nullable || ':' || column_default FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'discussion_topic'
+             AND column_name = 'pinned')
+        FROM discussion_topic WHERE topic_id = '84000000-0000-4000-8000-000000000001'`,
+        expected: "false:NO:false",
+        message: "0013 must backfill existing topics as unpinned with a non-null default",
+      },
+      {
+        sql: String.raw`SELECT pg_get_indexdef(indexrelid) FROM pg_index
+        JOIN pg_class ON pg_class.oid = indexrelid
+        WHERE relname = 'discussion_topic_area_pinned_idx'`,
+        expected:
+          "CREATE INDEX discussion_topic_area_pinned_idx ON public.discussion_topic USING btree (area_id, updated_seq DESC, topic_id DESC) WHERE pinned",
+        message: "0013 must index pinned topics per area in keyset order",
+      },
+    ],
+  },
 ];
 
 const postMigrationAuthorityInvariantSql = String.raw`

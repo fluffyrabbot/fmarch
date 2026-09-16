@@ -703,6 +703,8 @@ pub struct DiscussionTopicRow {
     pub last_post_at: Option<i64>,
     /// Current topic stream sequence used by optimistic community commands.
     pub version: i64,
+    /// GlobalMod curation: pinned topics lead an area's first page.
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -4100,6 +4102,9 @@ async fn fold_discussion_event(
             | forum::POST_SUBMITTED
             | forum::POSTING_STATE_CHANGED
             | forum::VISIBILITY_CHANGED
+            | forum::TOPIC_RENAMED
+            | forum::TOPIC_MOVED
+            | forum::TOPIC_PINNED_CHANGED
     );
     match event.kind.as_str() {
         forum::AREA_CREATED => {
@@ -4354,6 +4359,46 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
+        // Curation folds touch the topic row only. Rename and move keep
+        // updated_seq so the area index does not treat filing as activity;
+        // the surface href follows the area so every post link stays
+        // canonical. Pin likewise leaves the keyset untouched.
+        forum::TOPIC_RENAMED => {
+            let title = str_field(&event.payload, "title", &event.kind)?;
+            sqlx::query(
+                "UPDATE discussion_topic SET title = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(title)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        forum::TOPIC_MOVED => {
+            let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
+            sqlx::query(
+                "UPDATE discussion_topic SET area_id = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(area_id)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        forum::TOPIC_PINNED_CHANGED => {
+            let pinned = bool_field(&event.payload, "pinned", &event.kind)?;
+            sqlx::query(
+                "UPDATE discussion_topic SET pinned = $2, moderated_seq = $3, version = $4 WHERE topic_id = $1",
+            )
+            .bind(stream_id)
+            .bind(pinned)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
         forum::VISIBILITY_CHANGED => {
             let visibility = str_field(&event.payload, "visibility", &event.kind)?;
             TopicVisibility::parse(visibility.as_str())
@@ -4373,6 +4418,9 @@ async fn fold_discussion_event(
     }
     if is_topic_event {
         publications::record_forum_surface(tx, stream_id, event.seq, event.occurred_at).await?;
+    }
+    if event.kind == forum::TOPIC_MOVED {
+        publications::rehome_forum_publications(tx, stream_id).await?;
     }
     Ok(())
 }
@@ -7863,6 +7911,26 @@ pub async fn discussion_area_by_slug(
     }))
 }
 
+/// Read one discussion area by id: the topic's current home after a move.
+pub async fn discussion_area_by_id(
+    pool: &PgPool,
+    area_id: Uuid,
+) -> Result<Option<DiscussionAreaRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT area_id, slug, title, description, created_seq FROM discussion_area WHERE area_id = $1",
+    )
+    .bind(area_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|row| DiscussionAreaRow {
+        area_id: row.get("area_id"),
+        slug: row.get("slug"),
+        title: row.get("title"),
+        description: row.get("description"),
+        created_seq: row.get("created_seq"),
+    }))
+}
+
 /// List public discussion areas in stable creation order.
 pub async fn discussion_areas(pool: &PgPool) -> Result<Vec<DiscussionAreaRow>, ProjectionError> {
     let rows = sqlx::query(
@@ -7883,6 +7951,10 @@ pub async fn discussion_areas(pool: &PgPool) -> Result<Vec<DiscussionAreaRow>, P
 }
 
 /// Read visible discussion topics newest-first with a stable sequence keyset.
+/// Pinned topics are curation, not activity: every pinned topic leads the
+/// first page in the same newest-first order, and the keyset then walks the
+/// unpinned topics only, so pinning neither moves a cursor nor reorders the
+/// pages behind it.
 pub async fn discussion_topics(
     pool: &PgPool,
     area_id: Uuid,
@@ -7901,12 +7973,13 @@ pub async fn discussion_topics(
                        topic.posting_state, topic.visibility, topic.post_count,
                        topic.created_seq, topic.updated_seq, topic.created_at,
                        topic.updated_at, topic.last_post_seq, topic.last_post_at,
-                       topic.version, author.profile_id AS author_profile_id,
+                       topic.version, topic.pinned, author.profile_id AS author_profile_id,
                        author.handle AS author_handle, author.display_name AS author_display_name
                 FROM discussion_topic AS topic
                 LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1
                   AND topic.visibility = 'visible'
+                  AND NOT topic.pinned
                   AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
                   AND NOT EXISTS (
                       SELECT 1 FROM profile_mute AS mute
@@ -7934,11 +8007,12 @@ pub async fn discussion_topics(
                        topic.posting_state, topic.visibility, topic.post_count,
                        topic.created_seq, topic.updated_seq, topic.created_at,
                        topic.updated_at, topic.last_post_seq, topic.last_post_at,
-                       topic.version, author.profile_id AS author_profile_id,
+                       topic.version, topic.pinned, author.profile_id AS author_profile_id,
                        author.handle AS author_handle, author.display_name AS author_display_name
                 FROM discussion_topic AS topic
                 LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1 AND topic.visibility = 'visible'
+                  AND NOT topic.pinned
                   AND NOT EXISTS (
                       SELECT 1 FROM profile_mute AS mute
                       WHERE $2::uuid IS NOT NULL
@@ -7957,14 +8031,43 @@ pub async fn discussion_topics(
             .await?
         }
     };
+    let pinned = if cursor.is_none() {
+        sqlx::query(
+            r#"
+            SELECT topic.topic_id, topic.area_id, topic.title,
+                   topic.posting_state, topic.visibility, topic.post_count,
+                   topic.created_seq, topic.updated_seq, topic.created_at,
+                   topic.updated_at, topic.last_post_seq, topic.last_post_at,
+                   topic.version, topic.pinned, author.profile_id AS author_profile_id,
+                   author.handle AS author_handle, author.display_name AS author_display_name
+            FROM discussion_topic AS topic
+            LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
+            WHERE topic.area_id = $1 AND topic.visibility = 'visible' AND topic.pinned
+              AND NOT EXISTS (
+                  SELECT 1 FROM profile_mute AS mute
+                  WHERE $2::uuid IS NOT NULL
+                    AND mute.principal_id = $2
+                    AND mute.target_profile_id = topic.author_profile_id
+                    AND mute.active
+              )
+            ORDER BY topic.updated_seq DESC, topic.topic_id DESC
+            "#,
+        )
+        .bind(area_id)
+        .bind(viewer_principal_id)
+        .fetch_all(pool)
+        .await?
+    } else {
+        Vec::new()
+    };
     let has_more = rows.len() as i64 > limit;
-    let topics: Vec<_> = rows
+    let unpinned: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
         .map(discussion_topic_row)
         .collect();
     let next_cursor = has_more.then(|| {
-        let last = topics
+        let last = unpinned
             .last()
             .expect("full discussion page has a final topic");
         DiscussionTopicCursor {
@@ -7972,6 +8075,11 @@ pub async fn discussion_topics(
             topic_id: last.topic_id,
         }
     });
+    let topics = pinned
+        .into_iter()
+        .map(discussion_topic_row)
+        .chain(unpinned)
+        .collect();
     Ok(DiscussionTopicPage {
         topics,
         next_cursor,
@@ -7991,7 +8099,7 @@ pub async fn discussion_topic_by_id(
                topic.posting_state, topic.visibility, topic.post_count,
                topic.created_seq, topic.updated_seq, topic.created_at,
                topic.updated_at, topic.last_post_seq, topic.last_post_at,
-               topic.version, author.profile_id AS author_profile_id,
+               topic.version, topic.pinned, author.profile_id AS author_profile_id,
                author.handle AS author_handle, author.display_name AS author_display_name
         FROM discussion_topic AS topic
         LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
@@ -8958,6 +9066,7 @@ fn discussion_topic_row(row: sqlx::postgres::PgRow) -> DiscussionTopicRow {
         last_post_seq: row.get("last_post_seq"),
         last_post_at: row.get("last_post_at"),
         version: row.get("version"),
+        pinned: row.get("pinned"),
     }
 }
 
@@ -11229,6 +11338,15 @@ fn i64_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<i64, Projec
         .ok_or_else(|| ProjectionError::Payload {
             kind: kind.to_string(),
             source: serde::de::Error::custom(format!("missing integer field `{key}`")),
+        })
+}
+
+fn bool_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<bool, ProjectionError> {
+    p.get(key)
+        .and_then(serde_json::Value::as_bool)
+        .ok_or_else(|| ProjectionError::Payload {
+            kind: kind.to_string(),
+            source: serde::de::Error::custom(format!("missing boolean field `{key}`")),
         })
 }
 

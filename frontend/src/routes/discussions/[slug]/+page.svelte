@@ -23,8 +23,10 @@
         <p data-testid="discussion-topic-empty">No discussion topics yet.</p>
       {:else}
         {#each discussion.topics as topic}
-          <article class="fm-panel" data-testid={`discussion-topic-${topic.topic}`}>
-            <p class="fm-eyebrow">{topic.posting_state}</p>
+          <article class="fm-panel" data-testid={`discussion-topic-${topic.topic}`} data-pinned={topic.pinned === true ? "true" : "false"}>
+            <p class="fm-eyebrow">
+              {#if topic.pinned === true}<span class="discussion-topic__pinned" data-testid={`discussion-topic-pinned-${topic.topic}`}>Pinned</span> · {/if}{topic.posting_state}
+            </p>
             <h2>{topic.title}</h2>
             <p>
               {topic.post_count} posts · started by
@@ -69,5 +71,6 @@
 
 <style>
   .discussion-form { display: grid; gap: 12px; }
+  .discussion-topic__pinned { font-weight: 600; }
   textarea { min-block-size: 112px; resize: vertical; }
 </style>

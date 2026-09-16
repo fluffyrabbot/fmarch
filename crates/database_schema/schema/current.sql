@@ -1163,6 +1163,7 @@ CREATE TABLE public.discussion_topic (
     updated_at bigint DEFAULT 0 NOT NULL,
     last_post_seq bigint,
     last_post_at bigint,
+    pinned boolean DEFAULT false NOT NULL,
     CONSTRAINT discussion_topic_posting_state_check CHECK ((posting_state = ANY (ARRAY['open'::text, 'locked'::text]))),
     CONSTRAINT discussion_topic_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
 );
@@ -3916,6 +3917,13 @@ CREATE INDEX discussion_post_topic_order_idx ON public.discussion_post USING btr
 --
 
 CREATE INDEX discussion_topic_area_page_idx ON public.discussion_topic USING btree (area_id, updated_seq DESC, topic_id DESC) WHERE (visibility = 'visible'::text);
+
+
+--
+-- Name: discussion_topic_area_pinned_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX discussion_topic_area_pinned_idx ON public.discussion_topic USING btree (area_id, updated_seq DESC, topic_id DESC) WHERE pinned;
 
 
 --

@@ -285,7 +285,11 @@ export type DiscussionArea = { slug: string, title: string, description: string,
 
 export type DiscussionAuthor = { handle: string, display_name: string, };
 
-export type DiscussionTopic = { topic: string, title: string, author: DiscussionAuthor | null, posting_state: string, visibility: string, post_count: bigint, updated_seq: bigint, created_at: bigint, updated_at: bigint, last_post_seq: bigint | null, last_post_at: bigint | null, };
+export type DiscussionTopic = { topic: string, title: string, author: DiscussionAuthor | null, posting_state: string, visibility: string, post_count: bigint, updated_seq: bigint, created_at: bigint, updated_at: bigint, last_post_seq: bigint | null, last_post_at: bigint | null,
+/**
+ * GlobalMod curation: pinned topics lead their area's first page.
+ */
+pinned: boolean, };
 
 export type DiscussionTopicPage = { area: DiscussionArea, topics: Array<DiscussionTopic>, next_cursor: string | null, };
 

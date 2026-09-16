@@ -30,8 +30,10 @@
     </nav>
 
     <section class="fm-panel" aria-label="Discussion thread" data-testid="discussion-thread">
-      <p class="fm-eyebrow">{thread.topic.posting_state}</p>
-      <h2>{thread.topic.title}</h2>
+      <p class="fm-eyebrow">
+        {#if thread.topic.pinned === true}<span data-testid="discussion-topic-pinned">Pinned</span> · {/if}{thread.topic.posting_state}
+      </p>
+      <h2 data-testid="discussion-topic-heading">{thread.topic.title}</h2>
       {#if discussion.subscription !== null}
         <div class="discussion-watch" data-testid="discussion-watch-control">
           <form method="POST" action="?/watch">
@@ -220,6 +222,24 @@
           <form method="POST" action="?/visibility" class="discussion-form">
             <label class="fm-field"><span>Visibility</span><select name="visibility" value={thread.topic.visibility} data-testid="discussion-visibility"><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label>
             <button type="submit" class="fm-touch-button fm-touch-button--secondary">Update visibility</button>
+          </form>
+          <form method="POST" action="?/rename" class="discussion-form" data-testid="discussion-curation-rename">
+            <label class="fm-field"><span>Title</span><input name="title" required maxlength="180" value={thread.topic.title} data-testid="discussion-rename-title" /></label>
+            <button type="submit" class="fm-touch-button fm-touch-button--secondary" data-testid="discussion-rename-submit">Rename topic</button>
+          </form>
+          <form method="POST" action="?/move" class="discussion-form" data-testid="discussion-curation-move">
+            <label class="fm-field"><span>Area</span><select name="area_slug" value={thread.area.slug} data-testid="discussion-move-area">
+              {#each discussion.areas as area}
+                <option value={area.slug}>{area.title}</option>
+              {/each}
+            </select></label>
+            <button type="submit" class="fm-touch-button fm-touch-button--secondary" data-testid="discussion-move-submit">Move topic</button>
+          </form>
+          <form method="POST" action="?/pin" class="discussion-form" data-testid="discussion-curation-pin">
+            <input type="hidden" name="pinned" value={thread.topic.pinned === true ? "false" : "true"} />
+            <button type="submit" class="fm-touch-button fm-touch-button--secondary" data-testid="discussion-pin-submit">
+              {thread.topic.pinned === true ? "Unpin topic" : "Pin topic"}
+            </button>
           </form>
         </div>
       {:else}

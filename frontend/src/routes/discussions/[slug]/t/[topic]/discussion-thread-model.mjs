@@ -9,6 +9,16 @@ export const DISCUSSION_MAX_QUOTATIONS = 8;
 // the server then refuses.
 export const DISCUSSION_EDIT_WINDOW_SECONDS = 30 * 60;
 
+/**
+ * The area slug a moved topic should be read under, or `null` when the
+ * requested slug is already where the topic is filed (or nothing loaded).
+ */
+export function canonicalAreaSlug(thread, requestedSlug) {
+  const current = thread?.area?.slug;
+  if (typeof current !== "string" || current === "" || current === requestedSlug) return null;
+  return current;
+}
+
 export function parseQuoteSeqs(searchParams) {
   const values = typeof searchParams?.getAll === "function" ? searchParams.getAll("quote") : [];
   const seqs = [];

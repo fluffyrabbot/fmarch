@@ -5,6 +5,7 @@ import {
   DISCUSSION_EDIT_WINDOW_SECONDS,
   buildDiscussionPostView,
   buildDiscussionThreadView,
+  canonicalAreaSlug,
   discussionComposerHref,
   excerptFromBody,
   ownPostAffordances,
@@ -56,6 +57,12 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
           unread_count: 1,
         });
       }
+      if (url === "/discussions/areas") {
+        return Response.json([
+          { slug: "general", title: "General", description: "" },
+          { slug: "archive", title: "Archive", description: "" },
+        ]);
+      }
       assert.equal(url, "/profiles/me/editor");
       return Response.json({ handle: "member_a", visibility: "public" });
     },
@@ -65,6 +72,7 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
   assert.deepEqual(requests, [
     `/discussions/areas/general/topics/${topic}?limit=50&before_seq=41`,
     "/profiles/me/editor",
+    "/discussions/areas",
     `/subscriptions/${topic}`,
   ]);
   assert.equal(data.discussion.thread.posts[0].author.handle, "member_a");
@@ -72,6 +80,81 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
   assert.equal(data.discussion.canPost, true);
   assert.equal(data.discussion.canModerate, true);
   assert.equal(data.discussion.subscription.unread_count, 1);
+  assert.deepEqual(data.discussion.areas, [
+    { slug: "general", title: "General" },
+    { slug: "archive", title: "Archive" },
+  ]);
+});
+
+test("a moved topic redirects from the area it was linked from to its canonical area", async () => {
+  await assert.rejects(
+    () => load({
+      params: { slug: "general", topic },
+      locals: { principalId: null, resolvedCapabilities: [] },
+      cookies: { get: () => undefined },
+      fetch: async () => Response.json({
+        area: { slug: "archive", title: "Archive", description: "" },
+        topic: { topic, title: "Moved", posting_state: "open", visibility: "visible", post_count: 1, pinned: true },
+        posts: [],
+        next_before_seq: null,
+      }),
+      url: new URL(`https://fmarch.local/discussions/general/t/${topic}?before_seq=41`),
+    }),
+    (error) => error?.status === 301
+      && error?.location === `/discussions/archive/t/${topic}?before_seq=41`,
+  );
+  assert.equal(canonicalAreaSlug({ area: { slug: "general" } }, "general"), null);
+  assert.equal(canonicalAreaSlug(null, "general"), null);
+  assert.equal(canonicalAreaSlug({ area: { slug: "archive" } }, "general"), "archive");
+});
+
+test("curation actions post exactly one change to the typed curation route", async () => {
+  const calls = [];
+  const fetch = async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return Response.json({ topic, pinned: true }, { status: 200 });
+  };
+  const run = (name, fields) => actions[name]({
+    cookies: { get: () => "moderator-session" },
+    params: { slug: "general", topic },
+    request: new Request(`http://localhost/discussions/general/t/topic?/${name}`, {
+      method: "POST",
+      body: new URLSearchParams(fields),
+    }),
+    fetch,
+  });
+  await assert.rejects(
+    () => run("rename", { title: "Filed title" }),
+    (error) => error?.status === 303 && error?.location === `/discussions/general/t/${topic}`,
+  );
+  await assert.rejects(
+    () => run("move", { area_slug: "archive" }),
+    (error) => error?.status === 303 && error?.location === `/discussions/archive/t/${topic}`,
+  );
+  await assert.rejects(
+    () => run("pin", { pinned: "true" }),
+    (error) => error?.status === 303 && error?.location === `/discussions/general/t/${topic}`,
+  );
+  assert.deepEqual(calls, [
+    { url: `/discussions/topics/${topic}/curation`, body: { title: "Filed title" } },
+    { url: `/discussions/topics/${topic}/curation`, body: { area_slug: "archive" } },
+    { url: `/discussions/topics/${topic}/curation`, body: { pinned: true } },
+  ]);
+
+  const denied = await actions.pin({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/pin", {
+      method: "POST",
+      body: new URLSearchParams({ pinned: "false" }),
+    }),
+    fetch: async () => Response.json(
+      { error: "not_authorized", message: "discussion curation requires GlobalMod" },
+      { status: 403 },
+    ),
+  });
+  assert.equal(denied.status, 403);
+  assert.match(denied.data.message, /requires GlobalMod/u);
 });
 
 test("canonical discussion topic keeps wrong-area and hidden responses unavailable", async () => {

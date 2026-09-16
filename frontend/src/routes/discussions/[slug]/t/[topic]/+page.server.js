@@ -8,6 +8,7 @@ import { parseSubmittedMentions } from "../../../../../lib/app/mention-model.mjs
 import {
   DISCUSSION_CITATION_PREVIEW_LIMIT,
   buildDiscussionThreadView,
+  canonicalAreaSlug,
   parseQuoteSeqs,
   parseSubmittedQuotations,
 } from "./discussion-thread-model.mjs";
@@ -23,7 +24,21 @@ export async function load({ params, locals, cookies, fetch, url }) {
     { headers: readHeaders(token) },
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
+  // The topic id is the identity; a moved topic still resolves under the
+  // area it was linked from, and the canonical URL is wherever it is filed now.
+  const canonicalSlug = canonicalAreaSlug(thread, params.slug);
+  if (canonicalSlug !== null) {
+    throw redirect(
+      301,
+      `/discussions/${encodeURIComponent(canonicalSlug)}/t/${encodeURIComponent(params.topic)}${url.search}`,
+    );
+  }
   const profile = await loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl });
+  const canModerate = hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalMod" })
+    || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" });
+  const areas = thread !== null && canModerate
+    ? await loadAreas({ fetch, apiBaseUrl })
+    : [];
   const subscription = thread === null
     ? null
     : await loadSubscription({
@@ -80,10 +95,22 @@ export async function load({ params, locals, cookies, fetch, url }) {
       canPost,
       hasSession: typeof locals.principalId === "string",
       subscription,
-      canModerate: hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalMod" })
-        || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" }),
+      canModerate,
+      areas,
     },
   };
+}
+
+async function loadAreas({ fetch, apiBaseUrl }) {
+  const response = await fetch(`${apiBaseUrl}/discussions/areas`, {
+    headers: { accept: "application/json" },
+  });
+  const areas = response.ok ? await response.json().catch(() => null) : null;
+  return Array.isArray(areas)
+    ? areas
+        .filter((area) => typeof area?.slug === "string" && typeof area?.title === "string")
+        .map((area) => ({ slug: area.slug, title: area.title }))
+    : [];
 }
 
 async function loadCitationPages({ fetch, token, apiBaseUrl, topic, posts }) {
@@ -223,6 +250,44 @@ export const actions = {
     });
     if (!response.ok) return mutationFailure(response, "Unable to retract this post");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}#post-${sourceSeq}`);
+  },
+  rename: async ({ locals, cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
+      body: { title: text(form.get("title")) },
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to rename this topic");
+    throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
+  },
+  move: async ({ locals, cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const areaSlug = text(form.get("area_slug"));
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
+      body: { area_slug: areaSlug },
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to move this topic");
+    throw redirect(303, `/discussions/${encodeURIComponent(areaSlug)}/t/${encodeURIComponent(params.topic)}`);
+  },
+  pin: async ({ locals, cookies, fetch, params, request }) => {
+    const form = await request.formData();
+    const pinned = text(form.get("pinned")) === "true";
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
+      body: { pinned },
+    });
+    if (!response.ok) return mutationFailure(response, pinned ? "Unable to pin this topic" : "Unable to unpin this topic");
+    throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
   },
   postingState: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();

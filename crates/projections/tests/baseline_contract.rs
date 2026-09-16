@@ -384,6 +384,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "discussion_post_revision_pkey",
     "discussion_post_topic_order_idx",
     "discussion_topic_area_page_idx",
+    "discussion_topic_area_pinned_idx",
     "discussion_topic_pkey",
     "engine_snapshot_checkpoint_pkey",
     "event_direct_key_sentinel_lifecycle_idx",

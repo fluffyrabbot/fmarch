@@ -3319,6 +3319,9 @@ pub struct DiscussionTopic {
     pub updated_at: i64,
     pub last_post_seq: Option<i64>,
     pub last_post_at: Option<i64>,
+    /// GlobalMod curation: pinned topics lead their area's first page.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3508,6 +3511,7 @@ impl From<projections::DiscussionTopicRow> for DiscussionTopic {
             updated_at: topic.updated_at,
             last_post_seq: topic.last_post_seq,
             last_post_at: topic.last_post_at,
+            pinned: topic.pinned,
         }
     }
 }

@@ -67,10 +67,10 @@ WebSocket compatibility mode.
 
 Read `recommended_slice` and dependencies in the
 [completion registry](../ops/completion-registry.json) before starting work.
-The active slice is forum topic curation (rename, move, pin); author post
-editing and retraction landed on 2026-09-16 as slice 1 of the same item, and
-the resolver night-action extraction is queued behind it as `remaining` text
-on `foundation.maintainable-core`.
+The active slice is signup threads (`product.community.signup-threads`);
+forum post editing, retraction, and topic curation landed on 2026-09-16, and
+the resolver night-action extraction is queued behind signup threads as
+`remaining` text on `foundation.maintainable-core`.
 [16-maintainable-core](16-maintainable-core.md) owns the module inventory. The
 resolver's action, outcome, and trace families are extracted; broad stage
 coordination, other projection families, physical command-test families, and
@@ -84,11 +84,11 @@ policy in [AGENTS.md](../../AGENTS.md).
 Accepted RFCs deliver product capability outside the registry's original
 inventory; each landed RFC must be recorded as a registry item with its proof
 anchors before its `Accepted` status is treated as shipped. The forum write
-model now has author post editing (bounded by `forum::FORUM_EDIT_WINDOW_SECONDS`,
-append-only revision history) and author retraction (a read-time overlay that
-keeps cited excerpts), but still lacks topic rename/move/pin; that gap is the
-open registry item `product.community.forum-editing-curation`, ruled
-1.0-required on 2026-09-16 and the recommended coding slice ahead of the
+model has author post editing (bounded by `forum::FORUM_EDIT_WINDOW_SECONDS`,
+append-only revision history), author retraction (a read-time overlay that
+keeps cited excerpts), and GlobalMod rename/move/pin; the registry item
+`product.community.forum-editing-curation`, ruled 1.0-required on 2026-09-16,
+is complete, and signup threads are the recommended coding slice ahead of the
 remaining `foundation.maintainable-core` extractions. Editability is a policy
 each thread source owns: community forum threads are editable within a bounded
 window, game channel threads never are (posts are slot-authored evidence, and

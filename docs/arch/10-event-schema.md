@@ -66,7 +66,9 @@ engine. Community discussion events have their own bounded context under
 Editability is a per-thread-source policy, not a platform capability. The forum
 owns `DiscussionPostEdited { source_seq, body, mentions?, revision }` and
 `DiscussionPostRetracted { source_seq }` on the topic stream
-([`crates/forum`](../../crates/forum/src/lib.rs)); game channels own no
+([`crates/forum`](../../crates/forum/src/lib.rs)), plus the GlobalMod curation
+events `DiscussionTopicRenamed { title }`, `DiscussionTopicMoved { area_id }`,
+and `DiscussionTopicPinnedChanged { pinned }`; game channels own no
 counterpart because a game post is slot-authored evidence, and
 `commands::Command` / `wire::Command` carrying no edit or retract variant is
 asserted by a boundary test rather than left implicit.
