@@ -1,6 +1,31 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildLiveStackReadiness } from "./live_stack_readiness_contract.mjs";
+import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
+
+test("host ops requires the canonical replacement principal in captured browser fields", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"),
+    "passed",
+  );
+
+  for (const field of ["playerInviteTarget", "retryTarget"]) {
+    for (const invalid of ["player-rowan", fixturePrincipalAuthorityId("player-mira")]) {
+      const changed = structuredClone(evidence);
+      const moderator = changed.browser.moderator;
+      const target = field === "playerInviteTarget"
+        ? moderator.playerInviteTarget
+        : moderator.stalePlayerInviteReject.retry.target;
+      target.principalId = invalid;
+      assert.equal(
+        checkStatus(buildLiveStackReadiness(changed), "host-ops-workflow"),
+        "failed",
+        `${field} must reject ${invalid}`,
+      );
+    }
+  }
+});
 
 test("player-vote-loop requires host votecount convergence evidence", () => {
   const evidence = liveStackReadinessFixture();
@@ -258,14 +283,14 @@ function liveStackReadinessFixture() {
         slotLifecycle: { commandStatus: { state: "ack" } },
         playerInviteTarget: {
           status: "passed",
-          principalId: "player-rowan",
+          principalId: fixturePrincipalAuthorityId("player-rowan"),
         },
         stalePlayerInviteReject: {
           state: "recovered",
           reject: { message: "Invite target is stale" },
           retry: {
             state: "ack",
-            target: { principalId: "player-rowan" },
+            target: { principalId: fixturePrincipalAuthorityId("player-rowan") },
           },
         },
         rolePmReplacement: {

@@ -1,8 +1,10 @@
 import {
   hasCompleteSetupCommandEvidence,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
+const PLAYER_ROWAN_PRINCIPAL_ID = fixturePrincipalAuthorityId("player-rowan");
 
 const LOCAL_DISPOSABLE_DATABASE_LIFECYCLES = new Set([
   "created-and-dropped-per-smoke-run",
@@ -202,7 +204,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.slotLifecycle?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.playerInviteTarget?.status === "passed" &&
       evidence?.browser?.moderator?.playerInviteTarget?.principalId ===
-        "player-rowan" &&
+        PLAYER_ROWAN_PRINCIPAL_ID &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.state === "recovered" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.reject?.message?.includes(
         "Invite target is stale",
@@ -210,7 +212,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.state ===
         "ack" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.target
-        ?.principalId === "player-rowan" &&
+        ?.principalId === PLAYER_ROWAN_PRINCIPAL_ID &&
       evidence?.slotLifecycleApiState?.slots?.some(
         (slot) => slot.slot_id === "slot-7" && slot.alive === false,
       ),
