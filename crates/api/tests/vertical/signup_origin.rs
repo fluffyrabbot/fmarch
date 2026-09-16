@@ -17,7 +17,7 @@ async fn origin_fixture(pool: &sqlx::PgPool) -> (caps::Principal, Uuid, Uuid) {
         social::ProfilePresentation::new(
             social::ProfileHandle::new("signup_host").unwrap(),
             social::ProfileDisplayName::new("Signup Host").unwrap(),
-            social::ProfileBio::new("").unwrap(),
+            social::ProfileBio::new("Signup origin proof").unwrap(),
             social::ProfileVisibility::Public,
         ),
         1,

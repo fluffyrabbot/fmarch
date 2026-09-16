@@ -39,7 +39,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     let presentation = ProfilePresentation::new(
         ProfileHandle::new("reported_member").unwrap(),
         ProfileDisplayName::new("Reported member").unwrap(),
-        ProfileBio::new("").unwrap(),
+        ProfileBio::new("Moderation evidence proof").unwrap(),
         ProfileVisibility::Public,
     );
     let profile = profile_application::create_profile(pool, author, presentation, 1)
