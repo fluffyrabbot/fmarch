@@ -2,6 +2,7 @@ import {
   hasCompleteSetupCommandEvidence,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
+import { hasContendedVoteRaceEvidence } from "./live_stack/vote_race_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -75,15 +76,13 @@ const CHECKS = Object.freeze([
   },
   {
     id: "player-vote-loop",
-    label: "Player route proves vote, duplicate retry, concurrent vote, and withdraw loop",
+    label: "Player route proves vote, duplicate retry, contended vote with same-command recovery, and withdraw loop",
     predicate: (evidence) =>
       evidence?.browser?.player?.duplicateVoteRetry?.outcome?.state === "ack" &&
       evidence?.browser?.player?.duplicateVoteRetry?.voteRows?.includes(
         "VoteSubmitted",
       ) &&
-      evidence?.browser?.player?.concurrentVoteRace?.firstOutcome?.state === "ack" &&
-      evidence?.browser?.player?.concurrentVoteRace?.secondOutcome?.state ===
-        "ack" &&
+      hasContendedVoteRaceEvidence(evidence?.browser?.player?.concurrentVoteRace) &&
       evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot_4") &&
       evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot-7") &&
       evidence?.browser?.hostVotecountConvergence?.status === "passed" &&
