@@ -834,6 +834,19 @@
       "capabilities": ["product.game.setup", "product.identity.session-lifecycle"]
     },
     {
+      "id": "frontend:live-projection",
+      "tier": "frozen",
+      "paths": [
+        "frontend/src/lib/app/projection-store.mjs",
+        "frontend/src/lib/app/projection-store.test.mjs",
+        "frontend/src/lib/app/live-transport.mjs",
+        "frontend/src/lib/app/live-transport.test.mjs"
+      ],
+      "lanes": ["test:frontend-contract"],
+      "also_triggers": ["frontend:game", "proof:host-console-live-stack"],
+      "capabilities": ["foundation.wire-live-delivery"]
+    },
+    {
       "id": "frontend:game",
       "tier": "frozen",
       "paths": [
