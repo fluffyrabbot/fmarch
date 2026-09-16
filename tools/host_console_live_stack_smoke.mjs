@@ -390,6 +390,7 @@ try {
     migrationUrl: smokeDatabase.url,
   });
   smokeDatabase.applicationUrl = authority.applicationUrl;
+  smokeDatabase.ownerUrl = authority.ownerUrl;
 
   await writeProgress({ stage: "start-rust-server", apiPort });
   runtimeEnvironment = localProofAuth.serverEnvironment({
@@ -5096,10 +5097,13 @@ async function driveHostStreamConflictBrowser(page) {
 }
 
 async function installDeadlineStreamConflictTrigger() {
+  // Only scratch fault-injection DDL uses owner authority. Runtime and evidence
+  // reads keep the constrained application role; no application grants change.
   await runSql(
-    smokeDatabase.applicationUrl,
+    smokeDatabase.ownerUrl,
     `
-    CREATE OR REPLACE FUNCTION test_force_deadline_stream_conflict() RETURNS trigger AS $$
+    BEGIN;
+    CREATE OR REPLACE FUNCTION public.test_force_deadline_stream_conflict() RETURNS trigger AS $$
     BEGIN
       IF NEW.stream_id = ${sqlLiteral(game)}::uuid AND NEW.kind = 'DeadlineExtended' THEN
         -- Exercise the event-store's unique-conflict mapping without forging an
@@ -5112,51 +5116,58 @@ async function installDeadlineStreamConflictTrigger() {
     END;
     $$ LANGUAGE plpgsql;
 
-    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events;
+    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON public.events;
     CREATE TRIGGER test_force_deadline_stream_conflict
-      BEFORE INSERT ON events
-      FOR EACH ROW EXECUTE FUNCTION test_force_deadline_stream_conflict();
+      BEFORE INSERT ON public.events
+      FOR EACH ROW EXECUTE FUNCTION public.test_force_deadline_stream_conflict();
+    COMMIT;
     `,
   );
 }
 
 async function dropDeadlineStreamConflictTrigger() {
   await runSql(
-    smokeDatabase.applicationUrl,
+    smokeDatabase.ownerUrl,
     `
-    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events;
-    DROP FUNCTION IF EXISTS test_force_deadline_stream_conflict();
+    BEGIN;
+    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON public.events;
+    DROP FUNCTION IF EXISTS public.test_force_deadline_stream_conflict();
+    COMMIT;
     `,
   );
 }
 
 async function installVoteInsertDelayTrigger() {
   await runSql(
-    smokeDatabase.applicationUrl,
+    smokeDatabase.ownerUrl,
     `
-    CREATE OR REPLACE FUNCTION test_delay_vote_insert() RETURNS trigger AS $$
+    BEGIN;
+    CREATE OR REPLACE FUNCTION public.test_delay_vote_insert() RETURNS trigger AS $$
     BEGIN
       IF NEW.stream_id = ${sqlLiteral(game)}::uuid AND NEW.kind = 'VoteSubmitted' THEN
-        PERFORM pg_sleep(0.35);
+        PERFORM pg_catalog.pg_sleep(0.35);
       END IF;
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
 
-    DROP TRIGGER IF EXISTS test_delay_vote_insert ON events;
+    DROP TRIGGER IF EXISTS test_delay_vote_insert ON public.events;
     CREATE TRIGGER test_delay_vote_insert
-      BEFORE INSERT ON events
-      FOR EACH ROW EXECUTE FUNCTION test_delay_vote_insert();
+      BEFORE INSERT ON public.events
+      FOR EACH ROW EXECUTE FUNCTION public.test_delay_vote_insert();
+    COMMIT;
     `,
   );
 }
 
 async function dropVoteInsertDelayTrigger() {
   await runSql(
-    smokeDatabase.applicationUrl,
+    smokeDatabase.ownerUrl,
     `
-    DROP TRIGGER IF EXISTS test_delay_vote_insert ON events;
-    DROP FUNCTION IF EXISTS test_delay_vote_insert();
+    BEGIN;
+    DROP TRIGGER IF EXISTS test_delay_vote_insert ON public.events;
+    DROP FUNCTION IF EXISTS public.test_delay_vote_insert();
+    COMMIT;
     `,
   );
 }
