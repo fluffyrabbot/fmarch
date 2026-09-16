@@ -26,6 +26,7 @@ import {
   CommandInterruptedError,
   commandInterruptionStatus,
   executeCommandProjectionRecovery,
+  isRetryableCommandRejection,
 } from "../../../lib/app/command-interruption.mjs";
 import {
   persistInterruptedCommandAttempts,
@@ -354,6 +355,43 @@ export function playerCommandInterruptedStatus(error, { action, commandId }) {
     : attachCommandTrace(status, playerCommandTrace(action));
 }
 
+// A retry is a new transport attempt whose outcome is unknown until its own
+// response arrives, even when the preceding attempt was explicitly rejected.
+export function playerAttemptBeforeDispatch(attempt) {
+  const { confirmedRejection, ...pendingAttempt } = attempt;
+  return Object.freeze({ ...pendingAttempt, interruption: "connection_lost" });
+}
+
+export function playerCommandRecoveryAfterConfirmation({
+  attempts, action, attempt, commandStatus,
+}) {
+  const nextAttempts = { ...attempts };
+  delete nextAttempts[action];
+  let status = commandStatus;
+  if (isRetryableCommandRejection(commandStatus) &&
+      commandStatus.commandId === attempt.commandId) {
+    const { interruption, confirmedRejection, ...retained } = attempt;
+    nextAttempts[action] = Object.freeze({
+      ...retained,
+      confirmedRejection: Object.freeze({
+        error: commandStatus.error,
+        message: commandStatus.message,
+        retryable: true,
+      }),
+    });
+    status = attachCommandTrace({ ...commandStatus, actionId: action }, playerCommandTrace(action));
+  }
+  return Object.freeze({ attempts: Object.freeze(nextAttempts), commandStatus: status });
+}
+
+export function playerCommandRetryAvailable(status, attempts) {
+  const attempt = attempts?.[status?.actionId];
+  return isRetryableCommandRejection(status) &&
+    attempt?.commandId === status.commandId &&
+    attempt.confirmedRejection?.error === status.error &&
+    attempt.confirmedRejection.retryable === true;
+}
+
 export function persistPlayerInterruptedCommands({
   storage,
   game,
@@ -385,10 +423,17 @@ export function restorePlayerInterruptedCommands({
   let commandStatus = null;
   let commandReceipts = Object.freeze([]);
   for (const [action, attempt] of Object.entries(attempts)) {
-    const status = playerCommandInterruptedStatus(
-      new CommandInterruptedError(attempt.interruption),
-      { action, commandId: attempt.commandId },
-    );
+    const status = attempt.confirmedRejection === undefined
+      ? playerCommandInterruptedStatus(
+          new CommandInterruptedError(attempt.interruption),
+          { action, commandId: attempt.commandId },
+        )
+      : attachCommandTrace({
+          ...attempt.confirmedRejection,
+          state: "reject",
+          commandId: attempt.commandId,
+          actionId: action,
+        }, playerCommandTrace(action));
     if (status === null) {
       continue;
     }
@@ -805,7 +850,7 @@ function projectionUnavailablePlayerCommandStatus(commandStatus, error) {
   const committed = commandStatus?.state === "ack";
   return Object.freeze({
     ...commandStatus,
-    retryable: false,
+    retryable: committed ? false : commandStatus?.retryable === true,
     projectionUnavailable: true,
     message: committed
       ? `${commandStatus.message}. Command committed; authoritative state refresh is unavailable. Do not retry.`

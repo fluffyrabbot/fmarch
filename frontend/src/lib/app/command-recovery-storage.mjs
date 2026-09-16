@@ -1,3 +1,5 @@
+import { isRetryableCommandRejection } from "./command-interruption.mjs";
+
 export const COMMAND_RECOVERY_STORAGE_VERSION = 2;
 export const COMMAND_RECOVERY_STORAGE_PREFIX = "fmarch:command-recovery:v2:";
 export const COMMAND_RECOVERY_SURFACES = Object.freeze(["player", "moderator"]);
@@ -123,6 +125,12 @@ function normalizeAttempt(actionId, attempt) {
   if (typeof commandId !== "string" || commandId.trim() === "") {
     return null;
   }
+  const rejection = attempt.confirmedRejection;
+  if (rejection !== undefined && (!isRetryableCommandRejection({
+    ...rejection, state: "reject", commandId,
+  }) || attempt.interruption !== undefined)) {
+    return null;
+  }
   const interruption = COMMAND_INTERRUPTIONS.includes(attempt.interruption)
     ? attempt.interruption
     : "connection_lost";
@@ -134,7 +142,13 @@ function normalizeAttempt(actionId, attempt) {
     commandId,
     actionId: requiredString(attempt.actionId ?? attempt.action ?? actionId, "actionId"),
     action: requiredString(attempt.action ?? attempt.actionId ?? actionId, "action"),
-    interruption,
+    ...(rejection === undefined ? { interruption } : {
+      confirmedRejection: Object.freeze({
+        error: rejection.error,
+        message: rejection.message,
+        retryable: true,
+      }),
+    }),
     command,
     ...(typeof attempt.composerBody === "string"
       ? { composerBody: attempt.composerBody }
@@ -142,6 +156,9 @@ function normalizeAttempt(actionId, attempt) {
     ...(Array.isArray(attempt.media) ? { media: Object.freeze([...attempt.media]) } : {}),
     ...(Array.isArray(attempt.quotations)
       ? { quotations: Object.freeze([...attempt.quotations]) }
+      : {}),
+    ...(Array.isArray(attempt.mentions)
+      ? { mentions: Object.freeze([...attempt.mentions]) }
       : {}),
     ...(typeof attempt.embedUrl === "string" ? { embedUrl: attempt.embedUrl } : {}),
     ...(attempt.event !== undefined && attempt.event !== null

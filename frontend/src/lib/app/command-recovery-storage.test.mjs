@@ -59,6 +59,40 @@ test("persists exact interrupted commands and drops route data", () => {
   );
 });
 
+test("known rejection preserves exact post arguments and rejects contradictory recovery states", () => {
+  const storage = memoryStorage();
+  const scope = { storage, game: "midsummer", surface: "player", authority: "player:principal-a:slot-7" };
+  const mentions = [{ slot_id: "slot-2", offset: 0, len: 7 }];
+  const command = { SubmitPost: {
+    game: "midsummer", actor_slot: "slot-7", channel_id: "main",
+    body: "@slot-2 hello", media: [], mentions,
+  } };
+  const attempt = {
+    action: "submit_post", commandId: "post-retry-id", command,
+    composerBody: "@slot-2 hello", media: [], mentions,
+    confirmedRejection: { error: "StreamConflict", retryable: true, message: "Reject StreamConflict" },
+  };
+  persistInterruptedCommandAttempts({ ...scope, attempts: { submit_post: attempt } });
+  const restored = readInterruptedCommandAttempts(scope).submit_post;
+  assert.deepEqual(restored.command, command);
+  assert.deepEqual(restored.mentions, mentions);
+  assert.deepEqual(restored.confirmedRejection, attempt.confirmedRejection);
+  assert.equal(restored.interruption, undefined);
+
+  for (const invalid of [
+    { ...attempt, interruption: "timeout" },
+    { ...attempt, confirmedRejection: { ...attempt.confirmedRejection, retryable: false } },
+    { ...attempt, confirmedRejection: { error: "StreamConflict" } },
+  ]) {
+    storage.setItem(commandRecoveryStorageKey(scope), JSON.stringify({
+      v: 2, game: scope.game, surface: scope.surface, authority: scope.authority,
+      attempts: { submit_post: invalid },
+    }));
+    assert.deepEqual(readInterruptedCommandAttempts(scope), {},
+      "invalid confirmed rejection must not become an unknown or retryable command");
+  }
+});
+
 test("clears storage when the last interrupted command is dismissed", () => {
   const storage = memoryStorage();
   persistInterruptedCommandAttempts({

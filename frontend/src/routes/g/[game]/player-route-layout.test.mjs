@@ -58,7 +58,7 @@ test("player live invalidation precedes best-effort recovery restore and dispatc
   );
   assert.match(
     source,
-    /delete nextAttempts\[action\];\s*commitPlayerCommandRecovery\(nextAttempts\);\s*const result = await recoverPlayerRouteCommand/u,
+    /const confirmedRecovery = playerCommandRecoveryAfterConfirmation\([\s\S]*?commitPlayerCommandRecovery\(confirmedRecovery.attempts\);\s*const result = await recoverPlayerRouteCommand/u,
   );
   assert.match(source, /data-testid="player-command-recovery-storage-warning"/);
 });

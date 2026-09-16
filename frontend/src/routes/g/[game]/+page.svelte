@@ -84,6 +84,9 @@
     loadNewerPlayerThreadPage,
     playerCommandErrorStatus,
     playerCommandInterruptedStatus,
+    playerAttemptBeforeDispatch,
+    playerCommandRecoveryAfterConfirmation,
+    playerCommandRetryAvailable,
     playerCommandPendingStatus,
     playerCommandAuthorityIsCurrent,
     recordPlayerCommandReceipt,
@@ -133,6 +136,8 @@
   $: commandInterrupted = commandStatus?.state === "interrupted";
   let commandReceipts = [];
   let commandRecoveryAttempts = {};
+  $: confirmedRetryAvailable = playerCommandRetryAvailable(commandStatus, commandRecoveryAttempts);
+  $: commandRecoveryRequired = commandInterrupted || confirmedRetryAvailable;
   let commandRecoveryStorage = null;
   let commandRecoveryStorageAvailable = true;
   let thread = data.thread;
@@ -441,7 +446,7 @@
     channel,
     player,
     commandPending: commandPending || !projectionCommandsReady,
-    commandInterrupted,
+    commandInterrupted: commandRecoveryRequired,
   });
   $: quoteEnabled =
     projectionCommandsReady &&
@@ -625,7 +630,7 @@
     if (
       !projectionCommandsReady ||
       commandPending ||
-      (commandInterrupted && recoveredAttempt === null)
+      (commandRecoveryRequired && recoveredAttempt === null)
     ) {
       return;
     }
@@ -685,12 +690,10 @@
           ),
         });
       }
+      attempt = playerAttemptBeforeDispatch(attempt);
       const recoveryPersisted = commitPlayerCommandRecovery({
         ...commandRecoveryAttempts,
-        [action]: Object.freeze({
-          ...attempt,
-          interruption: attempt.interruption ?? "connection_lost",
-        }),
+        [action]: attempt,
       });
       if (recoveryPersisted !== true) {
         throw new Error(
@@ -716,15 +719,16 @@
           preparedCommand: attempt.command,
         }),
       });
-      const nextAttempts = { ...commandRecoveryAttempts };
-      delete nextAttempts[action];
-      commitPlayerCommandRecovery(nextAttempts);
+      const confirmedRecovery = playerCommandRecoveryAfterConfirmation({
+        attempts: commandRecoveryAttempts, action, attempt, commandStatus: confirmedStatus,
+      });
+      commitPlayerCommandRecovery(confirmedRecovery.attempts);
       const result = await recoverPlayerRouteCommand({
         action,
         data: dispatchData,
         fetchImpl: fetch,
         projectionStore,
-        commandStatus: confirmedStatus,
+        commandStatus: confirmedRecovery.commandStatus,
         projectionRecoveryTimeoutMs: commandProjectionRecoveryTimeoutMs(
           typeof window === "undefined" ? null : window,
         ),
@@ -1080,7 +1084,7 @@
       <PlayerDayEventRail
         commands={composer.dayEventCommands ?? []}
         {commandPending}
-        {commandInterrupted}
+        commandInterrupted={commandRecoveryRequired}
         {player}
         onCommand={submitPlayerCommand}
       />
@@ -1155,6 +1159,8 @@
         <PlayerCommandReceipt
           receipts={commandReceipts}
           currentStatus={commandStatus}
+          retryAvailable={confirmedRetryAvailable}
+          retryEnabled={projectionCommandsReady && !commandPending}
           onRetry={retryPlayerCommand}
           onCancel={cancelPlayerCommandRecovery}
         />

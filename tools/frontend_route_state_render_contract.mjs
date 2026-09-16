@@ -382,6 +382,40 @@ async function proveRenderedPlayerCommandReceipt(bundle) {
   );
   assertIncludes(html, 'data-state="reject"', "active player command receipt reject");
   assertIncludes(html, "Reject PhaseLocked", "active player command receipt message");
+  const retryableStatus = {
+    actionId: "submit_vote", commandId: "retained-vote-id", state: "reject",
+    error: "StreamConflict", retryable: true, message: "Reject StreamConflict",
+  };
+  const retry = (await bundle.renderPlayerCommandReceipt({
+    status: retryableStatus, retryAvailable: true,
+  })).html;
+  assertIncludes(retry, 'data-testid="command-recovery-retry-submit_vote"', "retained rejection retry control");
+  assertIncludes(retry, 'data-command-id="retained-vote-id"', "retained retry identity");
+  assertIncludes(retry, 'data-outcome="confirmed-rejection"', "confirmed rejection semantics");
+  assertIncludes(retry, "The server rejected this attempt", "confirmed rejection copy");
+  assertIncludes(retry, "Retry request", "confirmed rejection retry label");
+  assert.ok(!retry.includes("may still have reached"), "known rejection must not claim an unknown outcome");
+  for (const scenario of [
+    { status: retryableStatus },
+    { status: { ...retryableStatus, retryable: false }, retryAvailable: true },
+    { status: { ...retryableStatus, state: "ack" }, retryAvailable: true },
+  ]) {
+    const unavailable = (await bundle.renderPlayerCommandReceipt(scenario)).html;
+    assert.ok(!unavailable.includes('data-testid="command-recovery-retry-submit_vote"'),
+      "confirmed recovery requires a retained retryable rejection");
+  }
+  const unknown = (await bundle.renderPlayerCommandReceipt({
+    status: { ...retryableStatus, state: "interrupted", interruption: "connection_lost",
+      message: "Connection lost before confirmation. The command may still have reached the server." },
+  })).html;
+  assertIncludes(unknown, 'data-outcome="unknown"', "unknown outcome semantics");
+  assertIncludes(unknown, "may still have reached the server", "unknown outcome copy");
+  assertIncludes(unknown, "Retry safely", "unknown outcome retry label");
+  const unavailableRetry = (await bundle.renderPlayerCommandReceipt({
+    status: retryableStatus, retryAvailable: true, retryEnabled: false,
+  })).html;
+  assert.match(unavailableRetry, /<button[^>]*data-testid="command-recovery-retry-submit_vote"[^>]*disabled/s,
+    "retry waits for recovered authority and projection health");
   const trace = assertCommandTraceAttributes(html, {
     testId: "player-command-receipt-submit_vote",
     surface: "player",
@@ -2758,15 +2792,19 @@ export async function renderAdminCommandActivity() {
   });
 }
 
-export async function renderPlayerCommandReceipt() {
+export async function renderPlayerCommandReceipt(recovery = null) {
+  const status = recovery?.status ?? {
+    actionId: "submit_vote",
+    state: "reject",
+    message: "Reject PhaseLocked: reload and retry",
+    commandTrace: playerCommandTrace("submit_vote"),
+  };
   return render(PlayerCommandReceipt, {
     props: {
-      receipts: recordPlayerCommandReceipt([], "submit_vote", {
-        actionId: "submit_vote",
-        state: "reject",
-        message: "Reject PhaseLocked: reload and retry",
-        commandTrace: playerCommandTrace("submit_vote"),
-      }),
+      receipts: recordPlayerCommandReceipt([], "submit_vote", status),
+      currentStatus: status,
+      retryAvailable: recovery?.retryAvailable ?? false,
+      retryEnabled: recovery?.retryEnabled ?? true,
     },
   });
 }
