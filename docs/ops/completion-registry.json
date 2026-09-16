@@ -312,6 +312,61 @@
       "boundary": "This closes the source-controlled and local-browser security release baseline. The SvelteKit accessibility announcer is the sole inline-style exception and is authorized by an exact CSP hash; executable inline content remains nonce-bound. Secret evidence contains policy and version markers only, never values. Third-party penetration testing, compliance certification, hosted telemetry retention, incident response rehearsal, and production promotion remain independent release evidence."
     },
     {
+      "id": "foundation.community-bounded-owners",
+      "section": "foundation",
+      "order": 65,
+      "title": "Community platform bounded owners",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "RFC 0003 replaced the community catch-all with forum, attention, social, trust_safety, content_reference, and game_platform owners over one rebuildable public-publication index. Search, watches, inbox, mutes, moderation, and citations consume publication identity rather than a closed discussion|game kind switch, so a new public source registers one adapter.",
+      "complete_when": [
+        "The community crate is gone, each RFC 0003 owner exists with its own decide/fold surface, and public engagement consumers depend on publication identity rather than post kind."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "foundation.command-capability-runtime"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0003-community-platform-v2.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/attention/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/social/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/trust_safety/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/game_platform/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/publication_adapter_contract.rs"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections --test publication_adapter_contract -- --test-threads=1"
+        }
+      ],
+      "remaining": []
+    },
+    {
       "id": "foundation.maintainable-core",
       "section": "foundation",
       "order": 70,
@@ -533,32 +588,9 @@
         }
       ],
       "remaining": [
-        "Split the broad resolver protection/kill stage coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Next resolver extraction (queued behind forum editing): Extract the night Protect and Kill stage bodies from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/night_action.rs owner. Introduce typed ProtectionStageContext and KillStageContext inputs that carry prepared actions, validated pack/state, deterministic chance RNG, protection/dependency/effect state, event and trace sinks, kill attribution, and carry tokens without a broad resolver-root facade. Keep action resolution in resolver/action.rs, intake ordering in resolver/intake.rs, trigger fixpoint behavior in resolver/trigger.rs, and policy admission exclusively in pack/validation.rs. Extend the resolver source-boundary contract to fix one coordinator call per stage, direct dependency direction, moved stage ownership, and the absence of local lint suppression. Preserve event and trace order, RNG consumption order, target-state gating, wolf-carry behavior, public resolver APIs, and every golden semantic.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
-      ],
-      "recommended_slice": {
-        "objective": "Extract the night Protect and Kill stage bodies from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/night_action.rs owner. Introduce typed ProtectionStageContext and KillStageContext inputs that carry prepared actions, validated pack/state, deterministic chance RNG, protection/dependency/effect state, event and trace sinks, kill attribution, and carry tokens without a broad resolver-root facade. Keep action resolution in resolver/action.rs, intake ordering in resolver/intake.rs, trigger fixpoint behavior in resolver/trigger.rs, and policy admission exclusively in pack/validation.rs. Extend the resolver source-boundary contract to fix one coordinator call per stage, direct dependency direction, moved stage ownership, and the absence of local lint suppression. Preserve event and trace order, RNG consumption order, target-state gating, wolf-carry behavior, public resolver APIs, and every golden semantic.",
-        "paths": [
-          "crates/domain/src/resolver.rs",
-          "crates/domain/src/resolver/night_action.rs",
-          "crates/domain/tests/resolver_boundary.rs",
-          "docs/arch/16-maintainable-core.md"
-        ],
-        "proof_commands": [
-          "cargo test -p domain --test resolver_boundary",
-          "cargo test -p domain",
-          "cargo clippy --workspace --all-targets --all-features -- -D warnings",
-          "npm run test:proof-lane-contract",
-          "npm run proof:lanes -- --mode sprint --run",
-          "npm run proof:lanes -- --mode full --run"
-        ],
-        "non_claims": [
-          "Do not redesign pack validation, intake ordering, suppression, redirect, trigger fixpoint, outcome policy, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of stage ownership extraction.",
-          "Do not change event order, trace payloads, action-chance RNG consumption, target-state gating, protection/kill precedence, wolf-carry token consumption, or accepted pack behavior.",
-          "Do not leave stage forwarding helpers or resolver-root re-exports; the coordinator constructs each typed context and calls its owner directly.",
-          "Do not mark foundation.maintainable-core complete; later resolver stage coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
-        ]
-      }
+      ]
     },
     {
       "id": "product.game.core-loop",
@@ -1633,7 +1665,7 @@
       "title": "Non-game discussion areas",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Public non-game discussions use a typed community write model, expected-version appends, enabled-account and profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof.",
+      "summary": "Public non-game discussions use a typed forum write model (crates/forum), expected-version appends, active-community-membership and public-profile-backed authorship, independent posting/visibility moderation, canonical topic/post URLs, a public area directory, and a seeded Chromium proof. Topic verbs are create, post, lock/unlock, and hide/unhide; post editing, retraction, and topic curation are tracked separately under product.community.forum-editing-curation.",
       "complete_when": [
         "Users can browse, create, post in, and moderate capability-scoped non-game discussions through real routes and projections."
       ],
@@ -1806,7 +1838,7 @@
       "title": "Public watches and unread inbox",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history.",
+      "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream (crates/attention) and advance a monotonic per-watch read cursor. Since RFC 0007 the inbox is reason-derived: member_inbox_item rows are fanned out synchronously for watch and mention reasons, author-self updates are excluded, unread clears from either end, and moderation hide/restore suppresses and restores entries without mutating history.",
       "complete_when": [
         "Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."
       ],
@@ -1820,6 +1852,14 @@
         {
           "kind": "source",
           "value": "crates/database_schema/migrations/0001_current_schema.sql"
+        },
+        {
+          "kind": "source",
+          "value": "crates/attention/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/database_schema/migrations/0005_reason_derived_member_inbox.sql"
         },
         {
           "kind": "source",
@@ -1893,6 +1933,358 @@
         }
       ],
       "remaining": []
+    },
+    {
+      "id": "product.community.quotations",
+      "section": "community",
+      "order": 80,
+      "title": "First-class quotations and citations",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "RFC 0002: a quotation is a typed, same-thread, write-time-validated fact on the citing post with an immutable excerpt snapshot. Forum and game keep separate decide paths over the shared content_reference validator, the quoted-by reverse index is a rebuildable projection, and composer and renderer surfaces exist on discussion topics and public game threads.",
+      "complete_when": [
+        "Members can attach validated same-thread quotations in discussion and game composers, quoted posts expose a rebuildable quoted-by index, and visibility overlays apply to citations at read time."
+      ],
+      "depends_on": [
+        "foundation.community-bounded-owners",
+        "product.community.discussions",
+        "product.game.core-loop"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0002-first-class-quotations.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/quotation_citation.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/pipeline/quotations.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/public_platform_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections --test quotation_citation -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-discussion:local"
+        },
+        {
+          "kind": "artifact",
+          "value": "target/discussion-role-proof/discussion-proof.json"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.closed-admission",
+      "section": "community",
+      "order": 90,
+      "title": "Closed community admission and sponsorship provenance",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "RFC 0005: community membership is an aggregate admitted by exactly one single-use, target-bound invitation issued by an active sponsor; founders are explicit. Sponsorship lineage is an immutable acyclic forest with a rebuildable closure, private to the member and global stewards. Forum posting and topic creation require an active membership binding, sponsor suspension revokes pending invitations without cascading to descendants, and stewards suspend, restore, and revoke through capability-safe admin routes.",
+      "complete_when": [
+        "Unknown identities cannot self-provision, every ordinary membership traces to one accepted invitation, community-member authority resolves from the active-membership projection, and stewards can inspect lineage and sanction memberships through proven routes."
+      ],
+      "depends_on": [
+        "product.identity.registration",
+        "product.identity.method-coexistence",
+        "product.community.discussions",
+        "product.community.profiles"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0005-closed-community-admission.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/community_membership/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/membership_application/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/membership_application/tests/admission.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/membership_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/membership_http_boundary.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/database_schema/migrations/0003_closed_community_admission.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/auth/invite/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/admin/community/+page.svelte"
+        },
+        {
+          "kind": "command",
+          "value": "cargo test -p community_membership --lib"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p membership_application --test admission -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api --test membership_http_boundary -- --test-threads=1"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.mentions",
+      "section": "community",
+      "order": 100,
+      "title": "First-class mentions and addressed delivery",
+      "execution_class": "code",
+      "status": "complete",
+      "summary": "RFC 0007: a mention is a validated span on the post, not markup. Community mentions address currently-public profiles and deliver to the reason-derived member inbox; game mentions address a slot that can read the channel and deliver through a sibling slot_mention_notification table, never to a principal. Typeahead lives in the existing composer, mute and moderation overlays stay at read time, and per-post mention bounds are enforced at decision time.",
+      "complete_when": [
+        "Members can mention public profiles in discussions and readable slots in game channels through the composer, mentioned parties receive privacy-safe addressed delivery that clears from either end, and no mention path exposes a credential principal."
+      ],
+      "depends_on": [
+        "foundation.community-bounded-owners",
+        "product.community.subscriptions",
+        "product.community.member-mutes",
+        "product.game.persona-occupancy"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0007-first-class-mentions-and-addressed-delivery.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/tests/universe_boundary.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/mention_delivery.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/slot_mention_delivery.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/tests/pipeline/mentions.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/database_schema/migrations/0006_discussion_post_mentions.sql"
+        },
+        {
+          "kind": "source",
+          "value": "crates/database_schema/migrations/0008_game_slot_mentions.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/components/discussion/MentionComposer.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/api/mention-suggestions/+server.js"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections --test mention_delivery --test slot_mention_delivery -- --test-threads=1"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-role-smoke"
+        }
+      ],
+      "remaining": []
+    },
+    {
+      "id": "product.community.forum-editing-curation",
+      "section": "community",
+      "order": 110,
+      "title": "Forum post editing and topic curation",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The forum write model has four verbs: create topic, submit post, lock/unlock, hide/unhide (crates/forum/src/lib.rs). No post edit, author retraction, edit history, topic rename, topic move between areas, or pin/sticky exists. Owner ruling 2026-09-16: this is 1.0-required, and editability is a policy owned by each thread source, not a platform-wide capability. Forum (community) threads are editable within a bounded window; game channel threads are never editable because posts are slot-authored evidence in a live game, and the absence of any game edit command is a proven contract, not an omission. A future signup or recruitment thread kind declares its own edit policy when it is added.",
+      "complete_when": [
+        "A forum post author can edit their own post within a bounded window with an append-only revision history and a visible edited marker, can retract their own post as a read-time overlay that preserves history and cited excerpts, and a GlobalMod can rename, move, and pin a topic through capability-safe routes; search, inbox, citation, and moderation overlays stay consistent; game channel posts remain provably non-editable; and a seeded Chromium proof covers each flow."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.quotations",
+        "product.community.mentions",
+        "product.community.search",
+        "product.community.moderation-operations"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/forum/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/public_platform_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0002-first-class-quotations.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0003-community-platform-v2.md"
+        },
+        {
+          "kind": "planned-command",
+          "value": "npm run test:dev-test-game-discussion:local"
+        },
+        {
+          "kind": "planned-command",
+          "value": "cargo test -p forum"
+        }
+      ],
+      "remaining": [
+        "Slice 1 (active): forum post edit and author retraction with revision history, plus the game-thread non-editability contract.",
+        "Slice 2: topic rename, move, and pin commands with GlobalMod capability, canonical-URL stability, and pinned-first area ordering.",
+        "Extend the discussion role proof with edit, retract, rename, move, and pin flows, and add the forum crate to the cargo:public-platform proof lane, which currently tests attention, social, and trust_safety but not forum."
+      ],
+      "recommended_slice": {
+        "objective": "Add forum-owned post editing and author retraction. In crates/forum extend TopicCommand with EditPost { source_seq, body, mentions, author_profile_id, expected_revision } and RetractPost { source_seq, author_profile_id }, and TopicEvent with PostEdited { source_seq, body, mentions, revision } and PostRetracted { source_seq }; decide_topic rejects non-author edits, edits after the forum-owned edit window, edits or retractions of retracted posts, and edits on locked or hidden topics; quotations on a post are fixed at submission and are not editable. Add a migration that gives discussion_post revision, edited_at, and retracted_at columns and an append-only discussion_post_revision table; the discussion projection folds both events, search reindexes the current body on edit and removes it on retract, newly added mentions deliver through the reason-derived inbox while removed mentions are not undelivered, and edits never fan out as watch updates. Retraction is a read-time overlay: the body is withheld and marked retracted by the author, history and cited excerpt snapshots are preserved per RFC 0002. Expose PUT and DELETE /discussions/topics/{topic}/posts/{source_seq} behind DiscussionProfileAuthentication with a 409 on stale expected_revision, extend wire DiscussionPost with revision, edited_at, and retracted fields, and give the topic page an edit affordance on own posts inside the window, an edited marker, and a retracted placeholder. Prove game threads are non-editable: add a boundary test asserting that commands::Command and wire::Command have no edit or retract variant and that forum edit routes accept only DiscussionTopic ids, so a game PostRef cannot reach decide_topic. Add forum unit tests for every reject and add -p forum to the cargo:public-platform lane.",
+        "paths": [
+          "crates/forum/src/lib.rs",
+          "crates/forum/tests/editing.rs",
+          "crates/database_schema/migrations/0012_discussion_post_editing.sql",
+          "crates/projections/src/lib.rs",
+          "crates/projections/tests/discussion_post_editing.rs",
+          "crates/wire/src/lib.rs",
+          "crates/api/src/public_platform_http.rs",
+          "crates/api/tests/public_platform_http_boundary.rs",
+          "crates/commands/tests/pipeline/residual_cases.rs",
+          "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte",
+          "tools/discussion_role_proof.mjs",
+          "tools/frontend_role_smoke_flows.mjs",
+          "docs/ops/proof-lane-manifest.json",
+          "docs/arch/02-event-sourcing.md",
+          "docs/arch/10-event-schema.md"
+        ],
+        "proof_commands": [
+          "cargo test -p forum",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections --test discussion_post_editing --test quotation_citation --test mention_delivery -- --test-threads=1",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api --test public_platform_http_boundary -- --test-threads=1",
+          "npm run test:database-schema:static",
+          "npm run test:dev-test-game-discussion:local",
+          "npm run test:dev-test-game-search:local",
+          "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+          "npm run test:proof-lane-contract",
+          "npm run proof:lanes -- --mode sprint --run"
+        ],
+        "non_claims": [
+          "Do not add an edit or retract command to game channel posts, the commands crate, or the wire Command enum; game posts are slot-authored evidence and stay immutable.",
+          "Do not make quotations editable, rewrite cited excerpt snapshots, or delete discussion_post rows; retraction is an overlay and revisions are append-only.",
+          "Do not undeliver inbox items for mentions removed by an edit, and do not fan out edits as watch updates.",
+          "Do not implement topic rename, move, or pin in this slice; that is slice 2 of the same item.",
+          "Do not introduce a signup or recruitment thread kind; when one is added it declares its own edit policy.",
+          "Do not mark product.community.forum-editing-curation complete; topic curation and the extended role proof remain."
+        ]
+      }
+    },
+    {
+      "id": "product.community.signup-threads",
+      "section": "community",
+      "order": 120,
+      "title": "Signup threads linked to spawned games",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "A signup thread is an ordinary forum topic that a game names as its origin at creation. Design ruling 2026-09-16: the game declares the link as one immutable, additive origin fact on GameCreated (CreateGame { origin: Option<PublicContentRef> }), validated at decide time against a visible public forum topic through projection reads; the forum write model never learns about games (RFC 0003 invariant 1). 'Signup' is a derived kind, not a declared one: a topic is a signup thread iff a game names it, so there is no topic kind column and no dual state. Forward (game -> origin topic) lives on game_index, the reverse index (topic -> spawned games) is a rebuildable projection fed by the game source adapter, and an optional reason-derived inbox reason tells topic watchers when the game spawns. Grouping is a discussion_area with slug signups, which is existing data. Signup threads inherit the forum edit policy from product.community.forum-editing-curation.",
+      "complete_when": [
+        "A host can name a visible public forum topic as a game's origin at creation, the origin is immutable and validated at decide time, the topic page shows its spawned games and the game surfaces link back to the origin topic from rebuildable projections, watchers of the origin topic receive a reason-derived inbox update when the game spawns, and a seeded Chromium proof covers the flow."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.subscriptions",
+        "product.community.forum-editing-curation",
+        "product.game.setup",
+        "foundation.community-bounded-owners"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/content_reference/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/publications.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0003-community-platform-v2.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0005-closed-community-admission.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0007-first-class-mentions-and-addressed-delivery.md"
+        },
+        {
+          "kind": "planned-command",
+          "value": "npm run test:dev-test-game-game-index:local"
+        },
+        {
+          "kind": "planned-command",
+          "value": "npm run test:dev-test-game-discussion:local"
+        },
+        {
+          "kind": "planned-command",
+          "value": "npm run test:database-schema:static"
+        }
+      ],
+      "remaining": [
+        "Add the optional origin to wire Command::CreateGame and the GameCreated payload; in commands::create_game validate through projection reads that the origin is a PublicContentRef to a visible forum topic (host-authored unless the owner relaxes that to any member topic), and record the origin as immutable.",
+        "Add game_index.origin_topic_id and a rebuildable discussion_topic_spawned_game reverse index fed by the game source adapter in projections::publications, with rebuild-audit coverage.",
+        "Extend wire GameIndexEntry with origin_topic and DiscussionTopic with spawned_games; render the origin picker in the host setup workbench, a spawned-game banner on the topic page, and an origin link on game surfaces.",
+        "Register an attention adapter for a game_spawned_from_watched_topic inbox reason; do not auto-watch or auto-lock the origin topic.",
+        "Extend the game-index and discussion role proofs with an origin-linked game and update docs/arch/01-domain-model.md and 10-event-schema.md."
+      ],
+      "decision_trigger": "Introduce a dedicated Signup context with typed Enrol, roster, waitlist, and quota commands only when enrolment must be machine-readable (auto-seating from a roster, waitlists, or quotas). Until then the host reads the thread and seats players with SeatPersona; posts are never parsed as enrolments."
     },
     {
       "id": "product.archive.completed-game-export",

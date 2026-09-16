@@ -18,12 +18,12 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 42,
+    complete: 46,
     partial: 0,
-    open: 1,
+    open: 3,
     blocked: 0,
     deferred: 0,
-    total: 43,
+    total: 49,
   });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
@@ -41,7 +41,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  assert.equal(summary.productCapabilitiesComplete, true);
+  // Forum editing and curation is a stated open product gap.
+  assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   assert.equal(
@@ -49,7 +50,10 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
       ?.status,
     "complete",
   );
-  assert.equal(nextBuildableCodeItem(registry)?.id, "foundation.maintainable-core");
+  assert.equal(
+    nextBuildableCodeItem(registry)?.id,
+    "product.community.forum-editing-curation",
+  );
   assert.equal(
     registry.items.find((item) => item.id === "product.game.persona-occupancy")
       ?.status,
@@ -136,47 +140,18 @@ test("registry validation rejects duplicate ids and unknown dependencies", async
 test("registry validation rejects dependency cycles", async () => {
   const registry = await loadCompletionRegistry();
   const cyclic = structuredClone(registry);
-  const discussions = cyclic.items.find(
-    (item) => item.id === "product.community.discussions",
-  );
-  discussions.status = "open";
-  discussions.remaining = ["cyclic test dependency"];
-  const profiles = cyclic.items.find(
-    (item) => item.id === "product.community.profiles",
-  );
-  profiles.status = "open";
-  profiles.remaining = ["cyclic test dependency"];
-  const lifecycle = cyclic.items.find(
-    (item) => item.id === "product.identity.data-lifecycle",
-  );
-  lifecycle.status = "open";
-  lifecycle.remaining = ["cyclic test dependency"];
-  const search = cyclic.items.find((item) => item.id === "product.community.search");
-  search.status = "open";
-  search.remaining = ["cyclic test dependency"];
-  const moderation = cyclic.items.find(
-    (item) => item.id === "product.community.moderation-operations",
-  );
-  moderation.status = "open";
-  moderation.remaining = ["cyclic test dependency"];
-  const subscriptions = cyclic.items.find(
-    (item) => item.id === "product.community.subscriptions",
-  );
-  subscriptions.status = "open";
-  subscriptions.remaining = ["cyclic test dependency"];
-  const mutes = cyclic.items.find(
-    (item) => item.id === "product.community.member-mutes",
-  );
-  mutes.status = "open";
-  mutes.remaining = ["cyclic test dependency"];
+  // Open every complete item so the cycle check is reached before the
+  // complete-depends-on-incomplete check, regardless of which items exist.
+  for (const item of cyclic.items) {
+    if (item.status === "complete") {
+      item.status = item.execution_class === "external-evidence" ? "partial" : "open";
+      item.remaining = ["cyclic test dependency"];
+    }
+  }
   const registration = cyclic.items.find(
     (item) => item.id === "product.identity.registration",
   );
   const delivery = cyclic.items.find((item) => item.id === "product.identity.delivery");
-  registration.status = "open";
-  registration.remaining = ["cyclic test dependency"];
-  delivery.status = "open";
-  delivery.remaining = ["cyclic test dependency"];
   registration.depends_on = [delivery.id];
   delivery.depends_on = [registration.id];
   await assert.rejects(
