@@ -81,6 +81,13 @@ test("route-state render keeps generated entry modules under its lane artifact r
   );
 });
 
+test("community browser proofs publish artifacts into their canonical lane directories", () => {
+  for (const script of ["community_moderation_role_proof.mjs", "public_watch_role_proof.mjs"]) {
+    const source = readFileSync(path.join(repoRoot, "tools", script), "utf8");
+    assert.match(source, /const artifactDir = path\.resolve\([\s\S]*?process\.env\.FMARCH_PROOF_ARTIFACT_DIR/);
+  }
+});
+
 test('theme evidence rejects incomplete matrices, preferences, contrasts, and missing screenshots', async t => {
   const {mkdtemp, mkdir, writeFile, rm} = await import('node:fs/promises');
   const {tmpdir} = await import('node:os');

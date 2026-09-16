@@ -152,7 +152,9 @@
     "test:dependency-policy:audit": { "kind": "npm", "execution": { "class": "hosted", "timeout_seconds": 900, "argv": ["npm", "run", "test:dependency-policy:audit"], "resources": [{ "kind": "lock", "name": "network" }] } },
     "test:frontend-csp-browser": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 300, "argv": ["npm", "run", "test:frontend-csp-browser"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }] } },
     "check:build-posture": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "check:build-posture"], "resources": [] } },
-    "test:exact-image-content": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
+    "test:exact-image-content": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:dev-test-game-community-moderation": {"phase": "acceptance", "kind": "npm", "execution": {"class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:dev-test-game-community-moderation"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "lock", "name": "browser"}, {"kind": "lock", "name": "frontend-worktree"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}},
+    "test:dev-test-game-community-subscriptions": {"phase": "acceptance", "kind": "npm", "execution": {"class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:dev-test-game-community-subscriptions"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "lock", "name": "browser"}, {"kind": "lock", "name": "frontend-worktree"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}}
   },
   "areas": [
     {
@@ -295,14 +297,7 @@
       "paths": ["crates/projections/"],
       "crate": "projections",
       "dependency_lanes": ["cargo:projections", "cargo:clippy-workspace"],
-      "lanes": [
-        "cargo:projections",
-        "cargo:clippy-workspace",
-        "check:event-key-rotation-evidence",
-        "test:railway-staging-target",
-        "test:production-promotion",
-        "test:public-search-role-proof"
-      ],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace", "check:event-key-rotation-evidence", "test:railway-staging-target", "test:production-promotion", "test:public-search-role-proof", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -601,7 +596,7 @@
       "paths": ["crates/attention/"],
       "crate": "attention",
       "dependency_lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
-      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace", "test:dev-test-game-community-subscriptions"],
       "capabilities": ["product.community.subscriptions"]
     },
     {
@@ -628,7 +623,7 @@
       "paths": ["crates/trust_safety/"],
       "crate": "trust_safety",
       "dependency_lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
-      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace", "test:dev-test-game-community-moderation"],
       "capabilities": ["product.community.moderation-operations"]
     },
     {
@@ -728,15 +723,8 @@
       "id": "api:public-search",
       "tier": "frozen",
       "paths": ["crates/api/src/public_platform_http.rs"],
-      "lanes": [
-        "cargo:api",
-        "cargo:clippy-workspace",
-        "test:mash-scale-acceptance",
-        "test:security-release-baseline",
-        "check:event-key-rotation-evidence",
-        "test:public-search-role-proof"
-      ],
-      "capabilities": ["product.community.search"]
+      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "check:event-key-rotation-evidence", "test:public-search-role-proof", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
+      "capabilities": ["product.community.search", "product.community.moderation-operations", "product.community.subscriptions"]
     },
     {
       "id": "api:tests",
@@ -888,7 +876,7 @@
         "frontend/src/routes/u/",
         "frontend/src/routes/moderation/"
       ],
-      "lanes": ["test:frontend-contract", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-game-index"],
+      "lanes": ["test:frontend-contract", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-game-index", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -1426,6 +1414,8 @@
         "test:dependency-policy:audit",
         "test:database-tls-boundary"
       ]
-    }
+    },
+    {"id": "proof:community-moderation-role", "tier": "frozen", "paths": ["tools/community_moderation_role_proof.mjs", "tools/community_moderation_evidence_contract.mjs", "tools/community_moderation_evidence_contract.test.mjs"], "lanes": ["test:dev-test-game-community-moderation", "test:dev-test-game-contract"], "capabilities": ["product.community.moderation-operations"]},
+    {"id": "proof:public-watch-role", "tier": "frozen", "paths": ["tools/public_watch_role_proof.mjs"], "lanes": ["test:dev-test-game-community-subscriptions"], "capabilities": ["product.community.subscriptions"]}
   ]
 }
