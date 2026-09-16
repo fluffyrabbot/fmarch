@@ -3186,18 +3186,36 @@ pub async fn append_discussion_and_project(
     Ok(stored)
 }
 
-/// Transactional form of [`append_discussion_and_project`].
+/// Transactional form of [`append_discussion_and_project`]. The complete batch
+/// owns a savepoint so a fold error rolls back both journal and projection
+/// writes without discarding unrelated work in the caller's transaction.
 pub async fn append_discussion_and_project_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
     validate_discussion_events(events)?;
-    let stored = append_in_tx(tx, stream_id, events).await?;
-    for event in &stored {
-        fold_discussion_event(tx, stream_id, event).await?;
+    let mut batch = sqlx::Acquire::begin(&mut *tx).await?;
+    let result: Result<Vec<StoredEvent>, ProjectionError> = async {
+        let stored = append_in_tx(&mut batch, stream_id, events).await?;
+        for event in &stored {
+            fold_discussion_event(&mut batch, stream_id, event).await?;
+        }
+        Ok(stored)
     }
-    Ok(stored)
+    .await;
+    match result {
+        Ok(stored) => {
+            batch.commit().await?;
+            Ok(stored)
+        }
+        Err(error) => {
+            // Finish rollback before returning; a rollback failure supersedes
+            // the fold error because atomic recovery is no longer confirmed.
+            batch.rollback().await?;
+            Err(error)
+        }
+    }
 }
 
 /// Append a community command only if the topic stream is still at the version
