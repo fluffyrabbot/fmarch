@@ -17,6 +17,7 @@ import {
   validateLiveProjectionMessageScope,
 } from "./live-transport.mjs";
 import { createProjectionStore } from "./projection-store.mjs";
+import { recoverPlayerRouteCommand } from "../../routes/g/[game]/player-route-controller.mjs";
 
 test("builds websocket URLs from API bases and relative app origins", () => {
   assert.equal(
@@ -1449,6 +1450,140 @@ test("websocket delta frames can refresh dependent cold-load keys", async () => 
   assert.equal(events.at(-1).message.delta.kind, "ThreadPostsChanged");
   assert.equal(events.at(-1).snapshot.commandState.actions[0], "fresh-action");
   connection.close();
+});
+
+for (const startsFirst of ["command", "live"]) {
+  for (const finishesFirst of ["command", "live"]) {
+    test(`overlapping vote recovery preserves live delivery: ${startsFirst} starts, ${finishesFirst} finishes first`, async (t) => {
+      FakeWebSocket.instances = [];
+      const events = [];
+      const commandResponse = deferred();
+      const liveResponse = deferred();
+      const commandStarted = deferred();
+      const liveStarted = deferred();
+      const store = createProjectionStore({
+        initialSnapshot: {
+          votecount: [{ target: "slot-2", count: 1, needed: 7 }],
+          commandState: { revision: "initial" },
+        },
+        expectedScope: { game: "midsummer", channel: "main", slotId: null },
+        coldLoads: {
+          votecount: { url: "/votecount" },
+          commandState: { url: "/command-state" },
+        },
+      });
+      let recovered = false;
+      const connection = connectLiveProjection({
+        url: "/ws?game=midsummer",
+        projectionStore: store,
+        WebSocketCtor: FakeWebSocket,
+        reconnect: false,
+        fetchImpl: async (url) => {
+          if (!recovered) return jsonResponse(url.startsWith("/votecount?")
+            ? [{ target: "slot-2", count: 1, needed: 7 }]
+            : { revision: "initial" });
+          assert.ok(url.startsWith("/command-state?"));
+          liveStarted.resolve();
+          await liveResponse.promise;
+          return jsonResponse({ revision: "live" });
+        },
+        refreshKeysForEvent: (message) => message.kind === "delta" ? ["commandState"] : [],
+        onEvent: (message, snapshot) => events.push({ message, snapshot }),
+      });
+      t.after(() => connection.close());
+      await completeLiveHandshake();
+      recovered = true;
+      events.length = 0;
+      const socket = FakeWebSocket.last;
+      const commandStatus = { state: "ack", commandId: "confirmed-vote", message: "Ack: stream seq 41" };
+      const recoverCommand = () => recoverPlayerRouteCommand({
+        action: "submit_vote",
+        data: { coldLoad: { commandStateEndpoint: "/command-state" } },
+        projectionStore: store,
+        commandStatus,
+        fetchImpl: async (url) => {
+          commandStarted.resolve();
+          await commandResponse.promise;
+          return jsonResponse(url.startsWith("/votecount?")
+            ? [{ target: "slot-2", count: startsFirst === "command" ? 2 : 3, needed: 7 }]
+            : { revision: "command" });
+        },
+      });
+      const deliver = () => socket.emit("message", {
+        data: encodeServerEnvelopeFrame(deltaEnvelope("VoteCountChanged", canonicalVoteCountBody({ count: 3 }))),
+      });
+      let commandRecovery;
+      let delivery;
+      if (startsFirst === "command") {
+        commandRecovery = recoverCommand();
+        await commandStarted.promise;
+        delivery = deliver();
+        await liveStarted.promise;
+      } else {
+        delivery = deliver();
+        await liveStarted.promise;
+        commandRecovery = recoverCommand();
+        await commandStarted.promise;
+      }
+      if (finishesFirst === "command") {
+        commandResponse.resolve();
+        await new Promise((resolve) => setImmediate(resolve));
+        liveResponse.resolve();
+      } else {
+        liveResponse.resolve();
+        await new Promise((resolve) => setImmediate(resolve));
+        commandResponse.resolve();
+      }
+      const [recovery] = await Promise.all([commandRecovery, delivery]);
+      assert.equal(recovery.commandStatus, commandStatus, "a confirmed ACK keeps successful projection recovery");
+      assert.equal(socket.closed, undefined, "ordinary overlap must not retire the healthy socket");
+      assert.equal(store.isReady(), true);
+      assert.deepEqual(store.getSnapshot().votecount, [{ target: "slot-2", count: 3, needed: 7 }]);
+      assert.equal(store.getSnapshot().commandState.revision, startsFirst === "command" ? "live" : "command");
+      assert.equal(events.length, 1, "deliver the actual delta without error or reconnect events");
+      assert.equal(events[0].message.delta.kind, "VoteCountChanged");
+      assert.equal(events[0].message.delta.body.count, 3);
+      assert.equal(events[0].snapshot.votecount[0].count, 3);
+    });
+  }
+}
+
+test("a real dependent refresh failure still retires the live generation", async (t) => {
+  const events = [];
+  const store = createProjectionStore({
+    initialSnapshot: { votecount: [], commandState: { actions: ["vote"] } },
+    expectedScope: { game: "midsummer", channel: "main", slotId: null },
+    coldLoads: {
+      votecount: { url: "/votecount" },
+      commandState: { url: "/command-state", revoke: { actions: [] } },
+    },
+  });
+  let recovered = false;
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    reconnect: false,
+    fetchImpl: async (url) => recovered
+      ? { ok: false, status: 503 }
+      : jsonResponse(url.startsWith("/votecount?") ? [] : { actions: ["vote"] }),
+    refreshKeysForEvent: () => ["commandState"],
+    onEvent: (message) => events.push(message),
+  });
+  t.after(() => connection.close());
+  await completeLiveHandshake();
+  recovered = true;
+  events.length = 0;
+  await FakeWebSocket.last.emit("message", {
+    data: encodeServerEnvelopeFrame(deltaEnvelope("VoteCountChanged", canonicalVoteCountBody({ count: 3 }))),
+  });
+  assert.equal(FakeWebSocket.last.closed, true);
+  assert.equal(store.isReady(), false);
+  assert.deepEqual(store.getSnapshot().commandState, { actions: [] });
+  assert.deepEqual(events, [
+    { kind: "error", message: "authoritative projection refresh failed for commandState" },
+    { kind: "close" },
+  ]);
 });
 
 test("a slow consumer cannot grow the generation frame queue without bound", async () => {

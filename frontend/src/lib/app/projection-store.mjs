@@ -38,12 +38,15 @@ export function createProjectionStore({
   let snapshot = freezeSnapshot(requiredObject(initialSnapshot, "initialSnapshot"));
   let refreshNonce = 0;
   let refreshAttempt = 0;
+  let authorityEpoch = 0;
+  const epochListeners = new Set();
+  const ownershipListeners = new Set();
   const registeredKeys = Object.freeze(Object.keys(coldLoads));
   const immutableExpectedScope = expectedScope === undefined
     ? null
     : normalizeLiveProjectionScope(expectedScope);
-  const latestAttemptByKey = new Map(
-    registeredKeys.map((key) => [key, 0]),
+  const latestOwnerByKey = new Map(
+    registeredKeys.map((key) => [key, { attempt: 0, settled: true, error: null }]),
   );
   let health = initialProjectionHealth(registeredKeys);
   const subscribers = new Set();
@@ -109,6 +112,7 @@ export function createProjectionStore({
     { reason = "authoritative_projection_invalidated" } = {},
   ) {
     const invalidatedKeys = normalizeProjectionKeys(keys, registeredKeys);
+    advanceAuthorityEpoch();
     const attempt = supersedeProjectionKeys(invalidatedKeys);
     publishHealth({
       reason,
@@ -152,6 +156,7 @@ export function createProjectionStore({
       revocationPatch[key] = revoked;
     }
 
+    advanceAuthorityEpoch();
     const attempt = supersedeProjectionKeys(registeredKeys);
     if (Object.keys(revocationPatch).length > 0) {
       commitSnapshot(revocationPatch);
@@ -182,10 +187,19 @@ export function createProjectionStore({
       throw new TypeError("projection store refresh requires a fetch implementation");
     }
 
+    const epoch = authorityEpoch;
     const attempt = ++refreshAttempt;
+    let complete;
+    const owner = {
+      attempt,
+      settled: false,
+      error: null,
+      completion: new Promise((resolve) => { complete = resolve; }),
+    };
     for (const key of refreshKeys) {
-      latestAttemptByKey.set(key, attempt);
+      latestOwnerByKey.set(key, owner);
     }
+    notifyOwnershipChange();
     publishHealth({
       reason: "authoritative_refresh_in_progress",
       keyUpdates: Object.fromEntries(
@@ -193,116 +207,188 @@ export function createProjectionStore({
       ),
     });
 
-    const results = await Promise.all(
-      refreshKeys.map(async (key) => {
-        const coldLoad = coldLoads[key];
-        try {
-          const response = await fetchImpl(
-            projectionRefreshUrl(coldLoad.url, ++refreshNonce),
-            {
-              cache: "no-store",
-              headers: { accept: "application/json" },
-              signal,
-            },
-          );
-          if (!response?.ok) {
-            const normalizedError = normalizeProjectionError({
-              key,
-              status: Number(response?.status ?? 0),
-              previous: snapshot[key],
-              coldLoad,
-            });
-            if (normalizedError.accepted) {
-              return refreshSuccess(key, normalizedError.value);
-            }
-            return refreshFailure(key, "http_error", {
-              status: Number(response?.status ?? 0),
-            });
+    try {
+      assertRefreshEpoch(epoch, signal);
+      const results = await withinRefreshEpoch(Promise.all(
+        refreshKeys.map((key) => readProjection(key, { fetchImpl, signal })),
+      ), { epoch, signal });
+      const publishedKeys = new Set();
+
+      // Every caller starts fresh HTTP reads, including post-command callers.
+      // Older batches follow strictly newer owners instead of treating ordinary
+      // overlap as lost authority. No sibling is published before all requested
+      // keys have a successful current result or a successful replacement.
+      while (true) {
+        assertRefreshEpoch(epoch, signal);
+        const observedOwners = refreshKeys.map((key) => latestOwnerByKey.get(key));
+        const replacements = [...new Set(observedOwners.filter((current) => current !== owner))];
+        const currentResults = results.filter(
+          (result) => latestOwnerByKey.get(result.key) === owner,
+        );
+        const failures = currentResults.filter((result) => result.kind === "failure");
+        for (const replacement of replacements) {
+          if (replacement.settled && replacement.error !== null) {
+            failures.push(...replacement.error.failures);
           }
-          if (!isJsonResponse(response)) {
-            return refreshFailure(key, "invalid_content_type", {
-              status: Number(response?.status ?? 0),
-            });
-          }
-          const payload = await response.json();
-          return refreshSuccess(
-            key,
-            normalizeProjectionPayload({
-              key,
-              payload,
-              previous: snapshot[key],
-              coldLoad,
-            }),
-          );
-        } catch (error) {
-          return refreshFailure(key, "invalid_response", {
-            message: errorMessage(error),
+        }
+        if (failures.length > 0) {
+          throw new ProjectionRefreshError(failures);
+        }
+        const pending = replacements.filter((current) => !current.settled)
+          .map((current) => current.completion);
+        if (pending.length > 0) {
+          await waitForRefreshProgress(pending, { epoch, signal });
+          // Another key may have acquired a newer owner while we waited.
+          continue;
+        }
+        const unpublishedResults = currentResults.filter((result) => !publishedKeys.has(result.key));
+        if (unpublishedResults.length > 0) {
+          for (const result of unpublishedResults) publishedKeys.add(result.key);
+          commitSnapshot(Object.fromEntries(
+            unpublishedResults.map((result) => [result.key, result.value]),
+          ));
+          assertRefreshEpoch(epoch, signal);
+          publishHealth({
+            reason: restoreReadiness === true
+              ? "authoritative_refresh_succeeded"
+              : "authoritative_refresh_applied_while_unavailable",
+            keyUpdates: Object.fromEntries(
+              currentResults
+                .filter((result) => latestOwnerByKey.get(result.key) === owner)
+                .map((result) => [result.key, projectionKeyHealth(
+                  restoreReadiness === true ? "ready" : "unavailable", attempt,
+                )]),
+            ),
           });
         }
-      }),
-    );
-
-    const currentResults = results.filter(
-      (result) => latestAttemptByKey.get(result.key) === attempt,
-    );
-    if (currentResults.length !== results.length) {
-      if (currentResults.length > 0) {
+        assertRefreshEpoch(epoch, signal);
+        // Subscribers are synchronous and may start another refresh while we
+        // publish. Follow that new owner without publishing our siblings twice.
+        if (refreshKeys.some((key, index) => latestOwnerByKey.get(key) !== observedOwners[index])) {
+          continue;
+        }
+        return snapshot;
+      }
+    } catch (error) {
+      owner.error = error instanceof ProjectionRefreshError
+        ? error
+        : new ProjectionRefreshError([
+            refreshFailure("*", "invalid_response", { message: errorMessage(error) }),
+          ]);
+      const ownedKeys = refreshKeys.filter((key) => latestOwnerByKey.get(key) === owner);
+      if (ownedKeys.length > 0) {
         publishHealth({
-          reason: "authoritative_refresh_superseded",
-          keyUpdates: Object.fromEntries(
-            currentResults.map((result) => [
-              result.key,
-              projectionKeyHealth("unavailable", attempt),
-            ]),
-          ),
+          reason: "authoritative_refresh_failed",
+          keyUpdates: Object.fromEntries(ownedKeys.map((key) => [
+            key, projectionKeyHealth("unavailable", attempt),
+          ])),
         });
       }
+      throw owner.error;
+    } finally {
+      owner.settled = true;
+      complete();
+    }
+  }
+
+  async function readProjection(key, { fetchImpl, signal }) {
+    const coldLoad = coldLoads[key];
+    try {
+      const response = await fetchImpl(
+        projectionRefreshUrl(coldLoad.url, ++refreshNonce),
+        {
+          cache: "no-store",
+          headers: { accept: "application/json" },
+          signal,
+        },
+      );
+      if (!response?.ok) {
+        const normalizedError = normalizeProjectionError({
+          key,
+          status: Number(response?.status ?? 0),
+          previous: snapshot[key],
+          coldLoad,
+        });
+        if (normalizedError.accepted) {
+          return refreshSuccess(key, normalizedError.value);
+        }
+        return refreshFailure(key, "http_error", {
+          status: Number(response?.status ?? 0),
+        });
+      }
+      if (!isJsonResponse(response)) {
+        return refreshFailure(key, "invalid_content_type", {
+          status: Number(response?.status ?? 0),
+        });
+      }
+      const payload = await response.json();
+      return refreshSuccess(
+        key,
+        normalizeProjectionPayload({
+          key,
+          payload,
+          previous: snapshot[key],
+          coldLoad,
+        }),
+      );
+    } catch (error) {
+      return refreshFailure(key, "invalid_response", {
+        message: errorMessage(error),
+      });
+    }
+  }
+
+  function notifyOwnershipChange() {
+    for (const listener of ownershipListeners) listener();
+  }
+
+  async function waitForRefreshProgress(pending, context) {
+    let changed;
+    const ownershipChanged = new Promise((resolve) => { changed = resolve; });
+    ownershipListeners.add(changed);
+    try {
+      await withinRefreshEpoch(Promise.race([
+        ownershipChanged,
+        ...pending,
+      ]), context);
+    } finally {
+      ownershipListeners.delete(changed);
+    }
+  }
+
+  function assertRefreshEpoch(epoch, signal) {
+    if (epoch !== authorityEpoch || signal?.aborted === true) {
       throw new ProjectionRefreshError([
-        refreshFailure("*", "superseded_refresh"),
+        refreshFailure("*", epoch !== authorityEpoch ? "invalidated_refresh" : "aborted_refresh"),
       ]);
     }
-    const failures = currentResults.filter((result) => result.kind === "failure");
-    const successes = currentResults.filter((result) => result.kind === "success");
-    const keyUpdates = Object.fromEntries(
-      currentResults.map((result) => [
-        result.key,
-        projectionKeyHealth(
-          result.kind === "success" ? "ready" : "unavailable",
-          attempt,
-        ),
-      ]),
-    );
-    if (failures.length > 0) {
-      publishHealth({
-        reason: "authoritative_refresh_failed",
-        keyUpdates: Object.fromEntries(
-          currentResults.map((result) => [
-            result.key,
-            projectionKeyHealth("unavailable", attempt),
-          ]),
-        ),
-      });
-      throw new ProjectionRefreshError(failures);
-    }
-    if (successes.length > 0) {
-      commitSnapshot(
-        Object.fromEntries(successes.map((result) => [result.key, result.value])),
-      );
-    }
-    publishHealth({
-      reason: restoreReadiness === true
-        ? "authoritative_refresh_succeeded"
-        : "authoritative_refresh_applied_while_unavailable",
-      keyUpdates: restoreReadiness === true
-        ? keyUpdates
-        : Object.fromEntries(
-            currentResults.map((result) => [
-              result.key,
-              projectionKeyHealth("unavailable", attempt),
-            ]),
-          ),
+  }
+
+  function advanceAuthorityEpoch() {
+    authorityEpoch += 1;
+    for (const listener of epochListeners) listener();
+  }
+
+  async function withinRefreshEpoch(pending, { epoch, signal }) {
+    let check;
+    const interrupted = new Promise((_, reject) => {
+      check = () => {
+        try {
+          assertRefreshEpoch(epoch, signal);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      epochListeners.add(check);
+      signal?.addEventListener("abort", check, { once: true });
+      check();
     });
-    return snapshot;
+    try {
+      return await Promise.race([pending, interrupted]);
+    } finally {
+      epochListeners.delete(check);
+      signal?.removeEventListener("abort", check);
+    }
   }
 
   function applyPayload(key, payload) {
@@ -310,18 +396,14 @@ export function createProjectionStore({
     if (coldLoad === undefined) {
       throw new TypeError(`unknown projection payload key: ${key}`);
     }
+    const epoch = authorityEpoch;
     const attempt = supersedeProjectionKeys([key]);
     try {
-      const nextSnapshot = commitSnapshot({
+      commitSnapshot({
         [key]: normalizeProjectionPayload({ key, payload, previous: snapshot[key], coldLoad }),
       });
-      publishHealth({
-        reason: "authoritative_projection_applied",
-        keyUpdates: {
-          [key]: projectionKeyHealth("ready", attempt),
-        },
-      });
-      return nextSnapshot;
+      publishAppliedHealth([key], { epoch, attempt });
+      return snapshot;
     } catch (error) {
       invalidate([key], { reason: "invalid_live_projection_payload" });
       throw error;
@@ -333,6 +415,7 @@ export function createProjectionStore({
     if (coldLoad === undefined) {
       throw new TypeError(`unknown normalized projection key: ${key}`);
     }
+    const epoch = authorityEpoch;
     const attempt = supersedeProjectionKeys([key]);
     try {
       validateNormalizedProjection({
@@ -341,14 +424,9 @@ export function createProjectionStore({
         previous: snapshot[key],
         coldLoad,
       });
-      const nextSnapshot = commitSnapshot({ [key]: value });
-      publishHealth({
-        reason: "authoritative_projection_applied",
-        keyUpdates: {
-          [key]: projectionKeyHealth("ready", attempt),
-        },
-      });
-      return nextSnapshot;
+      commitSnapshot({ [key]: value });
+      publishAppliedHealth([key], { epoch, attempt });
+      return snapshot;
     } catch (error) {
       invalidate([key], { reason: "invalid_live_projection_payload" });
       throw error;
@@ -357,20 +435,24 @@ export function createProjectionStore({
 
   function applySnapshot(patch) {
     const nextPatch = requiredObject(patch, "projection patch");
-    supersedeProjectionKeys(Object.keys(nextPatch));
-    const nextSnapshot = commitSnapshot(nextPatch);
+    const keys = Object.keys(nextPatch);
+    const epoch = authorityEpoch;
+    const attempt = supersedeProjectionKeys(keys);
+    commitSnapshot(nextPatch);
+    publishAppliedHealth(keys, { epoch, attempt });
+    return snapshot;
+  }
+
+  function publishAppliedHealth(keys, { epoch, attempt }) {
+    if (epoch !== authorityEpoch) return;
+    const ownedKeys = keys.filter((key) => latestOwnerByKey.get(key)?.attempt === attempt);
+    if (ownedKeys.length === 0) return;
     publishHealth({
       reason: "authoritative_projection_applied",
-      keyUpdates: Object.fromEntries(
-        Object.keys(nextPatch)
-          .filter((key) => registeredKeys.includes(key))
-          .map((key) => [
-            key,
-            projectionKeyHealth("ready", latestAttemptByKey.get(key) ?? 0),
-          ]),
-      ),
+      keyUpdates: Object.fromEntries(ownedKeys.map((key) => [
+        key, projectionKeyHealth("ready", attempt),
+      ])),
     });
-    return nextSnapshot;
   }
 
   function commitSnapshot(patch) {
@@ -386,13 +468,14 @@ export function createProjectionStore({
   }
 
   function supersedeProjectionKeys(keys) {
-    const attempt = ++refreshAttempt;
+    const owner = { attempt: ++refreshAttempt, settled: true, error: null };
     for (const key of keys) {
       if (registeredKeys.includes(key)) {
-        latestAttemptByKey.set(key, attempt);
+        latestOwnerByKey.set(key, owner);
       }
     }
-    return attempt;
+    notifyOwnershipChange();
+    return owner.attempt;
   }
 
   function applyLiveEnvelope(
