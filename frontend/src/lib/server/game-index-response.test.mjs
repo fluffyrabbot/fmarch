@@ -4,6 +4,7 @@ import { decodeGameIndexPage } from "./game-index-response.mjs";
 
 const FIRST_GAME = "00000000-0000-0000-0000-000000000020";
 const SECOND_GAME = "00000000-0000-0000-0000-000000000010";
+const ORIGIN_TOPIC = "00000000-0000-0000-0000-000000000030";
 
 test("the exact GameIndexPage decoder accepts a healthy immutable page", () => {
   const decoded = decodeGameIndexPage({
@@ -15,6 +16,7 @@ test("the exact GameIndexPage decoder accepts a healthy immutable page", () => {
         phase_id: "D03",
         updated_seq: 10,
         completed_seq: 10,
+        origin_topic: originTopic(),
       }),
     ],
     next_cursor: null,
@@ -29,6 +31,7 @@ test("the exact GameIndexPage decoder accepts a healthy immutable page", () => {
         phase_id: "D03",
         updated_seq: 10,
         completed_seq: 10,
+        origin_topic: originTopic(),
       }),
     ],
     next_cursor: null,
@@ -36,6 +39,52 @@ test("the exact GameIndexPage decoder accepts a healthy immutable page", () => {
   assert.equal(Object.isFrozen(decoded), true);
   assert.equal(Object.isFrozen(decoded.games), true);
   assert.equal(Object.isFrozen(decoded.games[0]), true);
+  assert.equal(decoded.games[0].origin_topic, null);
+  assert.equal(Object.isFrozen(decoded.games[1].origin_topic), true);
+});
+
+test("origin topics preserve their exact fields independently of mutable upstream objects", () => {
+  const origin = originTopic({ title: "é".repeat(90) });
+  const decoded = decodeGameIndexPage({ games: [gameEntry({ origin_topic: origin })], next_cursor: null });
+  assert.deepEqual(decoded.games[0].origin_topic, origin);
+  assert.notEqual(decoded.games[0].origin_topic, origin);
+  origin.title = "Upstream mutation";
+  assert.equal(decoded.games[0].origin_topic.title, "é".repeat(90));
+});
+
+test("the serialized origin field is required even when no origin exists", () => {
+  const entry = gameEntry();
+  delete entry.origin_topic;
+  assert.equal(decodeGameIndexPage({ games: [entry], next_cursor: null }), null);
+});
+
+test("origin topics reject malformed shapes, wrong destinations, and post addresses", () => {
+  const origin = originTopic();
+  for (const invalid of [
+    undefined, false, "topic", [], {},
+    { ...origin, topic: "not-a-uuid" },
+    { ...origin, topic: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA" },
+    { ...origin, title: null },
+    { ...origin, title: " " },
+    { ...origin, title: "é".repeat(91) },
+    { ...origin, href: null },
+    { topic: origin.topic, title: origin.title },
+    { ...origin, author_principal_id: FIRST_GAME },
+    { ...origin, topic: origin.href, href: origin.topic },
+    { ...origin, href: `/discussions/general/t/${SECOND_GAME}` },
+    { ...origin, href: `/games/${origin.topic}` },
+    { ...origin, href: `https://fmarch.local${origin.href}` },
+    { ...origin, href: `//fmarch.local${origin.href}` },
+    { ...origin, href: `${origin.href}?post=12#thread-post-12` },
+    { ...origin, href: `${origin.href}#post-12` },
+    { ...origin, href: `${origin.href}/posts/12` },
+    ...["x", "-general", "general-", "General", "a".repeat(49), "%67eneral", "../general"].map(slug => ({ ...origin, href: `/discussions/${slug}/t/${origin.topic}` })),
+  ]) {
+    assert.equal(decodeGameIndexPage({ games: [gameEntry({ origin_topic: invalid })], next_cursor: null }), null, JSON.stringify(invalid));
+  }
+  for (const slug of ["ab", "a".repeat(48), "general-discussion"]) {
+    assert.notEqual(decodeGameIndexPage({ games: [gameEntry({ origin_topic: { ...origin, href: `/discussions/${slug}/t/${origin.topic}` } })], next_cursor: null }), null);
+  }
 });
 
 test("empty is valid only when the complete page envelope is present", () => {
@@ -145,6 +194,16 @@ function gameEntry(overrides = {}) {
     phase_id: "D02",
     updated_seq: 20,
     completed_seq: null,
+    origin_topic: null,
+    ...overrides,
+  };
+}
+
+function originTopic(overrides = {}) {
+  return {
+    topic: ORIGIN_TOPIC,
+    title: "Signup topic",
+    href: `/discussions/general/t/${ORIGIN_TOPIC}`,
     ...overrides,
   };
 }

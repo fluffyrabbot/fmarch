@@ -2,7 +2,11 @@ import { canonicalPhaseId } from "../phase-id.mjs";
 
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const MAX_PACK_KEY_LENGTH = 128;
+const MAX_TOPIC_TITLE_BYTES = 180;
+const UTF8 = new TextEncoder();
 const PAGE_KEYS = Object.freeze(["games", "next_cursor"]);
+const ORIGIN_TOPIC_KEYS = Object.freeze(["topic", "title", "href"]);
+const TOPIC_SURFACE_HREF = /^\/discussions\/([a-z0-9][a-z0-9-]{0,46}[a-z0-9])\/t\/([0-9a-f-]{36})$/u;
 const ENTRY_KEYS = Object.freeze([
   "game",
   "pack",
@@ -10,6 +14,7 @@ const ENTRY_KEYS = Object.freeze([
   "phase_id",
   "updated_seq",
   "completed_seq",
+  "origin_topic",
 ]);
 
 /**
@@ -89,7 +94,8 @@ function decodeGameIndexEntry(value) {
     !["active", "completed"].includes(value.status) ||
     !validPhaseId(value.phase_id) ||
     !positiveSafeInteger(value.updated_seq) ||
-    !validCompletionSequence(value)
+    !validCompletionSequence(value) ||
+    !validOriginTopic(value.origin_topic)
   ) {
     return null;
   }
@@ -100,7 +106,30 @@ function decodeGameIndexEntry(value) {
     phase_id: value.phase_id,
     updated_seq: value.updated_seq,
     completed_seq: value.completed_seq,
+    origin_topic: value.origin_topic === null ? null : Object.freeze({
+      topic: value.origin_topic.topic,
+      title: value.origin_topic.title,
+      href: value.origin_topic.href,
+    }),
   });
+}
+
+function validOriginTopic(value) {
+  if (value === null) return true;
+  if (
+    !isPlainObject(value) ||
+    !hasExactKeys(value, ORIGIN_TOPIC_KEYS) ||
+    typeof value.topic !== "string" ||
+    !CANONICAL_UUID.test(value.topic) ||
+    typeof value.title !== "string" ||
+    value.title.trim().length === 0 ||
+    UTF8.encode(value.title).length > MAX_TOPIC_TITLE_BYTES ||
+    typeof value.href !== "string"
+  ) {
+    return false;
+  }
+  // Origins address the complete topic surface, never a post or another topic.
+  return TOPIC_SURFACE_HREF.exec(value.href)?.[2] === value.topic;
 }
 
 function validCompletionSequence(value) {

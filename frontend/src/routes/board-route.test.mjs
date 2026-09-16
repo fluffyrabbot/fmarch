@@ -26,6 +26,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
             phase_id: "D02",
             updated_seq: 20,
             completed_seq: null,
+            origin_topic: null,
           },
           {
             game: SECOND_GAME,
@@ -34,6 +35,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
             phase_id: "D01",
             updated_seq: 10,
             completed_seq: 10,
+            origin_topic: originTopic(),
           },
         ],
         next_cursor: null,
@@ -59,6 +61,35 @@ test("board load opts into the root-owned shell with an API-backed public index"
   assert.equal(data.board.games[1].actions[1].navigation, "blocked");
   assert.equal(data.board.olderHref, null);
   assert.equal(data.routeState, null);
+});
+
+test("the board upstream loader accepts and preserves the serialized origin DTO", async () => {
+  const origin = originTopic();
+  const result = await _loadBoardGameIndex({
+    fetchImpl: async () => Response.json({ games: [gameEntry({ origin_topic: origin })], next_cursor: null }),
+    apiBaseUrl: "",
+    url: new URL("https://fmarch.local/"),
+  });
+  assert.equal(result.kind, "ok");
+  assert.deepEqual(result.value.games[0].origin_topic, origin);
+  assert.equal(Object.isFrozen(result.value.games[0].origin_topic), true);
+});
+
+test("malformed origin addresses degrade the board instead of becoming ready cards", async () => {
+  for (const origin of [
+    { ...originTopic(), href: `/discussions/general/t/${SECOND_GAME}` },
+    { ...originTopic(), href: `${originTopic().href}?post=12#thread-post-12` },
+    { ...originTopic(), authority: "host" },
+  ]) {
+    const data = await load({
+      locals: { principalId: null, resolvedCapabilities: [] },
+      fetch: async () => Response.json({ games: [gameEntry({ origin_topic: origin })], next_cursor: null }),
+      url: new URL("https://fmarch.local/"),
+    });
+    assert.equal(data.board.status, "degraded");
+    assert.equal(data.board.degradation.kind, "invalid_response");
+    assert.deepEqual(data.board.games, []);
+  }
 });
 
 test("board load exposes fixture route state for root-owned shell proof", async () => {
@@ -215,8 +246,14 @@ function gameEntry(overrides = {}) {
     phase_id: "D02",
     updated_seq: 20,
     completed_seq: null,
+    origin_topic: null,
     ...overrides,
   };
+}
+
+function originTopic() {
+  const topic = "00000000-0000-0000-0000-000000000030";
+  return { topic, title: "Signup topic", href: `/discussions/general/t/${topic}` };
 }
 
 async function abortingFetch(_url, { signal } = {}) {
