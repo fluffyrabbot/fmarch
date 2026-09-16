@@ -287,10 +287,7 @@ test("superseded refreshes cannot overwrite newer projection health or state", a
   olderSuccess.resolve(
     jsonResponse({ posts: [{ seq: 1, body: "older" }] }),
   );
-  await assert.rejects(firstRefresh, (error) =>
-    error instanceof ProjectionRefreshError &&
-    error.failures[0].reason === "superseded_refresh",
-  );
+  assert.equal(await firstRefresh, store.getSnapshot());
   assert.equal(store.getSnapshot().thread.posts[0].body, "newer");
   assert.equal(store.isReady(), true);
 
@@ -338,12 +335,12 @@ test("a live payload supersedes an in-flight partial refresh without a stale ove
   pendingResponse.resolve(
     jsonResponse({ posts: [{ seq: 1, body: "stale refresh" }] }),
   );
-  await assert.rejects(pendingRefresh, ProjectionRefreshError);
+  assert.equal(await pendingRefresh, store.getSnapshot());
   assert.equal(store.getSnapshot().thread.posts[0].body, "newer live authority");
   assert.equal(store.isReady(), true);
 });
 
-test("a live payload superseding one key aborts the remaining refresh batch atomically", async () => {
+test("a live replacement lets a successful refresh publish only its remaining current keys", async () => {
   const threadResponse = deferred();
   const voteResponse = deferred();
   const initial = Object.freeze({
@@ -366,26 +363,322 @@ test("a live payload superseding one key aborts the remaining refresh batch atom
   });
   store.applyPayload("votecount", [{ target: "slot-live", count: 4 }]);
   threadResponse.resolve(
-    jsonResponse({ posts: [{ seq: 1, body: "stale batch" }] }),
+    jsonResponse({ posts: [{ seq: 1, body: "current thread" }] }),
   );
   voteResponse.resolve(
     jsonResponse([{ target: "slot-stale", count: 1 }]),
   );
 
-  await assert.rejects(
-    pendingRefresh,
-    (error) =>
-      error instanceof ProjectionRefreshError &&
-      error.failures[0].reason === "superseded_refresh",
-  );
-  assert.equal(store.getSnapshot().thread, initial.thread);
+  assert.equal(await pendingRefresh, store.getSnapshot());
+  assert.deepEqual(store.getSnapshot().thread.posts, [{ seq: 1, body: "current thread" }]);
   assert.deepEqual(store.getSnapshot().votecount, [
     { target: "slot-live", count: 4 },
   ]);
-  assert.equal(store.getHealth().keys.thread.state, "unavailable");
+  assert.equal(store.getHealth().keys.thread.state, "ready");
   assert.equal(store.getHealth().keys.votecount.state, "ready");
+  assert.equal(store.isReady(), true);
+});
+
+for (const finishFirst of ["older", "newer"]) {
+  test(`overlapping refreshes use fresh reads and the newer result when ${finishFirst} finishes first`, async () => {
+    const store = createProjectionStore({
+      initialSnapshot: { value: 0 },
+      coldLoads: { value: { url: "/value" } },
+    });
+    const responses = [deferred(), deferred()];
+    const requests = [];
+    const fetchImpl = (url) => {
+      requests.push(url);
+      return responses[requests.length - 1].promise;
+    };
+    let olderSettled = false;
+    const older = store.refresh(undefined, { fetchImpl }).finally(() => { olderSettled = true; });
+    const newer = store.refresh(undefined, { fetchImpl });
+    assert.equal(requests.length, 2, "the later caller must not reuse a pre-command request");
+    assert.notEqual(requests[0], requests[1]);
+    if (finishFirst === "older") {
+      responses[0].resolve(jsonResponse(1));
+      await nextTurn();
+      assert.equal(olderSettled, false);
+      assert.equal(store.getSnapshot().value, 0);
+      assert.equal(store.isReady(), false);
+    } else {
+      responses[1].resolve(jsonResponse(2));
+      await newer;
+    }
+    responses[0].resolve(jsonResponse(1));
+    responses[1].resolve(jsonResponse(2));
+    const snapshots = await Promise.all([older, newer]);
+    assert.ok(snapshots.every((snapshot) => snapshot.value === 2));
+    assert.equal(store.getSnapshot().value, 2);
+    assert.equal(store.isReady(), true);
+  });
+}
+
+test("partial overlap rechecks siblings that acquire another owner while waiting", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { a: 0, b: 0 },
+    coldLoads: { a: { url: "/a" }, b: { url: "/b" } },
+  });
+  const b = deferred();
+  const a = deferred();
+  let settled = false;
+  const first = store.refresh(undefined, { fetchImpl: async () => jsonResponse(1) })
+    .finally(() => { settled = true; });
+  const second = store.refresh("b", { fetchImpl: () => b.promise });
+  await nextTurn();
+  assert.deepEqual(store.getSnapshot(), { a: 0, b: 0 }, "withhold a until b's replacement succeeds");
+  const third = store.refresh("a", { fetchImpl: () => a.promise });
+  b.resolve(jsonResponse(2));
+  await second;
+  await nextTurn();
+  assert.equal(settled, false, "the first caller must also follow a's new owner");
+  a.resolve(jsonResponse(3));
+  await Promise.all([first, third]);
+  assert.deepEqual(store.getSnapshot(), { a: 3, b: 2 });
+  assert.equal(store.isReady(), true);
+});
+
+for (const failure of ["http_error", "invalid_response"]) {
+  test(`a newer ${failure} withholds successful siblings of an older batch`, async () => {
+    const store = createProjectionStore({
+      initialSnapshot: { a: 0, b: 0 },
+      coldLoads: { a: { url: "/a" }, b: { url: "/b", validate: Number.isInteger } },
+    });
+    const replacement = deferred();
+    const first = store.refresh(undefined, { fetchImpl: async () => jsonResponse(1) });
+    const second = store.refresh("b", { fetchImpl: () => replacement.promise });
+    const assertFailure = (promise) => assert.rejects(promise, (error) =>
+      error instanceof ProjectionRefreshError &&
+      error.failures.some((entry) => entry.key === "b" && entry.reason === failure));
+    const rejected = Promise.all([assertFailure(first), assertFailure(second)]);
+    await nextTurn();
+    assert.deepEqual(store.getSnapshot(), { a: 0, b: 0 });
+    replacement.resolve(failure === "http_error"
+      ? { ok: false, status: 503 }
+      : jsonResponse("invalid"));
+    await rejected;
+    assert.deepEqual(store.getSnapshot(), { a: 0, b: 0 });
+    assert.equal(store.getHealth().keys.a.state, "unavailable");
+    assert.equal(store.getHealth().keys.b.state, "unavailable");
+  });
+}
+
+test("an unsuperseded HTTP failure does not wait for another key's pending owner", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { a: 0, b: 0 },
+    coldLoads: { a: { url: "/a" }, b: { url: "/b" } },
+  });
+  const replacement = deferred();
+  const first = store.refresh(undefined, { fetchImpl: async (url) =>
+    url.startsWith("/a?") ? { ok: false, status: 503 } : jsonResponse(1) });
+  const second = store.refresh("b", { fetchImpl: () => replacement.promise });
+  await assert.rejects(first, (error) => error.failures[0].key === "a");
+  assert.deepEqual(store.getSnapshot(), { a: 0, b: 0 });
+  assert.equal(store.getHealth().keys.b.state, "refreshing");
+  replacement.resolve(jsonResponse(2));
+  await second;
+});
+
+test("a newer live owner releases waiters without waiting for obsolete HTTP", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { value: 0 },
+    coldLoads: { value: { url: "/value" } },
+  });
+  const pending = deferred();
+  const first = store.refresh(undefined, { fetchImpl: async () => ({ ok: false, status: 503 }) });
+  const second = store.refresh(undefined, { fetchImpl: () => pending.promise });
+  await nextTurn();
+  store.applyPayload("value", 3);
+  assert.equal((await first).value, 3, "the obsolete failure has a successful replacement");
+  pending.resolve(jsonResponse(2));
+  assert.equal((await second).value, 3);
+  assert.equal(store.isReady(), true);
+});
+
+for (const barrier of ["invalidate", "revokeAuthority"]) {
+  test(`${barrier} rejects old refresh waiters even after a new epoch recovers`, async () => {
+    const store = createProjectionStore({
+      initialSnapshot: { value: { principal: "old", secret: "private" } },
+      coldLoads: { value: {
+        url: "/value",
+        revoke: { principal: null, secret: null },
+      } },
+    });
+    const pending = deferred();
+    const first = store.refresh(undefined, { fetchImpl: async () =>
+      jsonResponse({ principal: "old", secret: "stale" }) });
+    const second = store.refresh(undefined, { fetchImpl: () => pending.promise });
+    const rejected = Promise.all([first, second].map((promise) =>
+      assert.rejects(promise, (error) => error.failures[0].reason === "invalidated_refresh")));
+    await nextTurn();
+    store[barrier]();
+    assert.equal(store.isReady(), false);
+    await store.refresh(undefined, { fetchImpl: async () =>
+      jsonResponse({ principal: "new", secret: "current" }) });
+    await rejected;
+    pending.resolve(jsonResponse({ principal: "old", secret: "must not return" }));
+    await nextTurn();
+    assert.deepEqual(store.getSnapshot().value, { principal: "new", secret: "current" });
+    assert.equal(store.isReady(), true);
+  });
+}
+
+test("aborting an older waiter leaves the newer owner's refresh intact", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { value: 0 },
+    coldLoads: { value: { url: "/value" } },
+  });
+  const controller = new AbortController();
+  const pending = deferred();
+  const first = store.refresh(undefined, {
+    fetchImpl: async () => jsonResponse(1), signal: controller.signal,
+  });
+  const second = store.refresh(undefined, { fetchImpl: () => pending.promise });
+  const rejected = assert.rejects(first, (error) => error.failures[0].reason === "aborted_refresh");
+  await nextTurn();
+  controller.abort();
+  await rejected;
+  assert.equal(store.getHealth().keys.value.state, "refreshing");
+  pending.resolve(jsonResponse(2));
+  await second;
+  assert.equal(store.getSnapshot().value, 2);
+  assert.equal(store.isReady(), true);
+});
+
+test("an older waiter cannot promote a newer owner's deliberately unavailable result", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { value: 0 },
+    coldLoads: { value: { url: "/value" } },
+  });
+  const first = store.refresh(undefined, { fetchImpl: async () => jsonResponse(1) });
+  const second = store.refresh(undefined, {
+    fetchImpl: async () => jsonResponse(2), restoreReadiness: false,
+  });
+  await Promise.all([first, second]);
+  assert.equal(store.getSnapshot().value, 2);
   assert.equal(store.isReady(), false);
 });
+
+test("health subscriber revocation cannot make a refresh report recovered across an epoch", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { value: "private" },
+    coldLoads: { value: { url: "/value", revoke: null } },
+  });
+  store.subscribeHealth((health) => {
+    if (health.reason === "authoritative_refresh_succeeded") store.revokeAuthority();
+  });
+  await assert.rejects(store.refresh(undefined, { fetchImpl: async () => jsonResponse("new private") }),
+    (error) => error.failures[0].reason === "invalidated_refresh");
+  assert.equal(store.getSnapshot().value, null);
+  assert.equal(store.isReady(), false);
+});
+
+test("a failed replacement does not wait for another replacement that is still pending", async () => {
+  const store = createProjectionStore({
+    initialSnapshot: { a: 0, b: 0, c: 0 },
+    coldLoads: { a: { url: "/a" }, b: { url: "/b" }, c: { url: "/c" } },
+  });
+  const pending = deferred();
+  const first = store.refresh(undefined, { fetchImpl: async () => jsonResponse(1) });
+  const second = store.refresh("b", { fetchImpl: async () => ({ ok: false, status: 503 }) });
+  const third = store.refresh("c", { fetchImpl: () => pending.promise });
+  await Promise.all([first, second].map((promise) => assert.rejects(promise,
+    (error) => error.failures[0].key === "b" && error.failures[0].reason === "http_error")));
+  assert.deepEqual(store.getSnapshot(), { a: 0, b: 0, c: 0 });
+  assert.equal(store.getHealth().keys.c.state, "refreshing");
+  pending.resolve(jsonResponse(3));
+  await third;
+});
+
+for (const source of ["snapshot", "health"]) {
+  test(`a ${source} subscriber's newer refresh is followed without republishing older siblings`, async () => {
+    const store = createProjectionStore({
+      initialSnapshot: { a: 0, b: 0 },
+      coldLoads: { a: { url: "/a" }, b: { url: "/b" } },
+    });
+    const pending = deferred();
+    const started = deferred();
+    const snapshots = [];
+    let newer = null;
+    let settled = false;
+    store.subscribe((snapshot) => snapshots.push(snapshot));
+    const replace = () => {
+      if (newer !== null) return;
+      newer = store.refresh("a", { fetchImpl: () => pending.promise });
+      started.resolve();
+    };
+    if (source === "snapshot") {
+      store.subscribe((snapshot) => { if (snapshot.a === 1) replace(); });
+    } else {
+      store.subscribeHealth((health) => {
+        if (health.reason === "authoritative_refresh_succeeded") replace();
+      });
+    }
+    const older = store.refresh(undefined, { fetchImpl: async () => jsonResponse(1) })
+      .finally(() => { settled = true; });
+    await started.promise;
+    await nextTurn();
+    assert.equal(settled, false);
+    assert.equal(store.isReady(), false);
+    pending.resolve(jsonResponse(2));
+    await Promise.all([older, newer]);
+    assert.deepEqual(snapshots, [{ a: 0, b: 0 }, { a: 1, b: 1 }, { a: 2, b: 1 }]);
+    assert.equal(store.isReady(), true);
+  });
+}
+
+for (const publisher of ["payload", "normalized live delta", "snapshot"]) {
+  for (const subscriberAction of ["refresh", "revoke"]) {
+    test(`${publisher} publication preserves a subscriber's newer ${subscriberAction} authority`, async () => {
+      const initial = { tasks: [{ id: "old" }] };
+      const store = createProjectionStore({
+        initialSnapshot: { host: initial },
+        expectedScope: { game: "midsummer", channel: "main" },
+        coldLoads: { host: { url: "/host", revoke: null } },
+      });
+      const pending = deferred();
+      let newer = null;
+      let acted = false;
+      store.subscribe((snapshot) => {
+        if (acted || snapshot.host?.tasks?.length !== 0) return;
+        acted = true;
+        if (subscriberAction === "refresh") {
+          newer = store.refresh("host", { fetchImpl: () => pending.promise });
+        } else {
+          store.revokeAuthority();
+        }
+      });
+      const result = publisher === "payload"
+        ? store.applyPayload("host", { tasks: [] })
+        : publisher === "snapshot"
+          ? store.applySnapshot({ host: { tasks: [] } })
+          : store.applyLiveEnvelope({
+              v: 3, id: 1, body: { kind: "Delta", body: {
+                kind: "HostConsoleTasksChanged", body: { game: "midsummer", tasks: [] },
+              } },
+            });
+      assert.equal(acted, true);
+      assert.equal(store.isReady(), false, "an older publisher cannot promote its newer owner");
+      if (subscriberAction === "refresh") {
+        assert.equal(store.getHealth().keys.host.state, "refreshing");
+        const current = { tasks: [{ id: "new" }] };
+        pending.resolve(jsonResponse(current));
+        await newer;
+        assert.deepEqual(store.getSnapshot().host, current);
+        assert.equal(store.isReady(), true);
+      } else {
+        assert.equal(store.getHealth().keys.host.state, "unavailable");
+        assert.equal(store.getSnapshot().host, null);
+        assert.equal(result.host, null, "the synchronous return cannot expose the revoked snapshot");
+      }
+    });
+  }
+}
+
+function nextTurn() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 test("projection store invalidation is explicit and only a full refresh recovers", async () => {
   const store = createProjectionStore({
