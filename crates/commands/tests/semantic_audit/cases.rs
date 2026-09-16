@@ -9,6 +9,7 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -178,6 +179,7 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -354,6 +356,7 @@ async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool:
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -626,6 +629,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPo
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -898,6 +902,7 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -1256,6 +1261,7 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -1483,6 +1489,7 @@ async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) 
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_twilight_window".into(),
             cohost_denied: vec![],
@@ -1691,6 +1698,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game: day_game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -1878,6 +1886,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game: night_game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -2059,6 +2068,7 @@ async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: Pg
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -2239,6 +2249,7 @@ async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -2395,6 +2406,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -2447,7 +2459,8 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -2611,6 +2624,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -2658,7 +2672,8 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -2809,6 +2824,7 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -2855,7 +2871,8 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -3810,6 +3827,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -3856,7 +3874,8 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -4140,6 +4159,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -4206,7 +4226,8 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -4450,6 +4471,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
         &pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -4912,6 +4934,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -4970,7 +4993,8 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -5674,6 +5698,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "chinese_structured".into(),
                 cohost_denied: vec![],
@@ -5732,7 +5757,8 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -6055,6 +6081,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "chinese_structured".into(),
                 cohost_denied: vec![],
@@ -6113,7 +6140,8 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -6580,6 +6608,7 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafia_universe".into(),
                 cohost_denied: vec![],
@@ -6638,7 +6667,8 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -7114,6 +7144,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "epicmafia".into(),
                 cohost_denied: vec![],
@@ -7172,7 +7203,8 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -7591,6 +7623,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "epicmafia".into(),
                 cohost_denied: vec![],
@@ -7649,7 +7682,8 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -8161,6 +8195,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "default_open".into(),
             cohost_denied: vec![],
@@ -8435,6 +8470,7 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "default_open".into(),
                 cohost_denied: vec![],
@@ -8493,7 +8529,8 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -8777,6 +8814,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "default_open".into(),
             cohost_denied: vec![],
@@ -9011,6 +9049,7 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
             &pool,
             &host,
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "default_open".into(),
                 cohost_denied: vec![],
@@ -9069,7 +9108,8 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
             &host,
             Command::StartGame {
                 game,
-                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
             &shrink_stem,
             &fixture_json,
@@ -9552,6 +9592,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -9744,6 +9785,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -10049,6 +10091,7 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -10255,6 +10298,7 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_role_tiebreaker_vote".into(),
             cohost_denied: vec![],
@@ -10375,6 +10419,7 @@ async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_dynamic_vote_effect".into(),
             cohost_denied: vec![],
@@ -10584,6 +10629,7 @@ async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_dynamic_vote_effect".into(),
             cohost_denied: vec![],
@@ -10813,6 +10859,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_dynamic_vote_prompt".into(),
             cohost_denied: vec![],
@@ -11051,6 +11098,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game: loved_game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -11375,6 +11423,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game: hated_game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -11505,6 +11554,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "epicmafia".into(),
             cohost_denied: vec![],
@@ -11861,6 +11911,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_dynamic_vote_pk".into(),
             cohost_denied: vec![],
@@ -12190,6 +12241,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -12477,6 +12529,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -12609,6 +12662,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -12796,6 +12850,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -13218,6 +13273,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -13460,6 +13516,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -13706,6 +13763,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -13971,6 +14029,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -14181,6 +14240,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -14402,6 +14462,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_guard_witch_killtarget".into(),
             cohost_denied: vec![],
@@ -14630,6 +14691,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -14890,6 +14952,7 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -15144,6 +15207,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -15203,8 +15267,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
     .unwrap();
 
     let prior_death = domain::ResolutionApplied {
-        phase_id: domain::phase::PhaseId::parse("N01")
-            .expect("static test phase id is canonical"),
+        phase_id: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: format!("test-seed:{game}:N01:prior-death"),
         result_version: domain::RESULT_VERSION,
         seed: 0,
@@ -15476,6 +15539,7 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -15689,6 +15753,7 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -15766,7 +15831,8 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         &h,
         Command::OpenDayPhase {
             game,
-            phase: domain::phase::PhaseId::parse("D01R1").expect("static test phase id is canonical"),
+            phase: domain::phase::PhaseId::parse("D01R1")
+                .expect("static test phase id is canonical"),
         },
     )
     .await
@@ -15926,6 +15992,7 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -16011,7 +16078,8 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         &h,
         Command::OpenDayPhase {
             game,
-            phase: domain::phase::PhaseId::parse("D01R1").expect("static test phase id is canonical"),
+            phase: domain::phase::PhaseId::parse("D01R1")
+                .expect("static test phase id is canonical"),
         },
     )
     .await
@@ -16201,6 +16269,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -16336,7 +16405,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         &h,
         Command::OpenDayPhase {
             game,
-            phase: domain::phase::PhaseId::parse("D01R1").expect("static test phase id is canonical"),
+            phase: domain::phase::PhaseId::parse("D01R1")
+                .expect("static test phase id is canonical"),
         },
     )
     .await
@@ -16500,6 +16570,7 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -16659,6 +16730,7 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_ita_buffered".into(),
             cohost_denied: vec![],
@@ -16747,7 +16819,8 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
         &h,
         Command::OpenDayPhase {
             game,
-            phase: domain::phase::PhaseId::parse("D01R1").expect("static test phase id is canonical"),
+            phase: domain::phase::PhaseId::parse("D01R1")
+                .expect("static test phase id is canonical"),
         },
     )
     .await
@@ -16947,6 +17020,7 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -17254,6 +17328,7 @@ async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -17435,6 +17510,7 @@ async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -17638,6 +17714,7 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -17824,6 +17901,7 @@ async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -18064,6 +18142,7 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -18304,6 +18383,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -18552,6 +18632,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -18789,6 +18870,7 @@ async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -18967,6 +19049,7 @@ async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: Pg
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -19171,6 +19254,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(poo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -19375,6 +19459,7 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -19552,6 +19637,7 @@ async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: Pg
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -19762,6 +19848,7 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -20012,6 +20099,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -20291,6 +20379,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -20546,6 +20635,7 @@ async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -20793,6 +20883,7 @@ async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -21095,6 +21186,7 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -21419,6 +21511,7 @@ async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -21706,6 +21799,7 @@ async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(po
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -22053,6 +22147,7 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -22285,6 +22380,7 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -22548,6 +22644,7 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -22900,6 +22997,7 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -23226,6 +23324,7 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -23596,6 +23695,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -23859,6 +23959,7 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -24218,6 +24319,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -24439,6 +24541,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -25037,6 +25140,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -25235,6 +25339,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -25560,6 +25665,7 @@ async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -25708,6 +25814,7 @@ async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -25856,6 +25963,7 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -25977,6 +26085,7 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -26177,6 +26286,7 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -26341,6 +26451,7 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -26544,6 +26655,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -26728,6 +26840,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -26888,6 +27001,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "epicmafia".into(),
             cohost_denied: vec![],
@@ -27190,6 +27304,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -27431,6 +27546,7 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -27609,6 +27725,7 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "epicmafia".into(),
             cohost_denied: vec![],
@@ -27751,6 +27868,7 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -27956,6 +28074,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -28261,6 +28380,7 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -28446,6 +28566,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -28617,6 +28738,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -28837,6 +28959,7 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29059,6 +29182,7 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29189,6 +29313,7 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29409,6 +29534,7 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29637,6 +29763,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29773,6 +29900,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -29970,6 +30098,7 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "epicmafia".into(),
             cohost_denied: vec![],
@@ -30156,6 +30285,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -30348,6 +30478,7 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -30530,6 +30661,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -30776,6 +30908,7 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -30935,6 +31068,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -31149,6 +31283,7 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -31320,6 +31455,7 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -31504,6 +31640,7 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -31648,6 +31785,7 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -31792,6 +31930,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -32011,6 +32150,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -32241,6 +32381,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -32389,6 +32530,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -32591,6 +32733,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -32957,6 +33100,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -33114,6 +33258,7 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -33308,6 +33453,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -33479,6 +33625,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -33836,6 +33983,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -34102,6 +34250,7 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_trigger_loop_cap".into(),
             cohost_denied: vec![],
@@ -34368,6 +34517,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -34570,6 +34720,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -34816,6 +34967,7 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -35022,6 +35174,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -35208,6 +35361,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -35395,6 +35549,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -35572,6 +35727,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -35805,6 +35961,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafia_universe".into(),
             cohost_denied: vec![],
@@ -35853,8 +36010,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
     .unwrap();
 
     let setup_link = domain::ResolutionApplied {
-        phase_id: domain::phase::PhaseId::parse("N01")
-            .expect("static test phase id is canonical"),
+        phase_id: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: "mafia-universe-lover-setup".into(),
         result_version: domain::RESULT_VERSION,
         seed: 701100,
@@ -36053,6 +36209,7 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -36257,6 +36414,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],
@@ -36441,6 +36599,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game: allowed_game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -36671,6 +36830,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game: poison_game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -36886,6 +37046,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -37163,6 +37324,7 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -37415,6 +37577,7 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -37579,6 +37742,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -37799,6 +37963,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -38024,6 +38189,7 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "chinese_structured".into(),
             cohost_denied: vec![],
@@ -38216,6 +38382,7 @@ async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "test_hammer_majority".into(),
             cohost_denied: vec![],

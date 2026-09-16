@@ -59,6 +59,8 @@ export async function load({ cookies, locals, fetch, url }) {
 
   return {
     ...data,
+    originTopics: data.bootstrap?.available && !(fixtureMode && apiBaseUrl === "")
+      ? await loadOriginTopics({ fetch, apiBaseUrl, sessionToken }) : [],
     shellOwner: "layout",
     routeState: resolveFixtureRouteState({
       surface: "admin",
@@ -66,6 +68,15 @@ export async function load({ cookies, locals, fetch, url }) {
       fixtureMode,
     }),
   };
+}
+
+async function loadOriginTopics({ fetch, apiBaseUrl, sessionToken }) {
+  if (!sessionToken) return [];
+  const response = await fetch(`${apiBaseUrl}/discussions/origin-topics`, {
+    headers: { accept: "application/json", authorization: `Bearer ${sessionToken}` },
+  });
+  if (!response.ok) throw error(response.status, "Could not load signup topics");
+  return response.json();
 }
 
 function fixtureAdminGameIndex() {
@@ -111,9 +122,10 @@ export const actions = {
     }
     const formData = await request.formData();
     const pack = requiredFormString(formData, "pack");
+    const originTopic = optionalGame(formData.get("origin_topic"));
     const game = randomUUID();
     const envelope = buildCommandEnvelope({
-      command: buildAdminCommand({ action: "create_game", game, pack }),
+      command: buildAdminCommand({ action: "create_game", game, pack, originTopic }),
       commandId: randomUUID(),
       envelopeId: Date.now(),
     });

@@ -225,6 +225,9 @@
 >
   <AppSurfaceHeader header={data.surfaceHeader} />
 
+  {#if setupState.originTopic}
+    <p class="fm-panel" data-testid="host-setup-origin-topic">Signup topic: <a href={setupState.originTopic.href}>{setupState.originTopic.title}</a>. This origin is fixed. The topic will link to this game when it starts.</p>
+  {/if}
   {#if forcedRouteState}
     <RouteState view={forcedRouteState} />
   {:else}

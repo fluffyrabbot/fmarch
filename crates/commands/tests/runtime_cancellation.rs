@@ -29,6 +29,7 @@ async fn setup_game(pool: &PgPool) -> Uuid {
     ensure_test_principal(pool, "user_a").await;
     for command in [
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],

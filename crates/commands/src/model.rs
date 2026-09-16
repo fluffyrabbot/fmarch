@@ -144,6 +144,8 @@ pub enum Command {
         pack: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         cohost_denied: Vec<CohostPermissionClass>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin: Option<content_reference::PublicContentRef>,
     },
     /// Add an (empty) slot to the game. Host-team (Setup class).
     AddSlot { game: Uuid, slot: String },

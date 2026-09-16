@@ -5,6 +5,8 @@
 //! schema on an ephemeral DB. Requires `DATABASE_URL` (compose PG :5544);
 //! never silently passes without a DB.
 
+#[path = "e2e/game_origin.rs"]
+mod game_origin;
 #[path = "e2e/public_search_model.rs"]
 mod public_search_model;
 #[path = "e2e/publication_replay_contract.rs"]

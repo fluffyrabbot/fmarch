@@ -279,6 +279,7 @@ async fn seed_fixture_game(
         pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: fixture.pack.clone(),
             cohost_denied: vec![],

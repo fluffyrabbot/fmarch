@@ -1880,6 +1880,7 @@ pub struct HostConsoleThreadPost {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostSetupStateResponse {
     pub game: Uuid,
+    pub origin_topic: Option<wire::GameOriginTopic>,
     pub created: bool,
     pub pack: HostSetupPackState,
     pub program_catalog: Vec<HostSetupProgramOption>,
@@ -2568,6 +2569,9 @@ async fn load_host_setup_state(
 
     Ok(HostSetupStateResponse {
         game,
+        origin_topic: projections::game_origin_topic(&state.pool, game)
+            .await?
+            .map(Into::into),
         created: true,
         pack: HostSetupPackState {
             key: pack_ref.key,

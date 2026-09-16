@@ -53,8 +53,8 @@ export async function load({ cookies, locals, fetch, url }) {
 function inboxItems(page) {
   return (Array.isArray(page?.items) ? page.items : []).map((item) => ({
     ...item,
-    reason: item?.reason === "mention" ? "mention" : "watch",
-    reasonLabel: item?.reason === "mention" ? "Mention" : "Public update",
+    reason: ["mention", "game_spawned_from_watched_topic"].includes(item?.reason) ? item.reason : "watch",
+    reasonLabel: item?.reason === "mention" ? "Mention" : item?.reason === "game_spawned_from_watched_topic" ? "Game started from a watched topic" : "Public update",
   }));
 }
 

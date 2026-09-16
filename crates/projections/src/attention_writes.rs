@@ -132,7 +132,7 @@ pub async fn advance_member_inbox_read_cursor(
         r#"
         SELECT COALESCE(MAX(item.delivery_seq), 0)::bigint
         FROM member_inbox_item AS item
-        JOIN public_publication AS publication
+        JOIN attention_destination AS publication
           ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE item.principal_id = $1 AND publication.visible AND surface.visible

@@ -162,6 +162,7 @@ export function buildAdminCommand({
   action,
   game,
   pack = "mafiascum",
+  originTopic = null,
   slot,
   roleKey,
   principalId,
@@ -177,6 +178,7 @@ export function buildAdminCommand({
         CreateGame: Object.freeze({
           game: requiredString(game, "game"),
           pack: requiredString(pack, "pack"),
+          ...(originTopic === null ? {} : { origin: { surface_id: requiredString(originTopic, "originTopic"), source_seq: 0 } }),
         }),
       });
     case "add_slot":

@@ -59,6 +59,7 @@ pub async fn reconcile(pool: &PgPool) -> Result<StagingSearchCorpusReceipt, Stri
             &Principal::authenticated(host),
             CREATE_COMMAND_ID,
             Command::CreateGame {
+                origin: None,
                 game: CORPUS_GAME_ID,
                 pack: CORPUS_PACK.to_string(),
                 cohost_denied: Vec::new(),

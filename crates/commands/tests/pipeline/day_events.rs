@@ -286,6 +286,7 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
         &pool,
         &user("host_h"),
         Command::CreateGame {
+            origin: None,
             game,
             pack: "default_open".into(),
             cohost_denied: vec![],

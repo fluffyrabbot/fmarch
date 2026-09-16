@@ -94,6 +94,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             "/discussions/areas",
             get(discussion_areas).post(create_discussion_area),
         )
+        .route("/discussions/origin-topics", get(game_origin_topic_options))
         .route("/discussions/areas/{slug}", get(discussion_area_topics))
         .route(
             "/discussions/areas/{slug}/topics",
@@ -822,6 +823,19 @@ struct ModerationCaseQuery {
 struct ModerateCaseRequest {
     action: String,
     reason: String,
+}
+
+async fn game_origin_topic_options(
+    State(state): State<PublicPlatformHttpState>,
+    MemberAuthentication(principal_id): MemberAuthentication,
+) -> Result<Json<Vec<wire::GameOriginTopic>>, ApiError> {
+    Ok(Json(
+        projections::game_origin_topic_options(&state.pool, principal_id)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+    ))
 }
 
 async fn discussion_areas(

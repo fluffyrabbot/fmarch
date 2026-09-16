@@ -35,6 +35,12 @@
         {#if thread.topic.pinned === true}<span data-testid="discussion-topic-pinned">Pinned</span> · {/if}{thread.topic.posting_state}
       </p>
       <h2 data-testid="discussion-topic-heading">{thread.topic.title}</h2>
+      {#if thread.topic.spawned_games?.length > 0}
+        <aside class="fm-panel" data-testid="discussion-spawned-games" aria-label="Games from this topic">
+          <h3>Games from this topic</h3>
+          <ul>{#each thread.topic.spawned_games as game}<li><a href={game.href}>{game.pack} · {game.status}</a></li>{/each}</ul>
+        </aside>
+      {/if}
       {#if discussion.subscription !== null}
         <div class="discussion-watch" data-testid="discussion-watch-control">
           <form method="POST" action="?/watch">

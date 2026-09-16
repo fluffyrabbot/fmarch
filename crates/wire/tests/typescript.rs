@@ -42,6 +42,7 @@ fn create_game_cohost_policy_is_omittable_in_both_wire_directions_and_typescript
     ));
 
     let serialized = serde_json::to_value(wire::Command::CreateGame {
+        origin: None,
         game,
         pack: "mafiascum".to_owned(),
         cohost_denied: Vec::new(),

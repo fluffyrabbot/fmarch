@@ -195,6 +195,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             1,
             PrincipalId::fixture("host_h"),
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],

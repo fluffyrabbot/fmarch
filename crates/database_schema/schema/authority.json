@@ -232,6 +232,13 @@
       "namespace": "public"
     },
     {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=r/$schema_owner}",
+      "kind": "relation",
+      "name": "attention_destination",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arw/$schema_owner}",
       "kind": "relation",
       "name": "auth_account",
@@ -998,6 +1005,27 @@
       "acl": "",
       "kind": "relation",
       "name": "discussion_topic_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
+      "kind": "relation",
+      "name": "discussion_topic_spawned_game",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "discussion_topic_spawned_game_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "discussion_topic_spawned_game_topic_idx",
       "owner": "$schema_owner",
       "namespace": "public"
     },

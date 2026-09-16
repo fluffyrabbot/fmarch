@@ -1271,6 +1271,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             201,
             "host_h",
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -3196,6 +3197,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             1,
             "host_h",
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -3394,6 +3396,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             1,
             "host_h",
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -3789,6 +3792,7 @@ async fn offline_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx
             1,
             "host_h",
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],
@@ -3965,6 +3969,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             9001,
             "host_h",
             Command::CreateGame {
+                origin: None,
                 game,
                 pack: "mafiascum".into(),
                 cohost_denied: vec![],

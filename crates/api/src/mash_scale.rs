@@ -516,6 +516,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         pool,
         &Principal::authenticated(host_principal_id()),
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".to_string(),
             cohost_denied: Vec::new(),

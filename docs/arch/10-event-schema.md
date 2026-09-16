@@ -58,6 +58,14 @@ the corresponding command and projector modules):
 | DayPrograms/DayEvents | See the sole-emitter table in [17-day-runtime-ownership](17-day-runtime-ownership.md#emit-table-dayevent-kinds) |
 | Member lifecycle | `MemberDeactivated`, `MemberErasureRequested`, `MemberCredentialsErased`, `MemberAuthorshipPseudonymized`, `MemberPersonalExportRecorded` |
 
+`GameCreated` accepts an additive optional `origin: { surface_id, source_seq: 0 }`
+that names a visible, host-authored forum topic. Missing historical origins
+remain absent. The edge is immutable and game-owned; `GameStarted` activates
+its public reverse link and watched-topic announcement. Attention retains the
+creation event as destination identity and uses the start event as delivery
+order. Game, topic, and subscription rebuilds converge independently under
+the origin attention gate.
+
 Replacement is a paired occupancy-end/start transition. Host modkill uses
 `SlotStatusChanged`; it is not a separate `SlotModkilled` submission to the
 engine. Community discussion events have their own bounded context under

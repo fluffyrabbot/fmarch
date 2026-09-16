@@ -288,13 +288,11 @@
     </form>
   {/if}
 
-  {#if adminForcedRouteState}
-    <RouteState view={adminForcedRouteState} />
-  {:else if data.bootstrap?.available && data.gameSelection?.selectedGame === null}
+  {#if !adminForcedRouteState && data.bootstrap?.available}
     <section class="admin-bootstrap fm-panel" data-testid="admin-game-bootstrap">
       <div>
-        <p class="fm-eyebrow">Fresh install</p>
-        <h2>Create the first game</h2>
+        <p class="fm-eyebrow">Host a game</p>
+        <h2>{data.gameSelection?.selectedGame === null ? "Create the first game" : "Create a game"}</h2>
         <p>Choose the rules pack. You will continue directly into host setup.</p>
       </div>
       <form method="POST" action="?/createGame">
@@ -306,12 +304,26 @@
             {/each}
           </select>
         </label>
+        <label class="fm-field">
+          <span>Signup topic (optional)</span>
+          <select name="origin_topic" data-testid="admin-game-origin-topic">
+            <option value="">No signup topic</option>
+            {#each data.originTopics ?? [] as topic}
+              <option value={topic.topic}>{topic.title}</option>
+            {/each}
+          </select>
+          <small>Choose one of your public topics. Its link is fixed when you create the game; watchers hear about the game when it starts.</small>
+        </label>
         <button class="fm-touch-button" type="submit" data-testid="admin-game-bootstrap-submit">Create game and continue</button>
       </form>
       {#if form?.bootstrap}
         <AppStatus status={form.bootstrap} testId="admin-game-bootstrap-status" />
       {/if}
     </section>
+  {/if}
+
+  {#if adminForcedRouteState}
+    <RouteState view={adminForcedRouteState} />
   {:else if adminSurfaceEmpty}
     <RouteState view={adminEmptyState} />
   {:else}

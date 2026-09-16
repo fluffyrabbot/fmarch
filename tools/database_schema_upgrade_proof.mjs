@@ -440,6 +440,37 @@ VALUES
   ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 200, 'watch', 200);
 `;
 
+const gameOriginSeedSql = String.raw`
+-- A legacy public game and ordinary topic have no origin relationship. The
+-- additive migration must retain that absence and every old post destination.
+INSERT INTO pack_artifact
+  (content_hash, pack_key, pack_version, artifact_schema_version, canonical_json)
+VALUES (repeat('9', 64), 'origin-upgrade', 1, 1, '{}');
+INSERT INTO game_index
+  (game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
+   created_seq, started_seq, completed_seq, updated_seq)
+VALUES ('94000000-0000-4000-8000-000000000001', 'origin-upgrade', 1, repeat('9', 64),
+  'active', 'D01', 600, 700, NULL, 700);
+INSERT INTO discussion_area (area_id, slug, title, description, created_seq)
+VALUES ('95000000-0000-4000-8000-000000000001', 'origin-upgrade', 'Origin Upgrade', '', 500);
+INSERT INTO discussion_topic
+  (topic_id, area_id, title, author_profile_id, post_count, created_seq, updated_seq,
+   version, created_at, updated_at)
+VALUES ('96000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001',
+  'An ordinary topic', '40000000-0000-4000-8000-000000000001', 0, 510, 510, 1, 510, 510);
+INSERT INTO publication_surface
+  (surface_id, search_group, title, href, visible, updated_seq)
+VALUES
+  ('94000000-0000-4000-8000-000000000001', 'games', 'Legacy game',
+   '/games/94000000-0000-4000-8000-000000000001', true, 700),
+  ('96000000-0000-4000-8000-000000000001', 'discussions', 'An ordinary topic',
+   '/discussions/origin-upgrade/t/96000000-0000-4000-8000-000000000001', true, 510);
+INSERT INTO public_publication
+  (surface_id, source_seq, body, href, occurred_at, visible)
+VALUES ('94000000-0000-4000-8000-000000000001', 710, 'Legacy public game post',
+  '/games/94000000-0000-4000-8000-000000000001#post-710', 710, true);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -903,6 +934,170 @@ const migrationFixtures = [
           '92000000-0000-4000-8000-000000000001', 100, 450, 'mention', 80)`,
         expectedError: /member_inbox_item_pkey/iu,
         message: "0015 must keep mention deduplication on the destination and reason, so a later event cannot create a second delivery identity",
+      },
+    ],
+  },
+  {
+    version: 16,
+    seed: gameOriginSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT (origin_topic_id IS NULL)::text || ':' ||
+          (SELECT COUNT(*)::text FROM discussion_topic_spawned_game
+           WHERE topic_id = '96000000-0000-4000-8000-000000000001')
+        FROM game_index WHERE game_id = '94000000-0000-4000-8000-000000000001'`,
+        expected: "true:0",
+        message: "0016 must not invent an origin relationship for a pre-existing game or topic",
+      },
+      {
+        sql: String.raw`SELECT is_nullable || ':' || COALESCE(column_default, 'none')
+        FROM information_schema.columns WHERE table_schema = 'public'
+          AND table_name = 'game_index' AND column_name = 'origin_topic_id'`,
+        expected: "YES:none",
+        message: "0016 must leave legacy origin absence explicit rather than install a default topic",
+      },
+      {
+        sql: String.raw`SELECT COUNT(*) FROM (
+          (SELECT surface_id, source_seq, href, author_profile_id, visible FROM public_publication
+           EXCEPT ALL SELECT surface_id, source_seq, href, author_profile_id, visible FROM attention_destination)
+          UNION ALL
+          (SELECT surface_id, source_seq, href, author_profile_id, visible FROM attention_destination
+           EXCEPT ALL SELECT surface_id, source_seq, href, author_profile_id, visible FROM public_publication)
+        ) AS difference`,
+        expected: "0",
+        message: "0016 must preserve every pre-existing public attention destination exactly, without fabricating game announcements",
+      },
+      {
+        sql: String.raw`SELECT target.relname || ':' || constraint_row.confdeltype::text
+        FROM pg_constraint AS constraint_row
+        JOIN pg_class AS target ON target.oid = constraint_row.confrelid
+        WHERE constraint_row.conrelid = 'public.discussion_topic_spawned_game'::regclass
+          AND constraint_row.contype = 'f'`,
+        expected: "game_index:c",
+        message: "0016 origin edges must cascade with their owning game and have no foreign key to the independently rebuilt topic",
+      },
+      {
+        sql: String.raw`SELECT pg_get_indexdef(indexrelid) FROM pg_index
+        JOIN pg_class ON pg_class.oid = indexrelid
+        WHERE relname = 'discussion_topic_spawned_game_topic_idx'`,
+        expected: "CREATE INDEX discussion_topic_spawned_game_topic_idx ON public.discussion_topic_spawned_game USING btree (topic_id, started_seq, game_id)",
+        message: "0016 must index reverse topic lookups in publication order",
+      },
+      {
+        sql: String.raw`DO $proof$
+        DECLARE
+          topic uuid := '96000000-0000-4000-8000-000000000001';
+          game uuid := '97000000-0000-4000-8000-000000000001';
+        BEGIN
+          INSERT INTO game_index
+            (game_id, pack_key, pack_version, pack_content_hash, status,
+             created_seq, updated_seq, origin_topic_id)
+          VALUES (game, 'origin-upgrade', 1, repeat('9', 64), 'setup', 800, 800, topic);
+          INSERT INTO discussion_topic_spawned_game
+            (game_id, topic_id, created_seq, host_principal_id)
+          VALUES (game, topic, 800, '10000000-0000-4000-8000-000000000001');
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800) THEN
+            RAISE EXCEPTION '0016 setup without a public game surface exposed an attention destination';
+          END IF;
+          INSERT INTO publication_surface
+            (surface_id, search_group, title, href, visible, updated_seq)
+          VALUES (game, 'games', 'Origin game', '/games/' || game::text, false, 800);
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 setup game became a visible announcement';
+          END IF;
+          UPDATE game_index SET status = 'active', phase_id = 'D01', started_seq = 900,
+            updated_seq = 900 WHERE game_id = game;
+          UPDATE publication_surface SET visible = true, updated_seq = 900 WHERE surface_id = game;
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 announcement became visible before its start fact';
+          END IF;
+          UPDATE discussion_topic_spawned_game SET started_seq = 900, started_at = 80 WHERE game_id = game;
+          INSERT INTO member_inbox_item
+            (principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at)
+          VALUES ('60000000-0000-4000-8000-000000000001', topic, 800, 900,
+            'game_spawned_from_watched_topic', 80);
+          IF (SELECT COUNT(*) FROM attention_destination
+              WHERE surface_id = topic AND source_seq = 800 AND visible
+                AND href = '/games/' || game::text
+                AND author_profile_id = '40000000-0000-4000-8000-000000000001') <> 1 THEN
+            RAISE EXCEPTION '0016 started game lost its stable origin-scoped identity, author, or game destination';
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM member_inbox_item AS item
+            JOIN attention_destination AS destination USING (surface_id, source_seq)
+            WHERE item.surface_id = topic AND item.source_seq = 800 AND item.delivery_seq = 900
+              AND item.reason = 'game_spawned_from_watched_topic' AND destination.visible) THEN
+            RAISE EXCEPTION '0016 launch delivery could not address the creation identity with the start event position';
+          END IF;
+          IF EXISTS (SELECT 1 FROM public_publication WHERE surface_id = topic AND source_seq = 800) THEN
+            RAISE EXCEPTION '0016 attention adapter manufactured a forum post';
+          END IF;
+          UPDATE discussion_topic SET visibility = 'hidden' WHERE topic_id = topic;
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 hidden topic retained a visible launch destination';
+          END IF;
+          UPDATE discussion_topic SET visibility = 'visible' WHERE topic_id = topic;
+          UPDATE publication_surface SET visible = false WHERE surface_id = game;
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 hidden game surface retained a visible launch destination';
+          END IF;
+          UPDATE publication_surface SET visible = true WHERE surface_id = game;
+          UPDATE game_index SET status = 'completed', completed_seq = 1000, updated_seq = 1000 WHERE game_id = game;
+          IF NOT EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 completion lost the public launch destination';
+          END IF;
+          DELETE FROM discussion_topic WHERE topic_id = topic;
+          IF NOT EXISTS (SELECT 1 FROM discussion_topic_spawned_game WHERE game_id = game)
+            OR NOT EXISTS (SELECT 1 FROM game_index WHERE game_id = game AND origin_topic_id = topic) THEN
+            RAISE EXCEPTION '0016 topic rebuild deletion erased a game-owned origin fact';
+          END IF;
+          IF EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800) THEN
+            RAISE EXCEPTION '0016 missing topic retained a launch destination';
+          END IF;
+          INSERT INTO discussion_topic
+            (topic_id, area_id, title, author_profile_id, post_count, created_seq, updated_seq,
+             version, created_at, updated_at)
+          VALUES (topic, '95000000-0000-4000-8000-000000000001', 'An ordinary topic',
+            '40000000-0000-4000-8000-000000000001', 0, 510, 510, 1, 510, 510);
+          IF NOT EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800 AND visible) THEN
+            RAISE EXCEPTION '0016 topic restoration failed to restore the retained launch destination';
+          END IF;
+          DELETE FROM game_index WHERE game_id = game;
+          IF EXISTS (SELECT 1 FROM discussion_topic_spawned_game WHERE game_id = game)
+            OR EXISTS (SELECT 1 FROM attention_destination WHERE surface_id = topic AND source_seq = 800) THEN
+            RAISE EXCEPTION '0016 owning-game deletion failed to remove the reverse edge and destination';
+          END IF;
+          DELETE FROM member_inbox_item WHERE surface_id = topic AND source_seq = 800;
+          DELETE FROM publication_surface WHERE surface_id = game;
+        END
+        $proof$;`,
+        expected: "DO",
+        message: "0016 must gate launch destinations on public start/visibility, retain creation identity with start delivery order, and preserve source ownership through deletion and restoration",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO discussion_topic_spawned_game
+          (game_id, topic_id, created_seq, host_principal_id, started_seq)
+        VALUES ('94000000-0000-4000-8000-000000000001',
+          '96000000-0000-4000-8000-000000000001', 600,
+          '10000000-0000-4000-8000-000000000001', 700)`,
+        expectedError: /discussion_topic_spawned_game_start_shape/iu,
+        message: "0016 must reject a start event without its matching timestamp",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO discussion_topic_spawned_game
+          (game_id, topic_id, created_seq, host_principal_id)
+        VALUES ('98000000-0000-4000-8000-000000000001',
+          '96000000-0000-4000-8000-000000000001', 600,
+          '10000000-0000-4000-8000-000000000001')`,
+        expectedError: /discussion_topic_spawned_game_game_id_fkey/iu,
+        message: "0016 must refuse an origin edge whose owning game does not exist",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO member_inbox_item
+          (principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at)
+        VALUES ('60000000-0000-4000-8000-000000000001',
+          '96000000-0000-4000-8000-000000000001', 800, 900, 'invented_reason', 80)`,
+        expectedError: /member_inbox_item_reason_check/iu,
+        message: "0016 must extend the closed reason set without admitting unknown attention reasons",
       },
     ],
   },

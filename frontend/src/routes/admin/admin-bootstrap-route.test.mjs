@@ -14,7 +14,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
           principalId: "admin_a",
           resolvedCapabilities: [{ kind: "GlobalAdmin" }],
         },
-        request: formRequest({ pack: "mafiascum" }),
+        request: formRequest({ pack: "mafiascum", origin_topic: "00000000-0000-0000-0000-000000000123" }),
         fetch: async (url, init) => {
           observed.url = url;
           observed.authorization = init.headers.authorization;
@@ -36,6 +36,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
     assert.equal(observed.authorization, "Bearer fmss_admin-session");
     assert.equal(observed.envelope.body.kind, "Command");
     assert.equal(observed.envelope.body.body.command.CreateGame.pack, "mafiascum");
+    assert.deepEqual(observed.envelope.body.body.command.CreateGame.origin, { surface_id: "00000000-0000-0000-0000-000000000123", source_seq: 0 });
     assert.equal("principal_id" in observed.envelope.body.body, false);
   } finally {
     restoreEnv("FMARCH_API_BASE_URL", previous);

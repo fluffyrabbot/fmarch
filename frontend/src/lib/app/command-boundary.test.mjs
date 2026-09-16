@@ -982,3 +982,11 @@ function jsonResponse(body) {
     },
   };
 }
+
+
+test("creating a game binds an optional origin to its topic surface", () => {
+  assert.deepEqual(buildAdminCommand({ action: "create_game", game: "new-game", originTopic: "signup-topic" }), {
+    CreateGame: { game: "new-game", pack: "mafiascum", origin: { surface_id: "signup-topic", source_seq: 0 } },
+  });
+  assert.equal("origin" in buildAdminCommand({ action: "create_game", game: "new-game" }).CreateGame, false);
+});

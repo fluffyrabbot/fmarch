@@ -42,6 +42,14 @@ from setup through active play to completion (`game_index.status` is
 `setup`, `active`, or `completed`). Completed-game archival/export is a separate
 operation, not another live phase.
 
+A game may name one immutable **origin topic** when created. The host selects a
+visible forum topic they authored; many games may share that topic. The game
+owns the edge and rebuildable reverse index, so forum decisions never depend
+on game state. Setup exposes the link only to authorized hosts. Starting the
+game publishes a topic banner and one reason-derived announcement to watchers.
+The edge does not enroll players, watch the topic, or lock it; hosts continue
+to seat players explicitly.
+
 ### Slot
 A position in a game. Carries:
 - **Occupant history** — immutable persona/slot occupancy start and end facts,

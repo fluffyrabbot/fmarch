@@ -671,6 +671,7 @@ pub async fn run_large_action_graph_performance_proof(
         pool,
         &host,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],

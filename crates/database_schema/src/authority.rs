@@ -46,6 +46,7 @@ const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "discussion_area",
     "discussion_post",
     "discussion_topic",
+    "discussion_topic_spawned_game",
     "engine_snapshot_checkpoint",
     "external_identity",
     "game_cohost_policy",
@@ -123,6 +124,7 @@ const APPLICATION_DELETE_TABLES: &[&str] = &[
     "delayed_death_queue",
     "discussion_post",
     "discussion_topic",
+    "discussion_topic_spawned_game",
     "engine_snapshot_checkpoint",
     "external_identity",
     "game_authority",
@@ -195,7 +197,7 @@ const APPLICATION_SEQUENCES: &[&str] = &[
 ];
 
 const EXPECTED_SEQUENCES: &[&str] = APPLICATION_SEQUENCES;
-const EXPECTED_VIEWS: &[&str] = &["event_direct_key_reference"];
+const EXPECTED_VIEWS: &[&str] = &["attention_destination", "event_direct_key_reference"];
 const EXPECTED_GUARDS: &[(&str, &str, &str)] = &[
     (
         "auth_delivery_intent",
@@ -664,6 +666,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "discussion_post",
     "discussion_post_revision",
     "discussion_topic",
+    "discussion_topic_spawned_game",
     "engine_snapshot_checkpoint",
     "event_direct_key_sentinel",
     "event_stream_key_state",
@@ -986,7 +989,11 @@ pub async fn reconcile_database_authority(
         &mut tx,
         APPLICATION_DATABASE_ROLE,
         "SELECT",
-        &["_sqlx_migrations", "event_direct_key_reference"],
+        &[
+            "_sqlx_migrations",
+            "attention_destination",
+            "event_direct_key_reference",
+        ],
     )
     .await?;
     grant_relations(
@@ -1690,6 +1697,7 @@ fn expected_table_privileges(expected: DatabasePrincipal) -> BTreeSet<(String, S
                 "event_direct_key_reference".to_string(),
                 "SELECT".to_string(),
             ));
+            privileges.insert(("attention_destination".to_string(), "SELECT".to_string()));
             for table in APPLICATION_UPDATE_TABLES {
                 privileges.insert(((*table).to_string(), "UPDATE".to_string()));
             }

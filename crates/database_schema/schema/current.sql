@@ -613,6 +613,123 @@ CREATE TABLE public.action_submission (
 
 
 --
+-- Name: discussion_topic; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discussion_topic (
+    topic_id uuid NOT NULL,
+    area_id uuid NOT NULL,
+    title text NOT NULL,
+    post_count bigint DEFAULT 0 NOT NULL,
+    created_seq bigint NOT NULL,
+    updated_seq bigint NOT NULL,
+    moderated_seq bigint,
+    author_profile_id uuid,
+    posting_state text DEFAULT 'open'::text NOT NULL,
+    visibility text DEFAULT 'visible'::text NOT NULL,
+    version bigint DEFAULT 0 NOT NULL,
+    created_at bigint DEFAULT 0 NOT NULL,
+    updated_at bigint DEFAULT 0 NOT NULL,
+    last_post_seq bigint,
+    last_post_at bigint,
+    pinned boolean DEFAULT false NOT NULL,
+    CONSTRAINT discussion_topic_posting_state_check CHECK ((posting_state = ANY (ARRAY['open'::text, 'locked'::text]))),
+    CONSTRAINT discussion_topic_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
+);
+
+
+--
+-- Name: discussion_topic_spawned_game; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discussion_topic_spawned_game (
+    game_id uuid NOT NULL,
+    topic_id uuid NOT NULL,
+    created_seq bigint NOT NULL,
+    host_principal_id uuid NOT NULL,
+    started_seq bigint,
+    started_at bigint,
+    CONSTRAINT discussion_topic_spawned_game_start_shape CHECK (((started_seq IS NULL) = (started_at IS NULL)))
+);
+
+
+--
+-- Name: game_index; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.game_index (
+    game_id uuid NOT NULL,
+    pack_key text NOT NULL,
+    status text NOT NULL,
+    phase_id text,
+    created_seq bigint NOT NULL,
+    started_seq bigint,
+    completed_seq bigint,
+    updated_seq bigint NOT NULL,
+    pack_version bigint NOT NULL,
+    pack_content_hash text NOT NULL,
+    origin_topic_id uuid,
+    CONSTRAINT game_index_pack_content_hash_check CHECK ((pack_content_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT game_index_pack_key_check CHECK (((length(pack_key) > 0) AND (pack_key = btrim(pack_key)))),
+    CONSTRAINT game_index_pack_version_check CHECK (((pack_version >= 1) AND (pack_version <= '4294967295'::bigint))),
+    CONSTRAINT game_index_status_check CHECK ((status = ANY (ARRAY['setup'::text, 'active'::text, 'completed'::text])))
+);
+
+
+--
+-- Name: public_publication; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.public_publication (
+    surface_id uuid NOT NULL,
+    source_seq bigint NOT NULL,
+    body text NOT NULL,
+    href text NOT NULL,
+    author_profile_id uuid,
+    occurred_at bigint NOT NULL,
+    visible boolean DEFAULT true NOT NULL
+);
+
+
+--
+-- Name: publication_surface; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.publication_surface (
+    surface_id uuid NOT NULL,
+    search_group text NOT NULL,
+    title text NOT NULL,
+    href text NOT NULL,
+    visible boolean DEFAULT true NOT NULL,
+    updated_seq bigint NOT NULL,
+    CONSTRAINT publication_surface_search_group_check CHECK ((search_group = ANY (ARRAY['discussions'::text, 'profiles'::text, 'games'::text])))
+);
+
+
+--
+-- Name: attention_destination; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.attention_destination AS
+ SELECT public_publication.surface_id,
+    public_publication.source_seq,
+    public_publication.href,
+    public_publication.author_profile_id,
+    public_publication.visible
+   FROM public.public_publication
+UNION ALL
+ SELECT origin.topic_id AS surface_id,
+    origin.created_seq AS source_seq,
+    ('/games/'::text || (origin.game_id)::text) AS href,
+    topic.author_profile_id,
+    ((origin.started_seq IS NOT NULL) AND (game.status = ANY (ARRAY['active'::text, 'completed'::text])) AND (topic.visibility = 'visible'::text) AND game_surface.visible) AS visible
+   FROM (((public.discussion_topic_spawned_game origin
+     JOIN public.game_index game ON ((game.game_id = origin.game_id)))
+     JOIN public.discussion_topic topic ON ((topic.topic_id = origin.topic_id)))
+     JOIN public.publication_surface game_surface ON ((game_surface.surface_id = game.game_id)));
+
+
+--
 -- Name: auth_account; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1144,32 +1261,6 @@ CREATE TABLE public.discussion_post_revision (
 
 
 --
--- Name: discussion_topic; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.discussion_topic (
-    topic_id uuid NOT NULL,
-    area_id uuid NOT NULL,
-    title text NOT NULL,
-    post_count bigint DEFAULT 0 NOT NULL,
-    created_seq bigint NOT NULL,
-    updated_seq bigint NOT NULL,
-    moderated_seq bigint,
-    author_profile_id uuid,
-    posting_state text DEFAULT 'open'::text NOT NULL,
-    visibility text DEFAULT 'visible'::text NOT NULL,
-    version bigint DEFAULT 0 NOT NULL,
-    created_at bigint DEFAULT 0 NOT NULL,
-    updated_at bigint DEFAULT 0 NOT NULL,
-    last_post_seq bigint,
-    last_post_at bigint,
-    pinned boolean DEFAULT false NOT NULL,
-    CONSTRAINT discussion_topic_posting_state_check CHECK ((posting_state = ANY (ARRAY['open'::text, 'locked'::text]))),
-    CONSTRAINT discussion_topic_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
-);
-
-
---
 -- Name: engine_snapshot_checkpoint; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1501,28 +1592,6 @@ CREATE TABLE public.game_cohost_policy (
 
 
 --
--- Name: game_index; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.game_index (
-    game_id uuid NOT NULL,
-    pack_key text NOT NULL,
-    status text NOT NULL,
-    phase_id text,
-    created_seq bigint NOT NULL,
-    started_seq bigint,
-    completed_seq bigint,
-    updated_seq bigint NOT NULL,
-    pack_version bigint NOT NULL,
-    pack_content_hash text NOT NULL,
-    CONSTRAINT game_index_pack_content_hash_check CHECK ((pack_content_hash ~ '^[0-9a-f]{64}$'::text)),
-    CONSTRAINT game_index_pack_key_check CHECK (((length(pack_key) > 0) AND (pack_key = btrim(pack_key)))),
-    CONSTRAINT game_index_pack_version_check CHECK (((pack_version >= 1) AND (pack_version <= '4294967295'::bigint))),
-    CONSTRAINT game_index_status_check CHECK ((status = ANY (ARRAY['setup'::text, 'active'::text, 'completed'::text])))
-);
-
-
---
 -- Name: game_invitation; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1797,7 +1866,7 @@ CREATE TABLE public.member_inbox_item (
     occurred_at bigint NOT NULL,
     delivery_seq bigint NOT NULL,
     CONSTRAINT member_inbox_item_delivery_seq_check CHECK (((delivery_seq >= source_seq) AND (source_seq > 0))),
-    CONSTRAINT member_inbox_item_reason_check CHECK ((reason = ANY (ARRAY['watch'::text, 'mention'::text])))
+    CONSTRAINT member_inbox_item_reason_check CHECK ((reason = ANY (ARRAY['watch'::text, 'mention'::text, 'game_spawned_from_watched_topic'::text])))
 );
 
 
@@ -2084,21 +2153,6 @@ CREATE TABLE public.public_profile (
 
 
 --
--- Name: public_publication; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.public_publication (
-    surface_id uuid NOT NULL,
-    source_seq bigint NOT NULL,
-    body text NOT NULL,
-    href text NOT NULL,
-    author_profile_id uuid,
-    occurred_at bigint NOT NULL,
-    visible boolean DEFAULT true NOT NULL
-);
-
-
---
 -- Name: public_search_document; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2145,21 +2199,6 @@ CREATE TABLE public.public_watch_period (
     started_seq bigint NOT NULL,
     ended_seq bigint,
     CONSTRAINT public_watch_period_bounds_check CHECK (((ended_seq IS NULL) OR (ended_seq > started_seq)))
-);
-
-
---
--- Name: publication_surface; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.publication_surface (
-    surface_id uuid NOT NULL,
-    search_group text NOT NULL,
-    title text NOT NULL,
-    href text NOT NULL,
-    visible boolean DEFAULT true NOT NULL,
-    updated_seq bigint NOT NULL,
-    CONSTRAINT publication_surface_search_group_check CHECK ((search_group = ANY (ARRAY['discussions'::text, 'profiles'::text, 'games'::text])))
 );
 
 
@@ -2803,6 +2842,14 @@ ALTER TABLE ONLY public.discussion_post_revision
 
 ALTER TABLE ONLY public.discussion_topic
     ADD CONSTRAINT discussion_topic_pkey PRIMARY KEY (topic_id);
+
+
+--
+-- Name: discussion_topic_spawned_game discussion_topic_spawned_game_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discussion_topic_spawned_game
+    ADD CONSTRAINT discussion_topic_spawned_game_pkey PRIMARY KEY (game_id);
 
 
 --
@@ -3931,6 +3978,13 @@ CREATE INDEX discussion_topic_area_pinned_idx ON public.discussion_topic USING b
 
 
 --
+-- Name: discussion_topic_spawned_game_topic_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX discussion_topic_spawned_game_topic_idx ON public.discussion_topic_spawned_game USING btree (topic_id, started_seq, game_id);
+
+
+--
 -- Name: event_direct_key_sentinel_lifecycle_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4906,6 +4960,14 @@ ALTER TABLE ONLY public.discussion_topic
 
 ALTER TABLE ONLY public.discussion_topic
     ADD CONSTRAINT discussion_topic_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.member_profile(profile_id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: discussion_topic_spawned_game discussion_topic_spawned_game_game_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discussion_topic_spawned_game
+    ADD CONSTRAINT discussion_topic_spawned_game_game_id_fkey FOREIGN KEY (game_id) REFERENCES public.game_index(game_id) ON DELETE CASCADE;
 
 
 --

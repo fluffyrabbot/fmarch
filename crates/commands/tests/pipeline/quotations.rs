@@ -129,6 +129,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
         &pool,
         &h,
         Command::CreateGame {
+            origin: None,
             game,
             pack: "mafiascum".into(),
             cohost_denied: vec![],

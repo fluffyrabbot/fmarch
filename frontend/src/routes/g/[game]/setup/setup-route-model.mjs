@@ -97,6 +97,7 @@ export function normalizeHostSetupState(raw, { game }) {
   return Object.freeze({
     game: normalizeId(raw?.game ?? game, "game"),
     created: raw?.created === true,
+    originTopic: raw?.origin_topic ?? null,
     pack: Object.freeze({
       key: normalizeOptionalText(pack.key) ?? "unknown",
       name: normalizeOptionalText(pack.name) ?? normalizeOptionalText(pack.key) ?? "Unknown pack",
