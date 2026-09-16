@@ -40,6 +40,20 @@ test("player-vote-loop requires host votecount convergence evidence", () => {
   );
 });
 
+test("player-vote-loop requires witnessed contention and an unchanged successful retry", () => {
+  for (const mutate of [
+    (race) => { delete race.firstAttempts; },
+    (race) => { race.contentionObserved = false; },
+    (race) => { race.retry.commandIdFactoryAbsent = false; },
+    (race) => { race.firstAttempts[1].error = "NotYourSlot"; },
+    (race) => { race.secondOutcome.requestEnvelope.body.body.command_id = "new-command"; },
+  ]) {
+    const evidence = liveStackReadinessFixture();
+    mutate(evidence.browser.player.concurrentVoteRace);
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "player-vote-loop"), "failed");
+  }
+});
+
 test("host setup workflow requires shared setup command evidence", () => {
   const evidence = liveStackReadinessFixture();
   assert.equal(
@@ -240,8 +254,7 @@ function liveStackReadinessFixture() {
           voteRows: ["VoteSubmitted"],
         },
         concurrentVoteRace: {
-          firstOutcome: { state: "ack" },
-          secondOutcome: { state: "ack" },
+          ...voteRaceFixture(),
           rows: ["slot_4", "slot-7"],
         },
         reconnect: {
@@ -475,5 +488,24 @@ function recoveryFixture(channelId) {
       protocol_v: 3, scope: { game: "game-a", channel: channelId },
     } },
     post: { seq: 7, body: "Historical post" },
+  };
+}
+
+function voteRaceFixture() {
+  const game = "game-a";
+  const outcome = (index, ack, envelopeId = 1) => ({
+    state: ack ? "ack" : "reject", commandId: `vote-${index}`,
+    ...(ack ? { streamSeqs: [10 + index] } : { error: "StreamConflict", retryable: true }),
+    requestEnvelope: { v: 3, id: envelopeId, body: { kind: "Command", body: {
+      command_id: `vote-${index}`,
+      command: { SubmitVote: { game, actor_slot: ["slot-7", "slot_4"][index], target: { Slot: "slot_1" } } },
+    } } },
+  });
+  return {
+    game, firstAttempts: [outcome(0, true), outcome(1, false)],
+    winner: 0, loser: 1, contentionObserved: true,
+    retry: { participant: 1, controlTestId: "command-recovery-retry-submit_vote",
+      storedCommandId: "vote-1", commandIdFactoryAbsent: true },
+    firstOutcome: outcome(0, true), secondOutcome: outcome(1, true, 2),
   };
 }

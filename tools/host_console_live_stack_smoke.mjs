@@ -34,6 +34,11 @@ import {
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
+  assertSameVoteRetry,
+  classifyContendedVoteRace,
+  waitForPlayerVoteTerminal,
+} from "./live_stack/vote_race_scenario.mjs";
+import {
   capturePlayerLiveBoundary,
   recoverPlayerHistory,
   waitForPlayerDelivery,
@@ -3665,6 +3670,11 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   let primaryWithdrawDelivery;
   let raceWithdrawDelivery;
   let raceVoteWithdrawCommand;
+  let firstVoteAttempts;
+  let voteContention;
+  let voteRetry;
+  let voteOutcome;
+  let raceVoteOutcome;
   const duplicateVoteCommandId = crypto.randomUUID();
   const raceVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl, {
     sessionToken: racePlayerSessionToken,
@@ -3691,19 +3701,51 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     await Promise.all([voteButton.click(), raceVoteButton.click()]);
     await status.waitFor({ state: "visible" });
     await raceStatus.waitFor({ state: "visible" });
-    await page.waitForFunction(
-      () => window.__fmarchPlayerCommandStatus?.state === "ack",
-    );
-    await raceVoteSession.page.waitForFunction(
-      () => window.__fmarchPlayerCommandStatus?.state === "ack",
-    );
+    firstVoteAttempts = await Promise.all([
+      waitForPlayerVoteTerminal(page),
+      waitForPlayerVoteTerminal(raceVoteSession.page),
+    ]);
+    voteContention = classifyContendedVoteRace(firstVoteAttempts, game);
+    await Promise.all([page, raceVoteSession.page].map((participant) =>
+      participant.evaluate(() => { delete window.__fmarchPlayerCommandIdFactory; }),
+    ));
+    const retryPage = [page, raceVoteSession.page][voteContention.loser];
+    const rejectedAttempt = firstVoteAttempts[voteContention.loser];
+    const retryControlTestId = "command-recovery-retry-submit_vote";
+    const recovery = retryPage.getByTestId("command-recovery-submit_vote");
+    await recovery.waitFor({ state: "visible" });
+    voteRetry = {
+      participant: voteContention.loser,
+      controlTestId: retryControlTestId,
+      storedCommandId: await recovery.getAttribute("data-command-id"),
+      commandIdFactoryAbsent: await retryPage.evaluate(
+        () => typeof window.__fmarchPlayerCommandIdFactory === "undefined",
+      ),
+    };
+    if (voteRetry.storedCommandId !== rejectedAttempt.commandId || !voteRetry.commandIdFactoryAbsent) {
+      throw new Error(`retry control did not retain the original decision naturally: ${JSON.stringify(voteRetry)}`);
+    }
+    await retryPage.getByTestId(retryControlTestId).click();
+    const retriedOutcome = await waitForPlayerVoteTerminal(retryPage, rejectedAttempt);
+    assertSameVoteRetry(rejectedAttempt, retriedOutcome);
+    const finalOutcomes = [...firstVoteAttempts];
+    finalOutcomes[voteContention.loser] = retriedOutcome;
+    [voteOutcome, raceVoteOutcome] = finalOutcomes;
+    assertPlayerVoteSubmitOutcome(voteOutcome, { actorSlot: "slot-7" });
+    assertPlayerVoteSubmitOutcome(raceVoteOutcome, { actorSlot: "slot_4", label: "racing player SubmitVote" });
+  } catch (error) {
+    const pages = await Promise.allSettled([
+      playerVoteRaceDiagnostic(page),
+      playerVoteRaceDiagnostic(raceVoteSession.page),
+      playerVoteRaceDiagnostic(duplicateVoteSession.page),
+    ]);
+    throw new Error(`concurrent player vote did not ACK: ${JSON.stringify({
+      firstAttempts: firstVoteAttempts, contention: voteContention, retry: voteRetry,
+      primary: pages[0], racing: pages[1], heldDuplicate: pages[2],
+    })}`, { cause: error });
   } finally {
     await dropVoteInsertDelayTrigger();
   }
-  const voteOutcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
-  const raceVoteOutcome = await raceVoteSession.page.evaluate(
-    () => window.__fmarchPlayerCommandStatus,
-  );
   assertPlayerVoteSubmitOutcome(voteOutcome, { actorSlot: "slot-7" });
   assertPlayerVoteSubmitOutcome(raceVoteOutcome, {
     actorSlot: "slot_4",
@@ -3747,6 +3789,11 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     );
     assertConcurrentPlayerVoteRows(concurrentVoteRows);
     concurrentVoteRace = {
+      game,
+      firstAttempts: firstVoteAttempts,
+      ...voteContention,
+      contentionObserved: true,
+      retry: voteRetry,
       firstOutcome: voteOutcome,
       secondOutcome: raceVoteOutcome,
       secondStatusMessage: await raceStatus.innerText(),
@@ -3756,7 +3803,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         () => window.__fmarchPlayerProjection,
       ),
       proof:
-        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the second live page explicitly reconnected and recovered authoritative votecount 3.",
+        "Two recovered player pages submitted distinct SubmitVote commands concurrently under a scratch append delay. Fail-fast admission produced one ACK and one explicit retryable StreamConflict. With ID factories cleared, the losing player used the rendered retry control's retained command identity and ACKed with the identical inner payload. Both durable ballots survived, and the second page reconnected and recovered votecount 3.",
     };
 
     playerStep = "duplicate-vote-retry";
@@ -4069,6 +4116,23 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         "A recovered player page emitted a real SubmitVote request while D01 was open. The proof held that unchanged HTTP request until LockThread committed, then released it and observed Reject PhaseLocked, stale-projection recovery guidance, and refreshed locked controls before unlocking the phase.",
     },
   };
+}
+
+async function playerVoteRaceDiagnostic(page) {
+  return await page.evaluate(() => ({
+    commandStatus: window.__fmarchPlayerCommandStatus ?? null,
+    commandReceipts: window.__fmarchPlayerCommandReceipts ?? null,
+    projection: window.__fmarchPlayerProjection ?? null,
+    liveStatus: window.__fmarchLiveProjectionStatus ?? null,
+    liveEvents: (window.__fmarchLiveProjectionEvents ?? []).slice(-20),
+    voteControl: (() => {
+      const control = document.querySelector('[data-action="submit_vote"]');
+      return control === null ? null : {
+        disabled: control.disabled,
+        text: control.textContent?.trim() ?? "",
+      };
+    })(),
+  }));
 }
 
 async function submitDuplicatePlayerVote(
@@ -4388,8 +4452,9 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     label: "first player SubmitAction",
   });
   await releaseHeldSubmission(duplicatePlayerSession, legalOutcome);
-  await releaseHeldSubmission(racePlayerSession, legalOutcome);
 
+  // Let the same-ID receipt retry settle before releasing the distinct-ID
+  // semantic conflict; otherwise these two probes contend for admission too.
   const duplicateRetry = await submitDuplicatePlayerAction(duplicatePlayerSession, {
     firstOutcome: legalOutcome,
     commandId: duplicatePlayerSubmitCommandId,
