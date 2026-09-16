@@ -50,6 +50,9 @@
         ],
         "audit": [
           "bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going"
+        ],
+        "signup-visual-review": [
+          "bash scripts/linux-proof.sh --only test:frontend-visual-regression"
         ]
       }
     }
