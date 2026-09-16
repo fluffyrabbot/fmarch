@@ -1322,7 +1322,7 @@ async fn moderation_case(
     let detail = projections::moderation_case_by_id(&state.pool, case)
         .await?
         .ok_or_else(|| discussion_not_found("moderation case"))?;
-    Ok(Json(detail.into()))
+    Ok(Json(moderation_case_detail(detail)))
 }
 
 async fn moderate_case(
@@ -1369,7 +1369,73 @@ async fn moderate_case(
     let detail = projections::moderation_case_by_id(&state.pool, case)
         .await?
         .expect("actioned moderation case is readable");
-    Ok(Json(detail.into()))
+    Ok(Json(moderation_case_detail(detail)))
+}
+
+fn moderation_content_snapshot(
+    content: trust_safety::ModerationContentSnapshot,
+) -> wire::ModerationContentSnapshot {
+    wire::ModerationContentSnapshot {
+        revision: content.revision,
+        body: content.body,
+        quotations: content.quotations.into_iter().map(Into::into).collect(),
+        profile_mentions: content
+            .profile_mentions
+            .into_iter()
+            .map(|mention| wire::ModerationProfileMention {
+                profile_id: mention.profile_id,
+                offset: mention.span.offset as i64,
+                len: mention.span.len as i64,
+            })
+            .collect(),
+        slot_mentions: content
+            .slot_mentions
+            .into_iter()
+            .map(|mention| wire::ModerationSlotMention {
+                slot_id: mention.slot_id,
+                offset: mention.span.offset as i64,
+                len: mention.span.len as i64,
+            })
+            .collect(),
+        retracted: content.retracted,
+    }
+}
+
+fn moderation_case_detail(row: projections::ModerationCaseDetailRow) -> ModerationCaseDetail {
+    ModerationCaseDetail {
+        case: row.case.into(),
+        reports: row
+            .reports
+            .into_iter()
+            .map(|report| wire::ModerationReport {
+                report_id: report.report_id,
+                reporter_principal_id: report.reporter_principal_id,
+                reason_family: report.reason_family,
+                details: report.details,
+                active: report.active,
+                submitted_at: report.submitted_at,
+                evidence: match report.evidence {
+                    trust_safety::ModerationEvidence::Captured { content } => {
+                        wire::ModerationEvidence::Captured {
+                            content: moderation_content_snapshot(content),
+                        }
+                    }
+                    trust_safety::ModerationEvidence::NotCaptured => {
+                        wire::ModerationEvidence::NotCaptured
+                    }
+                },
+            })
+            .collect(),
+        history: row.history.into_iter().map(Into::into).collect(),
+        content_history: row
+            .content_history
+            .into_iter()
+            .map(|revision| wire::ModerationContentRevision {
+                content: moderation_content_snapshot(revision.content),
+                superseded_at: revision.superseded_at,
+            })
+            .collect(),
+    }
 }
 
 fn parse_moderation_case_cursor(

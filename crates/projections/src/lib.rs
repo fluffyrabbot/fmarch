@@ -798,6 +798,8 @@ pub struct ModerationCaseRow {
     pub source_seq: i64,
     pub target_href: String,
     pub target_body: String,
+    pub target_revision: i64,
+    pub target_retracted: bool,
     pub status: String,
     pub report_count: i64,
     pub opened_at: i64,
@@ -815,6 +817,7 @@ pub struct ModerationReportRow {
     pub details: String,
     pub active: bool,
     pub submitted_at: i64,
+    pub evidence: trust_safety::ModerationEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -831,6 +834,13 @@ pub struct ModerationCaseDetailRow {
     pub case: ModerationCaseRow,
     pub reports: Vec<ModerationReportRow>,
     pub history: Vec<ModerationHistoryRow>,
+    pub content_history: Vec<ModerationContentRevisionRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModerationContentRevisionRow {
+    pub content: trust_safety::ModerationContentSnapshot,
+    pub superseded_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -3579,6 +3589,43 @@ async fn fan_out_member_inbox_update(
     Ok(())
 }
 
+/// v1 never captured evidence. v2 must carry a complete captured snapshot;
+/// unsupported versions and v2 absence fail closed rather than reading live text.
+fn moderation_report_evidence(
+    event: &StoredEvent,
+) -> Result<trust_safety::ModerationEvidence, ProjectionError> {
+    let invalid = |message: &str| ProjectionError::Payload {
+        kind: event.kind.clone(),
+        source: serde::de::Error::custom(message),
+    };
+    match event.version {
+        1 if event.payload.get("evidence").is_none() => {
+            Ok(trust_safety::ModerationEvidence::NotCaptured)
+        }
+        2 => {
+            let evidence: trust_safety::ModerationEvidence = serde_json::from_value(
+                event
+                    .payload
+                    .get("evidence")
+                    .cloned()
+                    .ok_or_else(|| invalid("v2 report requires captured evidence"))?,
+            )
+            .map_err(|source| ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source,
+            })?;
+            if !matches!(&evidence, trust_safety::ModerationEvidence::Captured { content } if content.revision >= 0)
+            {
+                return Err(invalid(
+                    "v2 report requires captured evidence with a nonnegative revision",
+                ));
+            }
+            Ok(evidence)
+        }
+        _ => Err(invalid("unsupported moderation report encoding")),
+    }
+}
+
 async fn fold_moderation_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     case_id: Uuid,
@@ -3638,14 +3685,20 @@ async fn fold_moderation_event(
                         source,
                     }
                 })?;
+            let evidence = moderation_report_evidence(event)?;
+            let evidence_json =
+                serde_json::to_value(&evidence).map_err(|source| ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source,
+                })?;
             ReportReasonFamily::parse(payload.reason.as_str())
                 .map_err(|reject| moderation_domain_error(reject, "fold report"))?;
             sqlx::query(
                 r#"
                 INSERT INTO moderation_report (
                     report_id, case_id, reporter_principal_id, reason_family,
-                    details, submitted_seq, submitted_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    details, submitted_seq, submitted_at, evidence
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 "#,
             )
             .bind(payload.report_id)
@@ -3655,6 +3708,7 @@ async fn fold_moderation_event(
             .bind(payload.details)
             .bind(event.seq)
             .bind(event.occurred_at)
+            .bind(evidence_json)
             .execute(&mut **tx)
             .await?;
             sqlx::query(
@@ -8911,11 +8965,14 @@ pub async fn moderation_cases(
                item.status, item.report_count, item.opened_at, item.updated_at,
                item.updated_seq, item.version, item.action_reason,
                COALESCE(publication.body, '') AS target_body,
+               COALESCE(post.revision, 0) AS target_revision,
+               post.retracted_at IS NOT NULL AS target_retracted,
                COALESCE(publication.href, surface.href) AS target_href
         FROM moderation_case AS item
         LEFT JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
         LEFT JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
+        LEFT JOIN discussion_post AS post ON post.topic_id = item.surface_id AND post.source_seq = item.source_seq
         WHERE ($1::TEXT IS NULL OR item.status = $1)
           AND ($2::BIGINT IS NULL OR item.updated_seq < $2
                OR (item.updated_seq = $2 AND item.case_id < $3))
@@ -8955,11 +9012,14 @@ pub async fn moderation_case_by_id(
                item.status, item.report_count, item.opened_at, item.updated_at,
                item.updated_seq, item.version, item.action_reason,
                COALESCE(publication.body, '') AS target_body,
+               COALESCE(post.revision, 0) AS target_revision,
+               post.retracted_at IS NOT NULL AS target_retracted,
                COALESCE(publication.href, surface.href) AS target_href
         FROM moderation_case AS item
         LEFT JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
         LEFT JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
+        LEFT JOIN discussion_post AS post ON post.topic_id = item.surface_id AND post.source_seq = item.source_seq
         WHERE item.case_id = $1
         "#,
     )
@@ -8969,21 +9029,24 @@ pub async fn moderation_case_by_id(
     .map(moderation_case_row);
     let Some(case) = case else { return Ok(None) };
     let reports = sqlx::query(
-        "SELECT report_id, reporter_principal_id, reason_family, details, active, submitted_at FROM moderation_report WHERE case_id = $1 ORDER BY submitted_seq",
+        "SELECT report_id, reporter_principal_id, reason_family, details, active, submitted_at, evidence FROM moderation_report WHERE case_id = $1 ORDER BY submitted_seq",
     )
     .bind(case_id)
     .fetch_all(pool)
     .await?
     .into_iter()
-    .map(|row| ModerationReportRow {
+    .map(|row| Ok(ModerationReportRow {
         report_id: row.get("report_id"),
         reporter_principal_id: PrincipalId::from_uuid(row.get("reporter_principal_id")),
         reason_family: row.get("reason_family"),
         details: row.get("details"),
         active: row.get("active"),
         submitted_at: row.get("submitted_at"),
-    })
-    .collect();
+        evidence: serde_json::from_value(row.get("evidence")).map_err(|source| ProjectionError::Payload {
+            kind: "ModerationEvidence".to_string(), source,
+        })?,
+    }))
+    .collect::<Result<Vec<_>, ProjectionError>>()?;
     let history = sqlx::query(
         "SELECT source_seq, event_kind, actor_principal_id, reason, occurred_at FROM moderation_case_history WHERE case_id = $1 ORDER BY source_seq",
     )
@@ -8999,11 +9062,70 @@ pub async fn moderation_case_by_id(
         occurred_at: row.get("occurred_at"),
     })
     .collect();
+    let content_history =
+        moderation_content_history(pool, case.surface_id, case.source_seq).await?;
     Ok(Some(ModerationCaseDetailRow {
         case,
         reports,
         history,
+        content_history,
     }))
+}
+
+/// Moderator-only content history, sourced solely from a public publication.
+/// Fixed quotation snapshots accompany every forum revision; current profile
+/// presentation is never resolved into historical evidence.
+async fn moderation_content_history(
+    pool: &PgPool,
+    surface_id: Uuid,
+    source_seq: i64,
+) -> Result<Vec<ModerationContentRevisionRow>, ProjectionError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT revision.revision, revision.body, post.quotations,
+               revision.mentions AS profile_mentions, '[]'::jsonb AS slot_mentions,
+               FALSE AS retracted, revision.superseded_at
+        FROM public_publication AS publication
+        JOIN discussion_post AS post ON post.topic_id = publication.surface_id AND post.source_seq = publication.source_seq
+        JOIN discussion_post_revision AS revision ON revision.source_seq = post.source_seq
+        WHERE publication.surface_id = $1 AND publication.source_seq = $2
+        UNION ALL
+        SELECT COALESCE(post.revision, 0), publication.body,
+               COALESCE(post.quotations, game.quotations, '[]'::jsonb),
+               COALESCE(post.mentions, '[]'::jsonb), COALESCE(game.mentions, '[]'::jsonb),
+               post.retracted_at IS NOT NULL, NULL::bigint
+        FROM public_publication AS publication
+        LEFT JOIN discussion_post AS post ON post.topic_id = publication.surface_id AND post.source_seq = publication.source_seq
+        LEFT JOIN thread_view AS game ON game.game_id = publication.surface_id AND game.source_seq = publication.source_seq AND game.channel_id = 'main'
+        WHERE publication.surface_id = $1 AND publication.source_seq = $2
+        ORDER BY revision
+        "#,
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(ModerationContentRevisionRow {
+                content: trust_safety::ModerationContentSnapshot {
+                    revision: row.get("revision"),
+                    body: row.get("body"),
+                    quotations: quotations_from_json(row.get("quotations"), "ModerationEvidence")?,
+                    profile_mentions: mentions_from_json(
+                        row.get("profile_mentions"),
+                        "ModerationEvidence",
+                    )?,
+                    slot_mentions: slot_mentions_from_json(
+                        row.get("slot_mentions"),
+                        "ModerationEvidence",
+                    )?,
+                    retracted: row.get("retracted"),
+                },
+                superseded_at: row.get("superseded_at"),
+            })
+        })
+        .collect()
 }
 
 pub async fn moderation_case_state(
@@ -9040,6 +9162,8 @@ fn moderation_case_row(row: sqlx::postgres::PgRow) -> ModerationCaseRow {
         source_seq: row.get("source_seq"),
         target_href: row.get("target_href"),
         target_body: row.get("target_body"),
+        target_revision: row.get("target_revision"),
+        target_retracted: row.get("target_retracted"),
         status: row.get("status"),
         report_count: row.get("report_count"),
         opened_at: row.get("opened_at"),

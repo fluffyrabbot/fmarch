@@ -8,8 +8,8 @@ use principal::PrincipalId;
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 use trust_safety::{
-    self, ModerationCaseState, ModerationCaseStatus, ModerationCommand, ModerationEvent,
-    ModerationTarget, ReportReasonFamily,
+    self, ModerationCaseState, ModerationCaseStatus, ModerationCommand, ModerationContentSnapshot,
+    ModerationEvent, ModerationTarget, ReportReasonFamily,
 };
 use uuid::Uuid;
 
@@ -30,14 +30,17 @@ pub async fn submit_moderation_report(
     occurred_at: i64,
 ) -> Result<ModerationReportReceiptRow, ProjectionError> {
     let mut tx = pool.begin().await?;
+    // The source aggregate owns content revisions. Take its normal stream lock
+    // before the target/case locks so report capture, edits, retraction, curation,
+    // and source rebuilds have one order. No publication row lock is held while
+    // waiting for a case writer, which avoids a case/publication lock inversion.
+    eventstore::lock_stream_in_tx(&mut tx, target.public.surface_id).await?;
     let lock_key = format!("{}:{}", target.public.surface_id, target.public.source_seq);
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(lock_key)
         .execute(&mut *tx)
         .await?;
-    if !moderation_target_is_public(&mut tx, &target).await? {
-        return Err(ProjectionError::ModerationTargetNotPublic);
-    }
+    let evidence = capture_moderation_evidence(&mut tx, &target).await?;
     let recent: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM moderation_report WHERE reporter_principal_id = $1 AND submitted_at >= $2",
     )
@@ -72,12 +75,14 @@ pub async fn submit_moderation_report(
             report_id,
             reason,
             details,
+            evidence,
         },
         None => ModerationCommand::OpenReport {
             target,
             report_id,
             reason,
             details,
+            evidence,
         },
     };
     let events = trust_safety::decide_moderation(existing.as_ref(), command)
@@ -125,7 +130,11 @@ fn moderation_event_inputs(
         .map(|event| {
             EventInput::new(
                 event.kind(),
-                1,
+                if matches!(event, ModerationEvent::ReportSubmitted { .. }) {
+                    2
+                } else {
+                    1
+                },
                 event.payload(),
                 eventstore::ActorId::Principal(actor_principal_id),
                 occurred_at,
@@ -157,26 +166,49 @@ async fn moderation_case_state_for_target(
     .transpose()
 }
 
-async fn moderation_target_is_public(
+/// Read only admitted public content. Holding the source stream lock makes the
+/// publication and source-specific row one committed revision. Case OCC rejects
+/// a report if a concurrent moderator changed the target after this read.
+async fn capture_moderation_evidence(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     target: &ModerationTarget,
-) -> Result<bool, ProjectionError> {
-    let visible: bool = sqlx::query_scalar(
+) -> Result<ModerationContentSnapshot, ProjectionError> {
+    let row = sqlx::query(
         r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM public_publication AS publication
-            JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
-            WHERE publication.surface_id = $1
-              AND publication.source_seq = $2
-              AND publication.visible
-              AND surface.visible
-        )
+        SELECT publication.body,
+               COALESCE(post.revision, 0) AS revision,
+               COALESCE(post.quotations, game.quotations, '[]'::jsonb) AS quotations,
+               COALESCE(post.mentions, '[]'::jsonb) AS profile_mentions,
+               COALESCE(game.mentions, '[]'::jsonb) AS slot_mentions,
+               post.retracted_at IS NOT NULL AS retracted
+        FROM public_publication AS publication
+        JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
+        LEFT JOIN discussion_post AS post
+          ON post.topic_id = publication.surface_id AND post.source_seq = publication.source_seq
+        LEFT JOIN thread_view AS game
+          ON game.game_id = publication.surface_id AND game.source_seq = publication.source_seq
+         AND game.channel_id = 'main'
+        WHERE publication.surface_id = $1 AND publication.source_seq = $2
+          AND publication.visible AND surface.visible
         "#,
     )
     .bind(target.public.surface_id)
     .bind(target.public.source_seq)
-    .fetch_one(&mut **tx)
-    .await?;
-    Ok(visible)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ProjectionError::ModerationTargetNotPublic)?;
+    Ok(ModerationContentSnapshot {
+        revision: row.get("revision"),
+        body: row.get("body"),
+        quotations: crate::quotations_from_json(row.get("quotations"), "ModerationEvidence")?,
+        profile_mentions: crate::mentions_from_json(
+            row.get("profile_mentions"),
+            "ModerationEvidence",
+        )?,
+        slot_mentions: crate::slot_mentions_from_json(
+            row.get("slot_mentions"),
+            "ModerationEvidence",
+        )?,
+        retracted: row.get("retracted"),
+    })
 }

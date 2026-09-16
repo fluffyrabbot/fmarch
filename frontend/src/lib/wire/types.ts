@@ -321,13 +321,23 @@ export type MemberMutePage = { members: Array<MemberMuteState>, next_cursor: str
 
 export type ModerationReportReceipt = { report_id: string, status: string, submitted_at: bigint, };
 
-export type ModerationCase = { case_id: string, surface_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };
+export type ModerationCase = { case_id: string, surface_id: string, source_seq: bigint, target_href: string, target_body: string, target_revision: bigint, target_retracted: boolean, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };
 
-export type ModerationReport = { report_id: string, reporter_principal_id: PrincipalId, reason_family: string, details: string, active: boolean, submitted_at: bigint, };
+export type ModerationProfileMention = { profile_id: string, offset: bigint, len: bigint, };
+
+export type ModerationSlotMention = { slot_id: string, offset: bigint, len: bigint, };
+
+export type ModerationContentSnapshot = { revision: bigint, body: string, quotations: Array<Quotation>, profile_mentions: Array<ModerationProfileMention>, slot_mentions: Array<ModerationSlotMention>, retracted: boolean, };
+
+export type ModerationEvidence = { "status": "captured", content: ModerationContentSnapshot, } | { "status": "not_captured" };
+
+export type ModerationContentRevision = { content: ModerationContentSnapshot, superseded_at: bigint | null, };
+
+export type ModerationReport = { report_id: string, reporter_principal_id: PrincipalId, reason_family: string, details: string, active: boolean, submitted_at: bigint, evidence: ModerationEvidence, };
 
 export type ModerationHistory = { source_seq: bigint, event_kind: string, actor_principal_id: PrincipalId, reason: string | null, occurred_at: bigint, };
 
-export type ModerationCaseDetail = { case: ModerationCase, reports: Array<ModerationReport>, history: Array<ModerationHistory>, };
+export type ModerationCaseDetail = { case: ModerationCase, reports: Array<ModerationReport>, history: Array<ModerationHistory>, content_history: Array<ModerationContentRevision>, };
 
 export type ModerationCasePage = { cases: Array<ModerationCase>, next_cursor: string | null, };
 
