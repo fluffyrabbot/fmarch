@@ -20,6 +20,7 @@ test("community inbox loads the authenticated update page and private mute contr
         items: [{
           surface_id: "00000000-0000-0000-0000-000000000111",
           source_seq: 80,
+          delivery_seq: 80,
           title: "Watched topic",
           href: "/discussions/general/t/00000000-0000-0000-0000-000000000111#post-80",
           reason: "watch",
@@ -29,6 +30,7 @@ test("community inbox loads the authenticated update page and private mute contr
         }, {
           surface_id: "00000000-0000-0000-0000-000000000112",
           source_seq: 79,
+          delivery_seq: 89,
           title: "Topic that named you",
           href: "/discussions/general/t/00000000-0000-0000-0000-000000000112#post-79",
           reason: "mention",
@@ -52,7 +54,7 @@ test("community inbox loads the authenticated update page and private mute contr
     data.inbox.items.map((item) => [item.reason, item.reasonLabel]),
     [["watch", "Public update"], ["mention", "Mention"]],
   );
-  assert.equal(data.inbox.readThroughSeq, 80);
+  assert.equal(data.inbox.readThroughSeq, 89);
   assert.equal(data.inbox.nextCursor, "79");
   assert.equal(data.mutedMembers[0].handle, "quiet-member");
 });
@@ -78,7 +80,7 @@ test("mark read advances the typed target cursor", async () => {
         method: "POST",
         body: new URLSearchParams({
           surface_id: "00000000-0000-0000-0000-000000000222",
-          source_seq: "81",
+          delivery_seq: "91",
         }),
       }),
       fetch: async (url, options) => {
@@ -91,7 +93,7 @@ test("mark read advances the typed target cursor", async () => {
   assert.deepEqual(mutation, {
     url: "/subscriptions/00000000-0000-0000-0000-000000000222/read",
     method: "POST",
-    body: { read_through_seq: 81 },
+    body: { read_through_seq: 91 },
   });
 });
 

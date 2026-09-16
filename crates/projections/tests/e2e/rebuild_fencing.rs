@@ -337,10 +337,34 @@ impl CommunityFixture {
                 .unwrap();
             }
             CommunityFamily::InboxCursor => {
+                fixture.surface = topic_fixture(pool).await;
+                projections::subscribe_to_public_target(
+                    pool,
+                    WatchTarget {
+                        surface_id: fixture.surface,
+                    },
+                    principal,
+                    8,
+                )
+                .await
+                .unwrap();
+                let delivered = append_discussion_and_project(
+                    pool,
+                    fixture.surface,
+                    &[post("first cursor delivery"), post("next cursor delivery")],
+                )
+                .await
+                .unwrap();
                 fixture.stream = attention::inbox_cursor_stream_id(principal);
-                projections::advance_member_inbox_read_cursor(pool, principal, 4, 10)
-                    .await
-                    .unwrap();
+                fixture.read_through = delivered[1].seq;
+                projections::advance_member_inbox_read_cursor(
+                    pool,
+                    principal,
+                    delivered[0].seq,
+                    10,
+                )
+                .await
+                .unwrap();
             }
         }
         fixture

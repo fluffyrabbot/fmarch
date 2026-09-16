@@ -42,7 +42,7 @@
             {#if item.unread && item.subscribed}
               <form method="POST" action="?/markRead">
                 <input type="hidden" name="surface_id" value={item.surface_id} />
-                <input type="hidden" name="source_seq" value={item.source_seq} />
+                <input type="hidden" name="delivery_seq" value={item.delivery_seq} />
                 <button type="submit" class="fm-touch-button" data-testid={`community-inbox-read-${item.source_seq}`}>Mark read</button>
               </form>
             {/if}

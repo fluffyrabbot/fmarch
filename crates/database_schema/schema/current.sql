@@ -1795,6 +1795,8 @@ CREATE TABLE public.member_inbox_item (
     source_seq bigint NOT NULL,
     reason text NOT NULL,
     occurred_at bigint NOT NULL,
+    delivery_seq bigint NOT NULL,
+    CONSTRAINT member_inbox_item_delivery_seq_check CHECK (((delivery_seq >= source_seq) AND (source_seq > 0))),
     CONSTRAINT member_inbox_item_reason_check CHECK ((reason = ANY (ARRAY['watch'::text, 'mention'::text])))
 );
 
@@ -4107,7 +4109,7 @@ CREATE INDEX media_upload_ledger_principal_idx ON public.media_upload_ledger USI
 -- Name: member_inbox_item_page_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX member_inbox_item_page_idx ON public.member_inbox_item USING btree (principal_id, source_seq DESC);
+CREATE INDEX member_inbox_item_page_idx ON public.member_inbox_item USING btree (principal_id, delivery_seq DESC);
 
 
 --

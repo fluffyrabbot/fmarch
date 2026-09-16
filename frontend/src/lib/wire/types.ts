@@ -301,13 +301,13 @@ export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | nu
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
-export type SubscriptionTargetState = { surface_id: string, subscribed: boolean, read_through_seq: bigint, latest_source_seq: bigint, unread_count: bigint, };
+export type SubscriptionTargetState = { surface_id: string, subscribed: boolean, read_through_seq: bigint, latest_delivery_seq: bigint, unread_count: bigint, };
 
 export type AdvanceSubscriptionReadRequest = { read_through_seq: bigint, };
 
 export type AdvanceInboxReadRequest = { read_through_seq: bigint, };
 
-export type PublicInboxItem = { surface_id: string, source_seq: bigint, title: string, href: string,
+export type PublicInboxItem = { surface_id: string, source_seq: bigint, delivery_seq: bigint, title: string, href: string,
 /**
  * `watch` | `mention`. One list, one badge, rows labelled by reason.
  */

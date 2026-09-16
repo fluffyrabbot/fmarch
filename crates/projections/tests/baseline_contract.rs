@@ -804,6 +804,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "member_inbox_cursor_pkey:p",
     "member_inbox_cursor_read_through_seq_check:c",
     "member_inbox_item_pkey:p",
+    "member_inbox_item_delivery_seq_check:c",
     "member_inbox_item_reason_check:c",
     "member_lifecycle_event_kind_check:c",
     "member_lifecycle_event_pkey:p",
