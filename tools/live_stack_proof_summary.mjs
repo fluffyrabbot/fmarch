@@ -9,6 +9,8 @@ import {
   setupCommandEvidenceKeys,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
+import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
+
 export const LIVE_STACK_PROOF_SUMMARY_VERSION = 1;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,8 +126,8 @@ export function buildLiveStackProofSummary(
         rolePmReplacement?.incoming?.principalId ?? null,
       incomingSubmitState:
         rolePmReplacement?.incoming?.submitOutcome?.state ?? null,
-      initialLiveDeltaKind:
-        rolePmReplacement?.incoming?.initialLiveDelta?.delta?.kind ?? null,
+      initialRecoveryStatus:
+        rolePmReplacement?.incoming?.initialRecovery?.status ?? null,
       commandLiveDeltaKind:
         rolePmReplacement?.incoming?.commandLiveDelta?.delta?.kind ?? null,
       reloadedPostCount:
@@ -157,8 +159,8 @@ export function buildLiveStackProofSummary(
         outgoingLiveDeltaKind:
           room.outgoing?.commandLiveDelta?.delta?.kind ?? null,
         incomingSubmitState: room.incoming?.submitOutcome?.state ?? null,
-        incomingInitialLiveDeltaKind:
-          room.incoming?.initialLiveDelta?.delta?.kind ?? null,
+        incomingInitialRecoveryStatus:
+          room.incoming?.initialRecovery?.status ?? null,
         incomingCommandLiveDeltaKind:
           room.incoming?.commandLiveDelta?.delta?.kind ?? null,
         reloadedPostCount: room.incoming?.reloadedPostBodies?.length ?? 0,
@@ -177,8 +179,8 @@ export function buildLiveStackProofSummary(
       outgoingLiveDeltaKind:
         deadChat?.outgoing?.commandLiveDelta?.delta?.kind ?? null,
       incomingSubmitState: deadChat?.incoming?.submitOutcome?.state ?? null,
-      incomingInitialLiveDeltaKind:
-        deadChat?.incoming?.initialLiveDelta?.delta?.kind ?? null,
+      incomingInitialRecoveryStatus:
+        deadChat?.incoming?.initialRecovery?.status ?? null,
       incomingCommandLiveDeltaKind:
         deadChat?.incoming?.commandLiveDelta?.delta?.kind ?? null,
       reloadedPostCount: deadChat?.incoming?.reloadedPostBodies?.length ?? 0,
@@ -194,7 +196,7 @@ export function buildLiveStackProofSummary(
       channelId: spectator?.channelId ?? null,
       derivedCapability: spectator?.derivedCapability ?? null,
       preGrant: `${spectator?.preGrant?.routeStatus ?? ""}/${spectator?.preGrant?.threadStatus ?? ""}`,
-      initialLiveDeltaKind: spectator?.initialLiveDelta?.delta?.kind ?? null,
+      initialRecoveryStatus: spectator?.initialRecovery?.status ?? null,
       liveDeltaKind: spectator?.liveDelta?.delta?.kind ?? null,
       reloadedPostCount: spectator?.reloadedPostBodies?.length ?? 0,
       mediaBodyBytes: spectator?.initialMediaBodyBytes ?? 0,
@@ -328,8 +330,7 @@ export function assertLiveStackProofSummary(summary) {
   }
   if (
     summary.rolePmReplacementLifecycle?.channelId !== "private:role_pm:slot-7" ||
-    summary.rolePmReplacementLifecycle?.initialLiveDeltaKind !==
-      "ThreadPostsChanged" ||
+    summary.rolePmReplacementLifecycle?.initialRecoveryStatus !== "passed" ||
     summary.rolePmReplacementLifecycle?.commandLiveDeltaKind !==
       "ThreadPostsChanged" ||
     summary.rolePmReplacementLifecycle?.outgoingMediaBodyBytes !== 0 ||
@@ -369,7 +370,7 @@ export function assertLiveStackProofSummary(summary) {
     summary.spectatorRoomLifecycle?.channelId !== "spectator" ||
     summary.spectatorRoomLifecycle?.derivedCapability !== "SpectatorOf(game)" ||
     summary.spectatorRoomLifecycle?.preGrant !== "403/403" ||
-    summary.spectatorRoomLifecycle?.initialLiveDeltaKind !== "ThreadPostsChanged" ||
+    summary.spectatorRoomLifecycle?.initialRecoveryStatus !== "passed" ||
     summary.spectatorRoomLifecycle?.liveDeltaKind !== "ThreadPostsChanged" ||
     summary.spectatorRoomLifecycle?.encryptedStorage !== "2|0|2|0" ||
     summary.spectatorRoomLifecycle?.appendReject !== "NotAuthorized" ||
@@ -452,8 +453,8 @@ export function markdownLiveStackProofSummary(summary) {
     `| reconnect | ${summary.reconnectRecovery.status} | state=${summary.reconnectRecovery.state ?? ""}, post=${summary.reconnectRecovery.recoveredSnapshotContainsPost} |`,
     `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
     `| Mason and Neighbor rooms | ${summary.additionalRoomLifecycle.status} | covered=${summary.additionalRoomLifecycle.coveredKinds.join(",")}, remaining=${summary.additionalRoomLifecycle.remainingKinds.join(",")}, rooms=${summary.additionalRoomLifecycle.rooms.map((room) => `${room.kind}:${room.status}:${room.encryptedStorage}`).join("; ")} |`,
-    `| Dead chat | ${summary.deadChatLifecycle.status} | capability=${summary.deadChatLifecycle.derivedCapability ?? ""}, live=${summary.deadChatLifecycle.incomingInitialLiveDeltaKind ?? ""}/${summary.deadChatLifecycle.incomingCommandLiveDeltaKind ?? ""}, encrypted=${summary.deadChatLifecycle.encryptedStorage ?? ""}, stale=${summary.deadChatLifecycle.staleOutgoing}, living=${summary.deadChatLifecycle.living}, restored=${summary.deadChatLifecycle.restoredAlive} |`,
-    `| Spectator room | ${summary.spectatorRoomLifecycle.status} | capability=${summary.spectatorRoomLifecycle.derivedCapability ?? ""}, preGrant=${summary.spectatorRoomLifecycle.preGrant}, live=${summary.spectatorRoomLifecycle.initialLiveDeltaKind ?? ""}/${summary.spectatorRoomLifecycle.liveDeltaKind ?? ""}, encrypted=${summary.spectatorRoomLifecycle.encryptedStorage ?? ""}, append=${summary.spectatorRoomLifecycle.appendReject ?? ""}, revoked=${summary.spectatorRoomLifecycle.revoked} |`,
+    `| Dead chat | ${summary.deadChatLifecycle.status} | capability=${summary.deadChatLifecycle.derivedCapability ?? ""}, recovery=${summary.deadChatLifecycle.incomingInitialRecoveryStatus ?? ""}, live=${summary.deadChatLifecycle.incomingCommandLiveDeltaKind ?? ""}, encrypted=${summary.deadChatLifecycle.encryptedStorage ?? ""}, stale=${summary.deadChatLifecycle.staleOutgoing}, living=${summary.deadChatLifecycle.living}, restored=${summary.deadChatLifecycle.restoredAlive} |`,
+    `| Spectator room | ${summary.spectatorRoomLifecycle.status} | capability=${summary.spectatorRoomLifecycle.derivedCapability ?? ""}, preGrant=${summary.spectatorRoomLifecycle.preGrant}, recovery=${summary.spectatorRoomLifecycle.initialRecoveryStatus ?? ""}, live=${summary.spectatorRoomLifecycle.liveDeltaKind ?? ""}, encrypted=${summary.spectatorRoomLifecycle.encryptedStorage ?? ""}, append=${summary.spectatorRoomLifecycle.appendReject ?? ""}, revoked=${summary.spectatorRoomLifecycle.revoked} |`,
     `| host ops | ${summary.hostOpsWorkflow.status} | prompt=${summary.hostOpsWorkflow.promptState ?? ""}, lifecycle=${summary.hostOpsWorkflow.slotLifecycleState ?? ""}, invite=${summary.hostOpsWorkflow.playerInviteStatus ?? ""}, staleInvite=${summary.hostOpsWorkflow.stalePlayerInviteState ?? ""}/${summary.hostOpsWorkflow.stalePlayerInviteRetryState ?? ""} |`,
   );
   return `${lines.join("\n")}\n`;
@@ -473,7 +474,7 @@ function rolePmReplacementStatus(evidence) {
   return evidence?.status === "passed" &&
     evidence?.channelId === "private:role_pm:slot-7" &&
     evidence?.incoming?.submitOutcome?.state === "ack" &&
-    evidence?.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(evidence?.incoming?.initialRecovery, evidence?.channelId) &&
     evidence?.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     evidence?.incoming?.reloadedPostBodies?.length >= 2 &&
     evidence?.incoming?.mediaBodyBytes > 0 &&
@@ -500,7 +501,7 @@ function additionalRoomsStatus(evidence) {
         room.outgoing?.submitOutcome?.state === "ack" &&
         room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
         room.incoming?.submitOutcome?.state === "ack" &&
-        room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+        hasRecoveredPlayerHistory(room.incoming?.initialRecovery, room.channelId) &&
         room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
         room.incoming?.reloadedPostBodies?.length === 2 &&
         room.incoming?.mediaBodyBytes > 0 &&
@@ -528,7 +529,7 @@ function deadChatStatus(evidence) {
     evidence?.outgoing?.submitOutcome?.state === "ack" &&
     evidence?.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     evidence?.incoming?.submitOutcome?.state === "ack" &&
-    evidence?.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(evidence?.incoming?.initialRecovery, evidence?.channelId) &&
     evidence?.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     evidence?.incoming?.reloadedPostBodies?.length === 2 &&
     evidence?.incoming?.mediaBodyBytes > 0 &&
@@ -560,7 +561,7 @@ function spectatorRoomStatus(evidence) {
     evidence?.preGrant?.routeStatus === 403 &&
     evidence?.preGrant?.threadStatus === 403 &&
     evidence?.initialMediaBodyBytes > 0 &&
-    evidence?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(evidence?.initialRecovery, evidence?.channelId) &&
     evidence?.liveDelta?.delta?.kind === "ThreadPostsChanged" &&
     evidence?.reloadedPostBodies?.length === 2 &&
     evidence?.appendReject?.error === "NotAuthorized" &&

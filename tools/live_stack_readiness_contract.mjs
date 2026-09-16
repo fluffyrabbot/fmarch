@@ -1,6 +1,7 @@
 import {
   hasCompleteSetupCommandEvidence,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -121,8 +122,10 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.rolePmReplacement?.status === "passed" &&
       evidence.browser.moderator.rolePmReplacement?.incoming?.submitOutcome?.state ===
         "ack" &&
-      evidence.browser.moderator.rolePmReplacement?.incoming?.initialLiveDelta?.delta
-        ?.kind === "ThreadPostsChanged" &&
+      hasRecoveredPlayerHistory(
+        evidence.browser.moderator.rolePmReplacement?.incoming?.initialRecovery,
+        "private:role_pm:slot-7",
+      ) &&
       evidence.browser.moderator.rolePmReplacement?.incoming?.commandLiveDelta?.delta
         ?.kind === "ThreadPostsChanged" &&
       evidence.browser.moderator.rolePmReplacement?.incoming?.reloadedPostBodies?.includes(
@@ -228,7 +231,7 @@ function additionalRoomLifecyclePassed(room, kind) {
     room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     room.outgoing?.mediaBodyBytes > 0 &&
     room.incoming?.submitOutcome?.state === "ack" &&
-    room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(room.incoming?.initialRecovery, room.channelId) &&
     room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     room.incoming?.reloadedPostBodies?.length === 2 &&
     room.incoming?.mediaBodyBytes > 0 &&
@@ -260,7 +263,7 @@ function deadChatLifecyclePassed(room) {
     room.outgoing?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     room.outgoing?.mediaBodyBytes > 0 &&
     room.incoming?.submitOutcome?.state === "ack" &&
-    room.incoming?.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(room.incoming?.initialRecovery, room.channelId) &&
     room.incoming?.commandLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
     room.incoming?.reloadedPostBodies?.length === 2 &&
     room.incoming?.mediaBodyBytes > 0 &&
@@ -295,7 +298,7 @@ function spectatorRoomLifecyclePassed(room) {
     room.historyNotice?.streamSeqs?.length > 0 &&
     room.liveNotice?.streamSeqs?.length > 0 &&
     room.initialMediaBodyBytes > 0 &&
-    room.initialLiveDelta?.delta?.kind === "ThreadPostsChanged" &&
+    hasRecoveredPlayerHistory(room.initialRecovery, room.channelId) &&
     room.liveDelta?.delta?.kind === "ThreadPostsChanged" &&
     room.reloadedPostBodies?.length === 2 &&
     room.appendReject?.error === "NotAuthorized" &&
