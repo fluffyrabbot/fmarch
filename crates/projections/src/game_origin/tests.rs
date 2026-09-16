@@ -27,7 +27,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
         social::ProfilePresentation::new(
             social::ProfileHandle::new(&handle).unwrap(),
             social::ProfileDisplayName::new("Origin Host").unwrap(),
-            social::ProfileBio::new("").unwrap(),
+            social::ProfileBio::new("Signup origin proof").unwrap(),
             social::ProfileVisibility::Public,
         ),
         1,
