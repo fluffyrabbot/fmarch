@@ -9,7 +9,7 @@ function fixture() {
   const stage = {
     revision: 2, retracted: true,
     api: { case: { case_id: "case", surface_id: "topic", source_seq: 2, target_revision: 2, target_retracted: true, target_body: expected.bodies[2] }, reports: [{ report_id: "report", reporter_principal_id: "member", evidence: { status: "captured", content: structuredClone(captured) } }], content_history: contentHistory },
-    rendered: { queue: "Current content · revision 2 · retracted by author\nReplacement two", currentHeading: "Revision 2 · retracted by author", currentBody: expected.bodies[2], reporter: "member", capturedHeading: "Content captured with report · revision 0", capturedBody: captured.body, capturedQuotations: ["Quoted original"], history: contentHistory.map(({ content }, index) => ({ heading: `Revision ${index} · ${index === 2 ? "current" : "superseded"}`, body: content.body, retracted: content.retracted, quotations: ["Quoted original"] })) },
+    rendered: { queueHeading: "Current content · revision 2 · retracted by author", queueBody: "Replacement two", currentHeading: "Revision 2 · retracted by author", currentBody: expected.bodies[2], reporter: "member", capturedHeading: "Content captured with report · revision 0", capturedBody: captured.body, capturedQuotations: ["Quoted original"], history: contentHistory.map(({ content }, index) => ({ heading: `Revision ${index} · ${index === 2 ? "current" : "superseded"}`, body: content.body, retracted: content.retracted, quotations: ["Quoted original"] })) },
   };
   const access = { memberCaseStatus: 403, memberQueueStatus: 403, memberSelectedPageStatus: 403, ownReceipt: { report_id: "report", status: "received", submitted_at: 42 }, publicPost: { source_seq: 2, retracted: true, body: "", quotations: [], mentions: [] }, publicText: "Retracted by author", deniedPageText: "403 Forbidden" };
   return { expected, stage, access };
@@ -25,6 +25,9 @@ for (const [name, mutate] of [
   ["report replaced by current content", stage => { stage.api.reports[0].evidence.content.body = "Replacement two"; }],
   ["captured quotation dropped", stage => { stage.rendered.capturedQuotations = []; }],
   ["stale current body", stage => { stage.rendered.currentBody = "Reported original"; }],
+  ["stale queue revision", stage => { stage.rendered.queueHeading = "Current content · revision 0"; }],
+  ["rendered casing substituted for semantic copy", stage => { stage.rendered.queueHeading = stage.rendered.queueHeading.toUpperCase(); }],
+  ["queue body containing extra stale content", stage => { stage.rendered.queueBody += " Reported original"; }],
   ["collapsed revision history", stage => { stage.api.content_history.splice(1, 1); }],
   ["superseded content marked current", stage => { stage.rendered.history[0].heading = "Revision 0 · current"; }],
   ["lost retraction marker", stage => { stage.rendered.currentHeading = "Revision 2"; }],

@@ -226,6 +226,7 @@ async function proveRevisionEvidence({ member, moderator, api, base, seeded }) {
       const detail = reviewer.getByTestId("moderation-case-detail");
       await detail.waitFor({ state: "visible" });
       const current = reviewer.getByTestId("moderation-current-content");
+      const queueItem = reviewer.getByTestId(`moderation-case-${caseId}`);
       const report = reviewer.getByTestId(`moderation-report-${reportId}`);
       const evidence = report.getByTestId("moderation-report-evidence");
       const history = reviewer.getByTestId("moderation-content-history").locator("li");
@@ -238,7 +239,10 @@ async function proveRevisionEvidence({ member, moderator, api, base, seeded }) {
         revision, retracted,
         api: await json(caseUrl, get(seeded.moderatorToken)),
         rendered: {
-          queue: await reviewer.getByTestId(`moderation-case-${caseId}`).innerText(),
+          // The queue eyebrow is uppercased by CSS. Check its exact semantic
+          // heading separately from the body, scoped to this visible case.
+          queueHeading: await visibleTextContent(queueItem.locator(":scope > p.fm-eyebrow").nth(1)),
+          queueBody: await visibleTextContent(queueItem.locator(":scope > p:not(.fm-eyebrow)")),
           currentHeading: await current.evaluate(element => element.previousElementSibling.textContent),
           currentBody: await current.innerText(),
           reporter: await report.innerText(),
@@ -283,6 +287,13 @@ async function proveRevisionEvidence({ member, moderator, api, base, seeded }) {
     await reporter.close();
     await reviewer.close();
   }
+}
+
+async function visibleTextContent(locator) {
+  await locator.waitFor({ state: "visible" });
+  const text = await locator.textContent();
+  assert.notEqual(text, null, "visible moderation content must have text");
+  return text.trim();
 }
 
 function get(token) {

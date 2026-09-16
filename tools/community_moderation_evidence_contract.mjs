@@ -18,8 +18,8 @@ export function assertModerationRevisionStage(stage, expected) {
   assert.deepEqual(report?.evidence, { status: "captured", content: captured }, "reported evidence changed with the source post");
   assert.equal(rendered.currentBody, bodies[revision]);
   assert.equal(rendered.currentHeading.trim(), `Revision ${revision}${retracted ? " · retracted by author" : ""}`);
-  assert.ok(rendered.queue.includes(`Current content · revision ${revision}${retracted ? " · retracted by author" : ""}`));
-  assert.ok(rendered.queue.includes(bodies[revision]));
+  assert.equal(rendered.queueHeading, `Current content · revision ${revision}${retracted ? " · retracted by author" : ""}`);
+  assert.equal(rendered.queueBody, bodies[revision]);
   assert.ok(rendered.reporter.includes(reporterPrincipalId));
   assert.equal(rendered.capturedHeading, `Content captured with report · revision ${captured.revision}`);
   assert.equal(rendered.capturedBody, captured.body);
