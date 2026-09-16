@@ -124,6 +124,27 @@ test("readiness accepts the runner-owned disposable database lifecycle", () => {
   );
 });
 
+test("every private history check requires scoped Hello recovery and an exact post identity", () => {
+  const cases = [
+    ["role-pm-replacement-lifecycle", (e) => e.browser.moderator.rolePmReplacement.incoming],
+    ["mason-neighbor-room-lifecycle", (e) => e.browser.additionalRooms.rooms[0].incoming],
+    ["dead-chat-lifecycle", (e) => e.browser.deadChat.incoming],
+    ["spectator-room-lifecycle", (e) => e.browser.spectator],
+  ];
+  for (const [check, select] of cases) {
+    for (const corrupt of [
+      (r) => { delete r.hello; },
+      (r) => { r.hello.body.scope.channel = "other-channel"; },
+      (r) => { r.hello.body.scope.game = "other-game"; },
+      (r) => { r.post.seq = null; },
+    ]) {
+      const evidence = liveStackReadinessFixture();
+      corrupt(select(evidence).initialRecovery);
+      assert.equal(checkStatus(buildLiveStackReadiness(evidence), check), "failed", check);
+    }
+  }
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -297,7 +318,7 @@ function liveStackReadinessFixture() {
           status: "passed",
           incoming: {
             submitOutcome: { state: "ack" },
-            initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+            initialRecovery: recoveryFixture("private:role_pm:slot-7"),
             commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
             reloadedPostBodies: [
               "Role PM history before replacement",
@@ -333,7 +354,7 @@ function additionalRoomFixture(kind, channelId) {
     },
     incoming: {
       submitOutcome: { state: "ack" },
-      initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      initialRecovery: recoveryFixture(channelId),
       commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
       reloadedPostBodies: ["history", "incoming"],
       mediaBodyBytes: 1226,
@@ -377,7 +398,7 @@ function deadChatFixture() {
     },
     incoming: {
       submitOutcome: { state: "ack" },
-      initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+      initialRecovery: recoveryFixture("dead"),
       commandLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
       reloadedPostBodies: ["history", "incoming"],
       mediaBodyBytes: 1226,
@@ -418,7 +439,7 @@ function spectatorRoomFixture() {
     historyNotice: { streamSeqs: [2] },
     liveNotice: { streamSeqs: [3] },
     initialMediaBodyBytes: 1226,
-    initialLiveDelta: { delta: { kind: "ThreadPostsChanged" } },
+    initialRecovery: recoveryFixture("spectator"),
     liveDelta: { delta: { kind: "ThreadPostsChanged" } },
     reloadedPostBodies: ["history", "live"],
     appendReject: { error: "NotAuthorized" },
@@ -441,5 +462,18 @@ function spectatorRoomFixture() {
       appendReject: { error: "NotAuthorized" },
       accountSessionActive: true,
     },
+  };
+}
+
+function recoveryFixture(channelId) {
+  return {
+    status: "passed",
+    game: "game-a",
+    channelId,
+    eventCount: 1,
+    hello: { kind: "hello", state: "recovered", body: {
+      protocol_v: 3, scope: { game: "game-a", channel: channelId },
+    } },
+    post: { seq: 7, body: "Historical post" },
   };
 }
