@@ -1630,6 +1630,27 @@ test('auth-source signer changes re-arm signed capacity and identity proofs', ()
   }
 });
 
+test('game-index DTO and board changes select the live game-index browser proof', () => {
+  for (const source of [
+    'crates/wire/src/lib.rs',
+    'frontend/src/lib/server/game-index-response.mjs',
+    'frontend/src/lib/server/game-index-response.test.mjs',
+    'frontend/src/routes/+page.server.js',
+    'frontend/src/routes/+page.svelte',
+    'frontend/src/routes/board-route.test.mjs',
+    'frontend/src/lib/app/app-shell-model.mjs',
+    'frontend/src/lib/app/app-shell-model.test.mjs',
+  ]) {
+    const selection = selectLanes({ changed: [source], manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
+    assert.ok(selection.behavioralAreas.includes('frontend:game-index'), `${source} must arm the board owner`);
+    for (const lane of ['test:frontend-contract', 'test:dev-test-game-game-index', 'test:frontend-role-smoke']) {
+      assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
+    }
+  }
+  const unrelated = selectLanes({ changed: ['frontend/src/lib/server/auth-source.mjs'], manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
+  assert.ok(!unrelated.laneIds.includes('test:dev-test-game-game-index'), 'identity server files keep their own proof scope');
+});
+
 test('also_triggers re-arms cross-boundary areas: wire thaws frontend:game and tools', () => {
   const selection = selectLanes({
     changed: ['crates/wire/src/lib.rs'],
