@@ -8,6 +8,17 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+/// A delivery addresses an immutable post but is ordered by the event that
+/// first supplied its reason. An edit can address an old post for the first
+/// time. Repeated mention edits retain the original delivery coordinate;
+/// distinct watch and mention reasons collapse to the newest delivery in reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InboxDelivery {
+    pub source_seq: i64,
+    pub delivery_seq: i64,
+    pub occurred_at: i64,
+}
+
 pub const SUBSCRIPTION_ENABLED: &str = "PublicWatchEnabled";
 pub const SUBSCRIPTION_DISABLED: &str = "PublicWatchDisabled";
 pub const SUBSCRIPTION_READ_ADVANCED: &str = "PublicWatchReadAdvanced";
@@ -138,6 +149,8 @@ pub fn decide_watch(
     }
 }
 
+/// All attention read cursors contain delivery event positions, never post identities.
+///
 /// Durable per-principal inbox cursor for the reason-derived member inbox.
 ///
 /// Watch cursors are per-target; a mention can arrive on a surface the member

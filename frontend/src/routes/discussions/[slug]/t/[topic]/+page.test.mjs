@@ -54,7 +54,7 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
           surface_id: topic,
           subscribed: true,
           read_through_seq: 40,
-          latest_source_seq: 80,
+          latest_delivery_seq: 80,
           unread_count: 1,
         });
       }

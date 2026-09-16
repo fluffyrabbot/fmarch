@@ -3386,7 +3386,7 @@ pub struct SubscriptionTargetState {
     pub surface_id: Uuid,
     pub subscribed: bool,
     pub read_through_seq: i64,
-    pub latest_source_seq: i64,
+    pub latest_delivery_seq: i64,
     pub unread_count: i64,
 }
 
@@ -3396,7 +3396,7 @@ impl From<projections::SubscriptionTargetStateRow> for SubscriptionTargetState {
             surface_id: row.surface_id,
             subscribed: row.subscribed,
             read_through_seq: row.read_through_seq,
-            latest_source_seq: row.latest_source_seq,
+            latest_delivery_seq: row.latest_delivery_seq,
             unread_count: row.unread_count,
         }
     }
@@ -3419,6 +3419,7 @@ pub struct AdvanceInboxReadRequest {
 pub struct PublicInboxItem {
     pub surface_id: Uuid,
     pub source_seq: i64,
+    pub delivery_seq: i64,
     pub title: String,
     pub href: String,
     /// `watch` | `mention`. One list, one badge, rows labelled by reason.
@@ -3433,6 +3434,7 @@ impl From<projections::PublicInboxItemRow> for PublicInboxItem {
         Self {
             surface_id: row.surface_id,
             source_seq: row.source_seq,
+            delivery_seq: row.delivery_seq,
             title: row.title,
             href: row.href,
             reason: row.reason,

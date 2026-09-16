@@ -39,7 +39,7 @@ export async function load({ cookies, locals, fetch, url }) {
       nextCursor: positiveSequence(page?.next_cursor),
       // "Mark all read" advances the principal cursor to the highest sequence
       // this page actually showed, never to a fabricated "now".
-      readThroughSeq: highestSourceSeq(page),
+      readThroughSeq: highestDeliverySeq(page),
     },
     mutedMembers: Array.isArray(mutePage?.members) ? mutePage.members : [],
   };
@@ -58,9 +58,9 @@ function inboxItems(page) {
   }));
 }
 
-function highestSourceSeq(page) {
+function highestDeliverySeq(page) {
   const sequences = (Array.isArray(page?.items) ? page.items : [])
-    .map((item) => Number(item?.source_seq))
+    .map((item) => Number(item?.delivery_seq))
     .filter((seq) => Number.isSafeInteger(seq) && seq > 0);
   return sequences.length === 0 ? null : Math.max(...sequences);
 }
@@ -86,8 +86,8 @@ export const actions = {
   markRead: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
     const surfaceId = text(form.get("surface_id"));
-    const sourceSeq = positiveSequence(form.get("source_seq"));
-    if (surfaceId === "" || sourceSeq === null) {
+    const deliverySeq = positiveSequence(form.get("delivery_seq"));
+    if (surfaceId === "" || deliverySeq === null) {
       return fail(400, { id: "inbox-read", state: "reject", message: "Invalid inbox update" });
     }
     const response = await mutation({
@@ -96,7 +96,7 @@ export const actions = {
       fetch,
       path: `/subscriptions/${encodeURIComponent(surfaceId)}/read`,
       method: "POST",
-      body: { read_through_seq: Number(sourceSeq) },
+      body: { read_through_seq: Number(deliverySeq) },
     });
     if (!response.ok) return mutationFailure(response, "Unable to mark this update read");
     throw redirect(303, "/inbox");

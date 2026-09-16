@@ -15602,7 +15602,7 @@ async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool
     let cleared = post_bearer_json(
         &app,
         "/inbox/read",
-        serde_json::json!({ "read_through_seq": inbox.items[0].source_seq }),
+        serde_json::json!({ "read_through_seq": inbox.items[0].delivery_seq }),
         &target_token,
     )
     .await;
@@ -15613,7 +15613,7 @@ async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool
     let repeat = post_bearer_json(
         &app,
         "/inbox/read",
-        serde_json::json!({ "read_through_seq": inbox.items[0].source_seq }),
+        serde_json::json!({ "read_through_seq": inbox.items[0].delivery_seq }),
         &target_token,
     )
     .await;

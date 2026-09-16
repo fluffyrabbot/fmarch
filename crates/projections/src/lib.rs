@@ -860,7 +860,7 @@ pub struct SubscriptionTargetStateRow {
     pub surface_id: Uuid,
     pub subscribed: bool,
     pub read_through_seq: i64,
-    pub latest_source_seq: i64,
+    pub latest_delivery_seq: i64,
     pub unread_count: i64,
 }
 
@@ -868,6 +868,8 @@ pub struct SubscriptionTargetStateRow {
 pub struct PublicInboxItemRow {
     pub surface_id: Uuid,
     pub source_seq: i64,
+    /// First-delivery event position of the newest reason; drives order and reads.
+    pub delivery_seq: i64,
     pub title: String,
     pub href: String,
     /// Why this row was delivered. One post can be both watched and mentioned;
@@ -3347,22 +3349,29 @@ async fn subscription_domain_state(
     }))
 }
 
-async fn public_subscription_target_latest_seq(
+async fn public_subscription_target_latest_delivery_seq(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     target: &WatchTarget,
+    principal_id: PrincipalId,
 ) -> Result<Option<i64>, ProjectionError> {
     let latest = sqlx::query_scalar(
         r#"
-        SELECT COALESCE(MAX(publication.source_seq), 0)::bigint
+        SELECT GREATEST(COALESCE(MAX(publication.source_seq), 0),
+                        COALESCE(MAX(item.delivery_seq), 0))::bigint
         FROM publication_surface AS surface
         LEFT JOIN public_publication AS publication
           ON publication.surface_id = surface.surface_id
          AND publication.visible
+        LEFT JOIN member_inbox_item AS item
+          ON item.surface_id = publication.surface_id
+         AND item.source_seq = publication.source_seq
+         AND item.principal_id = $2
         WHERE surface.surface_id = $1 AND surface.visible
         GROUP BY surface.surface_id
         "#,
     )
     .bind(target.surface_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await?;
     Ok(latest)
@@ -3567,9 +3576,9 @@ async fn fan_out_member_inbox_update(
     sqlx::query(
         r#"
         INSERT INTO member_inbox_item (
-            principal_id, surface_id, source_seq, reason, occurred_at
+            principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at
         )
-        SELECT subscription.principal_id, $1, $2, 'watch', $3
+        SELECT subscription.principal_id, $1, $2, $2, 'watch', $3
         FROM public_watch AS subscription
         JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
@@ -4030,10 +4039,10 @@ async fn backfill_subscription_inbox(
     sqlx::query(
         r#"
         INSERT INTO member_inbox_item (
-            principal_id, surface_id, source_seq, reason, occurred_at
+            principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at
         )
         SELECT subscription.principal_id, publication.surface_id,
-               publication.source_seq, 'watch', publication.occurred_at
+               publication.source_seq, publication.source_seq, 'watch', publication.occurred_at
         FROM public_watch AS subscription
         JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
@@ -4282,8 +4291,11 @@ async fn fold_discussion_event(
             fan_out_profile_mentions(
                 tx,
                 stream_id,
-                event.seq,
-                event.occurred_at,
+                attention::InboxDelivery {
+                    source_seq: event.seq,
+                    delivery_seq: event.seq,
+                    occurred_at: event.occurred_at,
+                },
                 author_profile_id,
                 author_principal_id,
                 &mentions,
@@ -4352,22 +4364,19 @@ async fn fold_discussion_event(
                 eventstore::ActorId::Principal(principal) => Some(*principal),
                 _ => None,
             };
-            publications::record_publication_revision(
-                tx,
-                stream_id,
-                source_seq,
-                &body,
-                event.seq,
-            )
-            .await?;
+            publications::record_publication_revision(tx, stream_id, source_seq, &body, event.seq)
+                .await?;
             // Newly addressed profiles are delivered; the inbox key makes an
             // already-delivered mention a no-op, and mentions the edit removed
             // are never undelivered. Watchers are not notified of edits.
             fan_out_profile_mentions(
                 tx,
                 stream_id,
-                source_seq,
-                event.occurred_at,
+                attention::InboxDelivery {
+                    source_seq,
+                    delivery_seq: event.seq,
+                    occurred_at: event.occurred_at,
+                },
                 author_profile_id,
                 author_principal_id,
                 &mentions,
@@ -8766,9 +8775,10 @@ pub async fn subscription_target_state(
     target: WatchTarget,
 ) -> Result<SubscriptionTargetStateRow, ProjectionError> {
     let mut tx = pool.begin().await?;
-    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target).await?;
+    let latest_delivery_seq =
+        public_subscription_target_latest_delivery_seq(&mut tx, &target, principal_id).await?;
     let state = subscription_domain_state(&mut tx, principal_id, &target).await?;
-    if latest_source_seq.is_none() && state.is_none() {
+    if latest_delivery_seq.is_none() && state.is_none() {
         return Err(ProjectionError::SubscriptionTargetNotPublic);
     }
     let (subscribed, read_through_seq, unread_count) = match state {
@@ -8784,7 +8794,7 @@ pub async fn subscription_target_state(
         surface_id: target.surface_id,
         subscribed,
         read_through_seq,
-        latest_source_seq: latest_source_seq.unwrap_or(read_through_seq),
+        latest_delivery_seq: latest_delivery_seq.unwrap_or(read_through_seq),
         unread_count,
     })
 }
@@ -8808,9 +8818,9 @@ async fn visible_subscription_inbox_count(
          AND subscription.surface_id = item.surface_id
         WHERE item.principal_id = $1
           AND item.surface_id = $2
-          AND item.source_seq > COALESCE(cursor.read_through_seq, 0)
+          AND item.delivery_seq > COALESCE(cursor.read_through_seq, 0)
           AND (subscription.read_through_seq IS NULL
-               OR item.source_seq > subscription.read_through_seq)
+               OR item.delivery_seq > subscription.read_through_seq)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
@@ -8836,14 +8846,23 @@ pub async fn public_inbox(
     let fetch_limit = limit + 1;
     let rows = sqlx::query(
         r#"
-        SELECT DISTINCT ON (item.source_seq, item.surface_id)
-               item.surface_id, item.source_seq, item.occurred_at, item.reason,
-               item.source_seq > COALESCE(cursor.read_through_seq, 0)
+        WITH deliveries AS (
+            SELECT surface_id, source_seq, MAX(delivery_seq) AS delivery_seq,
+                   MAX(occurred_at) FILTER (WHERE delivery_seq = newest_delivery_seq) AS occurred_at,
+                   CASE WHEN BOOL_OR(reason = 'mention') THEN 'mention' ELSE 'watch' END AS reason
+            FROM (
+                SELECT item.*, MAX(delivery_seq) OVER (PARTITION BY surface_id, source_seq) AS newest_delivery_seq
+                FROM member_inbox_item AS item WHERE principal_id = $1
+            ) AS reasons
+            GROUP BY surface_id, source_seq
+        )
+        SELECT item.surface_id, item.source_seq, item.delivery_seq, item.occurred_at, item.reason,
+               item.delivery_seq > COALESCE(cursor.read_through_seq, 0)
                  AND (subscription.read_through_seq IS NULL
-                      OR item.source_seq > subscription.read_through_seq) AS unread,
+                      OR item.delivery_seq > subscription.read_through_seq) AS unread,
                COALESCE(subscription.active, FALSE) AS subscribed,
                surface.title, publication.href
-        FROM member_inbox_item AS item
+        FROM deliveries AS item
         LEFT JOIN member_inbox_cursor AS cursor ON cursor.principal_id = $1
         LEFT JOIN public_watch AS subscription
           ON subscription.principal_id = $1
@@ -8852,8 +8871,7 @@ pub async fn public_inbox(
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE item.principal_id = $1
-          AND ($2::bigint IS NULL OR item.source_seq < $2)
+        WHERE ($2::bigint IS NULL OR item.delivery_seq < $2)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
@@ -8861,8 +8879,7 @@ pub async fn public_inbox(
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
-        ORDER BY item.source_seq DESC, item.surface_id,
-                 (item.reason = 'mention') DESC
+        ORDER BY item.delivery_seq DESC
         LIMIT $3
         "#,
     )
@@ -8878,6 +8895,7 @@ pub async fn public_inbox(
         .map(|row| PublicInboxItemRow {
             surface_id: row.get("surface_id"),
             source_seq: row.get("source_seq"),
+            delivery_seq: row.get("delivery_seq"),
             title: row.get("title"),
             href: row.get("href"),
             reason: row.get("reason"),
@@ -8899,9 +8917,9 @@ pub async fn public_inbox(
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE item.principal_id = $1
-          AND item.source_seq > COALESCE(cursor.read_through_seq, 0)
+          AND item.delivery_seq > COALESCE(cursor.read_through_seq, 0)
           AND (subscription.read_through_seq IS NULL
-               OR item.source_seq > subscription.read_through_seq)
+               OR item.delivery_seq > subscription.read_through_seq)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
@@ -8918,7 +8936,7 @@ pub async fn public_inbox(
         items
             .last()
             .expect("full inbox page has a final item")
-            .source_seq
+            .delivery_seq
     });
     Ok(PublicInboxPage {
         items,
@@ -10799,8 +10817,7 @@ fn mentions_from_event(
 async fn fan_out_profile_mentions(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     surface_id: Uuid,
-    source_seq: i64,
-    occurred_at: i64,
+    delivery: attention::InboxDelivery,
     author_profile_id: Option<Uuid>,
     author_principal_id: Option<PrincipalId>,
     mentions: &[ProfileMention],
@@ -10825,15 +10842,16 @@ async fn fan_out_profile_mentions(
         sqlx::query(
             r#"
             INSERT INTO member_inbox_item (
-                principal_id, surface_id, source_seq, reason, occurred_at
-            ) VALUES ($1, $2, $3, 'mention', $4)
+                principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at
+            ) VALUES ($1, $2, $3, $4, 'mention', $5)
             ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
             "#,
         )
         .bind(target_principal_id)
         .bind(surface_id)
-        .bind(source_seq)
-        .bind(occurred_at)
+        .bind(delivery.source_seq)
+        .bind(delivery.delivery_seq)
+        .bind(delivery.occurred_at)
         .execute(&mut **tx)
         .await?;
     }

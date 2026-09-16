@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use crate::{
     fold_member_inbox_cursor_event, fold_subscription_event, public_inbox,
-    public_subscription_target_latest_seq, subscription_domain_state, subscription_target_state,
-    ProjectionError, PublicInboxPage, SubscriptionTargetStateRow,
+    public_subscription_target_latest_delivery_seq, subscription_domain_state,
+    subscription_target_state, ProjectionError, PublicInboxPage, SubscriptionTargetStateRow,
 };
 
 pub async fn subscribe_to_public_target(
@@ -22,9 +22,10 @@ pub async fn subscribe_to_public_target(
 ) -> Result<SubscriptionTargetStateRow, ProjectionError> {
     let mut tx = pool.begin().await?;
     lock_subscription_target(&mut tx, principal_id, &target).await?;
-    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target)
-        .await?
-        .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
+    let latest_delivery_seq =
+        public_subscription_target_latest_delivery_seq(&mut tx, &target, principal_id)
+            .await?
+            .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
     let existing = subscription_domain_state(&mut tx, principal_id, &target).await?;
     let subscription_id = existing
         .as_ref()
@@ -33,7 +34,7 @@ pub async fn subscribe_to_public_target(
         existing.as_ref(),
         WatchCommand::Subscribe {
             target: target.clone(),
-            initial_read_through_seq: latest_source_seq,
+            initial_read_through_seq: latest_delivery_seq,
         },
     )
     .map_err(subscription_domain_error)?;
@@ -85,10 +86,11 @@ pub async fn advance_subscription_read_cursor(
 ) -> Result<SubscriptionTargetStateRow, ProjectionError> {
     let mut tx = pool.begin().await?;
     lock_subscription_target(&mut tx, principal_id, &target).await?;
-    let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target)
-        .await?
-        .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
-    if read_through_seq <= 0 || read_through_seq > latest_source_seq {
+    let latest_delivery_seq =
+        public_subscription_target_latest_delivery_seq(&mut tx, &target, principal_id)
+            .await?
+            .ok_or(ProjectionError::SubscriptionTargetNotPublic)?;
+    if read_through_seq <= 0 || read_through_seq > latest_delivery_seq {
         return Err(ProjectionError::InvalidSubscriptionReadCursor);
     }
     let state = subscription_domain_state(&mut tx, principal_id, &target)
@@ -126,7 +128,25 @@ pub async fn advance_member_inbox_read_cursor(
         .bind(format!("member-inbox-cursor:{principal_id}"))
         .execute(&mut *tx)
         .await?;
-    if read_through_seq <= 0 {
+    let latest_delivery_seq: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(MAX(item.delivery_seq), 0)::bigint
+        FROM member_inbox_item AS item
+        JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
+        WHERE item.principal_id = $1 AND publication.visible AND surface.visible
+          AND NOT EXISTS (
+              SELECT 1 FROM profile_mute AS mute
+              WHERE mute.principal_id = $1 AND mute.active
+                AND mute.target_profile_id = publication.author_profile_id
+          )
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_one(&mut *tx)
+    .await?;
+    if read_through_seq <= 0 || read_through_seq > latest_delivery_seq {
         return Err(ProjectionError::InvalidSubscriptionReadCursor);
     }
     let state = inbox_cursor_domain_state(&mut tx, principal_id).await?;

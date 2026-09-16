@@ -383,6 +383,63 @@ VALUES
    NULL, NULL, NULL, 1000);
 `;
 
+const attentionDeliveryOrderSeedSql = String.raw`
+-- Source 100 was watched at creation, first mentioned the reader at edit 300,
+-- retained that mention at 350, removed it at 400, then re-added it at 450.
+-- Source 150 mentioned the reader at creation and later removed the mention.
+-- Source 200 is newer content that the reader has already read. Event order,
+-- not the intentionally skewed timestamps or immutable destination, must win.
+INSERT INTO discussion_area (area_id, slug, title, description, created_seq)
+VALUES ('91000000-0000-4000-8000-000000000001', 'delivery-upgrade', 'Delivery Upgrade', '', 90);
+INSERT INTO discussion_topic
+  (topic_id, area_id, title, post_count, created_seq, updated_seq, version, created_at, updated_at)
+VALUES ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000001',
+  'Delivery order', 3, 90, 200, 9, 90, 200);
+INSERT INTO publication_surface
+  (surface_id, search_group, title, href, visible, updated_seq)
+VALUES ('92000000-0000-4000-8000-000000000001', 'discussions', 'Delivery order',
+  '/d/delivery-upgrade', true, 450);
+INSERT INTO discussion_post
+  (source_seq, topic_id, body, created_seq, created_at, mentions, revision, edited_at)
+VALUES
+  (100, '92000000-0000-4000-8000-000000000001', '@reader re-added', 100, 100,
+   '[{"profile_id":"40000000-0000-4000-8000-000000000001","span":{"offset":0,"len":7}}]'::jsonb, 4, 80),
+  (150, '92000000-0000-4000-8000-000000000001', 'mention removed', 150, 150,
+   '[]'::jsonb, 1, 160),
+  (200, '92000000-0000-4000-8000-000000000001', 'newer post', 200, 200,
+   '[]'::jsonb, 0, NULL);
+INSERT INTO discussion_post_revision
+  (source_seq, revision, body, mentions, superseded_seq, superseded_at)
+VALUES
+  (100, 0, 'no mention yet', '[]'::jsonb, 300, 50),
+  (100, 1, '@reader first delivery',
+   '[{"profile_id":"40000000-0000-4000-8000-000000000001","span":{"offset":0,"len":7}}]'::jsonb, 350, 60),
+  (100, 2, '@reader unchanged mention',
+   '[{"profile_id":"40000000-0000-4000-8000-000000000001","span":{"offset":0,"len":7}}]'::jsonb, 400, 70),
+  (100, 3, 'mention removed', '[]'::jsonb, 450, 80),
+  (150, 0, '@reader original mention',
+   '[{"profile_id":"40000000-0000-4000-8000-000000000001","span":{"offset":0,"len":7}}]'::jsonb, 250, 160);
+INSERT INTO public_publication
+  (surface_id, source_seq, body, href, occurred_at, visible)
+SELECT topic_id, source_seq, body, '/d/delivery-upgrade#post-' || source_seq::text, created_at, true
+FROM discussion_post WHERE topic_id = '92000000-0000-4000-8000-000000000001';
+INSERT INTO public_watch
+  (subscription_id, principal_id, surface_id, active, read_through_seq, created_seq, updated_seq, version)
+VALUES ('93000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+  '92000000-0000-4000-8000-000000000001', true, 200, 95, 280, 2);
+INSERT INTO public_watch_period (subscription_id, started_seq, ended_seq)
+VALUES ('93000000-0000-4000-8000-000000000001', 95, NULL);
+INSERT INTO member_inbox_cursor (principal_id, read_through_seq, updated_seq, version)
+VALUES ('10000000-0000-4000-8000-000000000001', 200, 290, 1);
+INSERT INTO member_inbox_item (principal_id, surface_id, source_seq, reason, occurred_at)
+VALUES
+  ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 100, 'watch', 100),
+  ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 100, 'mention', 50),
+  ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 150, 'watch', 150),
+  ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 150, 'mention', 150),
+  ('10000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', 200, 'watch', 200);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -450,7 +507,7 @@ const migrationFixtures = [
     seed: reasonDerivedInboxSeedSql,
     assertions: [
       {
-        sql: "SELECT principal_id::text || ':' || surface_id::text || ':' || source_seq::text || ':' || reason || ':' || occurred_at::text FROM member_inbox_item",
+        sql: "SELECT principal_id::text || ':' || surface_id::text || ':' || source_seq::text || ':' || reason || ':' || occurred_at::text FROM member_inbox_item WHERE surface_id = '81000000-0000-4000-8000-000000000001'",
         expected:
           "60000000-0000-4000-8000-000000000001:81000000-0000-4000-8000-000000000001:5:watch:5",
         message: "0005 must backfill watch rows into the reason-derived member inbox",
@@ -459,7 +516,8 @@ const migrationFixtures = [
         sql: String.raw`SELECT
         (SELECT count(*)::text FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'public_inbox_item')::text || ':' ||
-        (SELECT count(*)::text FROM member_inbox_cursor)::text`,
+        (SELECT count(*)::text FROM member_inbox_cursor
+         WHERE principal_id = '60000000-0000-4000-8000-000000000001')::text`,
         expected: "0:0",
         message:
           "0005 must drop the subscription-keyed inbox table and start with an empty member inbox cursor",
@@ -753,6 +811,98 @@ const migrationFixtures = [
         rejectedSql: String.raw`UPDATE moderation_report SET evidence = '{}'::jsonb`,
         expectedError: /moderation_report_evidence_shape/iu,
         message: "0014 must reject unclassified evidence",
+      },
+    ],
+  },
+  {
+    version: 15,
+    seed: attentionDeliveryOrderSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT string_agg(source_seq::text || ':' || reason || ':' ||
+          delivery_seq::text || ':' || occurred_at::text, ',' ORDER BY source_seq, reason)
+        FROM member_inbox_item WHERE surface_id = '92000000-0000-4000-8000-000000000001'`,
+        expected: "100:mention:300:50,100:watch:100:100,150:mention:150:150,150:watch:150:150,200:watch:200:200",
+        message: "0015 must recover the first mention event while preserving watch positions, original mentions, timestamps, and remove/re-add deduplication",
+      },
+      {
+        sql: String.raw`WITH delivered AS (
+          SELECT surface_id, source_seq, MAX(delivery_seq) AS delivery_seq,
+                 CASE WHEN BOOL_OR(reason = 'mention') THEN 'mention' ELSE 'watch' END AS reason
+          FROM member_inbox_item
+          WHERE principal_id = '10000000-0000-4000-8000-000000000001'
+            AND surface_id = '92000000-0000-4000-8000-000000000001'
+          GROUP BY surface_id, source_seq
+        )
+        SELECT string_agg(item.source_seq::text || ':' || item.delivery_seq::text || ':' ||
+          item.reason || ':' || (item.delivery_seq > cursor.read_through_seq
+            AND item.delivery_seq > watch.read_through_seq)::text || ':' || publication.href,
+          ',' ORDER BY item.delivery_seq DESC)
+        FROM delivered AS item
+        JOIN public_publication AS publication USING (surface_id, source_seq)
+        JOIN public_watch AS watch ON watch.surface_id = item.surface_id
+          AND watch.principal_id = '10000000-0000-4000-8000-000000000001'
+        JOIN member_inbox_cursor AS cursor ON cursor.principal_id = watch.principal_id`,
+        expected: "100:300:mention:true:/d/delivery-upgrade#post-100,200:200:watch:false:/d/delivery-upgrade#post-200,150:150:mention:false:/d/delivery-upgrade#post-150",
+        message: "0015 must deliver one grouped old-post item above newer read posts without changing its destination or treating historical watch delivery as another unread item",
+      },
+      {
+        sql: String.raw`WITH delivered AS (
+          SELECT source_seq, MAX(delivery_seq) AS delivery_seq
+          FROM member_inbox_item
+          WHERE principal_id = '10000000-0000-4000-8000-000000000001'
+            AND surface_id = '92000000-0000-4000-8000-000000000001'
+          GROUP BY source_seq
+        )
+        SELECT (COUNT(*) FILTER (WHERE delivery_seq > 200 AND delivery_seq > 200))::text || ':' ||
+          (COUNT(*) FILTER (WHERE delivery_seq > 300 AND delivery_seq > 200))::text || ':' ||
+          (COUNT(*) FILTER (WHERE delivery_seq > 200 AND delivery_seq > 300))::text || ':' ||
+          (SELECT read_through_seq::text FROM member_inbox_cursor
+           WHERE principal_id = '10000000-0000-4000-8000-000000000001') || ':' ||
+          (SELECT read_through_seq::text FROM public_watch
+           WHERE subscription_id = '93000000-0000-4000-8000-000000000001')
+        FROM delivered`,
+        expected: "1:0:0:200:200",
+        message: "0015 must leave durable read claims unchanged; advancing either global or surface delivery cursor through the edit clears the one unread destination",
+      },
+      {
+        sql: String.raw`SELECT string_agg(source_seq::text, ',' ORDER BY delivery_seq DESC)
+        FROM (
+          SELECT source_seq, MAX(delivery_seq) AS delivery_seq
+          FROM member_inbox_item
+          WHERE principal_id = '10000000-0000-4000-8000-000000000001'
+            AND surface_id = '92000000-0000-4000-8000-000000000001'
+          GROUP BY source_seq
+        ) AS item WHERE delivery_seq < 300`,
+        expected: "200,150",
+        message: "0015 delivery keyset paging must retain older items after the old post moves to the first page",
+      },
+      {
+        sql: String.raw`SELECT is_nullable || ':' || COALESCE(column_default, 'none')
+        FROM information_schema.columns WHERE table_schema = 'public'
+          AND table_name = 'member_inbox_item' AND column_name = 'delivery_seq'`,
+        expected: "NO:none",
+        message: "0015 must require every new delivery writer to supply its event position explicitly",
+      },
+      {
+        sql: String.raw`SELECT pg_get_indexdef(indexrelid) FROM pg_index
+        JOIN pg_class ON pg_class.oid = indexrelid WHERE relname = 'member_inbox_item_page_idx'`,
+        expected: "CREATE INDEX member_inbox_item_page_idx ON public.member_inbox_item USING btree (principal_id, delivery_seq DESC)",
+        message: "0015 must index recipient delivery order instead of immutable post identity",
+      },
+      {
+        rejectedSql: String.raw`UPDATE member_inbox_item SET delivery_seq = source_seq - 1
+        WHERE surface_id = '92000000-0000-4000-8000-000000000001' AND source_seq = 100`,
+        expectedError: /member_inbox_item_delivery_seq_check/iu,
+        message: "0015 must reject a delivery position before its destination was created",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO member_inbox_item
+          (principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at)
+        VALUES ('10000000-0000-4000-8000-000000000001',
+          '92000000-0000-4000-8000-000000000001', 100, 450, 'mention', 80)`,
+        expectedError: /member_inbox_item_pkey/iu,
+        message: "0015 must keep mention deduplication on the destination and reason, so a later event cannot create a second delivery identity",
       },
     ],
   },

@@ -3174,7 +3174,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .unwrap();
     assert_eq!(
         resubscribed.read_through_seq,
-        resubscribed.latest_source_seq
+        resubscribed.latest_delivery_seq
     );
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
@@ -3204,7 +3204,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             .await
             .unwrap();
     sqlx::query(
-        "INSERT INTO member_inbox_item (principal_id, surface_id, source_seq, reason, occurred_at) VALUES ($1, $2, $3, 'watch', 0)",
+        "INSERT INTO member_inbox_item (principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at) VALUES ($1, $2, $3, $3, 'watch', 0)",
     )
     .bind(member.as_uuid())
     .bind(topic)

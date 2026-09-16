@@ -212,12 +212,13 @@ The inbox is rebaselined to be principal-keyed with an explicit reason:
 member_inbox_item
   principal_id     uuid
   surface_id       uuid
-  source_seq       bigint
+  source_seq       bigint   -- immutable post destination
+  delivery_seq     bigint   -- event first delivering this reason
   reason           text     -- 'watch' | 'mention'
   occurred_at      bigint
 
   PK    (principal_id, surface_id, source_seq, reason)
-  INDEX (principal_id, source_seq DESC)
+  INDEX (principal_id, delivery_seq DESC)
 
 member_inbox_cursor
   principal_id     uuid PRIMARY KEY
@@ -235,6 +236,18 @@ member_inbox_cursor
   delivered when it is written; it has no history to manufacture.
 - Rebuild deletes by surface and replays, unchanged in kind.
 
+Delivery identity remains `(principal_id, surface_id, source_seq, reason)`.
+`delivery_seq` is the post event for a watch or original mention, and the edit
+event for a newly introduced mention. Repeated edits and remove/re-add retain
+the first mention delivery. Reads collapse watch and mention reasons to one
+post row using the maximum delivery position, retain the mention label, and
+order/paginate by that delivery position. A new mention after a watched post
+was read therefore produces one newly unread item with the original post link.
+Both cursor types advance through delivery positions. Surface state exposes
+`latest_delivery_seq`; inbox items expose both destination `source_seq` and
+`delivery_seq`. Global cursor writes reject positions beyond the member's
+currently visible delivery high-water mark.
+
 `attention` grows one durable per-principal inbox cursor stream alongside its
 existing per-target watch streams, with the same monotonic-advance discipline
 and the same reject (`ReadCursorMustAdvance`).
@@ -245,8 +258,8 @@ An inbox row is unread when it is beyond the principal inbox cursor **and**,
 when a watch exists for that surface, beyond that watch's cursor:
 
 ```sql
-item.source_seq > cursor.read_through_seq
-  AND (watch.read_through_seq IS NULL OR item.source_seq > watch.read_through_seq)
+item.delivery_seq > cursor.read_through_seq
+  AND (watch.read_through_seq IS NULL OR item.delivery_seq > watch.read_through_seq)
 ```
 
 Reading the thread clears it; marking the inbox read clears it. Neither cursor

@@ -613,3 +613,257 @@ async fn inbox_cursor_clears_a_mention_on_an_unwatched_surface_and_must_advance(
     .unwrap();
     assert_eq!(rebuilt, seq);
 }
+
+async fn edit_mention_list(
+    pool: &sqlx::PgPool,
+    topic: Uuid,
+    source_seq: i64,
+    author: PrincipalId,
+    revision: i64,
+    mentioned_profile: Option<Uuid>,
+    occurred_at: i64,
+) -> i64 {
+    let mentions = mentioned_profile
+        .map(|profile_id| {
+            serde_json::json!({
+                "profile_id": profile_id,
+                "span": { "offset": 0, "len": 7 }
+            })
+        })
+        .into_iter()
+        .collect::<Vec<_>>();
+    append_discussion_and_project(
+        pool,
+        topic,
+        &[EventInput::new(
+            forum::POST_EDITED,
+            1,
+            serde_json::json!({
+                "source_seq": source_seq,
+                "revision": revision,
+                "body": "@reader revised message",
+                "mentions": mentions,
+            }),
+            ActorId::Principal(author),
+            occurred_at,
+        )],
+    )
+    .await
+    .unwrap()[0]
+        .seq
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn edited_mention_orders_by_first_delivery_and_survives_dedup_and_rebuild(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(401);
+    let topic = Uuid::from_u128(402);
+    let author = test_principal(401);
+    let member = test_principal(402);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, member).await;
+    let author_profile = create_test_profile(&pool, author, "edit_author", 1).await;
+    let member_profile = create_test_profile(&pool, member, "reader", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let original = eventstore::load_stream(&pool, topic)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.kind == "DiscussionPostSubmitted")
+        .unwrap()
+        .seq;
+    let newer_post = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: member_profile,
+            body: "@reader newer post",
+            len: 7,
+            occurred_at: 100,
+        },
+    )
+    .await;
+    advance_member_inbox_read_cursor(&pool, member, newer_post, 101)
+        .await
+        .unwrap();
+
+    // Even a timestamp earlier than the newer post must sort by edit event order.
+    let delivered =
+        edit_mention_list(&pool, topic, original, author, 1, Some(member_profile), 50).await;
+    assert!(delivered > newer_post);
+    let page = public_inbox(&pool, member, None, 1).await.unwrap();
+    assert_eq!(page.unread_count, 1);
+    assert_eq!(page.items[0].source_seq, original);
+    assert_eq!(page.items[0].delivery_seq, delivered);
+    assert_eq!(page.items[0].occurred_at, 50);
+    assert!(page.items[0].href.ends_with(&format!("#post-{original}")));
+    assert!(page.items[0].unread);
+    assert_eq!(page.next_cursor, Some(delivered));
+    let older = public_inbox(&pool, member, page.next_cursor, 1)
+        .await
+        .unwrap();
+    assert_eq!(older.items[0].source_seq, newer_post);
+    assert_eq!(older.items[0].delivery_seq, newer_post);
+    assert!(!older.items[0].unread);
+
+    let cleared = advance_member_inbox_read_cursor(&pool, member, delivered, 102)
+        .await
+        .unwrap();
+    assert_eq!(cleared.unread_count, 0);
+    edit_mention_list(&pool, topic, original, author, 2, Some(member_profile), 103).await;
+    edit_mention_list(&pool, topic, original, author, 3, None, 104).await;
+    edit_mention_list(&pool, topic, original, author, 4, Some(member_profile), 105).await;
+    let stable = public_inbox(&pool, member, None, 10).await.unwrap();
+    assert_eq!(stable.unread_count, 0);
+    assert_eq!(stable.items.len(), 2);
+    assert_eq!(stable.items[0].delivery_seq, delivered);
+    assert_eq!(stable.items[0].occurred_at, 50);
+    rebuild_discussion_stream(&pool, topic).await.unwrap();
+    projections::rebuild_member_inbox_cursor_stream(
+        &pool,
+        attention::inbox_cursor_stream_id(member),
+    )
+    .await
+    .unwrap();
+    assert_eq!(public_inbox(&pool, member, None, 10).await.unwrap(), stable);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn edited_mention_refreshes_one_watched_item_and_surface_cursor_clears_it(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(403);
+    let topic = Uuid::from_u128(404);
+    let author = test_principal(403);
+    let member = test_principal(404);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, member).await;
+    let author_profile = create_test_profile(&pool, author, "watch_edit_author", 1).await;
+    let member_profile = create_test_profile(&pool, member, "watch_edit_reader", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let target = WatchTarget { surface_id: topic };
+    subscribe_to_public_target(&pool, target.clone(), member, 5)
+        .await
+        .unwrap();
+    let post = append_discussion_and_project(
+        &pool,
+        topic,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({"body": "No mention yet", "author_profile_id": author_profile}),
+            ActorId::Principal(author),
+            6,
+        )],
+    )
+    .await
+    .unwrap()[0]
+        .seq;
+    advance_subscription_read_cursor(&pool, target.clone(), member, post, 7)
+        .await
+        .unwrap();
+    advance_member_inbox_read_cursor(&pool, member, post, 8)
+        .await
+        .unwrap();
+    let delivered = edit_mention_list(&pool, topic, post, author, 1, Some(member_profile), 9).await;
+    let page = public_inbox(&pool, member, None, 10).await.unwrap();
+    assert_eq!(
+        page.items.len(),
+        1,
+        "watch and mention collapse to one destination"
+    );
+    assert_eq!(page.unread_count, 1);
+    assert_eq!(page.items[0].reason, "mention");
+    assert_eq!(page.items[0].source_seq, post);
+    assert_eq!(page.items[0].delivery_seq, delivered);
+    assert_eq!(mention_inbox_rows(&pool, member).await.len(), 2);
+    let state = projections::subscription_target_state(&pool, member, target.clone())
+        .await
+        .unwrap();
+    assert_eq!(state.latest_delivery_seq, delivered);
+    assert_eq!(state.unread_count, 1);
+    assert!(
+        advance_subscription_read_cursor(&pool, target.clone(), member, delivered + 1, 10)
+            .await
+            .is_err()
+    );
+    advance_subscription_read_cursor(&pool, target, member, delivered, 11)
+        .await
+        .unwrap();
+    let cleared = public_inbox(&pool, member, None, 10).await.unwrap();
+    assert_eq!(cleared.unread_count, 0);
+    let watch_id: Uuid = sqlx::query_scalar(
+        "SELECT subscription_id FROM public_watch WHERE principal_id = $1 AND surface_id = $2",
+    )
+    .bind(member.as_uuid())
+    .bind(topic)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    projections::rebuild_subscription_stream(&pool, watch_id)
+        .await
+        .unwrap();
+    rebuild_discussion_stream(&pool, topic).await.unwrap();
+    assert_eq!(
+        public_inbox(&pool, member, None, 10).await.unwrap(),
+        cleared
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn inbox_cursor_cannot_advance_beyond_visible_delivery_highwater(pool: sqlx::PgPool) {
+    let author = test_principal(405);
+    let member = test_principal(406);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, member).await;
+    assert!(advance_member_inbox_read_cursor(&pool, member, 1, 1)
+        .await
+        .is_err());
+    let author_profile = create_test_profile(&pool, author, "future_author", 1).await;
+    let member_profile = create_test_profile(&pool, member, "future_reader", 2).await;
+    let topic = Uuid::from_u128(406);
+    create_topic_with_opening_post(
+        &pool,
+        Uuid::from_u128(405),
+        topic,
+        author,
+        author_profile,
+        3,
+    )
+    .await;
+    let delivered = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: member_profile,
+            body: "@future_reader reply",
+            len: 14,
+            occurred_at: 6,
+        },
+    )
+    .await;
+    assert!(
+        advance_member_inbox_read_cursor(&pool, member, delivered + 1, 7)
+            .await
+            .is_err()
+    );
+    set_publication_visible(&pool, topic, delivered, false).await;
+    assert!(
+        advance_member_inbox_read_cursor(&pool, member, delivered, 8)
+            .await
+            .is_err()
+    );
+    set_publication_visible(&pool, topic, delivered, true).await;
+    assert_eq!(
+        advance_member_inbox_read_cursor(&pool, member, delivered, 9)
+            .await
+            .unwrap()
+            .unread_count,
+        0
+    );
+}
