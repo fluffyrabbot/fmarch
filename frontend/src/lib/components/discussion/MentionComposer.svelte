@@ -23,8 +23,9 @@
   export let testid = "discussion-post-body";
   export let mentionsTestid = "discussion-mentions-field";
   export let suggestionsEndpoint = "/api/mention-suggestions";
-  // Editing seeds the textarea with the current text and its decided mention
-  // handles; spans are still re-derived from the body before submit.
+  // Initial values belong to this component instance. Edit callers key it by
+  // topic, post, and base revision; only an explicit draft reset remounts it.
+  // Spans are still re-derived from the body before submit.
   export let initial = "";
   export let initialMentions = [];
 
