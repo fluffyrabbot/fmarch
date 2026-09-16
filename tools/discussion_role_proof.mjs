@@ -17,7 +17,7 @@ import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
-const artifactDir = path.join(repoRoot, "target", "discussion-role-proof");
+const artifactDir = process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "discussion-role-proof");
 const evidencePath = path.join(artifactDir, "discussion-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";

@@ -21,7 +21,7 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
-const artifactDir = path.join(repoRoot, "target", "game-index-role-proof");
+const artifactDir = process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "game-index-role-proof");
 const evidencePath = path.join(artifactDir, "game-index-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
