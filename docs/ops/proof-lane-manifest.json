@@ -112,6 +112,8 @@
     "test:identity-delivery-provider-conformance": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:identity-delivery-provider-conformance"], "resources": [] } },
     "test:auth-invite-role-proof": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:public-search-role-proof": { "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:dev-test-game-discussion": {"phase": "acceptance", "kind": "npm", "execution": {"class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:dev-test-game-discussion"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "lock", "name": "browser"}, {"kind": "lock", "name": "frontend-worktree"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}},
+    "test:dev-test-game-game-index": {"phase": "acceptance", "kind": "npm", "execution": {"class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:dev-test-game-game-index"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "lock", "name": "browser"}, {"kind": "lock", "name": "frontend-worktree"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}},
     "test:database-schema:static": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-schema:static"], "resources": [] } },
     "test:database-schema-upgrade": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["npm", "run", "test:database-schema-upgrade"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_UPGRADE_DATABASE_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_FRESH_DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "check:event-key-rotation-evidence": { "kind": "shell", "command": "node tools/proof_test_evidence.mjs --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement", "depends_on": ["cargo:server"], "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["node", "tools/proof_test_evidence.mjs", "--claim", "FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access", "--claim", "FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement"], "resources": [{ "kind": "artifact-input", "from": "cargo:server", "env": "FMARCH_SERVER_TEST_ARTIFACT_DIR" }] } },
@@ -583,7 +585,7 @@
       "paths": ["crates/forum/"],
       "crate": "forum",
       "dependency_lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
-      "lanes": ["cargo:public-platform", "cargo:clippy-workspace", "test:public-search-role-proof"],
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace", "test:public-search-role-proof", "test:dev-test-game-discussion"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -886,7 +888,7 @@
         "frontend/src/routes/u/",
         "frontend/src/routes/moderation/"
       ],
-      "lanes": ["test:frontend-contract", "test:public-search-role-proof"],
+      "lanes": ["test:frontend-contract", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-game-index"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -1174,6 +1176,32 @@
       ],
       "lanes": ["test:auth-invite-role-proof", "test:dev-test-game-contract"],
       "capabilities": ["product.identity.account-login-invites"]
+    },
+    {
+      "id": "proof:discussion-role",
+      "tier": "frozen",
+      "paths": [
+        "tools/discussion_role_proof.mjs"
+      ],
+      "lanes": [
+        "test:dev-test-game-discussion"
+      ],
+      "capabilities": [
+        "product.community.discussions"
+      ]
+    },
+    {
+      "id": "proof:game-index-role",
+      "tier": "frozen",
+      "paths": [
+        "tools/game_index_role_proof.mjs"
+      ],
+      "lanes": [
+        "test:dev-test-game-game-index"
+      ],
+      "capabilities": [
+        "product.community.game-index"
+      ]
     },
     {
       "id": "proof:public-search-role",

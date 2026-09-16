@@ -1481,6 +1481,8 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       ['test:auth-invite-role-proof', 'test:dev-test-game-contract'],
     ],
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
+    ['tools/discussion_role_proof.mjs', 'test:dev-test-game-discussion'],
+    ['tools/game_index_role_proof.mjs', 'test:dev-test-game-game-index'],
     [
       'tools/capacity_auth_source_authority.mjs',
       [
