@@ -18,12 +18,12 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 47,
-    partial: 0,
+    complete: 48,
+    partial: 1,
     open: 2,
     blocked: 0,
     deferred: 0,
-    total: 49,
+    total: 51,
   });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
@@ -58,6 +58,13 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     registry.items.find((item) => item.id === "product.community.forum-editing-curation")
       ?.status,
     "complete",
+  );
+  // RFC 0006 is a sequenced architecture migration with one landed step; its
+  // registry item resolves the RFC's status pointer without implying closure.
+  assert.equal(
+    registry.items.find((item) => item.id === "foundation.executable-bounded-contexts")
+      ?.status,
+    "partial",
   );
   assert.equal(
     registry.items.find((item) => item.id === "product.game.persona-occupancy")
