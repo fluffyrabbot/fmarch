@@ -263,16 +263,6 @@ const pages = [
     ],
   },
   {
-    name: "projection-audit",
-    path: `/games/${game}/projection-audit/view`,
-    checks: ["Projection Rebuild Audit", "matched"],
-  },
-  {
-    name: "resolution-audit",
-    path: `/games/${game}/resolution-audit/view`,
-    checks: ["Resolution Replay Audit", "D01"],
-  },
-  {
     name: "resolution-traces",
     path: `/games/${game}/resolution-traces/view`,
     checks: [

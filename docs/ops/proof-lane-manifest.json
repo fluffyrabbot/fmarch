@@ -119,6 +119,7 @@
     "test:dev-test-game-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:dev-test-game-contract"], "resources": [] } },
     "test:dev-postgres-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:dev-postgres-contract"], "resources": [] } },
     "test:host-console-live-stack-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:host-console-live-stack-contract"], "resources": [] } },
+    "test:host-console-live-stack-smoke": { "coverage": ["Host and player live command, replay-artifact, and recovery operations"], "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 1200, "argv": ["npm", "run", "test:host-console-live-stack-smoke"], "env": { "FMARCH_DEV_AUTH": "1", "FMARCH_AUTH_SOURCE_SIGNING_KEY": "local-proof-signing-key-at-least-32-bytes" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:host-console-day-event-room-live-stack": { "coverage": ["Live DayEvent room operations"], "phase": "acceptance", "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:host-console-day-event-room-live-stack"], "env": { "FMARCH_DEV_AUTH": "1", "FMARCH_AUTH_SOURCE_SIGNING_KEY": "local-proof-signing-key-at-least-32-bytes", "FMARCH_LIVE_STACK_SCOPE": "day-event-room" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:live-stack-backup-restore-drill": { "phase": "acceptance", "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["npm", "run", "test:live-stack-backup-restore-drill"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_RESTORE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:mash-scale-acceptance": { "phase": "acceptance", "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:mash-scale-acceptance"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
@@ -1243,9 +1244,10 @@
       ],
       "lanes": [
         "test:host-console-live-stack-contract",
+        "test:host-console-live-stack-smoke",
         "test:host-console-day-event-room-live-stack"
       ],
-      "capabilities": ["product.mash.private-day-event-rooms"]
+      "capabilities": ["product.game.core-loop", "product.game.host-moderation", "product.mash.private-day-event-rooms"]
     },
     {
       "id": "proof:live-stack-backup-restore",
