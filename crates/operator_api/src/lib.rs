@@ -43,8 +43,7 @@ use operator_proof::{
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-use std::{fs, path::Path as FsPath, sync::Arc};
-use tokio::sync::Semaphore;
+use std::{fs, path::Path as FsPath};
 use uuid::Uuid;
 use wire::{
     HostPhaseControl, ProjectionAdapterError, RejectCode, RejectMsg,
@@ -55,23 +54,14 @@ use wire::{
 pub struct OperatorApiState {
     pool: PgPool,
     session_policy: identity::SessionPolicy,
-    projection_audit_slots: Arc<Semaphore>,
 }
 
 impl OperatorApiState {
-    pub fn new(
-        pool: PgPool,
-        session_policy: identity::SessionPolicy,
-        projection_audit_max_in_flight: usize,
-    ) -> Result<Self, &'static str> {
-        if !(1..=8).contains(&projection_audit_max_in_flight) {
-            return Err("operator projection-audit concurrency must be between 1 and 8");
-        }
-        Ok(OperatorApiState {
+    pub fn new(pool: PgPool, session_policy: identity::SessionPolicy) -> Self {
+        Self {
             pool,
             session_policy,
-            projection_audit_slots: Arc::new(Semaphore::new(projection_audit_max_in_flight)),
-        })
+        }
     }
 
     pub fn with_local_proof_instance(
@@ -83,16 +73,8 @@ impl OperatorApiState {
     }
 }
 
-pub fn router(
-    pool: PgPool,
-    session_policy: identity::SessionPolicy,
-    projection_audit_max_in_flight: usize,
-) -> Result<Router, &'static str> {
-    Ok(router_with_state(OperatorApiState::new(
-        pool,
-        session_policy,
-        projection_audit_max_in_flight,
-    )?))
+pub fn router(pool: PgPool, session_policy: identity::SessionPolicy) -> Router {
+    router_with_state(OperatorApiState::new(pool, session_policy))
 }
 
 pub fn router_with_state(state: OperatorApiState) -> Router {
@@ -173,16 +155,6 @@ pub fn router_with_state(state: OperatorApiState) -> Router {
         .route(
             "/games/{game}/operator/proof-runs/determinism-fuzz/view",
             get(operator_proof_run_determinism_fuzz_view),
-        )
-        .route("/games/{game}/projection-audit", get(projection_audit))
-        .route(
-            "/games/{game}/projection-audit/view",
-            get(projection_audit_view),
-        )
-        .route("/games/{game}/resolution-audit", get(resolution_audit))
-        .route(
-            "/games/{game}/resolution-audit/view",
-            get(resolution_audit_view),
         )
         .route("/games/{game}/resolution-traces", get(resolution_traces))
         .route(
@@ -790,88 +762,6 @@ async fn host_phase_controls_view(
     Ok(Html(render_host_phase_controls_html(game, &controls)))
 }
 
-async fn projection_audit(
-    State(state): State<OperatorApiState>,
-    Path(game): Path<Uuid>,
-    headers: HeaderMap,
-) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
-    require_host_audit_access(
-        &state,
-        &headers,
-        game,
-        "principal cannot read projection rebuild audit for this game",
-    )
-    .await?;
-    let _permit = state
-        .projection_audit_slots
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| operator_audit_capacity_exhausted())?;
-
-    Ok(Json(projections::audit_rebuild(&state.pool, game).await?))
-}
-
-async fn projection_audit_view(
-    State(state): State<OperatorApiState>,
-    Path(game): Path<Uuid>,
-    headers: HeaderMap,
-) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
-        &state,
-        &headers,
-        game,
-        "principal cannot read projection rebuild audit for this game",
-    )
-    .await?;
-    let _permit = state
-        .projection_audit_slots
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| operator_audit_capacity_exhausted())?;
-
-    let report = projections::audit_rebuild(&state.pool, game).await?;
-    Ok(Html(render_projection_audit_html(&report)))
-}
-
-async fn resolution_audit(
-    State(state): State<OperatorApiState>,
-    Path(game): Path<Uuid>,
-    headers: HeaderMap,
-) -> Result<Json<commands::ResolutionEnvelopeAuditReport>, ApiError> {
-    require_host_audit_access(
-        &state,
-        &headers,
-        game,
-        "principal cannot read resolution replay audit for this game",
-    )
-    .await?;
-
-    Ok(Json(
-        commands::audit_resolution_envelopes(&state.pool, game)
-            .await
-            .map_err(command_api_error)?,
-    ))
-}
-
-async fn resolution_audit_view(
-    State(state): State<OperatorApiState>,
-    Path(game): Path<Uuid>,
-    headers: HeaderMap,
-) -> Result<Html<String>, ApiError> {
-    require_host_audit_access(
-        &state,
-        &headers,
-        game,
-        "principal cannot read resolution replay audit for this game",
-    )
-    .await?;
-
-    let report = commands::audit_resolution_envelopes(&state.pool, game)
-        .await
-        .map_err(command_api_error)?;
-    Ok(Html(render_resolution_audit_html(&report)))
-}
-
 #[derive(Debug, Clone, Deserialize)]
 struct ResolutionTraceQuery {
     run_id: Option<String>,
@@ -987,12 +877,6 @@ fn unauthorized_operator_session() -> ApiError {
     }
 }
 
-fn operator_audit_capacity_exhausted() -> ApiError {
-    ApiError::Unavailable {
-        message: "operator projection audit capacity is exhausted; retry shortly".to_string(),
-    }
-}
-
 fn render_operator_index_html(game: Uuid, principal_id: &str) -> String {
     struct Link<'a> {
         label: &'a str,
@@ -1001,26 +885,6 @@ fn render_operator_index_html(game: Uuid, principal_id: &str) -> String {
     }
 
     let links = [
-        Link {
-            label: "Projection Rebuild Audit",
-            detail: "HTML drift report for rebuildable read models.",
-            href: format!("/games/{game}/projection-audit/view"),
-        },
-        Link {
-            label: "Projection Rebuild JSON",
-            detail: "Machine-readable rollback rebuild audit.",
-            href: format!("/games/{game}/projection-audit"),
-        },
-        Link {
-            label: "Resolution Replay Audit",
-            detail: "HTML comparison of stored and replayed resolution envelopes.",
-            href: format!("/games/{game}/resolution-audit/view"),
-        },
-        Link {
-            label: "Resolution Replay JSON",
-            detail: "Machine-readable replay audit with compact diff paths.",
-            href: format!("/games/{game}/resolution-audit"),
-        },
         Link {
             label: "Resolution Trace Inspection",
             detail:
@@ -3334,279 +3198,6 @@ fn render_host_phase_controls_html(game: Uuid, controls: &[HostPhaseControl]) ->
     html
 }
 
-fn render_resolution_audit_html(report: &commands::ResolutionEnvelopeAuditReport) -> String {
-    let status_class = if report.ok { "ok" } else { "drift" };
-    let status_text = if report.ok { "matched" } else { "drifted" };
-    let mut html = String::new();
-    html.push_str("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
-    html.push_str("<title>Resolution Replay Audit</title>");
-    html.push_str(
-        "<style>\
-         body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;margin:24px;color:#18202a;background:#f8fafc;}\
-         main{max-width:1180px;margin:0 auto;}\
-         h1{font-size:24px;margin:0 0 8px;}\
-         h2{font-size:18px;margin:28px 0 12px;}\
-         .meta,.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0;}\
-         .metric{background:#fff;border:1px solid #d8dee8;border-radius:6px;padding:10px 12px;}\
-         .label{display:block;font-size:12px;color:#516070;text-transform:uppercase;}\
-         .value{display:block;font-size:18px;font-weight:650;margin-top:4px;}\
-         .ok{color:#1f7a4d}.drift{color:#b42318}.skipped{color:#7a5a00}\
-         table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dee8;border-radius:6px;overflow:hidden;}\
-         th,td{text-align:left;vertical-align:top;border-bottom:1px solid #e7ebf1;padding:8px 10px;font-size:13px;}\
-         th{background:#edf2f7;color:#334155;}\
-         code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}\
-         code{font-size:12px;}\
-         pre{white-space:pre-wrap;word-break:break-word;background:#111827;color:#f8fafc;border-radius:6px;padding:10px;margin:6px 0 0;font-size:12px;}\
-         .path-list{margin:8px 0 0;padding-left:18px;}\
-         .audit-link{color:#0f5e9c;font-weight:650;text-decoration:none;}\
-         .audit-link:hover{text-decoration:underline;}\
-         .audit-diff{margin:0 0 12px;}\
-         .audit-diff:last-child{margin-bottom:0;}\
-         .audit-detail-link{display:inline-block;margin:0 8px 6px 0;}\
-         .empty{color:#64748b;}\
-         </style>",
-    );
-    html.push_str("</head><body><main>");
-    html.push_str("<h1>Resolution Replay Audit</h1>");
-    html.push_str("<section class=\"meta\">");
-    metric(&mut html, "Game", &report.game_id.to_string(), None);
-    metric(&mut html, "Status", status_text, Some(status_class));
-    metric(&mut html, "Audited", &report.audited.to_string(), None);
-    metric(
-        &mut html,
-        "Skipped",
-        &report.skipped.to_string(),
-        Some("skipped"),
-    );
-    html.push_str("</section>");
-
-    html.push_str("<h2>Summary</h2><section class=\"summary\">");
-    metric(
-        &mut html,
-        "Matched",
-        &report.summary.matched.to_string(),
-        Some("ok"),
-    );
-    metric(
-        &mut html,
-        "Drifted",
-        &report.summary.drifted.to_string(),
-        Some("drift"),
-    );
-    metric(
-        &mut html,
-        "Skipped",
-        &report.summary.skipped.to_string(),
-        Some("skipped"),
-    );
-    html.push_str("</section>");
-
-    html.push_str("<h2>First Drift Paths</h2>");
-    if report.summary.first_drift_paths.is_empty() {
-        html.push_str("<p class=\"empty\">No drift paths.</p>");
-    } else {
-        html.push_str("<ol class=\"path-list\">");
-        for path in &report.summary.first_drift_paths {
-            html.push_str("<li>");
-            if let Some(diff_id) = audit_summary_diff_id(report, path) {
-                html.push_str("<a class=\"audit-link\" href=\"#");
-                html_escape_into(&mut html, &diff_id);
-                html.push_str("\">");
-            }
-            html.push_str("<code>");
-            html_escape_into(&mut html, path.phase_id.as_str());
-            html.push_str(" / ");
-            html_escape_into(&mut html, &path.run_id);
-            html.push_str(" / ");
-            html_escape_into(&mut html, &json_label(&path.envelope));
-            html.push_str(" / ");
-            html_escape_into(&mut html, &path.path);
-            html.push_str("</code>");
-            if audit_summary_diff_id(report, path).is_some() {
-                html.push_str("</a>");
-            }
-            html.push_str("</li>");
-        }
-        html.push_str("</ol>");
-    }
-
-    html.push_str("<h2>Phases</h2><table><thead><tr>");
-    html.push_str(
-        "<th>Phase</th><th>Run</th><th>Status</th><th>Envelope Checks</th><th>Diffs</th>",
-    );
-    html.push_str("</tr></thead><tbody>");
-    for (phase_index, phase) in report.phases.iter().enumerate() {
-        let phase_row_id = audit_phase_row_id(phase_index);
-        html.push_str("<tr id=\"");
-        html_escape_into(&mut html, &phase_row_id);
-        html.push_str("\"><td><a class=\"audit-link\" href=\"#");
-        html_escape_into(&mut html, &phase_row_id);
-        html.push_str("\"><code>");
-        html_escape_into(&mut html, phase.phase_id.as_str());
-        html.push_str("</code></a></td><td><code>");
-        html_escape_into(&mut html, &phase.run_id);
-        html.push_str("</code></td><td class=\"");
-        let phase_status = json_label(&phase.status);
-        html_escape_into(&mut html, status_class_for(&phase_status));
-        html.push_str("\">");
-        html_escape_into(&mut html, &phase_status);
-        html.push_str("</td><td>");
-        html.push_str(if phase.applied_matches {
-            "applied matched"
-        } else {
-            "applied drifted"
-        });
-        html.push_str("<br>");
-        html.push_str(if phase.trace_matches {
-            "trace matched"
-        } else {
-            "trace drifted"
-        });
-        if let Some(reason) = &phase.reason {
-            html.push_str("<br><code>");
-            html_escape_into(&mut html, reason);
-            html.push_str("</code>");
-        }
-        html.push_str("</td><td>");
-        if phase.diffs.is_empty() {
-            html.push_str("<span class=\"empty\">No diffs.</span>");
-        } else {
-            for (diff_index, diff) in phase.diffs.iter().enumerate() {
-                let diff_id = audit_diff_row_id(phase_index, diff_index);
-                let expected_id = audit_diff_value_id(phase_index, diff_index, "expected");
-                let actual_id = audit_diff_value_id(phase_index, diff_index, "actual");
-                html.push_str("<section class=\"audit-diff\" id=\"");
-                html_escape_into(&mut html, &diff_id);
-                html.push_str("\"><a class=\"audit-link\" href=\"#");
-                html_escape_into(&mut html, &diff_id);
-                html.push_str("\"><code>");
-                html_escape_into(&mut html, &json_label(&diff.envelope));
-                html.push(' ');
-                html_escape_into(&mut html, &diff.path);
-                html.push_str("</code></a><br><a class=\"audit-link audit-detail-link\" href=\"#");
-                html_escape_into(&mut html, &expected_id);
-                html.push_str(
-                    "\">expected JSON</a><a class=\"audit-link audit-detail-link\" href=\"#",
-                );
-                html_escape_into(&mut html, &actual_id);
-                html.push_str("\">actual JSON</a><pre id=\"");
-                html_escape_into(&mut html, &expected_id);
-                html.push_str("\">expected:\n");
-                html_escape_into(&mut html, &pretty_json(&diff.expected));
-                html.push_str("</pre><pre id=\"");
-                html_escape_into(&mut html, &actual_id);
-                html.push_str("\">actual:\n");
-                html_escape_into(&mut html, &pretty_json(&diff.actual));
-                html.push_str("</pre></section>");
-            }
-        }
-        html.push_str("</td></tr>");
-    }
-    html.push_str("</tbody></table></main></body></html>");
-    html
-}
-
-fn render_projection_audit_html(report: &projections::ProjectionAuditReport) -> String {
-    let status_class = if report.ok { "ok" } else { "drift" };
-    let status_text = if report.ok { "matched" } else { "drifted" };
-    let drifted = report.tables.iter().filter(|table| !table.matches).count();
-    let mut html = String::new();
-    html.push_str("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
-    html.push_str("<title>Projection Rebuild Audit</title>");
-    html.push_str(
-        "<style>\
-         body{font-family:system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;margin:24px;color:#18202a;background:#f8fafc;}\
-         main{max-width:1180px;margin:0 auto;}\
-         h1{font-size:24px;margin:0 0 8px;}\
-         h2{font-size:18px;margin:28px 0 12px;}\
-         .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0;}\
-         .metric{background:#fff;border:1px solid #d8dee8;border-radius:6px;padding:10px 12px;}\
-         .label{display:block;font-size:12px;color:#516070;text-transform:uppercase;}\
-         .value{display:block;font-size:18px;font-weight:650;margin-top:4px;}\
-         .ok{color:#1f7a4d}.drift{color:#b42318}.skipped{color:#7a5a00}\
-         table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dee8;border-radius:6px;overflow:hidden;}\
-         th,td{text-align:left;vertical-align:top;border-bottom:1px solid #e7ebf1;padding:8px 10px;font-size:13px;}\
-         th{background:#edf2f7;color:#334155;}\
-         code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}\
-         code{font-size:12px;}\
-         pre{white-space:pre-wrap;word-break:break-word;background:#111827;color:#f8fafc;border-radius:6px;padding:10px;margin:6px 0 0;font-size:12px;}\
-         .projection-link{color:#0f5e9c;font-weight:650;text-decoration:none;}\
-         .projection-link:hover{text-decoration:underline;}\
-         .projection-detail-link{display:inline-block;margin:0 8px 0 0;}\
-         .empty{color:#64748b;}\
-         </style>",
-    );
-    html.push_str("</head><body><main>");
-    html.push_str("<h1>Projection Rebuild Audit</h1><section class=\"meta\">");
-    metric(&mut html, "Game", &report.game_id.to_string(), None);
-    metric(&mut html, "Status", status_text, Some(status_class));
-    metric(&mut html, "Tables", &report.tables.len().to_string(), None);
-    if let Some(first_drift_id) = projection_first_drift_table_id(report) {
-        metric_link(
-            &mut html,
-            "Drifted",
-            &drifted.to_string(),
-            Some("drift"),
-            &first_drift_id,
-        );
-    } else {
-        metric(&mut html, "Drifted", &drifted.to_string(), Some("drift"));
-    }
-    html.push_str("</section>");
-
-    html.push_str("<h2>Tables</h2><table><thead><tr>");
-    html.push_str("<th>Table</th><th>Status</th><th>Rows</th><th>Drift</th>");
-    html.push_str("</tr></thead><tbody>");
-    for (table_index, table) in report.tables.iter().enumerate() {
-        let row_class = if table.matches { "ok" } else { "drift" };
-        let row_status = if table.matches { "matched" } else { "drifted" };
-        let table_row_id = projection_table_row_id(table_index);
-        html.push_str("<tr id=\"");
-        html_escape_into(&mut html, &table_row_id);
-        html.push_str("\"><td><a class=\"projection-link\" href=\"#");
-        html_escape_into(&mut html, &table_row_id);
-        html.push_str("\"><code>");
-        html_escape_into(&mut html, &table.table);
-        html.push_str("</code></a></td><td class=\"");
-        html_escape_into(&mut html, row_class);
-        html.push_str("\">");
-        html_escape_into(&mut html, row_status);
-        html.push_str("</td><td>");
-        html_escape_into(
-            &mut html,
-            &format!(
-                "before: {} / rebuilt: {}",
-                table.before_rows, table.rebuilt_rows
-            ),
-        );
-        html.push_str("</td><td>");
-        if table.matches {
-            html.push_str("<span class=\"empty\">No drift.</span>");
-        } else {
-            let before_id = projection_table_value_id(table_index, "before");
-            let rebuilt_id = projection_table_value_id(table_index, "rebuilt");
-            html.push_str("<section><a class=\"projection-link projection-detail-link\" href=\"#");
-            html_escape_into(&mut html, &before_id);
-            html.push_str("\"><code>before</code></a>");
-            if let Some(before) = &table.before {
-                json_pre_with_id(&mut html, &before_id, before);
-            }
-            html.push_str(
-                "</section><section><a class=\"projection-link projection-detail-link\" href=\"#",
-            );
-            html_escape_into(&mut html, &rebuilt_id);
-            html.push_str("\"><code>rebuilt</code></a>");
-            if let Some(rebuilt) = &table.rebuilt {
-                json_pre_with_id(&mut html, &rebuilt_id, rebuilt);
-            }
-            html.push_str("</section>");
-        }
-        html.push_str("</td></tr>");
-    }
-    html.push_str("</tbody></table></main></body></html>");
-    html
-}
-
 fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionReport) -> String {
     let mut html = String::new();
     html.push_str("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
@@ -4032,21 +3623,6 @@ fn metric(html: &mut String, label: &str, value: &str, class: Option<&str>) {
     html.push_str("</span></div>");
 }
 
-fn metric_link(html: &mut String, label: &str, value: &str, class: Option<&str>, href: &str) {
-    html.push_str("<div class=\"metric\"><span class=\"label\">");
-    html_escape_into(html, label);
-    html.push_str("</span><a class=\"value projection-link");
-    if let Some(class) = class {
-        html.push(' ');
-        html_escape_into(html, class);
-    }
-    html.push_str("\" href=\"#");
-    html_escape_into(html, href);
-    html.push_str("\">");
-    html_escape_into(html, value);
-    html.push_str("</a></div>");
-}
-
 fn optional_i64(value: Option<i64>) -> String {
     value
         .map(|value| value.to_string())
@@ -4063,22 +3639,6 @@ fn optional_str(value: Option<&str>) -> String {
     value.unwrap_or("none").to_string()
 }
 
-fn status_class_for(status: &str) -> &'static str {
-    match status {
-        "matched" => "ok",
-        "drifted" => "drift",
-        "skipped" => "skipped",
-        _ => "",
-    }
-}
-
-fn json_label<T: Serialize>(value: &T) -> String {
-    serde_json::to_value(value)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_string))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
 fn pretty_json(value: &serde_json::Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
@@ -4089,55 +3649,6 @@ fn json_pre_with_id(html: &mut String, id: &str, value: &serde_json::Value) {
     html.push_str("\">");
     html_escape_into(html, &pretty_json(value));
     html.push_str("</pre>");
-}
-
-fn audit_summary_diff_id(
-    report: &commands::ResolutionEnvelopeAuditReport,
-    path: &commands::ResolutionEnvelopeAuditDriftPath,
-) -> Option<String> {
-    report
-        .phases
-        .iter()
-        .enumerate()
-        .find_map(|(phase_index, phase)| {
-            if phase.phase_id != path.phase_id || phase.run_id != path.run_id {
-                return None;
-            }
-            phase
-                .diffs
-                .iter()
-                .enumerate()
-                .find(|(_, diff)| diff.envelope == path.envelope && diff.path == path.path)
-                .map(|(diff_index, _)| audit_diff_row_id(phase_index, diff_index))
-        })
-}
-
-fn audit_phase_row_id(phase_index: usize) -> String {
-    format!("audit-phase-row-{phase_index}")
-}
-
-fn audit_diff_row_id(phase_index: usize, diff_index: usize) -> String {
-    format!("audit-diff-row-{phase_index}-{diff_index}")
-}
-
-fn audit_diff_value_id(phase_index: usize, diff_index: usize, side: &str) -> String {
-    format!("audit-diff-{side}-{phase_index}-{diff_index}")
-}
-
-fn projection_first_drift_table_id(report: &projections::ProjectionAuditReport) -> Option<String> {
-    report
-        .tables
-        .iter()
-        .position(|table| !table.matches)
-        .map(projection_table_row_id)
-}
-
-fn projection_table_row_id(table_index: usize) -> String {
-    format!("projection-table-row-{table_index}")
-}
-
-fn projection_table_value_id(table_index: usize, side: &str) -> String {
-    format!("projection-table-{side}-{table_index}")
 }
 
 fn trace_section_id(run_anchor: &str, section: &str) -> String {
@@ -4208,9 +3719,6 @@ pub enum ApiError {
     Projection(projections::ProjectionError),
     Capability(caps::CapError),
     Db(sqlx::Error),
-    Unavailable {
-        message: String,
-    },
     Reject {
         status: StatusCode,
         error: RejectCode,
@@ -4252,7 +3760,7 @@ impl IntoResponse for ApiError {
             ApiError::Projection(error) => projection_capacity_error(error),
             ApiError::Capability(error) => capability_capacity_error(error),
             ApiError::Db(error) => sqlx_capacity_error(error),
-            ApiError::Unavailable { .. } | ApiError::Reject { .. } => false,
+            ApiError::Reject { .. } => false,
         };
         if capacity_exhausted {
             let mut response = (
@@ -4271,27 +3779,10 @@ impl IntoResponse for ApiError {
             return response;
         }
 
-        if let ApiError::Unavailable { message } = self {
-            let mut response = (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(RejectMsg {
-                    error: RejectCode::Internal,
-                    retryable: true,
-                    message,
-                }),
-            )
-                .into_response();
-            response
-                .headers_mut()
-                .insert(RETRY_AFTER, HeaderValue::from_static("1"));
-            return response;
-        }
-
         let (status, error, message) = match self {
             ApiError::Projection(err) => opaque_internal_error("projection", err),
             ApiError::Capability(err) => opaque_internal_error("capability", err),
             ApiError::Db(err) => opaque_internal_error("database", err),
-            ApiError::Unavailable { .. } => unreachable!("handled above"),
             ApiError::Reject {
                 status,
                 error,
@@ -4371,13 +3862,6 @@ mod tests {
         assert_eq!(response.headers()[RETRY_AFTER], "1");
     }
 
-    #[test]
-    fn audit_admission_exhaustion_is_a_retryable_503() {
-        let response = operator_audit_capacity_exhausted().into_response();
-
-        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(response.headers()[RETRY_AFTER], "1");
-    }
     use std::{collections::HashSet, env, fs, path::Path as FsPath, time::SystemTime};
 
     // Command proof selectors span the ordinary pipeline and the physically

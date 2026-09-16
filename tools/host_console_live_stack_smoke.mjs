@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -73,9 +74,10 @@ const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
-const runnerOwnsDatabase =
-  process.env.FMARCH_PROOF_LANE_ID ===
-  "test:host-console-day-event-room-live-stack";
+const runnerOwnsDatabase = [
+  "test:host-console-live-stack-smoke",
+  "test:host-console-day-event-room-live-stack",
+].includes(process.env.FMARCH_PROOF_LANE_ID);
 if (runnerOwnsDatabase && configuredMediaRoot !== undefined) {
   throw new Error("runner-owned live-stack proof may not override FMARCH_MEDIA_ROOT");
 }
@@ -342,6 +344,8 @@ const sendCommand = async (principalId, command) =>
   preserveFixturePrincipalAliases(
     await rawSendCommand(principalId, commandForAuthorityTransport(command)),
   );
+const execFileAsync = promisify(execFile);
+let runtimeEnvironment;
 let server;
 let vite;
 let browser;
@@ -376,9 +380,7 @@ try {
   smokeDatabase.applicationUrl = authority.applicationUrl;
 
   await writeProgress({ stage: "start-rust-server", apiPort });
-  server = spawn("cargo", ["run", "-p", "server"], {
-    cwd: repoRoot,
-    env: localProofAuth.serverEnvironment({
+  runtimeEnvironment = localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
@@ -403,7 +405,10 @@ try {
       FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS:
         process.env.FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS ?? "185000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    }),
+    });
+  server = spawn("cargo", ["run", "-p", "server"], {
+    cwd: repoRoot,
+    env: runtimeEnvironment,
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => {
@@ -4541,10 +4546,14 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       `resolved factional kill did not kill slot-2: ${JSON.stringify(actionGameHostState.slots)}`,
     );
   }
-  const resolutionAudit = await fetchJson(
-    `${apiBaseUrl}/games/${actionGame}/resolution-audit`,
-    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  // This harness owns the disposable database and the canonical heavy lane.
+  // Replay is an explicit operator process; HTTP only reads stored traces.
+  const { stdout: auditJson } = await execFileAsync(
+    "cargo",
+    ["run", "--quiet", "-p", "operator_proof", "--bin", "audit_resolution", "--", actionGame],
+    { cwd: repoRoot, env: runtimeEnvironment, timeout: 180_000, maxBuffer: 16 * 1024 * 1024 },
   );
+  const resolutionAudit = JSON.parse(auditJson);
   const resolutionTraces = await fetchJson(
     `${apiBaseUrl}/games/${actionGame}/resolution-traces`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
@@ -4612,7 +4621,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the host-authorized resolution-audit plus trace-inspection APIs matched both sealed envelopes. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the explicit offline resolution audit matched both sealed envelopes and the host-authorized trace-inspection API read their stored trace. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 

@@ -70,9 +70,10 @@ struct CommandRouteState {
 }
 
 fn router(pool: sqlx::PgPool) -> Router {
-    let operator = operator_api::router_with_state(
-        operator_api::OperatorApiState::new(pool.clone(), local_proof_session_policy(), 1).unwrap(),
-    )
+    let operator = operator_api::router_with_state(operator_api::OperatorApiState::new(
+        pool.clone(),
+        local_proof_session_policy(),
+    ))
     .layer(middleware::from_fn_with_state(
         pool.clone(),
         authenticate_operator_fixture,
@@ -1259,337 +1260,6 @@ fn assert_proof_status_counts(
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sqlx::PgPool) {
-    let app = router(pool.clone());
-    let game = Uuid::new_v4();
-
-    expect_ack(
-        post_command(
-            app.clone(),
-            101,
-            "host_h",
-            Command::CreateGame {
-                game,
-                pack: "mafiascum".into(),
-                cohost_denied: vec![],
-            },
-        )
-        .await,
-    );
-    expect_ack(
-        post_command(
-            app.clone(),
-            102,
-            "host_h",
-            Command::AddCohost {
-                game,
-                principal_id: PrincipalId::fixture("cohost_c"),
-            },
-        )
-        .await,
-    );
-    expect_ack(
-        post_command(
-            app.clone(),
-            103,
-            "host_h",
-            Command::AddSlot {
-                game,
-                slot: "slot_1".into(),
-            },
-        )
-        .await,
-    );
-    expect_ack(
-        post_command(
-            app.clone(),
-            104,
-            "host_h",
-            seat_persona! {
-                game,
-                slot: "slot_1".into(),
-                user: "user_1",
-            },
-        )
-        .await,
-    );
-    expect_ack(
-        post_command(
-            app.clone(),
-            105,
-            "host_h",
-            Command::AssignRole {
-                game,
-                slot: "slot_1".into(),
-                role_key: "vanilla_townie".into(),
-            },
-        )
-        .await,
-    );
-
-    let game_text = game.to_string();
-    let mut tx = pool.begin().await.expect("begin projection tamper");
-    let tampered_private = eventstore::encrypt_private_projection(
-        &mut tx,
-        serde_json::json!({
-            "role_key": "tampered_role",
-            "alignment": "town"
-        }),
-        &format!("fmarch-projection-v1:slot_state:{game_text}:slot_1"),
-    )
-    .await
-    .expect("seal tampered slot state");
-    let update = sqlx::query(
-        "UPDATE slot_state SET private = $2 \
-         WHERE game_id = $1 AND slot_id = 'slot_1'",
-    )
-    .bind(game)
-    .bind(tampered_private)
-    .execute(&mut *tx)
-    .await
-    .expect("tamper live slot_state row");
-    tx.commit().await.expect("commit projection tamper");
-    assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/projection-audit?fixture_principal=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let report: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(report["game_id"], game.to_string());
-    assert_eq!(report["ok"], false);
-    let tables = report["tables"].as_array().unwrap();
-    let slot_state_index = tables
-        .iter()
-        .position(|table| table["table"] == "slot_state")
-        .expect("slot_state table audit");
-    let slot_state = &tables[slot_state_index];
-    assert_eq!(slot_state["matches"], false);
-    assert_eq!(slot_state["before_rows"], 1);
-    assert_eq!(slot_state["rebuilt_rows"], 1);
-    assert_eq!(slot_state["before"][0]["role_key"], "<private>");
-    assert_eq!(slot_state["rebuilt"][0]["role_key"], "<private>");
-
-    let live_role = projections::slot_state(&pool, game)
-        .await
-        .expect("live slot_state after rollback audit");
-    assert_eq!(
-        live_role[0].role_key.as_deref(),
-        Some("tampered_role"),
-        "projection audit must not repair live rows"
-    );
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/projection-audit/view?fixture_principal=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(html.contains("Projection Rebuild Audit"));
-    assert!(html.contains("slot_state"));
-    assert!(!html.contains("tampered_role"));
-    assert!(!html.contains("vanilla_townie"));
-    assert!(html.contains("private"));
-    assert!(html.contains("before"));
-    assert!(html.contains("rebuilt"));
-    let table_row_id = format!("projection-table-row-{slot_state_index}");
-    let before_id = format!("projection-table-before-{slot_state_index}");
-    let rebuilt_id = format!("projection-table-rebuilt-{slot_state_index}");
-    assert!(html.contains(&format!(
-        "class=\"value projection-link drift\" href=\"#{table_row_id}\">1</a>"
-    )));
-    assert!(html.contains(&format!("id=\"{table_row_id}\"")));
-    assert!(html.contains(&format!("href=\"#{table_row_id}\"")));
-    assert!(html.contains(&format!("id=\"{before_id}\"")));
-    assert!(html.contains(&format!("href=\"#{before_id}\"")));
-    assert!(html.contains(&format!("id=\"{rebuilt_id}\"")));
-    assert!(html.contains(&format!("href=\"#{rebuilt_id}\"")));
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/projection-audit/view?fixture_principal=cohost_c"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let cohost_html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(cohost_html.contains("slot_state"));
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/projection-audit?fixture_principal=user_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/projection-audit/view?fixture_principal=user_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/retention?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/resolution-diff?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-}
-
-#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -1647,8 +1317,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(html.contains("Operator Projection Rebuild Report"));
     assert!(html.contains("Operator Resolution Diff Report"));
     assert!(html.contains("Operator Trace Inspection Report"));
-    assert!(html.contains(&format!("/games/{game}/projection-audit/view")));
-    assert!(html.contains(&format!("/games/{game}/resolution-audit/view")));
+    assert!(!html.contains(&format!("/games/{game}/projection-audit")));
+    assert!(!html.contains(&format!("/games/{game}/resolution-audit")));
     assert!(html.contains(&format!("/games/{game}/resolution-traces/view")));
     assert!(html.contains(&format!("/games/{game}/host-phase-controls")));
     assert!(html.contains(&format!("/games/{game}/operator/proof-runs")));
@@ -4106,7 +3776,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx::PgPool) {
+async fn offline_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
     for principal_id in ["user_1", "user_2", "user_3"] {
@@ -4277,35 +3947,10 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
         .expect_err("authenticated ciphertext tamper must fail closed");
     assert!(load_error.to_string().contains("cryptography error"));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit?fixture_principal=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
+    let error = commands::audit_resolution_envelopes(&pool, game)
         .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit/view?fixture_principal=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        .expect_err("offline replay must reject authenticated ciphertext tamper");
+    assert!(error.to_string().contains("cryptography error"));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -4926,14 +4571,6 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
         (
             format!("/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h&fixture=drifted-production-artifact"),
             vec!["Operator Proof Artifact Go/No-Go", "no-go", "drifted", "non_trusted 1"],
-        ),
-        (
-            format!("/games/{game}/projection-audit/view?fixture_principal=host_h"),
-            vec!["Projection Rebuild Audit", "matched"],
-        ),
-        (
-            format!("/games/{game}/resolution-audit/view?fixture_principal=host_h"),
-            vec!["Resolution Replay Audit", "D01"],
         ),
         (
             format!("/games/{game}/resolution-traces/view?fixture_principal=host_h"),

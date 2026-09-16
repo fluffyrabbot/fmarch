@@ -29,7 +29,6 @@ struct RuntimeConfig {
     http: HttpCapacity,
     api: api::ApiRuntimeConfig,
     workers: WorkerBudget,
-    operator_audit_max_in_flight: usize,
     scheduler: commands::day_scheduler::DayEventSchedulerConfig,
     bootstrap_admin: Option<BootstrapAdminConfig>,
     classic_enabled: bool,
@@ -411,12 +410,6 @@ impl RuntimeConfig {
             http,
             api,
             workers,
-            operator_audit_max_in_flight: bounded_env(
-                "FMARCH_OPERATOR_AUDIT_MAX_IN_FLIGHT",
-                1,
-                1,
-                8,
-            )? as usize,
             scheduler: commands::day_scheduler::DayEventSchedulerConfig {
                 poll_interval: Duration::from_millis(bounded_env(
                     "FMARCH_DAY_EVENT_SCHEDULER_POLL_MS",
@@ -1352,12 +1345,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(verifier) = workos_verifier {
         api_state = api_state.with_access_token_verifier(std::sync::Arc::new(verifier));
     }
-    let mut operator_state = operator_api::OperatorApiState::new(
-        pool.clone(),
-        config.api.auth.session_policy.clone(),
-        config.operator_audit_max_in_flight,
-    )
-    .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))?;
+    let mut operator_state =
+        operator_api::OperatorApiState::new(pool.clone(), config.api.auth.session_policy.clone());
     if let Some(instance_id) = local_proof_instance_id {
         operator_state = operator_state.with_local_proof_instance(instance_id);
     }

@@ -433,7 +433,7 @@
       "title": "Executable bounded-context architecture",
       "execution_class": "code",
       "status": "partial",
-      "summary": "RFC 0006 is a twelve-step atomic migration from the persistence-centred application toward explicit bounded contexts over a typed journal and projector platform. Step 1 landed: tools/architecture_fitness.mjs enforces the active hard bans (pure contexts stay inward-only) and the four integration-hub dependency ratchets, and reports the accepted target bans as explicit migration debt (31 target dependency edges at last count). The remaining steps are architecture migration, not product capability, and are sequenced by the RFC itself; they are recorded here so the RFC's status pointer resolves truthfully rather than to implied completion.",
+      "summary": "RFC 0006 is a twelve-step atomic migration from the persistence-centred application toward explicit bounded contexts over a typed journal and projector platform. Steps 1 and 2 landed: tools/architecture_fitness.mjs enforces the active hard bans (pure contexts stay inward-only) and the four integration-hub dependency ratchets, and reports the accepted target bans as explicit migration debt (31 target dependency edges at last count). HTTP projection rebuild and resolution replay routes are deleted; saved artifact reads remain, and canonical tests cover concurrent writer fencing and absent replay authority. The remaining steps are architecture migration, not product capability, and are sequenced by the RFC itself; they are recorded here so the RFC's status pointer resolves truthfully rather than to implied completion.",
       "complete_when": [
         "All accepted target bans are active hard bans with zero target debt, every production dependency edge conforms to the RFC 0006 target DAG, every event row passes its owning typed codec audit, commands authorize from aggregate or operational authority rather than query projections, the concurrent append/rebuild proof shows no lost projection update, privacy provisioning and erasure crash/retry matrices end in valid states with complete receipts, the catalog proof shows schema ownership and least-privilege grants, the public binary carries no operator/proof or raw privacy-key authority, wire generation proves no internal dependency, and the forced full local proof sweep passes from a reset database."
       ],
@@ -457,10 +457,18 @@
         {
           "kind": "command",
           "value": "npm run test:architecture-fitness"
+        },
+        {
+          "kind": "source",
+          "value": "crates/operator_api/tests/operator_routes.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/e2e/rebuild_fencing.rs"
         }
       ],
       "remaining": [
-        "Steps 2-12 of the RFC 0006 atomic migration sequence: remove live destructive rebuild authority with a concurrent append/rebuild counterexample; install the context-neutral typed journal; make forum the reference vertical slice with its own application, journal, Postgres, query, and projector owners; cut social, attention, and trust-safety separately; replace commands with GameApplication and GameAggregate; land projector generations; rebuild privacy provisioning and erasure; split schemas, owners, roles, and pools; split runtime processes; rebaseline transport v3; and delete migration debt.",
+        "Steps 3-12 of the RFC 0006 atomic migration sequence: install the context-neutral typed journal; make forum the reference vertical slice with its own application, journal, Postgres, query, and projector owners; cut social, attention, and trust-safety separately; replace commands with GameApplication and GameAggregate; land projector generations; rebuild privacy provisioning and erasure; split schemas, owners, roles, and pools; split runtime processes; rebaseline transport v3; and delete migration debt.",
         "Each landed step must promote the ratchet edges it removes to active hard bans in the same commit; target debt only moves toward zero."
       ]
     },

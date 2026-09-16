@@ -197,7 +197,7 @@ test("host live-stack fixture inspects sealed events only at the opaque storage 
     /octet_length\(sealed_body\)\s*>=\s*16/,
     /FROM vote_ballot/,
     /FROM command_receipt/,
-    /\/resolution-audit/,
+    /"operator_proof", "--bin", "audit_resolution"/,
     /\/resolution-traces/,
   ]) {
     assert.match(source, sealedBoundary);

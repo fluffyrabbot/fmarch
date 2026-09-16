@@ -859,12 +859,11 @@ phase, skipped phase, and resolver identity without scanning raw events.
 
 The projections crate also ships `audit_rebuild`, a rollback-only operator command/library report
 that snapshots each rebuildable projection table for one game, replays the stored event stream, and
-emits a JSON drift report without mutating live read models. The same report is exposed through
-host/cohost-only `/games/{game}/projection-audit` JSON and
-`/games/{game}/projection-audit/view` HTML, with API coverage for host/cohost success, non-host
-rejection, synthetic `slot_state` drift rendering, and proof that rollback audit does not repair
-the live tampered projection row. The projection audit HTML links the drifted-table count to the
-first drifted table and gives drifted table rows plus before/rebuilt JSON blocks stable anchors.
+emits a JSON drift report in an exclusive/offline proof process. Rollback preserves
+committed rows, but execution takes stream locks and temporarily replaces projection
+rows, so HTTP diagnostics have no authority to run it against existing games. The operator surface reads saved reports
+at `/games/{game}/operator/proof-runs/projection-rebuild` (JSON and `/view` HTML).
+The concurrent writer/rebuild proofs retain the stream-fencing contract.
 The commands crate ships `audit_resolution`, which reruns
 ordinary `ResolvePhase` envelopes from the stored event-prefix and compares both
 `ResolutionApplied` and `ResolutionTrace` to the persisted payloads. It also reconstructs PK
@@ -879,11 +878,9 @@ full rebuilt/stored envelope payloads for deeper inspection. The report also inc
 `summary` with status counts and first drift paths. Applied drift, trace drift, and missing-trace
 cases are covered by command-level synthetic drift tests, and the `audit_resolution` binary is
 covered for matched zero-exit JSON output plus drifted non-zero exit with the same `summary` and
-`diffs[]` JSON. The same report is exposed through host/cohost-only
-`/games/{game}/resolution-audit` JSON and `/games/{game}/resolution-audit/view` HTML, with API
-coverage for host/cohost success, non-host rejection, and synthetic-drift rendering of summary
-counts, phase status, drift path, expected/actual values, drift-row anchors, expected/actual JSON
-anchors, and summary links to the first matching drift row. Richer trace browsing now has a first
+`diffs[]` JSON. Saved resolution-diff reports are available through the host/cohost-only
+`/games/{game}/operator/proof-runs/resolution-diff` JSON and `/view` HTML surfaces;
+HTTP diagnostics do not execute resolution replay. Richer trace browsing has a read-only
 operator surface: `inspect_trace`, `/games/{game}/resolution-traces` JSON, and
 `/games/{game}/resolution-traces/view` HTML flatten stored `ResolutionTrace` rows with
 stream-sequence anchors, decisions, redirect edges, generated actions, effect changes, visibility,

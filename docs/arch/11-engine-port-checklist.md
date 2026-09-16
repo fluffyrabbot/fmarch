@@ -2318,12 +2318,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    command-level synthetic `ResolutionApplied` drift, `ResolutionTrace` drift, and missing-trace
    tests. CLI coverage proves `audit_resolution` exits zero and prints JSON for a matched game,
    exits non-zero on drift, and prints the same compact `summary` plus `diffs[]` JSON for a
-   drifted game. The same report is exposed at host/cohost-only
-   `/games/{game}/resolution-audit` JSON and `/games/{game}/resolution-audit/view` HTML, with an
-   API vertical proving host success, cohost success, non-host rejection, compact `summary` /
-   phase-status / drift-path JSON, and synthetic-drift HTML rendering of summary counts, phase
-   status, drift path, expected/actual values, drift-row anchors, expected/actual JSON anchors,
-   and summary links to the first matching drift row. Revote and skip-next-day prompt decisions
+   drifted game. HTTP reads the saved report at host/cohost-only
+   `/games/{game}/operator/proof-runs/resolution-diff` JSON and `/view` HTML;
+   the runtime has no projection rebuild or resolution replay routes. Offline
+   command proof owns recomputation. Revote and skip-next-day prompt decisions
    have no `ResolutionApplied` envelope and remain covered by `host_phase_control`; `inspect_trace` plus
    `/games/{game}/resolution-traces` JSON and `/games/{game}/resolution-traces/view` HTML expose
    stored trace rows with stream anchors, decisions, redirect edges, generated actions, effect
@@ -2390,12 +2388,11 @@ coverage, and a playable vertical scenario through the command pipeline.
 3. Projection rebuild and audit commands.
    [done: `cargo run -p projections --bin audit_rebuild -- <game_uuid>` snapshots
    every rebuildable projection table, replays the game stream inside a rollback-only
-   transaction, emits a JSON `ProjectionAuditReport`, and exits non-zero on row drift. The same
-   callable library report is exposed through host/cohost-only
-   `/games/{game}/projection-audit` JSON and `/games/{game}/projection-audit/view` HTML; the API
-   vertical proves host/cohost success, non-host rejection, synthetic `slot_state` projection drift
-   rendering, linked drift-count summary, stable drifted-table row anchors, stable before/rebuilt
-   JSON anchors, and that rollback audit does not repair the live tampered projection row. Ordinary
+   transaction, emits a JSON `ProjectionAuditReport`, and exits non-zero on row drift. Saved reports are read through host/cohost-only
+   `/games/{game}/operator/proof-runs/projection-rebuild` JSON and `/view` HTML.
+   HTTP diagnostics cannot execute replay against existing games, including while
+   a concurrent writer holds the stream fence. Offline command proof covers drift
+   and rollback; the concurrent append/rebuild proof covers the fence. Ordinary
    `ResolvePhase` and PK host-prompt envelope drift are covered by `audit_resolution`; stored trace
    inspection is covered by `inspect_trace` and the host/cohost-only trace route; host phase-control
    JSON/HTML inspection and the host/cohost operator index link these proven surfaces from one game
@@ -2409,7 +2406,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    drifted synthetic games, proving exit code, stdout/file JSON parity, artifact path, game id,
    rollback-only isolation metadata, table/matched/drift counts, drifted `slot_state` rows, and
    rollback isolation. The Playwright operator browser smoke was rerun against a short-lived local
-   scratch database and proved the projection-audit view plus operator projection-rebuild
+   scratch database and proved the saved operator projection-rebuild
    saved-artifact JSON/HTML and fixture pages render through the browser proof lane]
 4. Performance tests around large action graphs.
    [done: `large_action_graph_resolves_and_audits_within_regression_ceiling` builds a
