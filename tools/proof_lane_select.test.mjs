@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
+import './proof_lane_select_live_ownership.test.mjs';
 
 import {
   assertMappedSelection,
