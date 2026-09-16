@@ -8293,7 +8293,7 @@ pub async fn discussion_posts(
 /// Load the slice of one discussion post the forum write model needs to decide
 /// an author edit or retraction. Moderation and mute state are deliberately
 /// absent: the author's own post is addressable to them regardless of who
-/// else can see it, and `decide_topic` owns the admission rules.
+/// else can see it, and `decide_post` owns the admission rules.
 pub async fn discussion_post_write_state(
     pool: &PgPool,
     topic_id: Uuid,
@@ -8316,6 +8316,7 @@ pub async fn discussion_post_write_state(
         return Ok(None);
     };
     Ok(Some(forum::PostState {
+        topic_id,
         source_seq: row.get("source_seq"),
         author_profile_id: row.get("author_profile_id"),
         body: row.get("body"),

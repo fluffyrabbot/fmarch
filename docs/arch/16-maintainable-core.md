@@ -47,6 +47,30 @@ The [completion registry](../ops/completion-registry.json) owns the next
 recommended slice. The contracts below retain each boundary's dependency and
 proof details; this table does not independently mark the broader area complete.
 
+## Forum command contracts: preparation for the application boundary
+
+`forum::TopicTitle`, `PostBody`, and `PostContent` own normalized text limits,
+nonempty-content policy, and topic-bound quotation and mention validation.
+`PostContent` has private fields and can only be constructed by applying the
+shared pure reference rules to the normalized body and one forum thread.
+HTTP resolves public profile candidates and loads the current source state;
+it does not independently decide forum title, body, quotation, or mention policy.
+
+Post-addressed commands use `PostDecisionContext` and `PostCommand` rather than
+an incompletely loaded `TopicState.posts` vector. The context names exactly one
+post, verifies its topic identity, and supplies the source sequence for emitted
+edit/retraction events. The pure owner checks author, topic state, original
+submission window, expected revision, checked revision advancement, and the
+fixed quotation content allowance. A refreshed clock before submission or an
+overflowing elapsed-time calculation fails closed.
+
+This is a preparatory contract cut, not the RFC 0006 application migration.
+HTTP still loads projection state and orchestrates the current event append;
+the journal still uses its existing envelopes. The typed neutral journal,
+forum aggregate replay/codec, repository/application ownership, and projector
+cutover in RFC 0006 steps 3 and 4 remain incomplete. No compatibility wrapper,
+new write path, schema reset, or event/wire encoding was introduced here.
+
 ## First closed boundary: API media HTTP
 
 `crates/api/src/media_http.rs` now owns upload and projected-reference media
