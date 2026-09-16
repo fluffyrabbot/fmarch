@@ -178,6 +178,11 @@ async function proveSignupOrigin({ member, moderator, frontendBaseUrl, apiBaseUr
   const readerPage = await member.newPage();
   try {
     await hostPage.goto(`${frontendBaseUrl}/admin`, { waitUntil: "networkidle" });
+    const creation = hostPage.getByTestId("admin-game-creation");
+    if (await creation.count() > 0) {
+      if (await creation.evaluate((node) => node.open)) throw new Error("existing-game creation must start collapsed");
+      await hostPage.getByTestId("admin-game-creation-toggle").click();
+    }
     const picker = hostPage.getByTestId("admin-game-origin-topic");
     await picker.selectOption(topic.topic);
     const optionLabels = await picker.locator("option").allTextContents();

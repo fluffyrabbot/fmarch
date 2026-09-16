@@ -144,6 +144,7 @@ try {
     });
   }
   const adminSurface = await proveRenderedAdminSurface(bundle);
+  await proveRenderedAdminCreation(bundle);
   const adminAuditDetailSurface = await proveRenderedAdminAuditDetailSurface(bundle);
   const playerSurface = await proveRenderedPlayerSurface(bundle);
   const playerThreadPagerStates = await proveRenderedPlayerThreadPagerStates(bundle);
@@ -1400,6 +1401,32 @@ async function proveRenderedAdminSurface(bundle) {
     commandActivityEmptyTestId: "admin-command-activity-empty",
     htmlBytes: Buffer.byteLength(html),
   };
+}
+
+async function proveRenderedAdminCreation(bundle) {
+  const first = (await bundle.renderAdminCreationSurface({ firstGame: true })).html;
+  assertIncludes(first, "Create the first game", "fresh install creation");
+  assertIncludes(first, 'data-testid="admin-game-origin-topic"', "fresh install signup choice");
+  assert.equal((first.match(/data-testid="admin-game-bootstrap"/g) ?? []).length, 1);
+  assert.ok(!first.includes('data-testid="admin-game-creation"'), "first creation must not be collapsed");
+  assert.ok(!first.includes('data-testid="route-state-admin-empty"'), "first creation must not also show the empty route state");
+  assert.ok(!first.includes('data-testid="admin-operator-inbox"'), "first creation has no game workspace yet");
+
+  const selected = (await bundle.renderAdminCreationSurface()).html;
+  const disclosure = selected.match(/<details\b[^>]*data-testid="admin-game-creation"[^>]*>/)?.[0];
+  assert.ok(disclosure, "selected-game workspace keeps creation available");
+  assert.doesNotMatch(disclosure, /\bopen(?:\s|>|=)/, "creation is closed by default");
+  assert.ok(selected.indexOf('data-testid="admin-operator-inbox"') < selected.indexOf(disclosure), "the current game inbox precedes creation");
+  assert.equal((selected.match(/data-testid="admin-game-bootstrap"/g) ?? []).length, 1);
+
+  const rejected = (await bundle.renderAdminCreationSurface({
+    status: { state: "reject", message: "Choose a topic you authored", pack: "mafia_universe", originTopic: "signup-topic" },
+  })).html;
+  assert.match(rejected.match(/<details\b[^>]*data-testid="admin-game-creation"[^>]*>/)?.[0] ?? "", /\bopen(?:\s|>|=)/, "creation rejection opens its feedback");
+  assertIncludes(rejected, 'data-testid="admin-game-bootstrap-status"', "creation rejection status component");
+  assertIncludes(rejected, "Choose a topic you authored", "creation rejection message");
+  assert.match(rejected, /<option value="mafia_universe" selected(?:\s|>|=)/, "returned pack choice survives rejection");
+  assert.match(rejected, /<option value="signup-topic" selected(?:\s|>|=)/, "returned signup choice survives rejection");
 }
 
 async function proveRenderedAdminAuditDetailSurface(bundle) {
@@ -2794,6 +2821,23 @@ export async function renderModeratorCommandActivity() {
 	  const data = await buildAdminRouteData(fixtureRouteInputForRole("admin"));
 	  return renderWithRootLayout({ page: "admin", data, url: "http://localhost/admin" });
 	}
+
+export async function renderAdminCreationSurface({ firstGame = false, status = null } = {}) {
+  const base = await buildAdminRouteData(fixtureRouteInputForRole("admin"));
+  const data = {
+    ...base,
+    ...(firstGame ? { gameSetup: [], audit: [], recoveryTasks: [], escalations: [] } : {}),
+    gameSelection: { selectedGame: firstGame ? null : "midsummer", options: [] },
+    bootstrap: {
+      available: true,
+      defaultPack: "mafiascum",
+      packs: [{ key: "mafiascum", name: "Mafiascum" }, { key: "mafia_universe", name: "Mafia Universe" }],
+    },
+    originTopics: [{ topic: "signup-topic", title: "Signup topic" }],
+  };
+  setPage({ status: 200, error: null, url: new URL("http://localhost/admin"), data });
+  return render(AdminPage, { props: { data, form: status === null ? undefined : { bootstrap: status } } });
+}
 
 export async function renderAdminAuditDetailSurface() {
 	  const data = await buildAdminAuditDetailData({
