@@ -50,6 +50,12 @@
         ],
         "audit": [
           "bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going"
+        ],
+        "forum-regression": [
+          "bash scripts/linux-proof.sh --only test:dev-test-game-game-index",
+          "bash scripts/linux-proof.sh --only test:dev-test-game-discussion",
+          "bash scripts/linux-proof.sh --only test:dev-test-game-community-moderation",
+          "bash scripts/linux-proof.sh --only test:dev-test-game-community-subscriptions"
         ]
       }
     }
