@@ -31,6 +31,7 @@ import {
   createLiveStackAuth,
   createLiveStackCommandSender,
 } from "./live_stack/auth_commands.mjs";
+import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import {
   createLiveStackViteLogger,
   createLiveStackFixtureTools,
@@ -823,16 +824,6 @@ async function seedGame() {
     ],
     ["host_h", { StartGame: { game, phase: "D01" } }],
     [
-      "player-seed",
-      {
-        SubmitVote: {
-          game,
-          actor_slot: "slot-3",
-          target: { Slot: "slot_1" },
-        },
-      },
-    ],
-    [
       "player-mira",
       {
         SubmitPost: {
@@ -1299,7 +1290,16 @@ async function driveBrowser(
   let playerEvidence;
   let moderatorEvidence;
   try {
-    await waitForHostLiveVotecount(moderatorSession.page, 1);
+    const hostInitialVoteDelivery = await proveHostInitialVoteDelivery({
+      page: moderatorSession.page,
+      game,
+      sendCommand,
+      diagnostics: {
+        tickets: moderatorTicketDiagnostics,
+        sockets: moderatorSocketDiagnostics,
+        console: moderatorConsoleDiagnostics,
+      },
+    });
     const hostVotecountBeforePlayer = await hostVotecountBrowserSnapshot(
       moderatorSession.page,
     );
@@ -1353,6 +1353,7 @@ async function driveBrowser(
       dayEventRoom,
       rolePmHistory,
       privateChannelForbidden: privateChannelForbiddenEvidence,
+      hostInitialVoteDelivery,
       hostVotecountConvergence,
       moderator: moderatorEvidence,
       playerVoteCountAfterPlayer,
@@ -5742,37 +5743,6 @@ async function waitForMainThreadPost(expectedBody) {
   throw new Error(
     `main thread projection did not include ${expectedBody}: ${JSON.stringify(lastPage)}`,
   );
-}
-
-async function waitForHostLiveVotecount(page, count) {
-  try {
-    await page.waitForFunction(
-      (expectedCount) =>
-        window.__fmarchHostLiveProjectionEvents?.some(
-          (event) =>
-            event?.delta?.kind === "VoteCountChanged" &&
-            event.delta.body?.candidate_slot === "slot_1" &&
-            event.delta.body?.count === expectedCount,
-        ),
-      count,
-    );
-    await page.waitForFunction(
-      (expectedCount) =>
-        window.__fmarchHostVotecountProjection?.some(
-          (row) => row.target === "slot_1" && row.count === expectedCount,
-        ),
-      count,
-    );
-  } catch (error) {
-    const debug = await page.evaluate(() => ({
-      endpoint: window.__fmarchHostLiveProjectionEndpoint,
-      events: window.__fmarchHostLiveProjectionEvents,
-      projection: window.__fmarchHostVotecountProjection,
-    }));
-    throw new Error(
-      `host live votecount did not reach ${count}: ${JSON.stringify({ ...debug, tickets: moderatorTicketDiagnostics, sockets: moderatorSocketDiagnostics, console: moderatorConsoleDiagnostics })}`,
-    );
-  }
 }
 
 async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
