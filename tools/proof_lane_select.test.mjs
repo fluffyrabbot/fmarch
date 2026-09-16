@@ -645,6 +645,8 @@ test('Postgres-backed npm lanes own a role-appropriate repo-local database defau
 test('migrated mutable proof leaves consume runner-owned database and artifact resources', () => {
   for (const [laneId, databaseEnvironments] of [
     ['test:auth-invite-role-proof', ['DATABASE_MIGRATION_URL']],
+    ['test:dev-test-game-community-moderation', ['DATABASE_MIGRATION_URL']],
+    ['test:dev-test-game-community-subscriptions', ['DATABASE_MIGRATION_URL']],
     ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
     ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
     ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
@@ -1483,6 +1485,10 @@ test('direct proof-tool sources select their owning proof lanes', () => {
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
     ['tools/discussion_role_proof.mjs', 'test:dev-test-game-discussion'],
     ['tools/game_index_role_proof.mjs', 'test:dev-test-game-game-index'],
+    ['tools/community_moderation_role_proof.mjs', 'test:dev-test-game-community-moderation'],
+    ['tools/community_moderation_evidence_contract.mjs', ['test:dev-test-game-community-moderation', 'test:dev-test-game-contract']],
+    ['tools/community_moderation_evidence_contract.test.mjs', ['test:dev-test-game-community-moderation', 'test:dev-test-game-contract']],
+    ['tools/public_watch_role_proof.mjs', 'test:dev-test-game-community-subscriptions'],
     [
       'tools/capacity_auth_source_authority.mjs',
       [
@@ -1584,6 +1590,22 @@ test('public search role proof is selected from search, projections, and public-
       selection.laneIds.includes('test:public-search-role-proof'),
       `${source} must arm public search role proof`,
     );
+  }
+});
+
+test('moderation and attention changes select their browser counterexamples', () => {
+  const moderation = 'test:dev-test-game-community-moderation';
+  const attention = 'test:dev-test-game-community-subscriptions';
+  for (const [source, required] of [
+    ['crates/projections/src/lib.rs', [moderation, attention]],
+    ['crates/api/src/public_platform_http.rs', [moderation, attention]],
+    ['crates/trust_safety/src/lib.rs', [moderation]],
+    ['crates/attention/src/lib.rs', [attention]],
+    ['frontend/src/routes/moderation/+page.svelte', [moderation]],
+    ['frontend/src/routes/inbox/+page.svelte', [attention]],
+  ]) {
+    const selection = selectLanes({ changed: [source], manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
+    for (const lane of required) assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
   }
 });
 
