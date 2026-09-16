@@ -118,6 +118,13 @@ includes at least one of private visibility, admission-controlled membership,
 or owner-managed spaces. Crossing that gate requires a dedicated context and
 capability design before adding routes or tables.
 
+Owner ruling (2026-09-16): [RFC 0005](0005-closed-community-admission.md)'s
+closed admission does **not** cross this gate. It governs who may be a
+principal at all; it is global, not a membership of any space, and it leaves
+the forum as one global root with no owned, member-only, or private
+sub-community. The gate stays closed until the roadmap names a governed
+non-game community; a community-spaces context is not registered.
+
 ## Invariants
 
 1. Game and forum aggregates retain separate commands, events, author models,
