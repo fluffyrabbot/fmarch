@@ -565,7 +565,7 @@
       "dependency_lanes": ["cargo:wire", "cargo:clippy-workspace", "check:wire-types"],
       "lanes": ["cargo:wire", "cargo:clippy-workspace", "check:wire-types"],
       "capabilities": ["foundation.wire-live-delivery"],
-      "also_triggers": ["frontend:game", "tools:proof-infra"]
+      "also_triggers": ["frontend:game", "frontend:game-index", "tools:proof-infra"]
     },
     {
       "id": "wire:tests",
@@ -865,6 +865,22 @@
         "product.mash.day-event-runtime",
         "product.mash.private-day-event-rooms"
       ]
+    },
+    {
+      "id": "frontend:game-index",
+      "tier": "frozen",
+      "paths": [
+        "frontend/src/lib/server/game-index-response.mjs",
+        "frontend/src/lib/server/game-index-response.test.mjs",
+        "frontend/src/routes/+page.server.js",
+        "frontend/src/routes/+page.svelte",
+        "frontend/src/routes/board-route.test.mjs",
+        "frontend/src/lib/app/app-shell-model.mjs",
+        "frontend/src/lib/app/app-shell-model.test.mjs"
+      ],
+      "lanes": ["test:frontend-contract", "test:dev-test-game-game-index"],
+      "also_triggers": ["frontend:game"],
+      "capabilities": ["product.community.game-index"]
     },
     {
       "id": "frontend:community",
