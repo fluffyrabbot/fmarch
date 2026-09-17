@@ -34,6 +34,7 @@ import {
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import { proveExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 import { captureHostResyncBoundary, hostNetworkDiagnostics, waitForHostCommandResync } from "./live_stack/host_resync_scenario.mjs";
+import { assertHostDeadlineApiPhase, waitForHostDeadlineDelivery } from "./live_stack/host_deadline_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
@@ -573,7 +574,7 @@ try {
         `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
         { headers: { authorization: `Bearer ${hostSessionToken}` } },
       ));
-  if (!dayEventRoomOnly) assertApiProjection(apiState);
+  if (!dayEventRoomOnly) assertApiProjection(apiState, browserEvidence.moderator.actions.find((action) => action.id === "extend_deadline").liveDelivery.command);
   const slotLifecycleApiState = dayEventRoomOnly
     ? null
     : browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
@@ -4971,8 +4972,7 @@ async function driveModeratorBrowser(
     const confirm = actionRoot.getByTestId("critical-host-action-confirm");
     const confirmBox = await confirm.boundingBox();
     assertHitTarget(confirmBox, `${expected.id} confirm`);
-    const recoveryBefore = expected.id === "process_replacement"
-      ? await captureHostResyncBoundary(page, moderatorNetworkSnapshot) : null;
+    const recoveryBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
     await confirm.click({ force: true });
 
     const status = page.getByTestId(`host-command-status-${expected.id}`);
@@ -4984,10 +4984,15 @@ async function driveModeratorBrowser(
           ?.getAttribute("data-state") === expectedStatus,
       { actionId: expected.id, expectedStatus: expected.status },
     );
-    if (expected.id === "extend_deadline") {
-      await waitForHostConsoleDeadlineDelta(page, 1781928000);
-    }
     const commandStatus = await page.evaluate((id) => window.__fmarchHostCommandStatuses?.[id], expected.id);
+    const liveDelivery = expected.id === "extend_deadline" ? await waitForHostDeadlineDelivery({
+      page, game, before: recoveryBefore, commandStatus,
+      rejectedCommandStatus: streamConflictEvidence.commandStatus,
+      readApiPhase: async () => (await fetchJson(`${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`, {
+        headers: { authorization: `Bearer ${hostSessionToken}` },
+      })).phase,
+      diagnostics: moderatorNetworkSnapshot,
+    }) : null;
     const liveRecovery = expected.id === "process_replacement" ? await waitForModeratorResync(page, {
       expected: { kind: "replacement", commandKind: "ProcessReplacement", slotId: "slot-7", principalId: PLAYER_ROWAN_PRINCIPAL_ID },
       before: recoveryBefore, commandReceipt: commandStatus,
@@ -4999,6 +5004,7 @@ async function driveModeratorBrowser(
       confirmBox,
       confirmationMessage,
       commandStatus,
+      liveDelivery,
       liveRecovery,
       statusMessage: await status.innerText(),
     });
@@ -5009,7 +5015,7 @@ async function driveModeratorBrowser(
     .getByTestId("host-console-slot-occupant")
     .innerText();
   const historyLabel = await page.getByTestId("host-console-history").innerText();
-  if (!deadlineLabel.includes("Jun 19, 2026") || !deadlineLabel.includes("9:00 PM")) {
+  if (deadlineLabel.trim() !== actionEvidence.find((action) => action.id === "extend_deadline").liveDelivery.expectedLabel) {
     throw new Error(`deadline label did not update from real API: ${deadlineLabel}`);
   }
   if (!occupantLabel.includes("Slot 7")) {
@@ -5852,18 +5858,6 @@ function voteCountForProjection(projection, slotId) {
   return row?.count ?? null;
 }
 
-async function waitForHostConsoleDeadlineDelta(page, deadline) {
-  await page.waitForFunction(
-    (expectedDeadline) =>
-      (window.__fmarchHostLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "HostConsoleHeaderChanged" &&
-          event.delta.body?.phase?.deadline === expectedDeadline,
-      ),
-    deadline,
-  );
-}
-
 async function fetchJson(url, options = {}, timeoutMs = 15000) {
   const headers = new Headers(options.headers);
   const authorization = headers.get("authorization");
@@ -5989,10 +5983,8 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
-function assertApiProjection(state) {
-  if (state.phase?.deadline !== 1781928000) {
-    throw new Error(`API deadline projection did not update: ${JSON.stringify(state.phase)}`);
-  }
+function assertApiProjection(state, deadlineCommand) {
+  assertHostDeadlineApiPhase(state.phase, deadlineCommand);
   if (state.slots?.[0]?.assigned_principal_id !== "player-rowan") {
     throw new Error(`API replacement projection did not update: ${JSON.stringify(state.slots)}`);
   }
