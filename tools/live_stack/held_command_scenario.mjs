@@ -50,6 +50,7 @@ export async function captureHeldBrowserPost(page, {
       capture = {
         status: "captured", game, kind, initialRecovery,
         commandId: command?.command_id ?? null,
+        requestEnvelope: invite ? null : structuredClone(body),
         pathname: new URL(request.url()).pathname,
         bodySha256: createHash("sha256").update(bytes).digest("hex"),
         bodyBytes: bytes.length,

@@ -26,6 +26,7 @@ test("real request remains held until competing commit and continues byte-for-by
   await held.completion;
   assert.deepEqual(fixture.continued, [[]]);
   assert.equal(receipt.commandId, "same-browser-command");
+  assert.deepEqual(receipt.requestEnvelope, envelope);
   assert.equal(receipt.bodySha256, createHash("sha256").update(JSON.stringify(envelope)).digest("hex"));
   assert.equal(receipt.releasedBodySha256, receipt.bodySha256);
   assert.deepEqual(receipt.ordering, ["captured-before-competing-command", "competing-command-acked", "continued-unchanged"]);
@@ -85,6 +86,7 @@ test("invite holds only its actual form route and never parses or rewrites submi
   });
   const receipt = await held.releaseAfter({ streamSeqs: [43] });
   assert.equal(receipt.commandId, null);
+  assert.equal(receipt.requestEnvelope, null);
   assert.equal(receipt.releasedBodySha256, receipt.bodySha256);
   assert.deepEqual(fixture.continued, [[]]);
 });
