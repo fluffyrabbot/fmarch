@@ -175,6 +175,8 @@ export type HostConsoleAuthorityKind = "HostOf" | "CohostOf" | "GlobalOperator";
 
 export type HostConsoleAuthorityDelta = { principal_id: PrincipalId, capability: HostConsoleAuthorityKind, allowed_classes: Array<CohostPermissionClass>, denied_classes: Array<CohostPermissionClass>, };
 
+export type HostReplacementCandidate = { slot_id: string, outgoing_persona_id: string, principal_id: PrincipalId, handle: string, display_name: string, };
+
 export type HostConsolePhaseStateDelta = { phase_id: PhaseId, locked: boolean, deadline: bigint | null, };
 
 export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupancy_id: string, persona_id: string, public_name: string, assigned_principal_id: PrincipalId, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
