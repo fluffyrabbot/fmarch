@@ -36,6 +36,7 @@ import { proveExplicitHostReconnect } from "./live_stack/host_reconnect_scenario
 import { captureHostResyncBoundary, hostNetworkDiagnostics, waitForHostCommandResync } from "./live_stack/host_resync_scenario.mjs";
 import { assertHostDeadlineApiPhase, waitForHostDeadlineDelivery } from "./live_stack/host_deadline_scenario.mjs";
 import { assertHostSeatScope, observeHostSeatReads } from "./live_stack/host_seat_scope_scenario.mjs";
+import { assertHostReplacementCandidate, assertHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
@@ -488,6 +489,7 @@ try {
   } else {
     await writeProgress({ stage: "create-granted-sessions", game });
     grantedSessions = await createGrantedSessions();
+    grantedSessions.rolePmIncoming.profile = await seedIncomingReplacementProfile();
     await writeProgress({ stage: "provision-account-only-fixture-principals" });
     accountOnlyPrincipals = await provisionAccountOnlyFixturePrincipals();
     await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
@@ -1229,6 +1231,23 @@ async function createGrantedSessions() {
       principalId: "cohost_c",
     }),
   };
+}
+
+async function seedIncomingReplacementProfile() {
+  const profile = await fetchJson(`${apiBaseUrl}/profiles`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rolePmIncomingSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      handle: "rowan", display_name: "Rowan", bio: "Live host replacement proof member.", visibility: "public",
+    }),
+  });
+  if (profile.handle !== "rowan" || profile.display_name !== "Rowan" || profile.visibility !== "public") {
+    throw new Error(`incoming member's public profile was not created: ${JSON.stringify(profile)}`);
+  }
+  return profile;
 }
 
 async function provisionAccountOnlyFixturePrincipals() {
@@ -4936,8 +4955,13 @@ async function driveModeratorBrowser(
     { id: "process_replacement", status: "ack" },
   ]) {
     const taskId = expected.id === "extend_deadline" ? "deadline" : "replacement";
-    await page.getByTestId(`host-task-${taskId}`).click();
+    let candidate = null;
+    let durableBefore = null;
+    let durableAfterLookup = null;
     if (expected.id === "process_replacement") {
+      durableBefore = await readHostReplacementDurability();
+      candidate = await chooseHostReplacementCandidate(page);
+      durableAfterLookup = await readHostReplacementDurability();
       stalePlayerInviteSession = await openStaleModeratorBrowser(pageUrl);
       stalePlayerInviteBefore = await readPlayerInviteTarget(stalePlayerInviteSession.page);
       if (
@@ -4951,12 +4975,9 @@ async function driveModeratorBrowser(
           `stale player invite fixture was not pre-replacement: ${JSON.stringify(stalePlayerInviteBefore)}`,
         );
       }
-      stalePlayerInviteSession.heldSubmission = await holdBrowserPost(stalePlayerInviteSession.page, {
-        game, kind: "issuePlayerInvite",
-        initialRecovery: await captureHostLiveBoundary(stalePlayerInviteSession.page),
-        trigger: () => rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page),
-      });
     }
+    // The chooser exists before a candidate-dependent replacement task does.
+    await page.getByTestId(`host-task-${taskId}`).click();
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -4976,18 +4997,30 @@ async function driveModeratorBrowser(
     const confirmBox = await confirm.boundingBox();
     assertHitTarget(confirmBox, `${expected.id} confirm`);
     const recoveryBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
+    if (expected.id === "process_replacement") {
+      // Candidate lookup and confirmation setup finish before this real request
+      // is paused. Release remains tied to the competing replacement ACK.
+      stalePlayerInviteSession.heldSubmission = await holdBrowserPost(stalePlayerInviteSession.page, {
+        game, kind: "issuePlayerInvite",
+        initialRecovery: await captureHostLiveBoundary(stalePlayerInviteSession.page),
+        trigger: () => rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page),
+      });
+    }
     await confirm.click({ force: true });
 
-    const status = page.getByTestId(`host-command-status-${expected.id}`);
+    const status = page.getByTestId(expected.id === "process_replacement"
+      ? "host-replacement-command-status" : `host-command-status-${expected.id}`);
     await status.waitFor({ state: "visible" });
     await page.waitForFunction(
-      ({ actionId, expectedStatus }) =>
-        document
-          .querySelector(`[data-testid="host-command-status-${actionId}"]`)
-          ?.getAttribute("data-state") === expectedStatus,
+      ({ actionId, expectedStatus }) => window.__fmarchHostCommandStatuses?.[actionId]?.state === expectedStatus,
       { actionId: expected.id, expectedStatus: expected.status },
     );
     const commandStatus = await page.evaluate((id) => window.__fmarchHostCommandStatuses?.[id], expected.id);
+    const replacementEvidence = expected.id === "process_replacement"
+      ? assertHostReplacementEvidence({
+        candidate, confirmationMessage, commandStatus, durableBefore, durableAfterLookup,
+        durableAfter: await readHostReplacementDurability(commandStatus.commandId),
+      }, hostReplacementExpected()) : null;
     const liveDelivery = expected.id === "extend_deadline" ? await waitForHostDeadlineDelivery({
       page, game, before: recoveryBefore, commandStatus,
       rejectedCommandStatus: streamConflictEvidence.commandStatus,
@@ -5009,6 +5042,7 @@ async function driveModeratorBrowser(
       commandStatus,
       liveDelivery,
       liveRecovery,
+      replacementEvidence,
       statusMessage: await status.innerText(),
     });
   }
@@ -5101,6 +5135,76 @@ async function driveModeratorBrowser(
     apiStateBeforePrompt,
   };
   return evidence;
+}
+
+function hostReplacementExpected() {
+  return {
+    game, slotId: "slot-7", handle: "rowan",
+    incomingPrincipalId: PLAYER_ROWAN_PRINCIPAL_ID,
+    hostPrincipalId: authorityPrincipalId("host_h"),
+  };
+}
+
+async function chooseHostReplacementCandidate(page) {
+  const outgoing = await page.evaluate(() => window.__fmarchHostProjection?.replacement);
+  const chooser = page.getByTestId("host-replacement-chooser");
+  await chooser.waitFor({ state: "visible" });
+  if (!await chooser.evaluate((node) => node.open)) await chooser.locator("summary").click();
+  await page.getByTestId("host-replacement-handle").fill("rowan");
+  const [response] = await Promise.all([
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === `/api/gameplay/games/${game}/replacement-candidate` &&
+        url.searchParams.get("slot_id") === "slot-7" && url.searchParams.get("handle") === "rowan" &&
+        response.request().method() === "GET";
+    }),
+    page.getByTestId("host-replacement-lookup").click(),
+  ]);
+  const lookupUrl = new URL(response.url());
+  const body = await response.json();
+  if (response.status() !== 200) {
+    throw new Error(`replacement candidate lookup failed: ${JSON.stringify({ status: response.status(), body })}`);
+  }
+  const result = page.getByTestId("host-replacement-candidate");
+  await result.waitFor({ state: "visible" });
+  return assertHostReplacementCandidate({
+    ...hostReplacementExpected(), outgoing,
+    lookup: {
+      pathname: lookupUrl.pathname, method: response.request().method(),
+      slotId: lookupUrl.searchParams.get("slot_id"), handle: lookupUrl.searchParams.get("handle"),
+      status: response.status(), body,
+    },
+    renderedText: (await result.textContent()).trim(),
+    renderedIdentity: {
+      handle: await result.getAttribute("data-handle"),
+      slotId: await result.getAttribute("data-slot-id"),
+      outgoingPersonaId: await result.getAttribute("data-outgoing-persona-id"),
+    },
+  });
+}
+
+async function readHostReplacementDurability(commandId = null) {
+  return JSON.parse(await runSqlScalar(smokeDatabase.applicationUrl, `
+    SELECT json_build_object(
+      'events', COALESCE((SELECT json_agg(r) FROM (
+        SELECT seq, stream_seq, kind FROM events
+        WHERE stream_id = ${sqlLiteral(game)}::uuid ORDER BY stream_seq
+      ) r), '[]'::json),
+      'epochs', COALESCE((SELECT json_agg(r) FROM (
+        SELECT epoch.*, subject.principal_id
+        FROM slot_occupancy_epoch epoch
+        JOIN game_persona_subject_binding binding
+          ON binding.game_id = epoch.game_id AND binding.persona_id = epoch.persona_id AND binding.lifecycle = 'active'
+        JOIN privacy_subject subject ON subject.subject_id = binding.subject_id
+        WHERE epoch.game_id = ${sqlLiteral(game)}::uuid AND epoch.slot_id = 'slot-7'
+        ORDER BY epoch.began_seq, epoch.occupancy_id
+      ) r), '[]'::json),
+      'commandReceipts', COALESCE((SELECT json_agg(r) FROM (
+        SELECT principal_id, stream_id, command_id, stream_seqs FROM command_receipt
+        WHERE command_id = ${commandId === null ? "NULL" : sqlLiteral(commandId)}::uuid
+        ORDER BY principal_id
+      ) r), '[]'::json)
+    )`));
 }
 
 async function driveHostStreamConflictBrowser(page) {
