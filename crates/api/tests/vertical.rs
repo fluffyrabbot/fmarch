@@ -1,3 +1,5 @@
+#[path = "vertical/replacement_candidate.rs"]
+mod replacement_candidate;
 #[path = "vertical/signup_origin.rs"]
 mod signup_origin;
 mod support;

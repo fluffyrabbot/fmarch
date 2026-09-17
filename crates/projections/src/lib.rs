@@ -94,6 +94,10 @@ mod reading_checkpoints;
 pub use reading_checkpoints::{reading_checkpoint, set_reading_checkpoint};
 mod effect_projection;
 mod game_origin;
+mod replacement_candidates;
+pub use replacement_candidates::{
+    host_replacement_candidate, replacement_principal_is_active, HostReplacementCandidateRow,
+};
 mod moderation_writes;
 mod private_channel_projection;
 pub use game_origin::{

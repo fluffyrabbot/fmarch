@@ -2896,7 +2896,13 @@ async fn process_replacement(
     if current_persona_id != outgoing_persona_id {
         return Err(Reject::InvalidTarget);
     }
-    if projections::spectator_membership(&mut **tx, game, incoming_principal_id).await? {
+    // HTTP admission holds the incoming identity owner lock through this
+    // decision, serializing it with member deactivation and erasure. A prior
+    // candidate lookup is presentation only and cannot substitute for this.
+    if !projections::replacement_principal_is_active(&mut **tx, incoming_principal_id).await?
+        || projections::principal_has_open_occupancy(&mut **tx, game, incoming_principal_id).await?
+        || projections::spectator_membership(&mut **tx, game, incoming_principal_id).await?
+    {
         return Err(Reject::InvalidTarget);
     }
     let incoming_persona_id = persona_id_for_principal(tx, game, incoming_principal_id)
