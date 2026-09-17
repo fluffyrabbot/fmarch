@@ -4,6 +4,36 @@ import { buildLiveStackReadiness } from "./live_stack_readiness_contract.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 import { invalidTargetRequestFixture, legalActionAfterInvalidTargetFixture } from "./live_stack/invalid_target_request_fixture.mjs";
 import { explicitHostReconnectFixture } from "./live_stack/host_reconnect_fixture.mjs";
+import { hostReplacementFixture } from "./live_stack/host_replacement_fixture.mjs";
+import { buildLiveStackProofSummary } from "./live_stack_proof_summary.mjs";
+
+test("host summary retains selected member and confirmed replacement command identity", () => {
+  const evidence = liveStackReadinessFixture();
+  evidence.browser.moderator.rolePmReplacement.channelId = "private:role_pm:slot-7";
+  evidence.browser.moderator.rolePmReplacement.incoming.mediaBodyBytes = 100;
+  evidence.browser.hostVotecountConvergence.reconnectEvent =
+    evidence.browser.hostVotecountConvergence.explicitReconnect.after.events.findLast((event) => event.kind === "reconnect");
+  const summary = buildLiveStackProofSummary(evidence);
+  assert.equal(summary.hostOpsWorkflow.status, "passed");
+  assert.equal(summary.hostOpsWorkflow.replacementCandidateHandle, "rowan");
+  assert.equal(summary.hostOpsWorkflow.replacementCommandId, hostReplacementFixture().evidence.commandStatus.commandId);
+  evidence.browser.moderator.actions[0].replacementEvidence.durableAfter.commandReceipts = [];
+  assert.throws(() => buildLiveStackProofSummary(evidence));
+});
+
+test("host readiness requires the actual candidate lookup and exactly one confirmed occupancy transition", () => {
+  for (const mutate of [
+    (e) => { delete e.browser.moderator.actions; },
+    (e) => { e.browser.moderator.actions[0].replacementEvidence.candidate.lookup.body.principal_id = "other"; },
+    (e) => { e.browser.moderator.actions[0].replacementEvidence.durableAfter.epochs.pop(); },
+    (e) => { e.browser.moderator.actions[0].replacementEvidence.durableAfterLookup.events.push({ kind: "write" }); },
+  ]) {
+    const evidence = liveStackReadinessFixture();
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"), "passed");
+    mutate(evidence);
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"), "failed");
+  }
+});
 
 test("player action readiness requires request-boundary InvalidTarget with no mutation and the legal UI followup", () => {
   const fixture = liveStackReadinessFixture();
@@ -187,6 +217,7 @@ function checkStatus(readiness, id) {
 function liveStackReadinessFixture() {
   return {
     status: "passed",
+    game: hostReplacementFixture().expected.game,
     database: {
       lifecycle: "created-and-dropped-per-smoke-run",
     },
@@ -331,6 +362,7 @@ function liveStackReadinessFixture() {
         channelId: "private:role_pm:slot-7",
       },
       moderator: {
+        actions: [{ id: "process_replacement", replacementEvidence: hostReplacementFixture().evidence }],
         phaseControls: {
           lock: { commandStatus: { state: "ack" } },
           staleLockReject: { commandStatus: { error: "PhaseLocked" } },
