@@ -10,6 +10,7 @@ import {
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
+import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 
 export const LIVE_STACK_PROOF_SUMMARY_VERSION = 1;
 
@@ -40,6 +41,10 @@ export function buildLiveStackProofSummary(
   const additionalRooms = evidence.browser?.additionalRooms;
   const deadChat = evidence.browser?.deadChat;
   const spectator = evidence.browser?.spectator;
+  const playerAction = evidence.browser?.playerAction;
+  const invalidTargetPassed = hasInvalidTargetRequestThenLegalAction(
+    playerAction?.invalidTargetRequest, playerAction?.legalOutcome,
+  );
   const summary = {
     version: LIVE_STACK_PROOF_SUMMARY_VERSION,
     proof: "host-console-live-stack-summary",
@@ -61,6 +66,14 @@ export function buildLiveStackProofSummary(
         id: check.id,
         status: check.status,
       })),
+    },
+    invalidTargetRequest: {
+      status: invalidTargetPassed ? "passed" : "failed",
+      boundary: playerAction?.invalidTargetRequest?.boundary ?? null,
+      error: playerAction?.invalidTargetRequest?.outcome?.error ?? null,
+      commandId: playerAction?.invalidTargetRequest?.outcome?.commandId ?? null,
+      legalUiCommandId: playerAction?.legalOutcome?.commandId ?? null,
+      unchangedDurableState: invalidTargetPassed,
     },
     hostSetupWorkflow: {
       status: hostSetup?.status ?? "missing",
@@ -228,6 +241,10 @@ export function buildLiveStackProofSummary(
         status: hostSetup?.status === "passed" ? "passed" : "failed",
       },
       {
+        id: "invalid-target-request-summary",
+        status: invalidTargetPassed ? "passed" : "failed",
+      },
+      {
         id: "host-votecount-convergence-summary",
         status:
           convergence?.status === "passed" &&
@@ -291,6 +308,7 @@ export function assertLiveStackProofSummary(summary) {
   const checks = new Map((summary.checks ?? []).map((check) => [check.id, check]));
   for (const id of [
     "readiness-carried",
+    "invalid-target-request-summary",
     "host-setup-summary",
     "host-votecount-convergence-summary",
     "reconnect-summary",
@@ -302,6 +320,11 @@ export function assertLiveStackProofSummary(summary) {
     if (checks.get(id)?.status !== "passed") {
       throw new Error(`live-stack summary missing passed check: ${id}`);
     }
+  }
+  if (summary.invalidTargetRequest?.boundary !== "authenticated-request" ||
+      summary.invalidTargetRequest.error !== "InvalidTarget" ||
+      summary.invalidTargetRequest.unchangedDurableState !== true) {
+    throw new Error("live-stack summary missing authenticated invalid-target request boundary");
   }
   if (
     summary.hostSetupWorkflow?.setupCommandEvidence?.startGame?.commandKind !==
@@ -450,6 +473,7 @@ export function markdownLiveStackProofSummary(summary) {
     "",
     "| Surface | Status | Details |",
     "| --- | --- | --- |",
+    `| invalid target request | ${summary.invalidTargetRequest.status} | boundary=${summary.invalidTargetRequest.boundary}, error=${summary.invalidTargetRequest.error}, unchangedDurableState=${summary.invalidTargetRequest.unchangedDurableState}; subsequent legal UI command=${summary.invalidTargetRequest.legalUiCommandId ?? ""} |`,
     `| reconnect | ${summary.reconnectRecovery.status} | state=${summary.reconnectRecovery.state ?? ""}, post=${summary.reconnectRecovery.recoveredSnapshotContainsPost} |`,
     `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
     `| Mason and Neighbor rooms | ${summary.additionalRoomLifecycle.status} | covered=${summary.additionalRoomLifecycle.coveredKinds.join(",")}, remaining=${summary.additionalRoomLifecycle.remainingKinds.join(",")}, rooms=${summary.additionalRoomLifecycle.rooms.map((room) => `${room.kind}:${room.status}:${room.encryptedStorage}`).join("; ")} |`,

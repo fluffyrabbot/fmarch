@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildLiveStackReadiness } from "./live_stack_readiness_contract.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
+import { invalidTargetRequestFixture, legalActionAfterInvalidTargetFixture } from "./live_stack/invalid_target_request_fixture.mjs";
+
+test("player action readiness requires request-boundary InvalidTarget with no mutation and the legal UI followup", () => {
+  const fixture = liveStackReadinessFixture();
+  assert.equal(checkStatus(buildLiveStackReadiness(fixture), "player-action-resolution"), "passed");
+  for (const mutate of [
+    (action) => { delete action.invalidTargetRequest; action.invalidOutcome = { error: "InvalidTarget" }; },
+    (action) => { action.invalidTargetRequest.boundary = "browser-rendered-recovery"; },
+    (action) => { action.invalidTargetRequest.durableAfter.actionSubmissions.push({ targets: ["slot_4"] }); },
+    (action) => { action.legalOutcome.requestEnvelope.body.body.command.SubmitAction.targets = ["slot_4"]; },
+  ]) {
+    const changed = structuredClone(fixture);
+    mutate(changed.browser.playerAction);
+    assert.equal(checkStatus(buildLiveStackReadiness(changed), "player-action-resolution"), "failed");
+  }
+});
 
 test("host ops requires the canonical replacement principal in captured browser fields", () => {
   const evidence = liveStackReadinessFixture();
@@ -276,8 +292,9 @@ function liveStackReadinessFixture() {
         },
       },
       playerAction: {
-        invalidOutcome: { error: "InvalidTarget" },
-        legalOutcome: { state: "ack" },
+        game: "invalid-target-game",
+        invalidTargetRequest: invalidTargetRequestFixture(),
+        legalOutcome: legalActionAfterInvalidTargetFixture(),
         resolveCommand: { streamSeqs: [1] },
         advanceCommand: { streamSeqs: [2] },
         resolvedTargetSlot: { alive: false },
