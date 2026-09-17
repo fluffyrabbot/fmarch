@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readPlayerCommandStateResponse } from "./player_command_state_evidence.mjs";
+import {
+  queuePlayerCommandStateResponse,
+  readPlayerCommandStateResponse,
+  settlePlayerCommandStateResponses,
+} from "./player_command_state_evidence.mjs";
 
 const url = "https://fixture.invalid/api/gameplay/games/game/player-command-state?slot_id=slot_4";
 const response = (body, status = 200) => ({
@@ -56,4 +60,27 @@ test("response failure metadata remains a failure even with a valid phase", asyn
   assert.equal(evidence.status, 503);
   assert.equal(evidence.ok, false);
   assert.equal(evidence.phaseKind, "Day");
+});
+
+test("queued body failures are observed during cleanup and still reject active checkpoints", async () => {
+  for (const error of [new Error("Target page, context or browser has been closed"), new SyntaxError("invalid JSON")]) {
+    const tasks = [];
+    const responses = [];
+    queuePlayerCommandStateResponse({ ...response({}), json: async () => { throw error; } }, responses, tasks);
+    // A body may reject well before the next explicit checkpoint or during
+    // cleanup. An unhandled rejection here would fail this Node test itself.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(responses, []);
+    await assert.rejects(settlePlayerCommandStateResponses(tasks), (actual) => actual === error);
+  }
+});
+
+test("successful queued responses remain available to the exact phase predicates", async () => {
+  const tasks = [];
+  const responses = [];
+  queuePlayerCommandStateResponse(response({ phase: { phase_id: "N01", locked: true }, actions: [] }), responses, tasks);
+  await settlePlayerCommandStateResponses(tasks);
+  assert.equal(responses.length, 1);
+  assert.equal(responses[0].phaseKind, "Night");
+  assert.equal(responses[0].locked, true);
 });

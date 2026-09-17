@@ -33,7 +33,15 @@ import {
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
-import { readPlayerCommandStateResponse } from "./live_stack/player_command_state_evidence.mjs";
+import {
+  assertDuplicatePlayerActionDurability,
+  assertDuplicatePlayerSubmitOutcome,
+} from "./live_stack/duplicate_action_scenario.mjs";
+import {
+  queuePlayerCommandStateResponse,
+  readPlayerCommandStateResponse,
+  settlePlayerCommandStateResponses,
+} from "./live_stack/player_command_state_evidence.mjs";
 import {
   assertLegalActionAfterInvalidTargetRequest,
   proveInvalidSelfTargetRequest,
@@ -4205,9 +4213,7 @@ async function openStalePlayerVoteBrowser(
     if (!pathname.endsWith("/player-command-state")) {
       return;
     }
-    commandStateResponseTasks.push(
-      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
-    );
+    queuePlayerCommandStateResponse(response, commandStateResponses, commandStateResponseTasks);
   });
   await context.addCookies([
     {
@@ -4266,7 +4272,7 @@ async function submitStalePlayerVote(staleSession, competingOutcome) {
       window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
       window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
   );
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   const lockedCommandState = await waitForCommandStateResponse(
     commandStateResponses,
     (response) =>
@@ -4310,9 +4316,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     if (!pathname.endsWith("/player-command-state")) {
       return;
     }
-    commandStateResponseTasks.push(
-      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
-    );
+    queuePlayerCommandStateResponse(response, commandStateResponses, commandStateResponseTasks);
   });
   await context.addCookies([
     {
@@ -4352,7 +4356,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     });
     commandStateResponses.push(await readPlayerCommandStateResponse(response));
   }
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   assertPlayerCommandStateEvidence({
     commandStateRequests,
     commandStateResponses,
@@ -4363,19 +4367,17 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   if (currentCommandState.game !== actionGame || currentCommandState.actorSlot !== "slot_4") {
     throw new Error("invalid-target request requires the current action player's scoped command state");
   }
-  const invalidTargetRequest = await proveInvalidSelfTargetRequest({
-    context: page.context(),
-    commandUrl: `${frontendBaseUrl}/commands`,
-    commandState: currentCommandState,
-    templateId: "factional_kill",
-    commandId: crypto.randomUUID(),
-    envelopeId: commandEnvelopeId++,
-    readDurableState: async (commandId) => JSON.parse(await runSqlScalar(
+  const readActionCommandDurability = async (commandId) => JSON.parse(await runSqlScalar(
       smokeDatabase.applicationUrl,
       `SELECT json_build_object(
         'eventCount', (SELECT COUNT(*) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
         'maxEventSeq', (SELECT COALESCE(MAX(seq), 0) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
         'maxStreamSeq', (SELECT COALESCE(MAX(stream_seq), 0) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
+        'actionSubmittedEvents', COALESCE((SELECT json_agg(r) FROM (
+          SELECT seq, stream_seq FROM events
+          WHERE stream_id = ${sqlLiteral(actionGame)}::uuid AND kind = 'ActionSubmitted'
+          ORDER BY stream_seq
+        ) r), '[]'::json),
         'actionSubmissions', COALESCE((SELECT json_agg(r) FROM (
           SELECT * FROM action_submission WHERE game_id = ${sqlLiteral(actionGame)}::uuid
           ORDER BY phase_id, actor_slot, action_id
@@ -4385,11 +4387,19 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
           ORDER BY phase_id, actor_slot
         ) r), '[]'::json),
         'commandReceipts', COALESCE((SELECT json_agg(r) FROM (
-          SELECT command_id, stream_seqs FROM command_receipt
+          SELECT principal_id, command_id, stream_id, stream_seqs FROM command_receipt
           WHERE command_id = ${sqlLiteral(commandId)}::uuid ORDER BY principal_id
         ) r), '[]'::json)
       )`,
-    )),
+    ));
+  const invalidTargetRequest = await proveInvalidSelfTargetRequest({
+    context: page.context(),
+    commandUrl: `${frontendBaseUrl}/commands`,
+    commandState: currentCommandState,
+    templateId: "factional_kill",
+    commandId: crypto.randomUUID(),
+    envelopeId: commandEnvelopeId++,
+    readDurableState: readActionCommandDurability,
   });
   const duplicatePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
   const racePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
@@ -4424,6 +4434,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     commandId: duplicatePlayerSubmitCommandId,
     label: "first player SubmitAction",
   });
+  const duplicateDurableBefore = await readActionCommandDurability(duplicatePlayerSubmitCommandId);
   await releaseHeldSubmission(duplicatePlayerSession, legalOutcome);
 
   // Let the same-ID receipt retry settle before releasing the distinct-ID
@@ -4431,6 +4442,14 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const duplicateRetry = await submitDuplicatePlayerAction(duplicatePlayerSession, {
     firstOutcome: legalOutcome,
     commandId: duplicatePlayerSubmitCommandId,
+  });
+  const duplicateDurableAfter = await readActionCommandDurability(duplicatePlayerSubmitCommandId);
+  const duplicateDurability = assertDuplicatePlayerActionDurability({
+    firstOutcome: legalOutcome,
+    principalId: authorityPrincipalId("action-goon"),
+    phaseId: "N01",
+    before: duplicateDurableBefore,
+    after: duplicateDurableAfter,
   });
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
@@ -4440,23 +4459,8 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     competingOutcome: legalOutcome,
   });
 
-  const duplicateReceiptRows = await runSql(
-    smokeDatabase.applicationUrl,
-    `SELECT 'ActionSubmitted' AS acknowledged_command,
-            principal_id,
-            command_id::text,
-            stream_seqs
-     FROM command_receipt
-     WHERE principal_id = ${sqlLiteral(authorityPrincipalId("action-goon"))}
-       AND command_id = '${duplicatePlayerSubmitCommandId}'::uuid`,
-  );
-  const actionRows = [
-    duplicateReceiptRows,
-    JSON.stringify(
-      legalOutcome.requestEnvelope?.body?.body?.command?.SubmitAction ?? null,
-    ),
-    JSON.stringify(duplicateRetry.commandState.noActionCommandState),
-  ].join("\n");
+  const duplicateReceiptRows = JSON.stringify(duplicateDurableAfter.commandReceipts);
+  const actionRows = JSON.stringify(duplicateDurableAfter.actionSubmissions);
   if (
     !actionRows.includes("role_factional_kill") ||
     !actionRows.includes("factional_kill") ||
@@ -4465,17 +4469,11 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   ) {
     throw new Error(`action submission boundary evidence drifted:\n${actionRows}`);
   }
-  assertSinglePlayerActionSubmittedRow(actionRows);
-  assertDuplicatePlayerSubmitReceipt({
-    commandId: duplicatePlayerSubmitCommandId,
-    receiptRows: duplicateReceiptRows,
-  });
-
   const resolveCommand = await sendCommand("host_h", {
     ResolvePhase: { game: actionGame, seed: 918273 },
   });
   await releaseHeldSubmission(stalePlayerSession, resolveCommand);
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   await page.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
   );
@@ -4579,6 +4577,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     duplicateLegalOutcome: duplicateRetry.outcome,
     duplicatePlayerSubmit: {
       ...duplicateRetry.duplicatePlayerSubmit,
+      durability: duplicateDurability,
       heldRequest: duplicateRetry.heldRequest,
       statusMessage: duplicateRetry.statusMessage,
       receiptRows: duplicateReceiptRows,
@@ -4625,9 +4624,7 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
     if (!pathname.endsWith("/player-command-state")) {
       return;
     }
-    commandStateResponseTasks.push(
-      readPlayerCommandStateResponse(response).then((evidence) => commandStateResponses.push(evidence)),
-    );
+    queuePlayerCommandStateResponse(response, commandStateResponses, commandStateResponseTasks);
   });
   await context.addCookies([
     {
@@ -4701,7 +4698,7 @@ async function submitStalePlayerAction(staleSession, competingOutcome) {
   await page.waitForFunction(
     () => document.querySelector('[data-testid="player-action-commands"]') === null,
   );
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   const lockedCommandState = await waitForCommandStateResponse(
     commandStateResponses,
     (response) =>
@@ -4745,6 +4742,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
     firstOutcome,
     duplicateOutcome: outcome,
     commandId,
+    heldRequest,
   });
   const statusMessage = await status.innerText();
   await page.evaluate(() => {
@@ -4766,7 +4764,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
     () =>
       document.querySelector('[data-action="withdraw_action:factional_kill"]') !== null,
   );
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   const noActionCommandState = await waitForCommandStateResponse(
     commandStateResponses,
     (response) =>
@@ -4825,7 +4823,7 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId, competi
     () =>
       document.querySelector('[data-action="withdraw_action:factional_kill"]') !== null,
   );
-  await Promise.allSettled(commandStateResponseTasks);
+  await settlePlayerCommandStateResponses(commandStateResponseTasks);
   const noActionCommandState = await waitForCommandStateResponse(
     commandStateResponses,
     (response) =>
@@ -6419,62 +6417,6 @@ function assertPlayerActionCommandId({ outcome, commandId, label }) {
   }
   if (outcome.commandId !== commandId) {
     throw new Error(`${label} status commandId drifted: ${JSON.stringify(outcome)}`);
-  }
-}
-
-function assertDuplicatePlayerSubmitOutcome({
-  firstOutcome,
-  duplicateOutcome,
-  commandId,
-}) {
-  assertPlayerActionCommandId({
-    outcome: duplicateOutcome,
-    commandId,
-    label: "duplicate player SubmitAction",
-  });
-  if (duplicateOutcome.envelopeId === firstOutcome.envelopeId) {
-    throw new Error(
-      `duplicate player SubmitAction did not send a fresh envelope: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
-    );
-  }
-  if (
-    JSON.stringify(duplicateOutcome.streamSeqs) !==
-    JSON.stringify(firstOutcome.streamSeqs)
-  ) {
-    throw new Error(
-      `duplicate player SubmitAction did not return original ack stream seqs: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
-    );
-  }
-  return {
-    commandId,
-    firstEnvelopeId: firstOutcome.envelopeId,
-    duplicateEnvelopeId: duplicateOutcome.envelopeId,
-    streamSeqs: duplicateOutcome.streamSeqs,
-  };
-}
-
-function assertSinglePlayerActionSubmittedRow(actionRows) {
-  const actionSubmittedRows = actionRows.match(/ActionSubmitted/g) ?? [];
-  if (actionSubmittedRows.length !== 1) {
-    throw new Error(
-      `duplicate player SubmitAction appended ${actionSubmittedRows.length} ActionSubmitted rows:\n${actionRows}`,
-    );
-  }
-}
-
-function assertDuplicatePlayerSubmitReceipt({ commandId, receiptRows }) {
-  if (
-    !receiptRows.includes(authorityPrincipalId("action-goon")) ||
-    !receiptRows.includes(commandId)
-  ) {
-    throw new Error(
-      `duplicate player SubmitAction receipt missing command ${commandId}:\n${receiptRows}`,
-    );
-  }
-  if (!/\{\d+\}/.test(receiptRows)) {
-    throw new Error(
-      `duplicate player SubmitAction receipt did not persist stream seqs:\n${receiptRows}`,
-    );
   }
 }
 
