@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { buildLiveStackReadiness } from "./live_stack_readiness_contract.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 import { invalidTargetRequestFixture, legalActionAfterInvalidTargetFixture } from "./live_stack/invalid_target_request_fixture.mjs";
+import { explicitHostReconnectFixture } from "./live_stack/host_reconnect_fixture.mjs";
 
 test("player action readiness requires request-boundary InvalidTarget with no mutation and the legal UI followup", () => {
   const fixture = liveStackReadinessFixture();
@@ -54,6 +55,10 @@ test("player-vote-loop requires host votecount convergence evidence", () => {
     checkStatus(buildLiveStackReadiness(withoutConvergence), "player-vote-loop"),
     "failed",
   );
+  const historicalOnly = structuredClone(evidence);
+  historicalOnly.browser.hostVotecountConvergence.explicitReconnect.after.events.pop();
+  historicalOnly.browser.hostVotecountConvergence.explicitReconnect.after.eventCount--;
+  assert.equal(checkStatus(buildLiveStackReadiness(historicalOnly), "player-vote-loop"), "failed");
 });
 
 test("player-vote-loop requires witnessed contention and an unchanged successful retry", () => {
@@ -287,6 +292,7 @@ function liveStackReadinessFixture() {
       hostVotecountConvergence: {
         status: "passed",
         expectedCount: 1,
+        explicitReconnect: explicitHostReconnectFixture(),
         after: {
           projection: [{ target: "slot_1", count: 1 }],
         },
