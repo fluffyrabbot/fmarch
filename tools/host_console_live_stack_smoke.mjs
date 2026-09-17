@@ -35,6 +35,7 @@ import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenar
 import { proveExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 import { captureHostResyncBoundary, hostNetworkDiagnostics, waitForHostCommandResync } from "./live_stack/host_resync_scenario.mjs";
 import { assertHostDeadlineApiPhase, waitForHostDeadlineDelivery } from "./live_stack/host_deadline_scenario.mjs";
+import { assertHostSeatScope, observeHostSeatReads } from "./live_stack/host_seat_scope_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
@@ -4906,7 +4907,8 @@ async function openModeratorBrowser(frontendBaseUrl) {
       diagnostic.frames.push(String(event.payload).slice(0, 500));
     });
   });
-  const pageUrl = `${frontendBaseUrl}/g/${game}/host`;
+  const seatReads = observeHostSeatReads(page, game);
+  const pageUrl = `${frontendBaseUrl}/g/${game}/host?slot_id=slot-7`;
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
     throw new Error(
@@ -4916,11 +4918,12 @@ async function openModeratorBrowser(frontendBaseUrl) {
   await openHostConsoleDrawer(page, "host-supporting-evidence");
   await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
-  return { context, page, pageUrl };
+  const seatScope = await captureHostSeatScope(page, seatReads);
+  return { context, page, pageUrl, seatScope };
 }
 
 async function driveModeratorBrowser(
-  { page, pageUrl },
+  { page, pageUrl, seatScope },
   { frontendBaseUrl, rolePmHistory },
 ) {
   const phaseControlEvidence = await driveHostPhaseControlsBrowser(page, pageUrl);
@@ -5046,6 +5049,7 @@ async function driveModeratorBrowser(
     stalePlayerInviteReject = {
       ...await stalePlayerInviteSession.heldSubmission.completion,
       heldRequest,
+      seatScope: stalePlayerInviteSession.seatScope,
     };
   }
   await stalePlayerInviteSession?.context.close();
@@ -5065,6 +5069,7 @@ async function driveModeratorBrowser(
   const evidence = {
     url: pageUrl,
     actions: actionEvidence,
+    seatScope,
     phaseControls: phaseControlEvidence,
     streamConflict: streamConflictEvidence,
     playerInviteTarget: {
@@ -5294,6 +5299,7 @@ async function openStaleModeratorBrowser(pageUrl) {
     },
   ]);
   const page = await context.newPage();
+  const seatReads = observeHostSeatReads(page, game);
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
     throw new Error(
@@ -5303,8 +5309,23 @@ async function openStaleModeratorBrowser(pageUrl) {
   await openHostConsoleDrawer(page, "host-supporting-evidence");
   await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
-  await captureHostLiveBoundary(page);
-  return { context, page };
+  const seatScope = await captureHostSeatScope(page, seatReads);
+  return { context, page, seatScope };
+}
+
+async function captureHostSeatScope(page, seatReads) {
+  try {
+    await captureHostLiveBoundary(page);
+    return assertHostSeatScope({
+      game, slotId: "slot-7", principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      pageUrl: page.url(),
+      reads: seatReads.reads,
+      replacement: await page.evaluate(() => window.__fmarchHostProjection?.replacement),
+      inviteTarget: await readPlayerInviteTarget(page),
+    });
+  } finally {
+    seatReads.stop();
+  }
 }
 
 async function captureHostLiveBoundary(page) {
