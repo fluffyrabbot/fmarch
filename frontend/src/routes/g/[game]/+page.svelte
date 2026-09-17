@@ -381,7 +381,6 @@
     composer = buildPlayerComposerView(
       data.composer,
       commandState,
-      data.player.slotId,
       selectedActionTargets,
       data.threadPager.channel,
     );
@@ -523,7 +522,6 @@
     composer = buildPlayerComposerView(
       data.composer,
       commandState,
-      data.player.slotId,
       selectedActionTargets,
       data.threadPager.channel,
     );

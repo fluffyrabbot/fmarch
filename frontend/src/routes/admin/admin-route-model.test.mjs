@@ -5170,7 +5170,8 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     {
       status: coreLoop.hostVisibleInvalidActionRecovery.status,
       hook: coreLoop.hostVisibleInvalidActionRecovery.recoveryHookStatus,
-      receipt: coreLoop.hostVisibleInvalidActionRecovery.receiptStatusText,
+      responseMessage: coreLoop.hostVisibleInvalidActionRecovery.responseMessage,
+      requestBoundaryVerified: coreLoop.hostVisibleInvalidActionRecovery.requestBoundaryVerified,
       legalActionVisible:
         coreLoop.hostVisibleInvalidActionRecovery.legalActionVisible,
       hostRoleUrl: coreLoop.hostVisibleInvalidActionRecovery.hostRoleUrl,
@@ -5181,7 +5182,8 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     {
       status: "passed",
       hook: "InvalidTarget",
-      receipt: playerInvalidActionRecoveryMessage,
+      responseMessage: playerInvalidActionRecoveryMessage,
+      requestBoundaryVerified: true,
       legalActionVisible: true,
       hostRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
       actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-b",
@@ -5233,7 +5235,9 @@ test("admin route data exposes local core loop proof as a native audit row", asy
       status: summary.status,
       command: summary.commandKind,
       hook: summary.recoveryHookStatus,
-      receipt: summary.receiptStatusText,
+      ...(summary.boundary === "authenticated-request"
+        ? { responseMessage: summary.responseMessage, requestBoundaryVerified: summary.requestBoundaryVerified }
+        : { receipt: summary.receiptStatusText }),
       hostRoleUrl: summary.hostRoleUrl,
       actionPlayerRoleUrl: summary.actionPlayerRoleUrl,
     })),
@@ -5244,7 +5248,8 @@ test("admin route data exposes local core loop proof as a native audit row", asy
         status: "passed",
         command: "SubmitAction",
         hook: "InvalidTarget",
-        receipt: playerInvalidActionRecoveryMessage,
+        responseMessage: playerInvalidActionRecoveryMessage,
+        requestBoundaryVerified: true,
         hostRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
         actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-b",
       },
@@ -5276,7 +5281,8 @@ test("admin route data exposes local core loop proof as a native audit row", asy
         status: "passed",
         command: "SubmitAction",
         hook: "InvalidTarget",
-        receipt: playerInvalidActionRecoveryMessage,
+        responseMessage: playerInvalidActionRecoveryMessage,
+        requestBoundaryVerified: true,
         hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
         actionPlayerRoleUrl:
           "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
@@ -5601,8 +5607,10 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["group", "invalid-action", false, "", ""],
           ["hook", "InvalidTarget", false, "", ""],
           ["command", "SubmitAction", false, "", ""],
-          ["receipt", playerInvalidActionRecoveryMessage, false, "", ""],
-          ["refreshedPhase", "", false, "", ""],
+          ["boundary", "Authenticated request", false, "", ""],
+          ["response", playerInvalidActionRecoveryMessage, false, "", ""],
+          ["requestBoundary", "Request and unchanged durable state verified: true", false, "", ""],
+          ["phase", "", false, "", ""],
           ["hostRoleUrl", "http://127.0.0.1:5173/g/game-b/host", false, "", ""],
           ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-b", false, "", ""],
         ],
@@ -5661,8 +5669,10 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["group", "private-channel", false, "", ""],
           ["hook", "InvalidTarget", false, "", ""],
           ["command", "SubmitAction", false, "", ""],
-          ["receipt", playerInvalidActionRecoveryMessage, false, "", ""],
-          ["refreshedPhase", "N01", false, "", ""],
+          ["boundary", "Authenticated request", false, "", ""],
+          ["response", playerInvalidActionRecoveryMessage, false, "", ""],
+          ["requestBoundary", "Request and unchanged durable state verified: true", false, "", ""],
+          ["phase", "N01", false, "", ""],
           ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
           [
             "actionPlayerRoleUrl",
@@ -5717,7 +5727,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["host-deadline-advance", "passed: D01 deadline -> N01"],
       [
         "invalid-action-recovery",
-        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+        `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
       ],
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
@@ -5732,7 +5742,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, authenticated request and unchanged durable state verified true, scope true, legal action visible true`,
       ],
       [
         "stale-host-complete-reload",
@@ -5791,8 +5801,8 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         "invalid-action-recovery",
-        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
-        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+        `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
+        `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
       ],
       [
         "resolution-receipts",
@@ -5821,8 +5831,8 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, authenticated request and unchanged durable state verified true, scope true, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, authenticated request and unchanged durable state verified true, scope true, legal action visible true`,
       ],
       [
         "stale-host-complete-reload",
@@ -5950,7 +5960,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ],
       [
         "invalid-action-recovery",
-        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+        `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
       ],
       ["dead-player-recovery", "passed"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
@@ -7782,13 +7792,12 @@ function proofRunFixture() {
     },
     "invalid-action-recovery": {
       rejectError: "InvalidTarget",
-      receiptActionId: "submit_invalid_action:factional_kill",
-      receiptState: "reject",
-      receiptStatusText: playerInvalidActionRecoveryMessage,
+      boundary: "authenticated-request",
+      responseMessage: playerInvalidActionRecoveryMessage,
+      requestBoundaryVerified: true,
       phase: "N01",
       actionCount: 1,
       legalActionVisible: true,
-      refreshKeys: ["notifications", "investigationResults", "commandState"],
     },
     "resolution-receipts": {
       targetSlot: "slot-2",
@@ -7830,13 +7839,14 @@ function proofRunFixture() {
       channel: privateChannelInvalidActionRecoveryScenario().channelId,
       state: "reject",
       error: privateChannelInvalidActionRecoveryScenario().commandError,
-      receiptStatusText:
+      boundary: "authenticated-request",
+      responseMessage:
         privateChannelInvalidActionRecoveryScenario().commandMessage,
       routeStatus: 200,
       actorSlot: privateChannelInvalidActionRecoveryScenario().actorSlot,
       actionTemplateId:
         privateChannelInvalidActionRecoveryScenario().expectedActionTemplateId,
-      refreshCommandState: true,
+      requestBoundaryVerified: true,
       channelContextPreserved: true,
       phase: privateChannelInvalidActionRecoveryScenario().expectedPhaseId,
       legalActionVisible: true,

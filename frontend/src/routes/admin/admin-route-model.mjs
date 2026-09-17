@@ -2466,8 +2466,20 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "group", text: summary.group },
       { id: "hook", text: summary.recoveryHookStatus },
       { id: "command", text: summary.commandKind },
-      { id: "receipt", text: summary.receiptStatusText },
-      { id: "refreshedPhase", text: summary.refreshedPhaseId ?? "" },
+      ...(summary.boundary === "authenticated-request"
+        ? [
+            { id: "boundary", text: "Authenticated request" },
+            { id: "response", text: summary.responseMessage ?? "unknown response" },
+            {
+              id: "requestBoundary",
+              text: `Request and unchanged durable state verified: ${String(summary.requestBoundaryVerified ?? "unknown")}`,
+            },
+            { id: "phase", text: summary.phaseId ?? "" },
+          ]
+        : [
+            { id: "receipt", text: summary.receiptStatusText },
+            { id: "refreshedPhase", text: summary.refreshedPhaseId ?? "" },
+          ]),
       { id: "hostRoleUrl", text: summary.hostRoleUrl },
       { id: "actionPlayerRoleUrl", text: summary.actionPlayerRoleUrl },
     ],

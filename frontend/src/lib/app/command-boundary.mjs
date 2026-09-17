@@ -134,7 +134,6 @@ export function buildPlayerCommand({
         }),
       });
     case "submit_action":
-    case "submit_invalid_action":
       return Object.freeze({
         SubmitAction: Object.freeze({
           game: requiredString(game, "game"),
