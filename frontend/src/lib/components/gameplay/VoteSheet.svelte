@@ -69,7 +69,7 @@
     {/if}
   </div>
 
-  {#if view.composer?.actionPicker?.actions?.length > 0 || view.composer?.actionPicker?.recoveryCommands?.length > 0}
+  {#if view.composer?.actionPicker?.actions?.length > 0}
     <div class="vote-sheet__phase-actions" id="player-phase-actions" data-testid="player-action-commands">
       <h3>{view.composer.actionHeading}</h3>
       {#each view.composer.actionPicker.actions as action (action.action)}
@@ -133,17 +133,6 @@
             </ConfirmationShell>
           {/if}
         </article>
-      {/each}
-      {#each view.composer.actionPicker.recoveryCommands as button (button.action)}
-        <button
-          type="button"
-          class={button.className}
-          data-action={button.action}
-          data-template-id={button.data.templateId}
-          data-target-slots={button.data.targetSlots.join(",")}
-          disabled={button.disabled}
-          on:click={() => onCommand(button.action)}
-        >{button.label}</button>
       {/each}
     </div>
   {/if}

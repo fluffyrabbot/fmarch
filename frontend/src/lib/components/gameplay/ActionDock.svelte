@@ -8,8 +8,7 @@
   export let onCommand = () => {};
 
   $: quickActions = view?.quickActions?.buttons ?? [];
-  $: hasPhaseActions = (view?.composer?.actionPicker?.actions?.length ?? 0) > 0 ||
-    (view?.composer?.actionPicker?.recoveryCommands?.length ?? 0) > 0;
+  $: hasPhaseActions = (view?.composer?.actionPicker?.actions?.length ?? 0) > 0;
 
   function focusDestination(destinationId) {
     window.setTimeout(() => {

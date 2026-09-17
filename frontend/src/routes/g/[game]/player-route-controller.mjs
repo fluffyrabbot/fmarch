@@ -515,9 +515,7 @@ export function playerRefreshKeysForAction(action) {
   const normalizedAction = String(action);
   if (
     normalizedAction === "submit_action" ||
-    normalizedAction.startsWith("submit_action:") ||
-    normalizedAction === "submit_invalid_action" ||
-    normalizedAction.startsWith("submit_invalid_action:")
+    normalizedAction.startsWith("submit_action:")
   ) {
     return Object.freeze(["notifications", "investigationResults", "commandState"]);
   }
@@ -808,10 +806,7 @@ function playerActionIsCurrentlyAfforded({ data, commandState, action }) {
         : target.kind === "slot" && target.slotId === voteTarget?.Slot,
     ) === true;
   }
-  if (
-    normalizedAction.startsWith("submit_action") ||
-    normalizedAction.startsWith("submit_invalid_action")
-  ) {
+  if (normalizedAction.startsWith("submit_action")) {
     const requested = playerActionConfig(data, action);
     return commandState.actions?.some(
       (current) =>
@@ -944,7 +939,6 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     commandStatus?.state === "reject" &&
     commandStatus?.error === "InvalidTarget" &&
     (String(action).startsWith("submit_action") ||
-      String(action).startsWith("submit_invalid_action") ||
       String(action).startsWith("submit_vote"))
   ) {
     return playerRefreshKeysForDataActionWithCommandState(data, action);

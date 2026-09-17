@@ -19,7 +19,7 @@ const LEGAL_ACTION = Object.freeze({
   grantId: "grant-factional-kill",
 });
 
-const INVALID_RECOVERY = Object.freeze({
+const INVENTED_ACTION = Object.freeze({
   action: "submit_invalid_action:factional_kill",
   commandKind: "submit_invalid_action",
   label: "Try invalid self-action",
@@ -28,17 +28,15 @@ const INVALID_RECOVERY = Object.freeze({
   targets: ["slot-7"],
 });
 
-test("picker splits legal actions from recovery commands", () => {
+test("picker omits invented action controls", () => {
   const picker = buildPlayerActionTargetPicker({
-    actionCommands: [LEGAL_ACTION, INVALID_RECOVERY],
+    actionCommands: [LEGAL_ACTION, INVENTED_ACTION],
   });
   assert.equal(picker.root.testId, "player-action-commands");
   assert.equal(picker.actions.length, 1);
-  assert.equal(picker.recoveryCommands.length, 1);
-  assert.equal(
-    picker.recoveryCommands[0].data.action,
-    "submit_invalid_action:factional_kill",
-  );
+  assert.equal(picker.actions[0].action, LEGAL_ACTION.action);
+  assert.equal(Object.hasOwn(picker, "recoveryCommands"), false);
+  assert.equal(JSON.stringify(picker).includes("Try invalid self-action"), false);
 });
 
 test("picker renders a withdraw affordance for a submitted action", () => {
@@ -69,7 +67,7 @@ test("picker renders a withdraw affordance for a submitted action", () => {
     "player-action-withdraw-confirm-factional_kill",
   );
   assert.equal(withdrawal.confirming, true);
-  assert.equal(picker.recoveryCommands.length, 0);
+  assert.equal(Object.hasOwn(picker, "recoveryCommands"), false);
 });
 
 test("picker options mirror target options with the current target checked", () => {

@@ -735,6 +735,40 @@ test("player route controller refuses commands before dispatch when route author
   assert.equal(sendCalls, 0);
 });
 
+for (const [name, mutate] of [
+  ["forged action id", (data) => {
+    data.composer.actionCommands[0].actionId = "invented_action_id";
+  }],
+  ["forged template", (data) => {
+    data.composer.actionCommands[0].templateId = "invented_template";
+  }],
+  ["forged self target", (data) => {
+    data.composer.actionCommands[0].targets = [data.player.slotId];
+  }],
+  ["stale action", (_data, store) => {
+    store.applySnapshot({
+      commandState: { ...store.getSnapshot().commandState, actions: [] },
+    });
+  }],
+]) {
+  test(`player action dispatch rejects ${name} before the network`, async () => {
+    const data = fixtureData();
+    const store = fakeProjectionStore();
+    mutate(data, store);
+    let fetchCalls = 0;
+    let sendCalls = 0;
+    await assert.rejects(dispatchPlayerRouteCommand({
+      action: "submit_action:factional_kill",
+      data,
+      projectionStore: store,
+      fetchImpl: async () => { fetchCalls += 1; },
+      sendCommandImpl: async () => { sendCalls += 1; },
+    }), /player action submit_action:factional_kill is no longer authoritative/);
+    assert.equal(fetchCalls, 0);
+    assert.equal(sendCalls, 0);
+  });
+}
+
 test("player route controller treats missing route authority as disabled", async () => {
   await assert.rejects(
     submitPlayerRouteCommand({
@@ -1067,7 +1101,7 @@ test("player route controller refreshes command state after stale phase rejects"
 test("player route controller refreshes action state after invalid target rejects", async () => {
   const refreshed = [];
   const result = await submitPlayerRouteCommand({
-    action: "submit_invalid_action:factional_kill",
+    action: "submit_action:factional_kill",
     composerBody: "",
     data: fixtureData(),
     fetchImpl: async () => null,
@@ -1076,11 +1110,21 @@ test("player route controller refreshes action state after invalid target reject
         refreshed.push(keys);
       },
     }),
-    sendCommandImpl: async () => ({
-      state: "reject",
-      error: "InvalidTarget",
-      message: "Reject InvalidTarget",
-    }),
+    sendCommandImpl: async ({ command }) => {
+      assert.deepEqual(command.SubmitAction, {
+        game: "midsummer",
+        actor_slot: "slot-7",
+        action_id: "browser_factional_kill_n01",
+        template_id: "factional_kill",
+        targets: ["slot-2"],
+        grant_id: null,
+      });
+      return {
+        state: "reject",
+        error: "InvalidTarget",
+        message: "Reject InvalidTarget",
+      };
+    },
   });
 
   assert.deepEqual(refreshed, [["notifications", "investigationResults", "commandState"]]);
@@ -1088,7 +1132,7 @@ test("player route controller refreshes action state after invalid target reject
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({
       data: fixtureData(),
-      action: "submit_invalid_action:factional_kill",
+      action: "submit_action:factional_kill",
       commandStatus: { state: "reject", error: "InvalidTarget" },
     }),
     ["notifications", "investigationResults", "commandState"],
@@ -1432,13 +1476,6 @@ function fixtureData(overrides = {}) {
           templateId: "factional_kill",
           targets: ["slot-2"],
         },
-        {
-          action: "submit_invalid_action:factional_kill",
-          commandKind: "submit_invalid_action",
-          actionId: "invalid_self_factional_kill",
-          templateId: "factional_kill",
-          targets: ["slot-7"],
-        },
       ],
     },
     threadPager: { pageSize: 50, channel: "main" },
@@ -1464,13 +1501,6 @@ function fixtureData(overrides = {}) {
           templateId: "factional_kill",
           targets: ["slot-2"],
           targetOptions: ["slot-2"],
-        },
-        {
-          action: "submit_invalid_action:factional_kill",
-          actionId: "invalid_self_factional_kill",
-          templateId: "factional_kill",
-          targets: ["slot-7"],
-          targetOptions: ["slot-7"],
         },
       ],
       currentActions: [],

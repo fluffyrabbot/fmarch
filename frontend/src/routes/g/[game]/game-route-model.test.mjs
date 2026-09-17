@@ -322,11 +322,6 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
         templateId: "factional_kill",
         targets: ["slot-3"],
       },
-      {
-        action: "submit_invalid_action:factional_kill",
-        templateId: "factional_kill",
-        targets: ["slot-7"],
-      },
     ],
   );
 });
@@ -380,7 +375,6 @@ test("selected action targets override the server default when legal", () => {
   const picked = buildPlayerComposerView(
     {},
     commandState,
-    "slot-7",
     { factional_kill: "slot-2" },
   ).actionCommands[0];
   assert.deepEqual(picked.targets, ["slot-2"]);
@@ -391,13 +385,12 @@ test("selected action targets override the server default when legal", () => {
   const staleSelection = buildPlayerComposerView(
     {},
     commandState,
-    "slot-7",
     { factional_kill: "slot-9" },
   ).actionCommands[0];
   assert.deepEqual(staleSelection.targets, ["slot-3"]);
   assert.equal(staleSelection.detail, "factional_kill -> slot-3");
 
-  const noSelection = buildPlayerComposerView({}, commandState, "slot-7")
+  const noSelection = buildPlayerComposerView({}, commandState)
     .actionCommands[0];
   assert.deepEqual(noSelection.targets, ["slot-3"]);
 });
@@ -414,7 +407,7 @@ test("current actions surface a withdraw command once the picker template is sub
       },
     ],
   };
-  const withdrawal = buildPlayerComposerView({}, commandState, "slot-7")
+  const withdrawal = buildPlayerComposerView({}, commandState)
     .actionCommands.find((command) => command.commandKind === "withdraw_action");
   assert.equal(withdrawal.action, "withdraw_action:factional_kill");
   assert.equal(withdrawal.actionId, "role_factional_kill");
@@ -695,14 +688,6 @@ test("player route data projects an authoritative cold-load snapshot", async () 
         detail: "factional_kill -> slot-2",
         templateId: "factional_kill",
         targets: ["slot-2"],
-      },
-      {
-        action: "submit_invalid_action:factional_kill",
-        commandKind: "submit_invalid_action",
-        label: "Try invalid self-action",
-        detail: "factional_kill -> own slot",
-        templateId: "factional_kill",
-        targets: ["slot-7"],
       },
     ],
   );

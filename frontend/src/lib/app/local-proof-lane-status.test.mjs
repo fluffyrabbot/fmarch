@@ -205,6 +205,22 @@ test("highlighted player recovery lanes come from shared scenarios", () => {
   }
 });
 
+test("invalid-action summaries do not infer request evidence from legacy receipts", () => {
+  for (const id of ["invalid-action-recovery", coreLoopPrivateChannelInvalidActionLaneId]) {
+    const summary = coreLoopLaneStatus({
+      id,
+      status: "passed",
+      evidence: {
+        receiptStatusText: "Reject InvalidTarget: obsolete receipt",
+        refreshCommandState: true,
+      },
+    });
+    assert.match(summary, /unknown response/);
+    assert.match(summary, /authenticated request and unchanged durable state verified unknown/);
+    assert.doesNotMatch(summary, /obsolete receipt|refresh commandState/);
+  }
+});
+
 test("core loop lane status formats seeded recovery evidence", () => {
   const privateInvalidAction = privateChannelInvalidActionRecoveryScenario();
   assert.equal(
@@ -226,11 +242,12 @@ test("core loop lane status formats seeded recovery evidence", () => {
       status: "passed",
       evidence: {
         rejectError: "InvalidTarget",
-        receiptStatusText: playerInvalidActionRecoveryMessage,
+        responseMessage: playerInvalidActionRecoveryMessage,
+        requestBoundaryVerified: true,
         legalActionVisible: true,
       },
     }),
-    `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+    `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -239,13 +256,13 @@ test("core loop lane status formats seeded recovery evidence", () => {
       evidence: {
         channel: privateInvalidAction.channelId,
         error: privateInvalidAction.commandError,
-        receiptStatusText: privateInvalidAction.commandMessage,
+        responseMessage: privateInvalidAction.commandMessage,
         channelContextPreserved: true,
-        refreshCommandState: true,
+        requestBoundaryVerified: true,
         legalActionVisible: true,
       },
     }),
-    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, scope true, refresh commandState true, legal action visible true`,
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, authenticated request and unchanged durable state verified true, scope true, legal action visible true`,
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -634,7 +651,8 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         status: "passed",
         evidence: {
           rejectError: "InvalidTarget",
-          receiptStatusText: playerInvalidActionRecoveryMessage,
+          responseMessage: playerInvalidActionRecoveryMessage,
+          requestBoundaryVerified: true,
           legalActionVisible: true,
         },
       },
@@ -644,9 +662,9 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: {
           channel: privateInvalidAction.channelId,
           error: privateInvalidAction.commandError,
-          receiptStatusText: privateInvalidAction.commandMessage,
+          responseMessage: privateInvalidAction.commandMessage,
           channelContextPreserved: true,
-          refreshCommandState: true,
+          requestBoundaryVerified: true,
           legalActionVisible: true,
         },
       },
@@ -821,13 +839,13 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   ]);
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
-    `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+    `passed: ${playerInvalidActionRecoveryMessage}, authenticated request and unchanged durable state verified true, legal action visible true`,
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)[
       coreLoopPrivateChannelInvalidActionLaneId
     ],
-    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, scope true, refresh commandState true, legal action visible true`,
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, authenticated request and unchanged durable state verified true, scope true, legal action visible true`,
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)[
