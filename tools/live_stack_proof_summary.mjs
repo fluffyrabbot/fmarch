@@ -12,6 +12,8 @@ import {
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
 import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import { hasExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
+import { hasHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
+import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_PROOF_SUMMARY_VERSION = 1;
 
@@ -222,7 +224,9 @@ export function buildLiveStackProofSummary(
       accountSessionActive: spectator?.revoked?.accountSessionActive ?? false,
     },
     hostOpsWorkflow: {
-      status: hostOpsStatus(moderator),
+      status: hostOpsStatus(moderator, evidence.game),
+      replacementCandidateHandle: moderator?.actions?.find((action) => action.id === "process_replacement")?.replacementEvidence?.candidate?.handle ?? null,
+      replacementCommandId: moderator?.actions?.find((action) => action.id === "process_replacement")?.replacementEvidence?.commandStatus?.commandId ?? null,
       promptState: moderator?.hostPrompt?.commandStatus?.state ?? null,
       slotLifecycleState: moderator?.slotLifecycle?.commandStatus?.state ?? null,
       playerInviteStatus: moderator?.playerInviteTarget?.status ?? null,
@@ -281,7 +285,7 @@ export function buildLiveStackProofSummary(
       },
       {
         id: "host-ops-summary",
-        status: hostOpsStatus(moderator),
+        status: hostOpsStatus(moderator, evidence.game),
       },
       {
         id: "production-boundary-carried",
@@ -487,8 +491,14 @@ export function markdownLiveStackProofSummary(summary) {
   return `${lines.join("\n")}\n`;
 }
 
-function hostOpsStatus(moderator) {
-  return moderator?.hostPrompt?.commandStatus?.state === "ack" &&
+function hostOpsStatus(moderator, game) {
+  return hasHostReplacementEvidence(
+    moderator?.actions?.find((action) => action.id === "process_replacement")?.replacementEvidence,
+    { game, slotId: "slot-7", handle: "rowan",
+      incomingPrincipalId: fixturePrincipalAuthorityId("player-rowan"),
+      hostPrincipalId: fixturePrincipalAuthorityId("host_h") },
+  ) &&
+    moderator?.hostPrompt?.commandStatus?.state === "ack" &&
     moderator?.slotLifecycle?.commandStatus?.state === "ack" &&
     moderator?.playerInviteTarget?.status === "passed" &&
     moderator?.stalePlayerInviteReject?.state === "recovered" &&

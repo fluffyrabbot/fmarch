@@ -5,6 +5,7 @@ import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs
 import { hasContendedVoteRaceEvidence } from "./live_stack/vote_race_scenario.mjs";
 import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import { hasExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
+import { hasHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -207,6 +208,12 @@ const CHECKS = Object.freeze([
     id: "host-ops-workflow",
     label: "Host route proves prompt resolution, slot lifecycle, and API projection truth",
     predicate: (evidence) =>
+      hasHostReplacementEvidence(
+        evidence?.browser?.moderator?.actions?.find((action) => action.id === "process_replacement")?.replacementEvidence,
+        { game: evidence?.game, slotId: "slot-7", handle: "rowan",
+          incomingPrincipalId: PLAYER_ROWAN_PRINCIPAL_ID,
+          hostPrincipalId: fixturePrincipalAuthorityId("host_h") },
+      ) &&
       evidence?.browser?.moderator?.hostPrompt?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.slotLifecycle?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.playerInviteTarget?.status === "passed" &&
