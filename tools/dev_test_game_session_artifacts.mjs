@@ -451,7 +451,7 @@ export function markdownSessionCard(card) {
     }
     if (card.verification.invalidActionRecovery !== undefined) {
       lines.push(
-        "## Invalid Action Recovery Proof",
+        "## Invalid Target Request Boundary Proof",
         "",
         `Status: ${card.verification.invalidActionRecovery.status}`,
         "",
@@ -459,7 +459,7 @@ export function markdownSessionCard(card) {
         "",
         `Reject: ${card.verification.invalidActionRecovery.reject.message}`,
         "",
-        `Receipt: ${card.verification.invalidActionRecovery.currentReceipt.message}`,
+        `Boundary: ${card.verification.invalidActionRecovery.invalidTargetRequest.boundary}; durable state unchanged before the subsequent legal UI action`,
         "",
         `Legal action visible: ${card.verification.invalidActionRecovery.legalActionVisible}`,
         "",

@@ -454,6 +454,7 @@ export function assertPrivateChannelInvalidActionRecoveryProofCase({
   const refreshKeys = proof?.bridgePlan?.projectionRefreshKeys ?? [];
   if (
     proof?.status !== "passed" ||
+    proof.boundary !== "fixture-ui-rejection" ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
     proof.visitedRolePath !== visitedRolePath ||
     proof.clickedAction !== scenario.clickedAction ||
@@ -461,7 +462,8 @@ export function assertPrivateChannelInvalidActionRecoveryProofCase({
     proof.command?.game !== expectedGame ||
     proof.command?.actor_slot !== scenario.actorSlot ||
     proof.command?.template_id !== scenario.expectedActionTemplateId ||
-    !sameStringArray(proof.command?.targets, [scenario.actorSlot]) ||
+    proof.command?.action_id !== scenario.expectedActionTemplateId ||
+    !sameStringArray(proof.command?.targets, [scenario.targetSlot]) ||
     proof.command?.grant_id !== "grant-factional-kill" ||
     proof.commandStatus?.state !== "reject" ||
     proof.commandStatus.error !== scenario.commandError ||

@@ -177,6 +177,7 @@ function playerInvalidActionProof({ game, sourceRoleUrl, visitedRolePath }) {
   const scenario = playerInvalidActionRecoveryScenario();
   return {
     status: "passed",
+    boundary: "fixture-ui-rejection",
     sourceRoleUrl,
     visitedRolePath,
     clickedAction: scenario.clickedAction,

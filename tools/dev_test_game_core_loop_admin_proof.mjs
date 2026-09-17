@@ -5377,9 +5377,11 @@ async function provePlayerActionInvalidRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const invalidButton = page.locator(scenario.commandButtonSelector);
-    await invalidButton.waitFor({ state: "visible", timeout: 15000 });
-    await invalidButton.click();
+    const legalButton = page.locator(scenario.commandButtonSelector);
+    await legalButton.waitFor({ state: "visible", timeout: 15000 });
+    await legalButton.click();
+    await page.locator(scenario.targetRadioSelector).check();
+    await page.locator(scenario.confirmButtonSelector).click();
     await page.waitForFunction(
       (proofScenario) =>
         window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&
@@ -5419,6 +5421,7 @@ async function provePlayerActionInvalidRecovery({
     const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
     return {
       status: "passed",
+      boundary: "fixture-ui-rejection",
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       clickedAction: scenario.clickedAction,
@@ -5481,7 +5484,7 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
           body: {
             error: "WrongPlayerInvalidActionProofCommand",
             retryable: false,
-            message: "invalid action proof only accepts invalid self action",
+            message: "fixture invalid-target response only accepts the offered action",
           },
         },
       }),
@@ -8591,6 +8594,8 @@ async function provePrivateChannelInvalidActionRecovery({
     await page.locator(
       `[data-testid="player-action-commands"] button[data-action="${scenario.clickedAction}"]`,
     ).click();
+    await page.locator(`[data-testid="player-action-target-factional_kill-${scenario.targetSlot}"] input`).check();
+    await page.getByTestId("player-action-confirm-factional_kill").click();
     await page.waitForFunction(
       (expectedError) =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -8641,6 +8646,7 @@ async function provePrivateChannelInvalidActionRecovery({
     const command = commandRequests.at(-1)?.SubmitAction ?? null;
     return {
       status: "passed",
+      boundary: "fixture-ui-rejection",
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       clickedAction: scenario.clickedAction,
