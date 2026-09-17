@@ -447,6 +447,7 @@ export function playerActionSubmissionRoleSurfaceFixture({
       }),
     playerActionInvalidRecoveryProof: {
       status: "passed",
+      boundary: "fixture-ui-rejection",
       sourceRoleUrl,
       visitedRolePath,
       clickedAction: invalidScenario.clickedAction,

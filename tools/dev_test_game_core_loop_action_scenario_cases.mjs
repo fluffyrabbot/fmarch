@@ -160,15 +160,18 @@ export function playerFactionalKillActionCommandFacts({
 
 export function playerInvalidActionRecoveryScenario() {
   return {
-    clickedAction: "submit_invalid_action:factional_kill",
+    boundary: "fixture-ui-rejection",
+    clickedAction: "submit_action:factional_kill",
     commandKind: "SubmitAction",
     commandSelector: "SubmitAction",
     commandButtonSelector:
-      '[data-testid="player-action-commands"] button[data-action="submit_invalid_action:factional_kill"]',
-    actionId: "invalid_self_factional_kill",
+      '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+    targetRadioSelector: '[data-testid="player-action-target-factional_kill-slot-3"] input',
+    confirmButtonSelector: '[data-testid="player-action-confirm-factional_kill"]',
+    actionId: "factional_kill",
     actorSlot: "slot-7",
     templateId: "factional_kill",
-    targetSlot: "slot-7",
+    targetSlot: "slot-3",
     grantId: "grant-factional-kill",
     finalState: "reject",
     error: "InvalidTarget",

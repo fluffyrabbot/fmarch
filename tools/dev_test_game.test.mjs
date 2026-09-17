@@ -1,3 +1,5 @@
+import { normalizeCommandResponse } from "../frontend/src/lib/app/command-boundary.mjs";
+import { invalidTargetRequestFixture, legalActionAfterInvalidTargetFixture } from "./live_stack/invalid_target_request_fixture.mjs";
 import assert from "node:assert/strict";
 import {
   mkdir,
@@ -12487,7 +12489,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         error: "InvalidTarget",
         message: playerInvalidActionRecoveryMessage,
       },
-      legalAction: { state: "ack", message: "Ack: stream seqs 42" },
+      legalAction: legalActionAfterInvalidTargetFixture(liveInvalidTargetRequestFixture(game)),
       dayNightTransition: {
         status: "passed",
         hostRoleUrl: `/g/${game}/host`,
@@ -12511,7 +12513,6 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           buttons: [
             { action: "submit_action:factional_kill", disabled: false },
-            { action: "submit_invalid_action:factional_kill", disabled: false },
           ],
         },
         normalPlayerNightSurface: {
@@ -13633,33 +13634,13 @@ test("session card and markdown include role credential URLs and tokens", async 
       d02Phase: { phaseId: "D02" },
       privateChannelInvalidActionRecovery: {
         status: "passed",
+        invalidTargetRequest: liveInvalidTargetRequestFixture(game),
         laneId: privateChannelInvalidActionRecoveryScenario().laneId,
         channel: privateChannelInvalidActionRecoveryScenario().channelId,
         route: {
           responseStatus: 200,
         },
-        reject: {
-          state: "reject",
-          error: privateChannelInvalidActionRecoveryScenario().commandError,
-          requestEnvelope: {
-            body: {
-              body: {
-                command: {
-                  SubmitAction: {
-                    actor_slot:
-                      privateChannelInvalidActionRecoveryScenario().actorSlot,
-                    template_id:
-                      privateChannelInvalidActionRecoveryScenario()
-                        .expectedActionTemplateId,
-                    targets: [
-                      privateChannelInvalidActionRecoveryScenario().actorSlot,
-                    ],
-                  },
-                },
-              },
-            },
-          },
-        },
+        reject: liveInvalidTargetRequestFixture(game).outcome,
         afterRejectSnapshot: {
           channelContext: {
             channelId: privateChannelInvalidActionRecoveryScenario().channelId,
@@ -13679,16 +13660,6 @@ test("session card and markdown include role credential URLs and tokens", async 
             ],
           },
         },
-        currentReceipt: {
-          actionId: privateChannelInvalidActionRecoveryScenario().clickedAction,
-          state: "reject",
-          commandTrace: {
-            projectionRefreshKeys:
-              privateChannelInvalidActionRecoveryScenario().expectedRefreshKeys,
-          },
-        },
-        receiptStatusText:
-          privateChannelInvalidActionRecoveryScenario().commandMessage,
         apiCommandStateAfterReject: {
           actions: [
             {
@@ -13704,26 +13675,14 @@ test("session card and markdown include role credential URLs and tokens", async 
     },
     invalidActionRecovery: {
       status: "passed",
-      proof: "invalid action receipt kept legal action available",
-      reject: {
-        state: "reject",
-        error: "InvalidTarget",
-        message: playerInvalidActionRecoveryMessage,
-      },
+      proof: "authenticated InvalidTarget leaves durable state unchanged before legal UI action",
+      invalidTargetRequest: liveInvalidTargetRequestFixture(game),
+      reject: liveInvalidTargetRequestFixture(game).outcome,
       commandState: {
         phase: { phaseId: "N01" },
         actions: [{ templateId: "factional_kill" }],
       },
       legalActionVisible: true,
-      currentReceipt: {
-        actionId: "submit_invalid_action:factional_kill",
-        state: "reject",
-        message: playerInvalidActionRecoveryMessage,
-        commandTrace: {
-          projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
-        },
-      },
-      receiptStatusText: playerInvalidActionRecoveryMessage,
     },
     resolutionReceipts: {
       status: "passed",
@@ -18911,8 +18870,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Target role: cop -> vanilla_townie"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
-  assert(markdown.includes("## Invalid Action Recovery Proof"));
-  assert(markdown.includes(`Receipt: ${playerInvalidActionRecoveryMessage}`));
+  assert(markdown.includes("## Invalid Target Request Boundary Proof"));
+  assert(markdown.includes("Boundary: authenticated-request; durable state unchanged before the subsequent legal UI action"));
   assert(markdown.includes("Legal action visible: true"));
   assert(markdown.includes("## Resolution Receipt Proof"));
   assert(markdown.includes("Target notice: player_killed factional_kill"));
@@ -18987,6 +18946,31 @@ test("session card and markdown include role credential URLs and tokens", async 
   });
   assertDevTestGameProofRun(proofRun);
   assert.equal(proofRun.status, "passed");
+  for (const [name, mutate] of [
+    ["missing request boundary", (verification) => {
+      delete verification.invalidActionRecovery.invalidTargetRequest;
+      verification.invalidActionRecovery.currentReceipt = { state: "reject", actionId: "submit_action:factional_kill" };
+    }],
+    ["changed durable ballot", (verification) => {
+      verification.invalidActionRecovery.invalidTargetRequest.durableAfter.voteBallots.push({ actor_slot: "slot_4", target: "slot-2" });
+    }],
+    ["wrong game scope", (verification) => {
+      verification.invalidActionRecovery.invalidTargetRequest = liveInvalidTargetRequestFixture("other-game");
+      verification.actionLoop.legalAction = legalActionAfterInvalidTargetFixture(verification.invalidActionRecovery.invalidTargetRequest);
+    }],
+    ["mutated legal target", (verification) => {
+      verification.actionLoop.legalAction.requestEnvelope.body.body.command.SubmitAction.targets = ["slot-3"];
+    }],
+  ]) {
+    const changed = structuredClone(card);
+    mutate(changed.verification);
+    const changedLane = buildDevTestGameProofRun(changed).lanes.find((lane) => lane.id === "invalid-action-recovery");
+    assert.equal(changedLane.status, "failed", name);
+  }
+  const privateChanged = structuredClone(card);
+  delete privateChanged.verification.actionLoop.privateChannelInvalidActionRecovery.invalidTargetRequest;
+  assert.equal(buildDevTestGameProofRun(privateChanged).lanes.find((lane) => lane.id === coreLoopPrivateChannelInvalidActionLaneId).status, "failed");
+
   assert.equal(
     proofRun.identityBootstrap.rootSessionSource,
     "/auth/local-proof/sessions",
@@ -23619,7 +23603,8 @@ function coreLoopAdminProofFixture({
                 message: playerInvalidActionRecoveryMessage,
               },
               legalActionVisible: true,
-              receiptStatusText: playerInvalidActionRecoveryMessage,
+              responseMessage: playerInvalidActionRecoveryMessage,
+              requestBoundaryVerified: true,
             },
           },
         ],
@@ -24325,16 +24310,17 @@ function privateChannelRoleSurfaceFixture() {
     },
     invalidActionRecoveryProof: {
       status: "passed",
+      boundary: "fixture-ui-rejection",
       sourceRoleUrl: roleUrl,
       visitedRolePath,
-      clickedAction: "submit_invalid_action:factional_kill",
+      clickedAction: "submit_action:factional_kill",
       commandKind: "SubmitAction",
       command: {
         game,
-        action_id: "invalid_self_factional_kill",
+        action_id: "factional_kill",
         actor_slot: "slot-7",
         template_id: "factional_kill",
-        targets: ["slot-7"],
+        targets: ["slot_3"],
         grant_id: "grant-factional-kill",
       },
       commandStatus: {
@@ -24356,7 +24342,7 @@ function privateChannelRoleSurfaceFixture() {
       },
       receipts: [
         {
-          actionId: "submit_invalid_action:factional_kill",
+          actionId: "submit_action:factional_kill",
           state: "reject",
           message:
             "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
@@ -30026,4 +30012,18 @@ function identityRole({ role, loginUrl, principalId, capabilityKinds }) {
       valuePrefix: "fmss_",
     },
   };
+}
+
+function liveInvalidTargetRequestFixture(game) {
+  const evidence = invalidTargetRequestFixture();
+  evidence.game = game;
+  evidence.legalCommand.SubmitAction.game = game;
+  evidence.outcome.requestEnvelope.body.body.command.SubmitAction.game = game;
+  evidence.outcome = normalizeCommandResponse({
+    commandId: evidence.outcome.commandId,
+    requestEnvelope: evidence.outcome.requestEnvelope,
+    response: { status: evidence.outcome.httpStatus },
+    serverEnvelope: evidence.outcome.serverEnvelope,
+  });
+  return evidence;
 }

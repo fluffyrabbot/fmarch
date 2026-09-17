@@ -42,10 +42,12 @@ export const coreLoopPrivateChannelInvalidActionFeatureTargetKind =
 
 export function privateChannelInvalidActionRecoveryScenario() {
   return {
+    boundary: "fixture-ui-rejection",
+    targetSlot: "slot_3",
     laneId: coreLoopPrivateChannelInvalidActionLaneId,
     channelId: "private:mafia_day_chat",
     actorSlot: "slot_4",
-    clickedAction: "submit_invalid_action:factional_kill",
+    clickedAction: "submit_action:factional_kill",
     commandKind: "SubmitAction",
     commandError: "InvalidTarget",
     commandMessage: playerInvalidActionRecoveryMessage,

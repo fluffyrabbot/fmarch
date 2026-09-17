@@ -3040,7 +3040,6 @@ export async function renderPlayerActionTargetConfirmation() {
       withdrawCommandLabel: "Withdraw vote",
     },
     commandState,
-    commandState.actorSlot,
     { factional_kill: "slot-2" },
   );
   return render(PlayerCommandPanel, {
@@ -3073,7 +3072,6 @@ export async function renderPlayerActionWithdrawConfirmation() {
       withdrawCommandLabel: "Withdraw vote",
     },
     commandState,
-    commandState.actorSlot,
     {},
   );
   return render(PlayerCommandPanel, {

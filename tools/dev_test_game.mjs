@@ -1,3 +1,8 @@
+import {
+  proveInvalidSelfTargetRequest,
+  hasInvalidTargetRequestEvidence,
+  assertLegalActionAfterInvalidTargetRequest,
+} from "./live_stack/invalid_target_request_scenario.mjs";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -49,7 +54,6 @@ import {
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
-  playerInvalidActionRecoveryMessage,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
@@ -4275,7 +4279,7 @@ async function verifySeededActionLoop({
   });
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
 
-  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').waitFor({
+  await actionPage.locator('[data-action="submit_action:factional_kill"]').waitFor({
     state: "visible",
   });
   const n01Phase = await actionPage.evaluate(
@@ -4334,8 +4338,8 @@ async function verifySeededActionLoop({
     !n01ActionSurface.buttons.some(
       (button) => button.action === "submit_action:factional_kill" && !button.disabled,
     ) ||
-    !n01ActionSurface.buttons.some(
-      (button) => button.action === "submit_invalid_action:factional_kill",
+    n01ActionSurface.buttons.some(
+      (button) => String(button.action).startsWith("submit_invalid_action:"),
     ) ||
     playerActionBoundary.phase?.phaseId !== "N01" ||
     playerActionBoundary.commandActions?.length !== 0 ||
@@ -4389,6 +4393,8 @@ async function verifySeededActionLoop({
     });
   const invalidActionRecovery = await verifySeededInvalidActionRecovery({
     actionPage,
+    game,
+    frontendBaseUrl,
   });
   const invalidAction = invalidActionRecovery.reject;
 
@@ -4400,6 +4406,12 @@ async function verifySeededActionLoop({
     game,
   });
   const legalAction = concurrentActionRace.ack;
+  assertLegalActionAfterInvalidTargetRequest(
+    invalidActionRecovery.invalidTargetRequest, legalAction,
+  );
+  assertLegalActionAfterInvalidTargetRequest(
+    privateChannelInvalidActionRecovery.invalidTargetRequest, legalAction,
+  );
   const submittedCommand = legalAction.requestEnvelope?.body?.body?.command?.SubmitAction;
   if (submittedCommand?.template_id !== "factional_kill") {
     throw new Error(`expected factional_kill SubmitAction: ${JSON.stringify(submittedCommand)}`);
@@ -6841,60 +6853,60 @@ async function freezeStaleHostControlPage({ staleHostPage, game, frontendBaseUrl
   };
 }
 
-async function verifySeededInvalidActionRecovery({ actionPage }) {
-  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').click();
-  await actionPage.waitForFunction(
-    () =>
-      window.__fmarchPlayerCommandStatus?.state === "reject" &&
-      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget",
-  );
-  const reject = await actionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
-  await actionPage.waitForFunction(
-    () =>
-      Array.isArray(window.__fmarchPlayerProjection?.commandState?.actions) &&
-      window.__fmarchPlayerProjection.commandState.actions.some(
-        (action) => action.templateId === "factional_kill",
-      ),
-  );
-  const commandState = await actionPage.evaluate(
-    () => window.__fmarchPlayerProjection?.commandState,
-  );
-  const legalActionVisible = await actionPage
-    .locator('[data-action="submit_action:factional_kill"]')
-    .isVisible();
-  const currentReceipt = await actionPage.evaluate(() =>
-    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
-  );
-  const receiptStatusText = await actionPage.getByTestId("player-command-status").innerText();
-  if (
-    reject?.error !== "InvalidTarget" ||
-    commandState?.phase?.phaseId !== "N01" ||
-    !commandState?.actions?.some((action) => action.templateId === "factional_kill") ||
-    legalActionVisible !== true ||
-    currentReceipt?.actionId !== "submit_invalid_action:factional_kill" ||
-    currentReceipt?.state !== "reject" ||
-    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !== true ||
-    !receiptStatusText.includes(playerInvalidActionRecoveryMessage)
-  ) {
-    throw new Error(
-      `invalid action recovery drifted: ${JSON.stringify({
-        reject,
-        commandState,
-        legalActionVisible,
-        currentReceipt,
-        receiptStatusText,
-      })}`,
-    );
+// This is a real authenticated server boundary, separate from intercepted UI fixtures.
+async function verifyInvalidTargetRequestFromPage({ page, game, frontendBaseUrl }) {
+  const commandState = await page.evaluate(() => window.__fmarchPlayerProjection?.commandState);
+  if (commandState?.game !== game) throw new Error("invalid-target request has the wrong game scope");
+  return proveInvalidSelfTargetRequest({
+    context: page.context(),
+    commandUrl: `${frontendBaseUrl}/commands`,
+    commandState,
+    templateId: "factional_kill",
+    commandId: crypto.randomUUID(),
+    envelopeId: commandEnvelopeId++,
+    readDurableState: async (commandId) => {
+      const result = await runProcess("psql", [databaseUrl, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", `
+        SELECT json_build_object(
+          'eventCount', (SELECT COUNT(*) FROM events WHERE stream_id = ${sqlLiteral(game)}::uuid),
+          'maxEventSeq', (SELECT COALESCE(MAX(seq), 0) FROM events WHERE stream_id = ${sqlLiteral(game)}::uuid),
+          'maxStreamSeq', (SELECT COALESCE(MAX(stream_seq), 0) FROM events WHERE stream_id = ${sqlLiteral(game)}::uuid),
+          'actionSubmissions', COALESCE((SELECT json_agg(r) FROM (
+            SELECT * FROM action_submission WHERE game_id = ${sqlLiteral(game)}::uuid
+            ORDER BY phase_id, actor_slot, action_id
+          ) r), '[]'::json),
+          'voteBallots', COALESCE((SELECT json_agg(r) FROM (
+            SELECT * FROM vote_ballot WHERE game_id = ${sqlLiteral(game)}::uuid
+            ORDER BY phase_id, actor_slot
+          ) r), '[]'::json),
+          'commandReceipts', COALESCE((SELECT json_agg(r) FROM (
+            SELECT command_id, stream_seqs FROM command_receipt
+            WHERE command_id = ${sqlLiteral(commandId)}::uuid ORDER BY principal_id
+          ) r), '[]'::json)
+        )`]);
+      return JSON.parse(result.stdout.trim());
+    },
+  });
+}
+
+async function verifySeededInvalidActionRecovery({ actionPage, game, frontendBaseUrl }) {
+  const invalidTargetRequest = await verifyInvalidTargetRequestFromPage({
+    page: actionPage, game, frontendBaseUrl,
+  });
+  const commandState = await actionPage.evaluate(() => window.__fmarchPlayerProjection?.commandState);
+  const legalActionVisible = await actionPage.locator('[data-action="submit_action:factional_kill"]').isVisible();
+  if (!hasInvalidTargetRequestEvidence(invalidTargetRequest) ||
+      commandState?.phase?.phaseId !== "N01" ||
+      !commandState?.actions?.some((action) => action.templateId === "factional_kill") ||
+      !legalActionVisible) {
+    throw new Error(`invalid-target request boundary drifted: ${JSON.stringify({ invalidTargetRequest, commandState, legalActionVisible })}`);
   }
   return {
     status: "passed",
-    reject,
+    invalidTargetRequest,
+    reject: invalidTargetRequest.outcome,
     commandState,
     legalActionVisible,
-    currentReceipt,
-    receiptStatusText,
-    proof:
-      "The action-player role URL submitted the seeded invalid self-action, rendered a current InvalidTarget command receipt, refreshed commandState, and kept the legal factional_kill action available without advancing phase.",
+    proof: "The real action player's authenticated request used the current action identity with only its target changed to self. The server rejected InvalidTarget without changing game events, action submissions, ballots, or command receipts. Legal UI controls remained available; the next action scenario submits through them.",
   };
 }
 
@@ -6920,9 +6932,6 @@ async function verifyPrivateChannelInvalidActionRecovery({
       ),
   );
   const setupSnapshot = await privateChannelRoleSnapshot(page);
-  const invalidActionButton = setupSnapshot.buttons.find(
-    (button) => button.action === "submit_invalid_action:factional_kill",
-  );
   const legalActionButton = setupSnapshot.buttons.find(
     (button) => button.action === "submit_action:factional_kill",
   );
@@ -6934,44 +6943,19 @@ async function verifyPrivateChannelInvalidActionRecovery({
     label: "private-channel invalid action setup",
     includeEvidenceInError: true,
   });
-  if (
-    invalidActionButton?.disabled !== false ||
-    legalActionButton?.disabled !== false
-  ) {
+  if (legalActionButton?.disabled !== false) {
     throw new Error(
       `private-channel invalid action setup drifted: ${JSON.stringify({
         route,
         setupSnapshot,
-        invalidActionButton,
         legalActionButton,
       })}`,
     );
   }
 
-  await page.locator('[data-action="submit_invalid_action:factional_kill"]').click();
-  await page.waitForFunction(
-    () =>
-      window.__fmarchPlayerCommandStatus?.state === "reject" &&
-      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget" &&
-      window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-        ?.SubmitAction?.action_id === "invalid_self_factional_kill",
-  );
-  await page.waitForFunction(
-    () =>
-      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
-      window.__fmarchPlayerProjection?.commandState?.actions?.some(
-        (action) => action.templateId === "factional_kill",
-      ) &&
-      document
-        .querySelector("[data-testid='player-command-channel-context']")
-        ?.getAttribute("data-channel-id") === "private:mafia_day_chat",
-  );
-  const reject = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const invalidTargetRequest = await verifyInvalidTargetRequestFromPage({ page, game, frontendBaseUrl });
+  const reject = invalidTargetRequest.outcome;
   const afterRejectSnapshot = await privateChannelRoleSnapshot(page);
-  const currentReceipt = await page.evaluate(() =>
-    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
-  );
-  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
     apiBaseUrl,
     game,
@@ -7003,12 +6987,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
       "factional_kill" ||
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
       "slot_4" ||
-    currentReceipt?.actionId !== "submit_invalid_action:factional_kill" ||
-    currentReceipt?.state !== "reject" ||
-    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
-      "commandState",
-    ) !== true ||
-    !receiptStatusText.includes(playerInvalidActionRecoveryMessage) ||
+    !hasInvalidTargetRequestEvidence(invalidTargetRequest) ||
     afterRejectSnapshot.commandState?.phase?.phaseId !== "N01" ||
     afterRejectSnapshot.commandState?.phase?.locked !== false ||
     !afterRejectSnapshot.commandState?.actions?.some(
@@ -7031,8 +7010,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
         reject,
         setupSnapshot,
         afterRejectSnapshot,
-        currentReceipt,
-        receiptStatusText,
+        invalidTargetRequest,
         apiCommandStateAfterReject,
         legalActionVisibleAfterReject,
         privateThreadPagerVisible,
@@ -7047,17 +7025,15 @@ async function verifyPrivateChannelInvalidActionRecovery({
     channel: factionDayChatChannel,
     route,
     setupSnapshot,
-    invalidActionButton,
     legalActionButton,
     reject,
     afterRejectSnapshot,
-    currentReceipt,
-    receiptStatusText,
+    invalidTargetRequest,
     apiCommandStateAfterReject,
     legalActionVisibleAfterReject,
     privateThreadPagerVisible,
     proof:
-      "The action-player private-channel role URL submitted the seeded invalid self-action, rendered a current InvalidTarget command receipt, refreshed commandState, kept the legal factional_kill action available, and preserved the scoped private-channel context.",
+      "The private-channel player used the same authenticated context for an actual InvalidTarget request boundary with unchanged durable state, while the legal action controls and scoped private-channel context remained available.",
   };
 }
 
