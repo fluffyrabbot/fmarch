@@ -2321,6 +2321,16 @@ pub struct HostConsoleAuthorityDelta {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct HostReplacementCandidate {
+    pub slot_id: String,
+    pub outgoing_persona_id: Uuid,
+    pub principal_id: PrincipalId,
+    pub handle: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostConsolePhaseStateDelta {
     pub phase_id: PhaseId,
     pub locked: bool,
@@ -4299,21 +4309,21 @@ pub mod typescript {
         HostConsoleTasksDelta, HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta,
         HostConsoleThreadPostsDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
         HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution,
-        HostPromptRecordedDecision, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
-        HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, InvestigationResultBody,
-        InvestigationResultFields, ItaSessionControlKind, JsonAtom, LiveAudience,
-        LiveProjectionDelta, LiveResyncRequired, LiveScope, MemberMutePage, MemberMuteState,
-        MentionSuggestionPage, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationContentRevision, ModerationContentSnapshot, ModerationEvidence,
-        ModerationHistory, ModerationProfileMention, ModerationReport, ModerationReportReceipt,
-        ModerationSlotMention, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
-        PlayerNotification, PlayerNotificationsDelta, PostCitation, PostCitationPage,
-        PostCitationsChangedDelta, PostEmbed, PostKind, PostRef, ProfileEditor, ProjectionDelta,
-        PublicContentRef, PublicGameThreadPage, PublicInboxItem, PublicInboxPage,
-        PublicPostCitation, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
-        PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
-        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        HostPromptRecordedDecision, HostPromptsDelta, HostReplacementCandidate,
+        HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
+        HostTaskUrgency, InvestigationResultBody, InvestigationResultFields, ItaSessionControlKind,
+        JsonAtom, LiveAudience, LiveProjectionDelta, LiveResyncRequired, LiveScope, MemberMutePage,
+        MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
+        ModerationCasePage, ModerationContentRevision, ModerationContentSnapshot,
+        ModerationEvidence, ModerationHistory, ModerationProfileMention, ModerationReport,
+        ModerationReportReceipt, ModerationSlotMention, PlayerInvestigationResult,
+        PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
+        PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
+        ProfileEditor, ProjectionDelta, PublicContentRef, PublicGameThreadPage, PublicInboxItem,
+        PublicInboxPage, PublicPostCitation, PublicPostCitationPage, PublicProfile,
+        PublicSearchExcerptSegment, PublicSearchFilterValue, PublicSearchPage, PublicSearchResult,
+        PublicSearchResultKind, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle,
         SlotMentionNotification, SlotMentionsDelta, SpawnedGame, SubmitPostEmbed, SubmitPostMedia,
@@ -4414,6 +4424,7 @@ pub mod typescript {
         push::<DayVoteOutcomeDelta>(&mut out, &config);
         push::<HostConsoleAuthorityKind>(&mut out, &config);
         push::<HostConsoleAuthorityDelta>(&mut out, &config);
+        push::<HostReplacementCandidate>(&mut out, &config);
         push::<HostConsolePhaseStateDelta>(&mut out, &config);
         push::<HostConsoleSlotOccupancyDelta>(&mut out, &config);
         push::<HostConsoleSlotsDelta>(&mut out, &config);

@@ -13,6 +13,8 @@ use axum::http::request::Parts;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::routing::get;
+#[path = "host_replacement_http.rs"]
+mod host_replacement_http;
 #[path = "private_attention_http.rs"]
 mod private_attention_http;
 #[path = "reading_checkpoint_http.rs"]
@@ -107,6 +109,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         )
         .route("/games/{game}/host-prompts", get(host_prompts))
         .route("/games/{game}/host-console-state", get(host_console_state))
+        .route(
+            "/games/{game}/replacement-candidate",
+            get(host_replacement_http::read),
+        )
         .route("/games/{game}/setup-state", get(host_setup_state))
         .with_state(GameHttpState::new(state.pool.clone(), state.auth.clone()))
 }
