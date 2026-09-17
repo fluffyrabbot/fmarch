@@ -4,6 +4,7 @@ import {
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
 import { hasContendedVoteRaceEvidence } from "./live_stack/vote_race_scenario.mjs";
 import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
+import { hasExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -88,6 +89,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot-7") &&
       evidence?.browser?.hostVotecountConvergence?.status === "passed" &&
       evidence?.browser?.hostVotecountConvergence?.expectedCount === 1 &&
+      hasExplicitHostReconnect(evidence?.browser?.hostVotecountConvergence?.explicitReconnect) &&
       evidence?.browser?.hostVotecountConvergence?.after?.projection?.some(
         (row) => row.target === "slot_1" && row.count === 1,
       ),
