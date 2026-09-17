@@ -117,6 +117,8 @@ export function shouldPreserveHostActionConfirmation(
     previous.id === next.id &&
     previous.requiresConfirmation &&
     next.requiresConfirmation &&
+    JSON.stringify(previous.payload) === JSON.stringify(next.payload) &&
+    previous.confirmationText === next.confirmationText &&
     next.disabled === false
   );
 }

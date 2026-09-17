@@ -104,13 +104,17 @@ function buildProcessReplacementAction(gameId, replacement) {
   }
   const outgoingPublicName = optionalNonEmptyString(replacement?.occupantLabel)
     ?? "current persona";
+  const incomingDisplayLabel = optionalNonEmptyString(replacement?.incomingDisplayLabel);
+  const replacementDescription = incomingDisplayLabel === null
+    ? `replace ${outgoingPublicName}`
+    : `replace ${outgoingPublicName} with ${incomingDisplayLabel}`;
   return freezeHostAction({
     id: "process_replacement",
     label: "Process replacement",
     objectLabel: `${replacementSlotId} / ${outgoingPublicName}`,
-    outcomeLabel: `replace ${outgoingPublicName} and preserve slot history`,
+    outcomeLabel: `${replacementDescription} and preserve slot history`,
     confirmationText:
-      `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: replace ${outgoingPublicName} and preserve slot history.`,
+      `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: ${replacementDescription} and preserve slot history.`,
     irreversible: true,
     payload: {
       kind: "process_replacement",
