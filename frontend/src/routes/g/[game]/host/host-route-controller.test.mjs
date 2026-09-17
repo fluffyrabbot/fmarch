@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
+import { replacementContext, validateReplacementCandidate } from "../../../../lib/components/host-action/host-replacement-candidate.mjs";
 import {
   appendHostActionEvent,
   appendHostCommandOutcome,
@@ -1088,3 +1089,109 @@ function memoryStorage() {
     },
   };
 }
+
+function replacementScenario() {
+  const data = fixtureData({ replacement: {
+    slotId: "slot-7", personaId: "persona-mira", occupantLabel: "Mira",
+    assignedPrincipalId: FIXTURE_PRINCIPAL_IDS.playerMira,
+  } });
+  const candidate = validateReplacementCandidate({
+    slot_id: "slot-7", outgoing_persona_id: "persona-mira",
+    principal_id: FIXTURE_PRINCIPAL_IDS.playerRowan, handle: "rowan", display_name: "Rowan",
+  }, replacementContext({ gameId: data.game.id, replacement: data.replacement, authority: data.authority }), "rowan");
+  const snapshot = buildHostProjectionInitialSnapshot(data);
+  const action = buildHostDerivedState({ gameId: data.game.id, snapshot, replacementCandidate: candidate }).criticalActions.find((entry) => entry.id === "process_replacement");
+  const event = { actionId: action.id, payload: action.payload, replacementCandidate: candidate };
+  return { data, candidate, snapshot, event };
+}
+
+test("host replacement sends the selected canonical identity without writing candidate intent into projection", async () => {
+  const { data, candidate, snapshot, event } = replacementScenario();
+  const sent = [];
+  await dispatchHostRouteAction({ event, data, replacementCandidate: candidate,
+    projectionStore: fakeProjectionStore(snapshot), sendHostActionCommandImpl: async (request) => { sent.push(request); return { state: "ack" }; },
+  });
+  assert.equal(sent[0].preparedCommand.ProcessReplacement.incoming_principal_id, FIXTURE_PRINCIPAL_IDS.playerRowan);
+  assert.equal(snapshot.host.replacement.incomingPrincipalId, undefined);
+});
+
+test("fresh replacement confirmation cannot dispatch after selected member or current occupant changes", async () => {
+  const { data, candidate, snapshot, event } = replacementScenario();
+  for (const [selection, current] of [
+    [null, snapshot],
+    [{ ...candidate, principalId: FIXTURE_PRINCIPAL_IDS.cohostC, handle: "birch", displayName: "Birch" }, snapshot],
+    [candidate, { ...snapshot, host: { ...snapshot.host, replacement: { ...snapshot.host.replacement, personaId: "new-persona" } } }],
+    [candidate, { ...snapshot, host: { ...snapshot.host, replacement: { ...snapshot.host.replacement, assignedPrincipalId: FIXTURE_PRINCIPAL_IDS.cohostC } } }],
+    [{ ...candidate, gameId: "another-game" }, snapshot],
+  ]) {
+    let sent = 0;
+    await assert.rejects(dispatchHostRouteAction({ event, data, replacementCandidate: selection,
+      projectionStore: fakeProjectionStore(current), sendHostActionCommandImpl: async () => { sent += 1; },
+    }), /no longer authoritative/);
+    assert.equal(sent, 0);
+  }
+});
+
+test("host replacement is blocked before network while projection is unready", async () => {
+  const { data, candidate, snapshot, event } = replacementScenario();
+  let sent = 0;
+  await assert.rejects(dispatchHostRouteAction({ event, data, replacementCandidate: candidate,
+    projectionStore: { ...fakeProjectionStore(snapshot), isReady: () => false },
+    sendHostActionCommandImpl: async () => { sent += 1; },
+  }), /freshness/);
+  assert.equal(sent, 0);
+});
+
+test("retained replacement with lost ACK replays its exact ID and body after occupancy changed", async () => {
+  const { data, candidate, snapshot, event } = replacementScenario();
+  const command = buildHostCommandRequest({ event, data }).command;
+  const storage = memoryStorage();
+  persistHostInterruptedCommands({ storage, game: data.game.id, principalId: data.commandPrincipalId,
+    attempts: { process_replacement: { event, command, commandId: "replacement-original", interruption: "connection_lost" } },
+  });
+  const restored = restoreHostInterruptedCommands({ storage, game: data.game.id, principalId: data.commandPrincipalId }).attempts.process_replacement;
+  assert.deepEqual(restored.event.replacementCandidate, candidate);
+  const current = { ...snapshot, host: { ...snapshot.host, replacement: { ...snapshot.host.replacement,
+    personaId: "persona-rowan", assignedPrincipalId: candidate.principalId, occupantLabel: "Rowan" } } };
+  const sent = [];
+  const outcome = await dispatchHostRouteAction({ event: restored.event, data,
+    projectionStore: fakeProjectionStore(current), preparedCommand: restored.command,
+    retainedReplacementAttempt: restored, commandIdFactory: () => restored.commandId,
+    sendHostActionCommandImpl: async (request) => {
+      sent.push(request); return { state: "ack", commandId: request.commandIdFactory(), streamSeqs: [42] };
+    },
+  });
+  assert.equal(outcome.commandId, "replacement-original");
+  assert.deepEqual(sent[0].preparedCommand, command);
+  assert.equal(sent.length, 1);
+  // Identical stale intent without a retained, dispatched attempt is never sent.
+  await assert.rejects(dispatchHostRouteAction({ event, data, replacementCandidate: candidate,
+    projectionStore: fakeProjectionStore(current), preparedCommand: command,
+  }), /no longer authoritative/);
+});
+
+test("retained replacement retry rejects changed identity, body and host authority before network", async () => {
+  const { data, snapshot, event } = replacementScenario();
+  const command = buildHostCommandRequest({ event, data }).command;
+  const retained = { event, command, commandId: "original-id", interruption: "timeout" };
+  const attempts = [
+    { commandIdFactory: () => "new-id" },
+    { preparedCommand: { ...command, changed: true } },
+    { retainedReplacementAttempt: { ...retained, interruption: undefined } },
+    { retainedReplacementAttempt: { ...retained, confirmedRejection: { error: "StreamConflict", retryable: true } } },
+    { data: { ...data, game: { id: "another-hosted-game" } } },
+    { retainedReplacementAttempt: { ...retained, event: { ...event, payload: { ...event.payload, incomingPrincipalId: FIXTURE_PRINCIPAL_IDS.cohostC } } } },
+    { projectionStore: fakeProjectionStore({ ...snapshot, host: { ...snapshot.host, authority: { ...data.authority, capabilityKind: "GlobalOperator" } } }) },
+    { projectionStore: fakeProjectionStore({ ...snapshot, host: { ...snapshot.host, authority: { ...data.authority, principalId: FIXTURE_PRINCIPAL_IDS.cohostC } } }) },
+    { projectionStore: fakeProjectionStore({ ...snapshot, host: { ...snapshot.host, authority: { ...data.authority, capabilityKind: "CohostOf", allowedClasses: [] } } }) },
+  ];
+  for (const overrides of attempts) {
+    let sent = 0;
+    await assert.rejects(dispatchHostRouteAction({ event, data, preparedCommand: command,
+      retainedReplacementAttempt: retained, commandIdFactory: () => retained.commandId,
+      projectionStore: fakeProjectionStore(snapshot), ...overrides,
+      sendHostActionCommandImpl: async () => { sent += 1; },
+    }), /retained replacement retry/);
+    assert.equal(sent, 0);
+  }
+});

@@ -2,7 +2,7 @@ import { readingPosition } from "../../../../lib/app/reading-checkpoint.mjs";
 import { accessTokenForRequest } from "../../../../lib/server/session-capabilities.mjs";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 
-const ALLOWED_GAMEPLAY_READ = /^games\/[^/]+(?:\/(?:channels\/[^/]+\/reading-checkpoint|channels\/(?!main(?:\/|$))[^/]+\/thread|votecount|day-vote-outcomes|endgame-summary|notifications|investigation-results|slot-mentions|private-attention|player-command-state|host-phase-controls|host-prompts|host-console-state|setup-state|export))?$/u;
+const ALLOWED_GAMEPLAY_READ = /^games\/[^/]+(?:\/(?:channels\/[^/]+\/reading-checkpoint|channels\/(?!main(?:\/|$))[^/]+\/thread|votecount|day-vote-outcomes|endgame-summary|notifications|investigation-results|slot-mentions|private-attention|player-command-state|host-phase-controls|host-prompts|host-console-state|replacement-candidate|setup-state|export))?$/u;
 const CLIENT_SELECTED_AUTHORITY_PARAMS = Object.freeze([
   "principal_id",
   "principalId",
