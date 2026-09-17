@@ -58,6 +58,8 @@
           "bash scripts/linux-proof.sh --only test:dev-test-game-community-subscriptions"
         ],
         "host-regression": [
+          "bash scripts/linux-proof.sh --only cargo:wire",
+          "bash scripts/linux-proof.sh --only cargo:api",
           "bash scripts/linux-proof.sh --only test:host-console-live-stack-smoke"
         ]
       }
