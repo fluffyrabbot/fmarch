@@ -33,6 +33,7 @@ import {
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
 import { proveExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
+import { captureHostResyncBoundary, hostNetworkDiagnostics, waitForHostCommandResync } from "./live_stack/host_resync_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
@@ -386,6 +387,9 @@ let primaryError = null;
 const heldBrowserPosts = [];
 const moderatorSocketDiagnostics = [];
 const moderatorTicketDiagnostics = [];
+const moderatorProjectionDiagnostics = [];
+const moderatorRequestDiagnostics = [];
+const moderatorRequestIds = new WeakMap();
 const moderatorConsoleDiagnostics = [];
 const previousSmokeAuth = process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
@@ -4870,17 +4874,32 @@ async function openModeratorBrowser(frontendBaseUrl) {
   page.on("pageerror", (error) => {
     moderatorConsoleDiagnostics.push(`pageerror: ${String(error)}`);
   });
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname !== "/live/tickets" && !url.pathname.startsWith(`/api/gameplay/games/${game}/`)) return;
+    const id = moderatorRequestDiagnostics.length;
+    moderatorRequestIds.set(request, id);
+    moderatorRequestDiagnostics.push({ id, pathname: url.pathname, game: url.searchParams.get("game"), method: request.method() });
+  });
   page.on("response", async (response) => {
+    const pathname = new URL(response.url()).pathname;
+    const requestId = moderatorRequestIds.get(response.request());
+    if (pathname.startsWith(`/api/gameplay/games/${game}/`)) {
+      moderatorProjectionDiagnostics.push({ requestId, pathname, method: response.request().method(), status: response.status() });
+    }
     if (new URL(response.url()).pathname !== "/live/tickets") return;
     moderatorTicketDiagnostics.push({
       url: response.url(),
+      requestId,
+      method: response.request().method(),
       status: response.status(),
       body: await response.json().catch(() => null),
     });
   });
   page.on("websocket", (socket) => {
-    const diagnostic = { url: socket.url(), errors: [], frames: [] };
+    const diagnostic = { url: socket.url(), errors: [], frames: [], closed: false };
     moderatorSocketDiagnostics.push(diagnostic);
+    socket.on("close", () => { diagnostic.closed = true; });
     socket.on("socketerror", (error) => diagnostic.errors.push(String(error)));
     socket.on("framereceived", (event) => {
       diagnostic.frames.push(String(event.payload).slice(0, 500));
@@ -4952,6 +4971,8 @@ async function driveModeratorBrowser(
     const confirm = actionRoot.getByTestId("critical-host-action-confirm");
     const confirmBox = await confirm.boundingBox();
     assertHitTarget(confirmBox, `${expected.id} confirm`);
+    const recoveryBefore = expected.id === "process_replacement"
+      ? await captureHostResyncBoundary(page, moderatorNetworkSnapshot) : null;
     await confirm.click({ force: true });
 
     const status = page.getByTestId(`host-command-status-${expected.id}`);
@@ -4966,15 +4987,19 @@ async function driveModeratorBrowser(
     if (expected.id === "extend_deadline") {
       await waitForHostConsoleDeadlineDelta(page, 1781928000);
     }
-    if (expected.id === "process_replacement") {
-      await waitForHostConsoleReplacementDelta(page, "player-rowan");
-    }
+    const commandStatus = await page.evaluate((id) => window.__fmarchHostCommandStatuses?.[id], expected.id);
+    const liveRecovery = expected.id === "process_replacement" ? await waitForModeratorResync(page, {
+      expected: { kind: "replacement", commandKind: "ProcessReplacement", slotId: "slot-7", principalId: PLAYER_ROWAN_PRINCIPAL_ID },
+      before: recoveryBefore, commandReceipt: commandStatus,
+    }) : null;
 
     actionEvidence.push({
       ...expected,
       triggerBox,
       confirmBox,
       confirmationMessage,
+      commandStatus,
+      liveRecovery,
       statusMessage: await status.innerText(),
     });
   }
@@ -5027,8 +5052,7 @@ async function driveModeratorBrowser(
     rolePmHistory,
   );
 
-  const hostPromptIssueCommands = await issueBelovedPrincessPrompt();
-  await waitForHostPromptDelta(page, "pending");
+  const hostPromptIssue = await issueBelovedPrincessPrompt(page);
   const hostPromptEvidence = await resolveHostPromptFromBrowser(page);
   const slotLifecycleEvidence = await modkillSlotFromBrowser(page);
 
@@ -5047,7 +5071,8 @@ async function driveModeratorBrowser(
     stalePlayerInviteReject,
     rolePmReplacement,
     hostPrompt: {
-      issueCommands: hostPromptIssueCommands,
+      issueCommands: hostPromptIssue.commands,
+      pendingRecovery: hostPromptIssue.liveRecovery,
       ...hostPromptEvidence,
     },
     slotLifecycle: slotLifecycleEvidence,
@@ -5190,6 +5215,24 @@ async function dropVoteInsertDelayTrigger() {
   );
 }
 
+function moderatorNetworkSnapshot() {
+  return hostNetworkDiagnostics({ tickets: moderatorTicketDiagnostics, sockets: moderatorSocketDiagnostics, projections: moderatorProjectionDiagnostics, requests: moderatorRequestDiagnostics });
+}
+
+async function waitForModeratorResync(page, { expected, before, commandReceipt }) {
+  return await waitForHostCommandResync({
+    page, game, expected, before, commandReceipt, diagnostics: moderatorNetworkSnapshot,
+    readApiState: async (expectedState) => {
+      const suffix = expectedState.kind === "prompt" ? "host-prompts" : "host-console-state?slot_id=slot-7";
+      const response = await fetchWithTimeout(`${apiBaseUrl}/games/${game}/${suffix}`, {
+        headers: { authorization: `Bearer ${resolveSessionToken(hostSessionToken)}` },
+      }, 15_000);
+      if (!response.ok) throw new Error(`host recovery API read failed: ${response.status}`);
+      return await response.json();
+    },
+  });
+}
+
 async function driveHostPhaseControlsBrowser(page, pageUrl) {
   const staleSession = await openStaleModeratorBrowser(pageUrl);
   await expectHostPhaseActions(page, ["resolve_phase", "lock_thread"]);
@@ -5198,15 +5241,23 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
     game, kind: "LockThread", initialRecovery: await captureHostLiveBoundary(staleSession.page),
     trigger: () => confirmHostAction(staleSession.page, "lock_thread", "reject"),
   });
+  const lockBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
   const lockEvidence = await confirmHostAction(page, "lock_thread");
   const heldRequest = await heldLock.releaseAfter(lockEvidence.commandStatus);
-  await waitForHostConsolePhaseLocked(page, true);
+  lockEvidence.liveRecovery = await waitForModeratorResync(page, {
+    expected: { kind: "phase", commandKind: "LockThread", phaseId: "D01", locked: true },
+    before: lockBefore, commandReceipt: lockEvidence.commandStatus,
+  });
   await expectHostPhaseActions(page, ["unlock_thread", "advance_phase"]);
   const staleLockEvidence = { ...await heldLock.completion, heldRequest };
   await waitForHostProjectionPhaseLocked(staleSession.page, true);
   await expectHostPhaseActions(staleSession.page, ["unlock_thread", "advance_phase"]);
+  const unlockBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
   const unlockEvidence = await confirmHostAction(page, "unlock_thread");
-  await waitForHostConsolePhaseLocked(page, false);
+  unlockEvidence.liveRecovery = await waitForModeratorResync(page, {
+    expected: { kind: "phase", commandKind: "UnlockThread", phaseId: "D01", locked: false },
+    before: unlockBefore, commandReceipt: unlockEvidence.commandStatus,
+  });
   await expectHostPhaseActions(page, ["resolve_phase", "lock_thread"]);
   await staleSession.context.close();
 
@@ -5501,8 +5552,9 @@ async function expectHostPhaseActions(page, expectedActions) {
   }
 }
 
-async function issueBelovedPrincessPrompt() {
+async function issueBelovedPrincessPrompt(page) {
   const commands = [];
+  let liveRecovery;
   for (const [principal, command] of [
     [
       "player-target",
@@ -5546,9 +5598,17 @@ async function issueBelovedPrincessPrompt() {
     ],
     ["host_h", { ResolvePhase: { game, seed: 7421 } }],
   ]) {
-    commands.push(await sendCommand(principal, command));
+    // Vote setup precedes the boundary: only the final ResolvePhase can issue
+    // this prompt and trigger the command-state resync being proved.
+    const before = command.ResolvePhase ? await captureHostResyncBoundary(page, moderatorNetworkSnapshot) : null;
+    const receipt = await sendCommand(principal, command);
+    commands.push(receipt);
+    if (before !== null) liveRecovery = await waitForModeratorResync(page, {
+      expected: { kind: "prompt", commandKind: "ResolvePhase", promptId: "D01:skip_next_day:slot_1", status: "pending" },
+      before, commandReceipt: receipt,
+    });
   }
-  return commands;
+  return { commands, liveRecovery };
 }
 
 async function resolveHostPromptFromBrowser(page) {
@@ -5576,6 +5636,7 @@ async function resolveHostPromptFromBrowser(page) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   const confirmBox = await confirm.boundingBox();
   assertHitTarget(confirmBox, `${actionId} confirm`);
+  const recoveryBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
   await confirm.click({ force: true });
 
   await page.waitForFunction(
@@ -5583,7 +5644,11 @@ async function resolveHostPromptFromBrowser(page) {
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
     actionId,
   );
-  await waitForHostPromptDelta(page, "resolved");
+  const commandStatus = await page.evaluate((id) => window.__fmarchHostCommandStatuses?.[id], actionId);
+  const liveRecovery = await waitForModeratorResync(page, {
+    expected: { kind: "prompt", commandKind: "ResolveHostPrompt", promptId: "D01:skip_next_day:slot_1", status: "resolved" },
+    before: recoveryBefore, commandReceipt: commandStatus,
+  });
   await page.waitForFunction(
     (expectedActionId) =>
       document.querySelector(`[data-testid="critical-host-action-${expectedActionId}"]`) ===
@@ -5596,10 +5661,8 @@ async function resolveHostPromptFromBrowser(page) {
     triggerBox,
     confirmBox,
     confirmationMessage,
-    commandStatus: await page.evaluate(
-      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
-      actionId,
-    ),
+    commandStatus,
+    liveRecovery,
     promptsProjection: await page.evaluate(
       () => window.__fmarchHostPromptsProjection,
     ),
@@ -5628,6 +5691,7 @@ async function modkillSlotFromBrowser(page) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   const confirmBox = await confirm.boundingBox();
   assertHitTarget(confirmBox, `${actionId} confirm`);
+  const recoveryBefore = await captureHostResyncBoundary(page, moderatorNetworkSnapshot);
   await confirm.click({ force: true });
 
   await page.waitForFunction(
@@ -5640,9 +5704,9 @@ async function modkillSlotFromBrowser(page) {
     actionId,
   );
   const statusMessage = commandStatus?.message ?? "";
-  await waitForHostConsoleSlotStatusDelta(page, {
-    slotId: "slot-7",
-    status: "modkilled",
+  const liveRecovery = await waitForModeratorResync(page, {
+    expected: { kind: "slot", commandKind: "SetSlotStatus", slotId: "slot-7", status: "modkilled", alive: false },
+    before: recoveryBefore, commandReceipt: commandStatus,
   });
   await page.waitForFunction((expectedPrincipalId) => {
     const replacement = window.__fmarchHostProjection?.replacement;
@@ -5667,64 +5731,10 @@ async function modkillSlotFromBrowser(page) {
     confirmationMessage,
     statusMessage,
     commandStatus,
+    liveRecovery,
     hostProjection: await page.evaluate(() => window.__fmarchHostProjection),
     apiStateAfter,
   };
-}
-
-async function waitForHostPromptDelta(page, status) {
-  await page.waitForFunction(
-    (expectedStatus) =>
-      window.__fmarchHostLiveProjectionEvents?.some(
-        (event) =>
-          event?.delta?.kind === "HostPromptsChanged" &&
-          event.delta.body?.prompts?.some(
-            (prompt) =>
-              prompt.prompt_id === "D01:skip_next_day:slot_1" &&
-              prompt.status === expectedStatus,
-          ),
-      ),
-    status,
-  );
-  await page.waitForFunction(
-    (expectedStatus) =>
-      window.__fmarchHostPromptsProjection?.some(
-        (prompt) =>
-          prompt.id === "D01:skip_next_day:slot_1" &&
-          prompt.status === expectedStatus,
-      ),
-    status,
-  );
-}
-
-async function waitForHostConsoleSlotStatusDelta(page, { slotId, status }) {
-  await page.waitForFunction(
-    ({ expectedSlotId, expectedStatus }) =>
-      (window.__fmarchHostLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "HostConsoleSlotsChanged" &&
-          event.delta.body?.slots?.some(
-            (slot) =>
-              slot.slot_id === expectedSlotId &&
-              slot.status === expectedStatus &&
-              slot.alive === false,
-          ),
-      ),
-    { expectedSlotId: slotId, expectedStatus: status },
-  );
-}
-
-async function waitForHostConsolePhaseLocked(page, locked) {
-  await page.waitForFunction(
-    (expectedLocked) =>
-      window.__fmarchHostProjection?.phase?.locked === expectedLocked &&
-      (window.__fmarchHostLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "HostConsoleHeaderChanged" &&
-          event.delta.body?.phase?.locked === expectedLocked,
-      ),
-    locked,
-  );
 }
 
 async function waitForHostProjectionPhaseLocked(page, locked) {
@@ -5851,21 +5861,6 @@ async function waitForHostConsoleDeadlineDelta(page, deadline) {
           event.delta.body?.phase?.deadline === expectedDeadline,
       ),
     deadline,
-  );
-}
-
-async function waitForHostConsoleReplacementDelta(page, principalId) {
-  const authorityId = authorityPrincipalId(principalId);
-  await page.waitForFunction(
-    (expectedOccupant) =>
-      (window.__fmarchHostLiveProjectionEvents ?? []).some(
-        (event) =>
-          event?.delta?.kind === "HostConsoleSlotsChanged" &&
-          event.delta.body?.slots?.some(
-            (slot) => slot.assigned_principal_id === expectedOccupant,
-          ),
-      ),
-    authorityId,
   );
 }
 
