@@ -143,7 +143,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
       },
     ],
   );
-  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
+  assert.equal(Object.hasOwn(view.composer.actionPicker, "recoveryCommands"), false);
   assert.match(view.quickActions.buttons[1].className, /secondary/);
 });
 
@@ -188,7 +188,7 @@ test("player command panel model disables command controls for dead actors", () 
     [["submit_post", true]],
   );
   assert.deepEqual(view.composer.actionPicker.actions, []);
-  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
+  assert.equal(Object.hasOwn(view.composer.actionPicker, "recoveryCommands"), false);
 });
 
 test("player command panel disables every dispatch path while a command is pending", () => {
@@ -473,7 +473,7 @@ test("player command panel model normalizes missing row and label data", () => {
     ["submit_post"],
   );
   assert.deepEqual(view.composer.actionPicker.actions, []);
-  assert.deepEqual(view.composer.actionPicker.recoveryCommands, []);
+  assert.equal(Object.hasOwn(view.composer.actionPicker, "recoveryCommands"), false);
 });
 
 test("locked DayEvent rooms retain context with a read-only composer", () => {

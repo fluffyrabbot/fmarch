@@ -24,9 +24,6 @@ export const PLAYER_ACTION_TARGET_PICKER_CONTRACT = Object.freeze({
   withdrawMessageIdPrefix: "player-action-withdraw-confirmation-message",
 });
 
-// The picker owns the legal submit_action commands; recovery commands
-// (submit_invalid_action proof controls) stay direct-dispatch buttons so the
-// stale/invalid recovery lanes keep their one-click contract.
 export function buildPlayerActionTargetPicker({
   actionCommands = [],
   confirmingAction = null,
@@ -35,10 +32,6 @@ export function buildPlayerActionTargetPicker({
   const commands = Array.isArray(actionCommands) ? actionCommands : [];
   const submittable = commands.filter(isSubmitActionCommand);
   const withdrawable = commands.filter(isWithdrawActionCommand);
-  const recovery = commands.filter(
-    (command) =>
-      !isSubmitActionCommand(command) && !isWithdrawActionCommand(command),
-  );
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_ACTION_TARGET_PICKER_CONTRACT.rootClassName,
@@ -55,7 +48,6 @@ export function buildPlayerActionTargetPicker({
         withdrawPickerAction({ command, confirmingAction, disabled }),
       ),
     ]),
-    recoveryCommands: Object.freeze(recovery.map(recoveryCommandButton)),
   });
 }
 
@@ -208,28 +200,6 @@ function withdrawPickerAction({ command, confirmingAction, disabled }) {
       }),
       confirmClassName: "fm-touch-button",
       cancelClassName: "fm-touch-button fm-touch-button--secondary",
-    }),
-  });
-}
-
-function recoveryCommandButton(command) {
-  const action = String(command?.action ?? "submit_invalid_action");
-  return Object.freeze({
-    action,
-    commandKind: String(command?.commandKind ?? action),
-    label: String(command?.label ?? action),
-    detail: String(command?.detail ?? ""),
-    disabled: false,
-    className: "fm-touch-button fm-touch-button--secondary",
-    data: Object.freeze({
-      action,
-      templateId: String(command?.templateId ?? ""),
-      targetSlots: Object.freeze(
-        Array.isArray(command?.targets)
-          ? command.targets.map((target) => String(target))
-          : [],
-      ),
-      minTouchTargetPx: PLAYER_ACTION_TARGET_PICKER_CONTRACT.minTouchTargetPx,
     }),
   });
 }

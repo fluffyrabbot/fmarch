@@ -12,6 +12,20 @@ import {
 } from "./command-boundary.mjs";
 import { CommandOutcomeUnknownError } from "./command-interruption.mjs";
 
+test("invented invalid-action command kinds have no wire mapping", () => {
+  assert.throws(() => buildPlayerCommand({
+    action: "submit_invalid_action:factional_kill",
+    game: "00000000-0000-0000-0000-000000000001",
+    actorSlot: "slot-7",
+    actionConfig: {
+      commandKind: "submit_invalid_action",
+      actionId: "invalid_self_factional_kill",
+      templateId: "factional_kill",
+      targets: ["slot-7"],
+    },
+  }), /unsupported player command action/);
+});
+
 test("player actions map to Rust wire command variants", () => {
   assert.deepEqual(
     buildPlayerCommand({
@@ -616,14 +630,14 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   const staleActionTargetReject = await sendCommand({
     principalId: "player_mira",
     command: buildPlayerCommand({
-      action: "submit_invalid_action:factional_kill",
+      action: "submit_action:factional_kill",
       game: "00000000-0000-0000-0000-000000000001",
       actorSlot: "slot_4",
       actionConfig: {
-        commandKind: "submit_invalid_action",
-        actionId: "invalid_self_factional_kill",
+        commandKind: "submit_action",
+        actionId: "role_factional_kill",
         templateId: "factional_kill",
-        targets: ["slot_4"],
+        targets: ["slot_2"],
       },
     }),
     commandIdFactory: () => "99999999-9999-4999-8999-999999999999",

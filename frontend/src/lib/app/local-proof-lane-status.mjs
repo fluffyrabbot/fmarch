@@ -41,7 +41,6 @@ import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
-  privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -160,7 +159,7 @@ export function coreLoopLaneStatus(lane) {
     case "host-deadline-advance":
       return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
     case playerInvalidActionRecoveryLaneId:
-      return `${status}: ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.rejectError ?? "unknown")}`)}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
+      return `${status}: ${String(evidence.responseMessage ?? "unknown response")}, authenticated request and unchanged durable state verified ${String(evidence.requestBoundaryVerified ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
     case playerActionBoundaryLaneId:
       return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
     case "private-channel":
@@ -171,10 +170,8 @@ export function coreLoopLaneStatus(lane) {
       const scenario = staleCompletedPrivatePostScenario();
       return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? scenario.commandMessage)}, completed ${String(evidence.gameCompleted ?? "unknown")}, thread post ${String(evidence.threadPostPresent ?? "unknown")}, reload closed ${String(evidence.reloadControlsDisabled ?? "unknown")}`;
     }
-    case coreLoopPrivateChannelInvalidActionLaneId: {
-      const scenario = privateChannelInvalidActionRecoveryScenario();
-      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.error ?? scenario.commandError)}`)}, scope ${String(evidence.channelContextPreserved ?? "unknown")}, refresh commandState ${String(evidence.refreshCommandState ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
-    }
+    case coreLoopPrivateChannelInvalidActionLaneId:
+      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.responseMessage ?? "unknown response")}, authenticated request and unchanged durable state verified ${String(evidence.requestBoundaryVerified ?? "unknown")}, scope ${String(evidence.channelContextPreserved ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
     case "resolution-receipts":
       return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
     case hostStaleResolveControlLaneId:

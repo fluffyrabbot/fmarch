@@ -170,7 +170,6 @@ export function buildGameRouteData({
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
     },
     coldLoad.commandState,
-    playerSlotId,
   );
   const verifiedActorSlotAuthority =
     hasPrincipalId(playerSlotId) &&
@@ -442,7 +441,6 @@ export function buildPlayerPhaseView(commandState) {
 export function buildPlayerComposerView(
   baseComposer,
   commandState,
-  actorSlot,
   selectedActionTargets = {},
   channelId = "main",
 ) {
@@ -457,7 +455,6 @@ export function buildPlayerComposerView(
     withdrawDisabledReason: withdrawState.reason,
     actionCommands: buildPlayerActionCommands(
       commandState,
-      actorSlot,
       selectedActionTargets,
     ),
     dayEventCommands: buildPlayerDayEventCommands(commandState),
@@ -581,7 +578,6 @@ export function buildPlayerVoteCommands(baseComposer, commandState) {
 
 export function buildPlayerActionCommands(
   commandState,
-  actorSlot,
   selectedActionTargets = {},
 ) {
   const actions = commandState?.actions ?? [];
@@ -640,24 +636,7 @@ export function buildPlayerActionCommands(
       grantId: current.grantId ?? null,
     });
   });
-  const recovery = [];
-  if (actions.length > 0) {
-    const first = actions[0];
-    recovery.push(
-      Object.freeze({
-        action: `submit_invalid_action:${first.templateId}`,
-        commandKind: "submit_invalid_action",
-        label: "Try invalid self-action",
-        detail: `${first.templateId} -> own slot`,
-        actionId: `invalid_self_${first.templateId}`,
-        templateId: first.templateId,
-        targets: Object.freeze([actorSlot]),
-        targetOptions: Object.freeze([]),
-        grantId: first.grantId,
-      }),
-    );
-  }
-  return Object.freeze([...legal, ...withdrawals, ...recovery]);
+  return Object.freeze([...legal, ...withdrawals]);
 }
 
 export function playerForbiddenMessage(game) {

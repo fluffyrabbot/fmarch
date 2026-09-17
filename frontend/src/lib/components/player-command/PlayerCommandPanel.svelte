@@ -210,7 +210,7 @@
       {/each}
     </div>
   </div>
-  {#if view.composer.actionPicker.actions.length > 0 || view.composer.actionPicker.recoveryCommands.length > 0}
+  {#if view.composer.actionPicker.actions.length > 0}
     <div
       class="player-command-panel__actions {view.composer.actionPicker.root.className}"
       data-component={view.composer.actionPicker.root.data.component}
@@ -304,26 +304,6 @@
             </ConfirmationShell>
           {/if}
         </div>
-      {/each}
-      {#each view.composer.actionPicker.recoveryCommands as button (button.action)}
-        <button
-          type="button"
-          class={button.className}
-          data-action={button.data.action}
-          data-command-recovery-return={button.action}
-          data-template-id={button.data.templateId}
-          data-target-slots={button.data.targetSlots.join(",")}
-          data-min-touch-target-px={button.data.minTouchTargetPx}
-          disabled={button.disabled}
-          aria-disabled={button.disabled ? "true" : undefined}
-          bind:this={triggerElements[button.action]}
-          on:click={() => dispatchCommand(button.action)}
-        >
-          <span>{button.label}</span>
-          {#if button.detail}
-            <small>{button.detail}</small>
-          {/if}
-        </button>
       {/each}
     </div>
   {/if}
