@@ -35,6 +35,10 @@ import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenar
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import { readPlayerCommandStateResponse } from "./live_stack/player_command_state_evidence.mjs";
 import {
+  assertLegalActionAfterInvalidTargetRequest,
+  proveInvalidSelfTargetRequest,
+} from "./live_stack/invalid_target_request_scenario.mjs";
+import {
   assertSameVoteRetry,
   classifyContendedVoteRace,
   waitForPlayerVoteTerminal,
@@ -4354,21 +4358,39 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     commandStateResponses,
   });
 
-  const invalidButton = page.locator('[data-action="submit_invalid_action:factional_kill"]');
-  assertHitTarget(await invalidButton.boundingBox(), "invalid player action button");
-  await invalidButton.click();
-  const status = page.getByTestId("player-command-status");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[data-testid="player-command-status"]')
-        ?.getAttribute("data-state") === "reject",
-  );
-  const invalidOutcome = await page.evaluate(
-    () => window.__fmarchPlayerCommandStatus,
-  );
-  assertInvalidActionRecovery(invalidOutcome);
+  await capturePlayerLiveBoundary(page, { game: actionGame, channelId: "main" });
+  const currentCommandState = await page.evaluate(() => window.__fmarchPlayerProjection.commandState);
+  if (currentCommandState.game !== actionGame || currentCommandState.actorSlot !== "slot_4") {
+    throw new Error("invalid-target request requires the current action player's scoped command state");
+  }
+  const invalidTargetRequest = await proveInvalidSelfTargetRequest({
+    context: page.context(),
+    commandUrl: `${frontendBaseUrl}/commands`,
+    commandState: currentCommandState,
+    templateId: "factional_kill",
+    commandId: crypto.randomUUID(),
+    envelopeId: commandEnvelopeId++,
+    readDurableState: async (commandId) => JSON.parse(await runSqlScalar(
+      smokeDatabase.applicationUrl,
+      `SELECT json_build_object(
+        'eventCount', (SELECT COUNT(*) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
+        'maxEventSeq', (SELECT COALESCE(MAX(seq), 0) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
+        'maxStreamSeq', (SELECT COALESCE(MAX(stream_seq), 0) FROM events WHERE stream_id = ${sqlLiteral(actionGame)}::uuid),
+        'actionSubmissions', COALESCE((SELECT json_agg(r) FROM (
+          SELECT * FROM action_submission WHERE game_id = ${sqlLiteral(actionGame)}::uuid
+          ORDER BY phase_id, actor_slot, action_id
+        ) r), '[]'::json),
+        'voteBallots', COALESCE((SELECT json_agg(r) FROM (
+          SELECT * FROM vote_ballot WHERE game_id = ${sqlLiteral(actionGame)}::uuid
+          ORDER BY phase_id, actor_slot
+        ) r), '[]'::json),
+        'commandReceipts', COALESCE((SELECT json_agg(r) FROM (
+          SELECT command_id, stream_seqs FROM command_receipt
+          WHERE command_id = ${sqlLiteral(commandId)}::uuid ORDER BY principal_id
+        ) r), '[]'::json)
+      )`,
+    )),
+  });
   const duplicatePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
   const racePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
   const stalePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
@@ -4396,6 +4418,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     () => window.__fmarchPlayerCommandStatus,
   );
   assertPlayerActionSubmitOutcome(legalOutcome);
+  assertLegalActionAfterInvalidTargetRequest(invalidTargetRequest, legalOutcome);
   assertPlayerActionCommandId({
     outcome: legalOutcome,
     commandId: duplicatePlayerSubmitCommandId,
@@ -4438,8 +4461,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     !actionRows.includes("role_factional_kill") ||
     !actionRows.includes("factional_kill") ||
     !actionRows.includes("slot_4") ||
-    !actionRows.includes("slot-2") ||
-    actionRows.includes("invalid_self_factional_kill")
+    !actionRows.includes("slot-2")
   ) {
     throw new Error(`action submission boundary evidence drifted:\n${actionRows}`);
   }
@@ -4552,7 +4574,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     url: pageUrl,
     game: actionGame,
     capability,
-    invalidOutcome,
+    invalidTargetRequest,
     legalOutcome,
     duplicateLegalOutcome: duplicateRetry.outcome,
     duplicatePlayerSubmit: {
@@ -4579,7 +4601,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the explicit offline resolution audit matched both sealed envelopes and the host-authorized trace-inspection API read their stored trace. Each competing player page first completed real Hello recovery and emitted a valid SubmitAction request. The proof held those HTTP requests unchanged until the winning action or ResolvePhase committed, then released them for real duplicate ACK, ActionAlreadySubmitted, or PhaseLocked outcomes. Live updates and authority checks remained enabled throughout; the phase rejection refreshed locked N01/no-actions without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session and the current factional_kill control. A separate authenticated request through that same browser context retained the current action identity and changed only its target to the excluded actor slot. The server returned InvalidTarget with no event, action, ballot or command-receipt mutation; this is request-boundary evidence, not rendered recovery. The real legal action control then ACKed. A second recovered player page's held same-ID request received the original command_receipt stream seqs and refreshed to N01/no-actions. A third page's distinct-ID request rendered ActionAlreadySubmitted recovery. The canonical receipt and command-state boundaries retained one ActionSubmitted decision. ResolvePhase killed the target; the offline resolution audit matched both sealed envelopes and the authorized trace API read the stored trace. Each competing player page first completed real Hello recovery and emitted a valid SubmitAction; its unchanged HTTP request was held until the winner or ResolvePhase committed. The genuine PhaseLocked rejection refreshed locked N01/no-actions without reload. Live updates and authority checks remained enabled; AdvancePhase refreshed D02/Day.",
   };
 }
 
@@ -6202,25 +6224,6 @@ function assertFactionDayChatSubmitPostOutcome(outcome) {
     contentId: attachment.content_id,
     attachment,
   });
-}
-
-function assertInvalidActionRecovery(outcome) {
-  if (outcome?.state !== "reject" || outcome.error !== "InvalidTarget") {
-    throw new Error(`invalid player action did not render InvalidTarget recovery: ${JSON.stringify(outcome)}`);
-  }
-  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitAction;
-  if (command?.game !== actionGame) {
-    throw new Error(`invalid player action used wrong game: ${JSON.stringify(command)}`);
-  }
-  if (command.actor_slot !== "slot_4") {
-    throw new Error(`invalid player action used wrong actor slot: ${JSON.stringify(command)}`);
-  }
-  if (command.template_id !== "factional_kill") {
-    throw new Error(`invalid player action used wrong template: ${JSON.stringify(command)}`);
-  }
-  if (command.targets?.[0] !== "slot_4") {
-    throw new Error(`invalid player action did not self-target slot_4: ${JSON.stringify(command)}`);
-  }
 }
 
 function assertStalePlayerActionRecovery(outcome) {
