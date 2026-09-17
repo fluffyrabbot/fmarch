@@ -1,3 +1,4 @@
+import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -7,7 +8,6 @@ import {
   coreLoopPhaseProgressionSpineSourceLaneIds,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
-  playerInvalidActionRecoveryMessage,
   playerStaleActionTransitionRecoveryHookId,
   playerStaleVoteTransitionRecoveryHookId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
@@ -1053,12 +1053,10 @@ assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery.reject.error,
   privateChannelInvalidActionRecovery.commandError,
 );
-assert.equal(
-  session.verification.actionLoop.privateChannelInvalidActionRecovery.receiptStatusText.includes(
-    privateChannelInvalidActionRecovery.commandMessage,
-  ),
-  true,
-);
+assert.equal(hasInvalidTargetRequestThenLegalAction(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.invalidTargetRequest,
+  session.verification.actionLoop.legalAction,
+), true);
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery
     .afterRejectSnapshot.channelContext.channelId,
@@ -1090,14 +1088,14 @@ assert.ok(invalidPrivateChannelProofLane);
 assert.equal(invalidPrivateChannelProofLane.status, "passed");
 assert.equal(invalidPrivateChannelProofLane.evidence.routeStatus, 200);
 assert.equal(
-  invalidPrivateChannelProofLane.evidence.receiptStatusText,
-  privateChannelInvalidActionRecovery.commandMessage,
+  invalidPrivateChannelProofLane.evidence.boundary,
+  "authenticated-request",
 );
 assert.equal(
   invalidPrivateChannelProofLane.evidence.channelContextPreserved,
   true,
 );
-assert.equal(invalidPrivateChannelProofLane.evidence.refreshCommandState, true);
+assert.equal(invalidPrivateChannelProofLane.evidence.requestBoundaryVerified, true);
 assert.equal(
   invalidPrivateChannelProofLane.evidence.apiLegalActionAvailable,
   true,
@@ -1172,9 +1170,9 @@ assert.equal(
 );
 assert.equal(
   session.verification.actionLoop.dayNightTransition.nightActionSurface.buttons.some(
-    (button) => button.action === "submit_invalid_action:factional_kill",
+    (button) => String(button.action).startsWith("submit_invalid_action:"),
   ),
-  true,
+  false,
 );
 assert.equal(
   session.verification.actionLoop.dayNightTransition.normalPlayerNightSurface.phase
@@ -1422,17 +1420,10 @@ assert.equal(session.verification.actionLoop.invalidAction.state, "reject");
 assert.equal(session.verification.actionLoop.invalidAction.error, "InvalidTarget");
 assert.equal(session.verification.invalidActionRecovery.status, "passed");
 assert.equal(session.verification.invalidActionRecovery.reject.error, "InvalidTarget");
-assert.equal(
-  session.verification.invalidActionRecovery.currentReceipt.actionId,
-  "submit_invalid_action:factional_kill",
-);
-assert.equal(session.verification.invalidActionRecovery.currentReceipt.state, "reject");
-assert.equal(
-  session.verification.invalidActionRecovery.currentReceipt.commandTrace.projectionRefreshKeys.includes(
-    "commandState",
-  ),
-  true,
-);
+assert.equal(hasInvalidTargetRequestThenLegalAction(
+  session.verification.invalidActionRecovery.invalidTargetRequest,
+  session.verification.actionLoop.legalAction,
+), true);
 assert.equal(session.verification.invalidActionRecovery.commandState.phase.phaseId, "N01");
 assert.equal(
   session.verification.invalidActionRecovery.commandState.actions.some(
@@ -1441,12 +1432,6 @@ assert.equal(
   true,
 );
 assert.equal(session.verification.invalidActionRecovery.legalActionVisible, true);
-assert.equal(
-  session.verification.invalidActionRecovery.receiptStatusText.includes(
-    playerInvalidActionRecoveryMessage,
-  ),
-  true,
-);
 assert.equal(session.verification.actionLoop.legalAction.state, "ack");
 assert.equal(
   session.verification.actionLoop.legalAction.requestEnvelope.body.body.command.SubmitAction

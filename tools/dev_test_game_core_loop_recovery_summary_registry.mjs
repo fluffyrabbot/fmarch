@@ -2,7 +2,6 @@ import {
   playerActionLoopLaneId,
   playerInvalidActionRecoveryHookId,
   playerInvalidActionRecoveryLaneId,
-  playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryScenario,
   playerStaleActionTransitionRecoveryFeatureSlotId,
   playerStaleActionTransitionRecoveryHookId,
@@ -95,12 +94,8 @@ export function buildHostVisibleInvalidActionRecoverySummary({
       laneEvidence.error ??
       "",
   );
-  const receiptStatusText = String(
-    laneEvidence.receiptStatusText ??
-      laneEvidence.currentReceipt?.message ??
-      laneEvidence.reject?.message ??
-      "",
-  );
+  const responseMessage = String(laneEvidence.responseMessage ?? "");
+  const requestBoundaryVerified = laneEvidence.requestBoundaryVerified === true;
   const legalActionVisible =
     laneEvidence.legalActionVisible === true ||
     laneEvidence.legalActionVisibleAfterReject === true;
@@ -115,7 +110,8 @@ export function buildHostVisibleInvalidActionRecoverySummary({
   const status =
     lane?.status === "passed" &&
     rejectError === scenario.error &&
-    receiptStatusText.includes(scenario.messageIncludes) &&
+    responseMessage.includes("InvalidTarget") &&
+    requestBoundaryVerified &&
     legalActionVisible &&
     recoveryHookStatus === scenario.error
       ? "passed"
@@ -127,7 +123,9 @@ export function buildHostVisibleInvalidActionRecoverySummary({
     recoveryHookId: scenario.recoveryHookId,
     recoveryHookStatus,
     rejectError,
-    receiptStatusText,
+    boundary: "authenticated-request",
+    responseMessage,
+    requestBoundaryVerified,
     legalActionVisible,
     hostRoleUrl: String(
       roleUrlHrefs["d02-n02-host"] ?? defaultCycleRoleUrls.host ?? "",
@@ -142,7 +140,7 @@ export function buildHostVisibleInvalidActionRecoverySummary({
     ),
     visibleStatus,
     proofBoundary:
-      "Host-visible local core-loop invalid-action recovery summary: the seeded admin detail names the invalid-action check, recovery hook, host URL, action-player URL, reject receipt, and restored legal action controls.",
+      "Host-visible local core-loop invalid-action recovery summary: the seeded admin detail names the invalid-action check, recovery hook, host URL, action-player URL, authenticated InvalidTarget response, unchanged durable state, and subsequent legal UI action.",
   });
 }
 
@@ -160,16 +158,15 @@ export function assertHostVisibleInvalidActionRecoverySummary({
     summary.recoveryHookId !== scenario.recoveryHookId ||
     summary.recoveryHookStatus !== scenario.error ||
     summary.rejectError !== scenario.error ||
-    !String(summary.receiptStatusText ?? "").includes(
-      scenario.messageIncludes,
-    ) ||
+    !String(summary.responseMessage ?? "").includes("InvalidTarget") ||
+    summary.requestBoundaryVerified !== true ||
     summary.legalActionVisible !== true ||
     !String(summary.hostRoleUrl ?? "").includes("/g/") ||
     !String(summary.hostRoleUrl ?? "").includes("/host") ||
     !String(summary.actionPlayerRoleUrl ?? "").includes("/g/") ||
     !String(summary.detailRoleUrl ?? "").includes("/_dev/ops/audit/") ||
     (requireVisibleStatus &&
-      (!visibleStatus.includes(scenario.messageIncludes) ||
+      (!visibleStatus.includes("InvalidTarget") ||
         !visibleStatus.includes("legal action visible true")));
   if (failure) {
     throw new Error(
@@ -310,7 +307,7 @@ function normalizeInvalidActionRecoverySummary(summary) {
     label: "Invalid action recovery",
     group: "invalid-action",
     commandKind: "SubmitAction",
-    clickedAction: "submit_invalid_action:factional_kill",
+    boundary: "authenticated-request",
     ...summary,
   });
 }
@@ -331,9 +328,7 @@ function buildPrivateChannelInvalidActionRecoverySummary({
       evidence.error ??
       "",
   );
-  const receiptStatusText = String(
-    evidence.receiptStatusText ?? playerInvalidActionRecoveryMessage,
-  );
+  const responseMessage = String(evidence.responseMessage ?? "");
   return Object.freeze({
     id: privateChannelInvalidActionRecoveryLaneId,
     label: "Private channel invalid action recovery",
@@ -341,6 +336,7 @@ function buildPrivateChannelInvalidActionRecoverySummary({
     status:
       lane?.status === "passed" &&
       evidence.error === "InvalidTarget" &&
+      evidence.requestBoundaryVerified === true &&
       evidence.legalActionVisible === true &&
       evidence.channelContextPreserved === true
         ? "passed"
@@ -349,10 +345,11 @@ function buildPrivateChannelInvalidActionRecoverySummary({
     recoveryHookId: playerInvalidActionRecoveryHookId,
     recoveryHookStatus,
     commandKind: "SubmitAction",
-    clickedAction: "submit_invalid_action:factional_kill",
+    boundary: "authenticated-request",
     rejectError: String(evidence.error ?? ""),
-    receiptStatusText,
-    refreshedPhaseId: String(evidence.phase ?? ""),
+    responseMessage,
+    requestBoundaryVerified: evidence.requestBoundaryVerified === true,
+    phaseId: String(evidence.phase ?? ""),
     legalActionVisible: evidence.legalActionVisible === true,
     channelContextPreserved: evidence.channelContextPreserved === true,
     channel,
@@ -363,7 +360,7 @@ function buildPrivateChannelInvalidActionRecoverySummary({
     actionPlayerRoleUrl: roleUrl,
     detailRoleUrl: String(detailRoleUrl ?? ""),
     proofBoundary:
-      "Host-visible local core-loop private-channel invalid-action recovery summary: the saved proof-run lane names the channel, reject receipt, preserved channel context, refreshed command-state, and restored legal action controls.",
+      "Host-visible local core-loop private-channel invalid-action recovery summary: the saved proof-run lane names the channel, authenticated InvalidTarget response, unchanged durable state, preserved channel context, and legal action controls.",
   });
 }
 

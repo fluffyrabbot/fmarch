@@ -104,6 +104,7 @@ export function assertPlayerInvalidActionRecoveryProofCase({
 }) {
   if (
     proof?.status !== "passed" ||
+    proof.boundary !== "fixture-ui-rejection" ||
     (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
     (visitedRolePath !== undefined &&
       proof.visitedRolePath !== visitedRolePath) ||

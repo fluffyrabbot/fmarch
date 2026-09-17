@@ -224,6 +224,7 @@ test("player invalid-action recovery assertion covers InvalidTarget refresh", ()
   const scenario = playerInvalidActionRecoveryScenario();
   const proof = {
     status: "passed",
+    boundary: "fixture-ui-rejection",
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
     command: {

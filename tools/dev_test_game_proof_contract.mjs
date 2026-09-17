@@ -1,3 +1,4 @@
+import { hasInvalidTargetRequestEvidence, hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,7 +57,6 @@ import {
 import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
-  playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
   playerStaleActionTransitionRecoveryHookId,
   playerStaleVoteTransitionRecoveryHookId,
@@ -858,8 +858,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (button) => button.action === "submit_action:factional_kill" && !button.disabled,
         ) === true &&
         verification.actionLoop?.dayNightTransition?.nightActionSurface?.buttons?.some(
-          (button) => button.action === "submit_invalid_action:factional_kill",
-        ) === true &&
+          (button) => String(button.action).startsWith("submit_invalid_action:"),
+        ) === false &&
         verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface?.phase
           ?.phaseId === "N01" &&
         verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
@@ -1244,35 +1244,24 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.deadline ===
           null,
     }),
-    lane(playerInvalidActionRecoveryLaneId, "Invalid action reject keeps legal controls usable", {
+    lane(playerInvalidActionRecoveryLaneId, "Authenticated invalid-target rejection precedes legal UI action", {
+      boundary: "authenticated-request",
       rejectError: verification.invalidActionRecovery?.reject?.error ?? null,
-      receiptActionId: verification.invalidActionRecovery?.currentReceipt?.actionId ?? null,
-      receiptState: verification.invalidActionRecovery?.currentReceipt?.state ?? null,
-      receiptStatusText:
-        verification.invalidActionRecovery?.receiptStatusText ?? null,
+      responseMessage: verification.invalidActionRecovery?.reject?.message ?? null,
+      invalidTargetRequest: verification.invalidActionRecovery?.invalidTargetRequest ?? null,
+      requestBoundaryVerified: hasInvalidTargetRequestEvidence(verification.invalidActionRecovery?.invalidTargetRequest),
       phase: verification.invalidActionRecovery?.commandState?.phase?.phaseId ?? null,
       actionCount: verification.invalidActionRecovery?.commandState?.actions?.length ?? null,
       legalActionVisible: verification.invalidActionRecovery?.legalActionVisible ?? null,
-      refreshKeys:
-        verification.invalidActionRecovery?.currentReceipt?.commandTrace
-          ?.projectionRefreshKeys ?? null,
       passed:
         verification.invalidActionRecovery?.status === "passed" &&
-        verification.invalidActionRecovery?.reject?.error === "InvalidTarget" &&
-        verification.invalidActionRecovery?.currentReceipt?.actionId ===
-          "submit_invalid_action:factional_kill" &&
-        verification.invalidActionRecovery?.currentReceipt?.state === "reject" &&
-        verification.invalidActionRecovery?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
-          "commandState",
-        ) === true &&
+        verification.invalidActionRecovery?.invalidTargetRequest?.game === session.game &&
+        hasInvalidTargetRequestThenLegalAction(verification.invalidActionRecovery?.invalidTargetRequest, verification.actionLoop?.legalAction) &&
         verification.invalidActionRecovery?.commandState?.phase?.phaseId === "N01" &&
         verification.invalidActionRecovery?.commandState?.actions?.some(
           (action) => action.templateId === "factional_kill",
         ) === true &&
-        verification.invalidActionRecovery?.legalActionVisible === true &&
-        verification.invalidActionRecovery?.receiptStatusText?.includes(
-          playerInvalidActionRecoveryMessage,
-        ) === true,
+        verification.invalidActionRecovery?.legalActionVisible === true,
     }),
     lane("resolution-receipts", "Role-scoped resolution receipts after night kill", {
       targetSlot: verification.resolutionReceipts?.targetSlot ?? null,
@@ -1552,7 +1541,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     ),
     lane(
       coreLoopPrivateChannelInvalidActionLaneId,
-      "Private channel invalid action recovery",
+      "Private channel authenticated invalid-target rejection",
       {
         channel:
           verification.actionLoop?.privateChannelInvalidActionRecovery
@@ -1563,9 +1552,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         error:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.error ?? null,
-        receiptStatusText:
-          verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.receiptStatusText ?? null,
+        boundary: "authenticated-request",
+        responseMessage:
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.reject?.message ?? null,
+        invalidTargetRequest:
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.invalidTargetRequest ?? null,
         routeStatus:
           verification.actionLoop?.privateChannelInvalidActionRecovery?.route
             ?.responseStatus ?? null,
@@ -1576,11 +1567,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           verification.actionLoop?.privateChannelInvalidActionRecovery?.reject
             ?.requestEnvelope?.body?.body?.command?.SubmitAction
             ?.template_id ?? null,
-        refreshCommandState:
-          verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
-              "commandState",
-            ) ?? null,
+        requestBoundaryVerified: hasInvalidTargetRequestEvidence(
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.invalidTargetRequest,
+        ),
         channelContextPreserved:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.channelContext?.channelId ===
@@ -1624,22 +1613,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
             ?.targets?.[0] === privateChannelInvalidActionRecovery.actorSlot &&
-          verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.currentReceipt?.actionId ===
-            privateChannelInvalidActionRecovery.clickedAction &&
-          verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.currentReceipt?.state === "reject" &&
-          privateChannelInvalidActionRecovery.expectedRefreshKeys.every(
-            (key) =>
-              verification.actionLoop?.privateChannelInvalidActionRecovery
-                ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
-                  key,
-                ) === true,
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.invalidTargetRequest?.game === session.game &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.invalidTargetRequest?.actorSlot === privateChannelInvalidActionRecovery.actorSlot &&
+          hasInvalidTargetRequestThenLegalAction(
+            verification.actionLoop?.privateChannelInvalidActionRecovery?.invalidTargetRequest,
+            verification.actionLoop?.legalAction,
           ) &&
-          verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.receiptStatusText?.includes(
-              privateChannelInvalidActionRecovery.commandMessage,
-            ) === true &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.channelContext?.channelId ===
             privateChannelInvalidActionRecovery.channelId &&
