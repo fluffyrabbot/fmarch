@@ -11,6 +11,7 @@ import {
 
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
 import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
+import { hasExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 
 export const LIVE_STACK_PROOF_SUMMARY_VERSION = 1;
 
@@ -118,6 +119,7 @@ export function buildLiveStackProofSummary(
       ),
       reconnectState: convergence?.reconnectEvent?.state ?? null,
       reconnectAttempt: convergence?.reconnectEvent?.attempt ?? null,
+      explicitReconnectVerified: hasExplicitHostReconnect(convergence?.explicitReconnect),
       sawFreshVoteEvent: convergence?.sawFreshVoteEvent ?? false,
       proof: convergence?.proof ?? null,
     },
@@ -347,7 +349,8 @@ export function assertLiveStackProofSummary(summary) {
   if (
     summary.hostVotecountConvergence?.reconnectState !== "recovered" ||
     !Number.isInteger(summary.hostVotecountConvergence?.reconnectAttempt) ||
-    summary.hostVotecountConvergence.reconnectAttempt < 1
+    summary.hostVotecountConvergence.reconnectAttempt < 0 ||
+    summary.hostVotecountConvergence.explicitReconnectVerified !== true
   ) {
     throw new Error("live-stack summary missing host votecount reconnect recovery");
   }

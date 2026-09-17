@@ -32,6 +32,7 @@ import {
   createLiveStackCommandSender,
 } from "./live_stack/auth_commands.mjs";
 import { proveHostInitialVoteDelivery } from "./live_stack/host_votecount_scenario.mjs";
+import { proveExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
@@ -5776,7 +5777,7 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
     );
   }
 
-  const reconnectEvent = await reconnectHostProjection(page, { expectedCount });
+  const explicitReconnect = await proveExplicitHostReconnect({ page, game, expectedCount });
   await page.waitForFunction(
     (expectedCount) =>
       window.__fmarchHostVotecountProjection?.some(
@@ -5810,10 +5811,11 @@ async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
     apiVoteCount,
     before,
     after,
-    reconnectEvent,
+    reconnectEvent: explicitReconnect.reconnectEvent,
+    explicitReconnect,
     sawFreshVoteEvent,
     proof:
-      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly ended its live generation, reminted a ticket, accepted a new exact Hello, refreshed once, and converged its votecount projection to the API votecount for slot_1. The proof no longer depends on retaining transient intermediate socket events.",
+      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly ended its live generation, reminted a ticket, accepted a new exact Hello, refreshed authoritative state, and converged its votecount projection to the API votecount for slot_1. This recovery is checked separately from fresh live vote delivery.",
   };
 }
 
@@ -5838,44 +5840,6 @@ function voteCountForSlot(votecount, slotId) {
 function voteCountForProjection(projection, slotId) {
   const row = (projection ?? []).find((candidate) => candidate?.target === slotId);
   return row?.count ?? null;
-}
-
-async function reconnectHostProjection(page, { expectedCount = 1 } = {}) {
-  const eventStart = await page.evaluate(
-    () => (window.__fmarchHostLiveProjectionEvents ?? []).length,
-  );
-  await page.evaluate(async () => window.__fmarchReconnectHostLiveProjectionNow());
-  await page.waitForFunction(
-    (start) => {
-      const events = window.__fmarchHostLiveProjectionEvents ?? [];
-      return events.slice(start).some(
-        (event) =>
-          event?.kind === "reconnect" &&
-          Number.isInteger(event.attempt) &&
-          event.attempt >= 1 &&
-          event.state === "recovered",
-      );
-    },
-    eventStart,
-  );
-  const reconnectEvent = await page.evaluate((start) => {
-    const events = window.__fmarchHostLiveProjectionEvents ?? [];
-    return events.slice(start).find(
-      (event) =>
-        event?.kind === "reconnect" &&
-        Number.isInteger(event.attempt) &&
-        event.attempt >= 1 &&
-        event.state === "recovered",
-    );
-  }, eventStart);
-  await page.waitForFunction(
-    (count) =>
-      window.__fmarchHostVotecountProjection?.some(
-        (row) => row.target === "slot_1" && row.count === count,
-      ),
-    expectedCount,
-  );
-  return reconnectEvent;
 }
 
 async function waitForHostConsoleDeadlineDelta(page, deadline) {
