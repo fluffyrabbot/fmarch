@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GET, POST } from "./api/gameplay/[...path]/+server.js";
 
+test("replacement candidate lookup uses the authenticated gameplay proxy and preserves denial", async () => {
+  for (const status of [200, 400, 403, 404]) {
+    const request = new Request("https://app.example/api/gameplay/games/game-1/replacement-candidate?slot_id=slot-7&handle=rowan");
+    const calls = [];
+    const response = await GET({ cookies: { get: () => "session" }, request, url: new URL(request.url),
+      params: { path: "games/game-1/replacement-candidate" }, fetch: async (url, init) => {
+        calls.push({ url: String(url), init }); return new Response("{}", { status });
+      },
+    });
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(calls[0].url, "https://app.example/games/game-1/replacement-candidate?slot_id=slot-7&handle=rowan");
+    assert.equal(calls[0].init.headers.authorization, "Bearer session");
+  }
+});
+
 test("private gameplay reads are allowlisted and bound to the httpOnly session", async () => {
   const calls = [];
   const request = new Request(

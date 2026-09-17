@@ -144,6 +144,7 @@ export function buildHostConsoleRouteData({
     commandPrincipalId,
     commandEndpoint: "/commands",
     commandsEnabled: access.allowed === true,
+    fixtureMode,
     commandContext: Object.freeze({
       gameId,
       principalId: commandPrincipalId,

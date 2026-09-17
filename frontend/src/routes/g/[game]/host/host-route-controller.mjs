@@ -13,7 +13,9 @@ import {
 import {
   buildHostConsoleActionGroups,
   buildHostConsoleCriticalActions,
+  hostActionAllowedForCapability,
 } from "../../../../lib/components/host-action/host-console-critical-action.mjs";
+import { replacementWithCandidate } from "../../../../lib/components/host-action/host-replacement-candidate.mjs";
 import {
   mapHostActionToWireCommand,
   projectHostConsoleState,
@@ -21,6 +23,7 @@ import {
 } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import {
   CommandInterruptedError,
+  COMMAND_INTERRUPTION_CONTRACT,
   commandInterruptionStatus,
   executeCommandProjectionRecovery,
 } from "../../../../lib/app/command-interruption.mjs";
@@ -144,6 +147,8 @@ export function buildHostDerivedState({
   snapshot,
   capabilityKind = "HostOf",
   nowSeconds = Math.floor(Date.now() / 1000),
+  replacementCandidate = null,
+  fixtureMode = false,
 }) {
   const projection = snapshot.host;
   const effectiveCapabilityKind =
@@ -158,7 +163,10 @@ export function buildHostDerivedState({
     : buildHostConsoleCriticalActions(gameId, {
         hostPrompts,
         phase: projection.phase,
-        replacement: projection.replacement,
+        replacement: replacementWithCandidate({
+          gameId, replacement: projection.replacement, authority: projection.authority,
+          candidate: replacementCandidate, fixtureMode,
+        }),
         completed: projection.completed,
         capabilityKind: effectiveCapabilityKind,
         allowedPermissionClasses: projection.authority?.allowedClasses ?? [],
@@ -318,6 +326,7 @@ export async function sendHostRouteAction({
   projectionStore,
   sendHostActionCommandImpl = sendHostActionCommand,
   preparedCommand = null,
+  replacementCandidate = null,
   projectionRecoveryTimeoutMs,
 }) {
   const outcome = await dispatchHostRouteAction({
@@ -329,6 +338,7 @@ export async function sendHostRouteAction({
     projectionStore,
     sendHostActionCommandImpl,
     preparedCommand,
+    replacementCandidate,
   });
   return recoverHostRouteAction({
     event,
@@ -348,6 +358,8 @@ export async function dispatchHostRouteAction({
   projectionStore,
   sendHostActionCommandImpl = sendHostActionCommand,
   preparedCommand = null,
+  replacementCandidate = null,
+  retainedReplacementAttempt = null,
   mapHostActionToWireCommandImpl = mapHostActionToWireCommand,
 }) {
   if (data?.commandsEnabled !== true) {
@@ -368,8 +380,32 @@ export async function dispatchHostRouteAction({
     },
     capabilityKind: data.access.capability?.kind,
     nowSeconds: data.deadlineClock?.nowSeconds,
+    replacementCandidate,
+    fixtureMode: data.fixtureMode === true,
   });
-  if (!currentDerivedState.criticalActions.some((action) =>
+  let retainedCommandId = null;
+  if (retainedReplacementAttempt !== null) {
+    const authority = currentDerivedState.projection.authority;
+    const retained = retainedReplacementAttempt;
+    if (event?.actionId !== "process_replacement" || event?.payload?.kind !== "process_replacement" ||
+      event.payload.gameId !== data.game.id ||
+      (event.replacementCandidate && (event.replacementCandidate.gameId !== data.game.id ||
+        event.replacementCandidate.authorityPrincipalId !== data.commandPrincipalId)) ||
+      !COMMAND_INTERRUPTION_CONTRACT.states.includes(retained.interruption) || retained.confirmedRejection !== undefined ||
+      typeof retained.commandId !== "string" || retained.commandId.trim() === "" ||
+      canonicalJson(retained.event) !== canonicalJson(event) || preparedCommand === null ||
+      canonicalJson(retained.command) !== canonicalJson(preparedCommand) ||
+      currentDerivedState.projection.authorityRevoked === true ||
+      authority?.principalId !== data.commandPrincipalId ||
+      !hostActionAllowedForCapability({ payload: event.payload }, authority?.capabilityKind, authority?.allowedClasses)) {
+      throw new Error("retained replacement retry no longer matches its original attempt or current host authority");
+    }
+    retainedCommandId = commandIdFactory?.();
+    if (retainedCommandId !== retained.commandId) {
+      throw new Error("retained replacement retry must use the original command identity");
+    }
+  }
+  if (retainedReplacementAttempt === null && !currentDerivedState.criticalActions.some((action) =>
     action.id === event?.actionId &&
     canonicalJson(action.payload) === canonicalJson(event?.payload)
   )) {
@@ -388,7 +424,7 @@ export async function dispatchHostRouteAction({
     actionEvent: event,
     endpoint: data.commandEndpoint,
     fetchImpl,
-    commandIdFactory,
+    commandIdFactory: retainedCommandId === null ? commandIdFactory : () => retainedCommandId,
     signal,
     preparedCommand: preparedCommand ?? currentCommand,
   });

@@ -10,6 +10,7 @@
   import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
   import HostConsoleBar from "$lib/components/host-action/HostConsoleBar.svelte";
   import HostTaskWorkspace from "$lib/components/host-action/HostTaskWorkspace.svelte";
+  import HostReplacementChooser from "$lib/components/host-action/HostReplacementChooser.svelte";
   import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
   import HostPromptResolutionHistory from "$lib/components/host-action/HostPromptResolutionHistory.svelte";
   import HostPhaseSummary from "$lib/components/host-action/HostPhaseSummary.svelte";
@@ -78,6 +79,7 @@
   let commandRecoveryAttempts = {};
   let commandRecoveryStorage = null;
   let commandRecoveryStorageAvailable = true;
+  let replacementCandidate = null;
   let projection = {
     phase: data.phase,
     replacement: data.replacement,
@@ -151,8 +153,15 @@
     hostTasks = derived.hostTasks;
     hostDayEvents = derived.hostDayEvents;
     dayEventScheduler = derived.dayEventScheduler;
-    moderatorActionGroups = derived.moderatorActionGroups;
   });
+  $: moderatorActionGroups = buildHostDerivedState({
+    gameId: data.game.id,
+    snapshot: { host: projection, votecount, dayVoteOutcomes, hostPrompts },
+    capabilityKind: data.access.capability?.kind,
+    nowSeconds: data.deadlineClock?.nowSeconds,
+    replacementCandidate,
+    fixtureMode: data.fixtureMode === true,
+  }).moderatorActionGroups;
   projectionStore.subscribeHealth((health) => {
     projectionHealth = health;
   });
@@ -241,6 +250,14 @@
     ) {
       return;
     }
+    // Persist selected identity only once a command is dispatched. A later fresh
+    // confirmation is always checked against the current chooser selection.
+    const selectedReplacement = recoveredAttempt === null
+      ? replacementCandidate
+      : recoveredAttempt.event?.replacementCandidate ?? null;
+    if (event.actionId === "process_replacement" && recoveredAttempt === null) {
+      event = Object.freeze({ ...event, replacementCandidate: selectedReplacement });
+    }
     if (recoveredAttempt === null) {
       dispatched = appendHostActionEvent(dispatched, event);
     }
@@ -284,6 +301,8 @@
           signal,
           projectionStore,
           preparedCommand: attempt.command,
+          replacementCandidate: selectedReplacement,
+          retainedReplacementAttempt: event.actionId === "process_replacement" ? recoveredAttempt : null,
         }),
       });
       const nextAttempts = { ...commandRecoveryAttempts };
@@ -530,6 +549,19 @@
           </p>
         </section>
       {/if}
+
+      <HostReplacementChooser
+        gameId={data.game.id}
+        replacement={projection.replacement}
+        authority={projection.authority}
+        completed={projection.completed}
+        ready={projectionCommandsReady}
+        onSelection={(candidate) => replacementCandidate = candidate}
+        commandStatus={commandStatuses.process_replacement}
+        showRecovery={!projectionCommandsReady || !moderatorActionGroups.some((group) => group.actions.some((action) => action.id === "process_replacement"))}
+        onRetry={retryHostCommand}
+        onCancel={cancelHostCommandRecovery}
+      />
 
       <details
         class="host-console-critical-path__drawer"
