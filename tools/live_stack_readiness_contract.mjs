@@ -3,6 +3,7 @@ import {
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { hasRecoveredPlayerHistory } from "./live_stack/player_live_scenario.mjs";
 import { hasContendedVoteRaceEvidence } from "./live_stack/vote_race_scenario.mjs";
+import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -93,11 +94,13 @@ const CHECKS = Object.freeze([
   },
   {
     id: "player-action-resolution",
-    label: "Player action route proves invalid action recovery, submit, resolve, and advance",
+    label: "Authenticated request rejects an invalid target without mutation; the real player action UI submits, resolves, and advances",
     predicate: (evidence) =>
-      evidence?.browser?.playerAction?.invalidOutcome?.error ===
-        "InvalidTarget" &&
-      evidence?.browser?.playerAction?.legalOutcome?.state === "ack" &&
+      hasInvalidTargetRequestThenLegalAction(
+        evidence?.browser?.playerAction?.invalidTargetRequest,
+        evidence?.browser?.playerAction?.legalOutcome,
+      ) &&
+      evidence.browser.playerAction.invalidTargetRequest.game === evidence.browser.playerAction.game &&
       Array.isArray(evidence?.browser?.playerAction?.resolveCommand?.streamSeqs) &&
       Array.isArray(evidence?.browser?.playerAction?.advanceCommand?.streamSeqs) &&
       evidence?.browser?.playerAction?.resolvedTargetSlot?.alive === false,
