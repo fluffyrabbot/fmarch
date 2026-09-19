@@ -440,7 +440,10 @@ async fn replacement_command_rechecks_candidate_activity_and_spectator_membershi
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CONFLICT);
-    assert_eq!(body(response).await["error"], "InvalidTarget");
+    expect_reject(
+        serde_json::from_value(body(response).await).unwrap(),
+        RejectCode::InvalidTarget,
+    );
     assert_eq!(stream(&pool, game).await, before);
 }
 
