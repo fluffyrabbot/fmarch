@@ -901,6 +901,12 @@ export const commandFlows = Object.freeze({
         name: "player-receipt",
         labelPrefix: "player receipt",
       },
+      // A retryable rejection retains the exact command until the player
+      // explicitly retries or abandons it; settle that recovery before posting.
+      {
+        type: "click",
+        target: { testId: "command-recovery-cancel-submit_vote" },
+      },
       { type: "wait-visible", target: { testId: "thread-post-443" } },
       {
         type: "wait-visible",

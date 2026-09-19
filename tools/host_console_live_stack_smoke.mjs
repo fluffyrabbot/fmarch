@@ -5055,7 +5055,16 @@ async function driveModeratorBrowser(
   if (deadlineLabel.trim() !== actionEvidence.find((action) => action.id === "extend_deadline").liveDelivery.expectedLabel) {
     throw new Error(`deadline label did not update from real API: ${deadlineLabel}`);
   }
-  if (!occupantLabel.includes("Slot 7")) {
+  const replacementState = await fetchJson(
+    `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  );
+  const replacementSlot = replacementState.slots?.find((slot) => slot.slot_id === "slot-7");
+  if (
+    !replacementSlot?.public_name ||
+    replacementSlot.assigned_principal_id !== PLAYER_ROWAN_PRINCIPAL_ID ||
+    occupantLabel.trim() !== replacementSlot.public_name
+  ) {
     throw new Error(`replacement persona label did not update from real API: ${occupantLabel}`);
   }
   if (!historyLabel.includes("slot-7")) {
@@ -5063,8 +5072,9 @@ async function driveModeratorBrowser(
   }
   const livePlayerInvite = await readPlayerInviteTarget(page);
   if (
-    !livePlayerInvite.targetLabel.includes("Slot 7") ||
+    !livePlayerInvite.targetLabel.includes(replacementSlot.public_name) ||
     livePlayerInvite.targetLabel.includes("player-rowan") ||
+    livePlayerInvite.slotId !== "slot-7" ||
     livePlayerInvite.principalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
     livePlayerInvite.expectedOccupantPrincipalId !== PLAYER_ROWAN_PRINCIPAL_ID
   ) {
