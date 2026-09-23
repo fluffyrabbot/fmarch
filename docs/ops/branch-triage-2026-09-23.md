@@ -91,3 +91,32 @@ done
 git branch -r --merged origin/main
 git diff 80e9e335^ 80e9e335 | git apply --check -R
 ```
+
+## Disposition applied — 2026-09-23
+
+The owner approved every `delete` disposition above. Before deletion each tip
+was re-read: all 27 merged branches, plus `weekly-release-landing`'s successors
+`docs/branch-triage-2026-09-23` (`8da701b1`) and
+`feat/posting-rate-limits-20260923` (`1b4e0c96`), were ancestors of `main`
+(`1b4e0c96`), and `git cherry origin/main <branch>` for each unmerged branch
+reported exactly the residuals recorded in the table. The 39 remote branches
+were deleted with `git push origin --delete`; their tips are the ones in the
+tables above plus the two named here. Restore any of them from its tip:
+`git push origin <sha>:refs/heads/<branch>`.
+
+Retained: `proof/forum-browser-regression-20260916` (`ebcab726`), pending an
+owner decision on its three diagnostic lane definitions.
+
+All thirty-two editing-Mac worktrees were retired with `git worktree remove`
+(none forced). The single remaining uncommitted edit — a one-line
+`host_console_live_stack_smoke.mjs` principal comparison in the
+`fix/weekly-release-20260918` worktree, superseded on `main` by `a2dbd59c` —
+and one real (non-symlinked) `target/dev-test-game/` directory of hosted
+evidence JSON were copied to
+`/Users/fluffypro/apps/.fleet-worktrees/_preserved-20260923/` first. External
+build roots under `/Volumes/rabbitx10/build/` were not touched. Local branch
+refs with no content outside `main` were deleted (tips listed in the
+preserved directory); local refs are kept for the only commits that exist
+nowhere else: the four `proof/benchmark-*-20260908` branches, the three
+`ops/coverage-gates-*-20260907` branches, and
+`proof/signup-visual-review-20260916` (`594605a4`).
