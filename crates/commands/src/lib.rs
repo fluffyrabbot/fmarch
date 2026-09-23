@@ -501,20 +501,25 @@ pub async fn handle_idempotent(
 /// point: the caller can lock and revalidate its session in `tx`, execute the
 /// command here, and commit both as one authorized unit of work.
 ///
-/// The caller owns commit or rollback. Receipt replay is intentionally
+/// The caller owns commit or rollback, and must roll back on `Err`: a
+/// posting-budget charge is taken inside `tx`. Receipt replay is intentionally
 /// returned without committing so it cannot escape the surrounding authority
-/// fence.
+/// fence, and never charges budget.
+///
+/// The in-process entry points above are fixtures and seeders, not member
+/// traffic, so they run with [`projections::PostingAdmission::Unenforced`].
 pub async fn handle_idempotent_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     command_id: Uuid,
     command: Command,
+    posting: &projections::PostingAdmission,
 ) -> Result<Ack, Reject> {
     let receipt = ReceiptClaim::new(principal, command_id, &command)?;
     COMMAND_RUNTIME_TEST_CONTROL
         .scope(
             None,
-            handle_in_tx(tx, principal, command_id, command, Some(&receipt)),
+            handle_in_tx(tx, principal, command_id, command, Some(&receipt), posting),
         )
         .await
 }
@@ -551,7 +556,15 @@ async fn handle_inner(
         .map_err(|error| Reject::Internal(error.to_string()))?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::TransactionBegun).await;
 
-    let ack = handle_in_tx(&mut tx, principal, command_id, command, receipt).await?;
+    let ack = handle_in_tx(
+        &mut tx,
+        principal,
+        command_id,
+        command,
+        receipt,
+        &projections::PostingAdmission::Unenforced,
+    )
+    .await?;
     tx.commit()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -565,6 +578,7 @@ async fn handle_in_tx(
     command_id: Uuid,
     command: Command,
     receipt: Option<&ReceiptClaim>,
+    posting: &projections::PostingAdmission,
 ) -> Result<Ack, Reject> {
     let game = command_game(&command);
 
@@ -585,7 +599,7 @@ async fn handle_in_tx(
     }
     let audit_context = command_audit_context(tx, principal, command_id, &command).await?;
     let ack = COMMAND_AUDIT_CONTEXT
-        .scope(audit_context, handle_command(tx, principal, command))
+        .scope(audit_context, handle_command(tx, principal, command, posting))
         .await?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
 
@@ -691,6 +705,7 @@ async fn handle_command(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     command: Command,
+    posting: &projections::PostingAdmission,
 ) -> Result<Ack, Reject> {
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
@@ -909,6 +924,7 @@ async fn handle_command(
                     embed_url,
                     embed_snapshot,
                 },
+                posting,
             )
             .await
         }
@@ -2643,6 +2659,7 @@ async fn submit_post(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     request: SubmitPostRequest,
+    posting: &projections::PostingAdmission,
 ) -> Result<Ack, Reject> {
     let SubmitPostRequest {
         game,
@@ -2682,6 +2699,7 @@ async fn submit_post(
             return Err(Reject::InvalidTarget);
         }
     }
+    charge_game_post_budget(tx, posting, principal, &caps, game, &mentions).await?;
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user), so it survives a replacement. Phase id is recorded
     // for partitioning.
@@ -2715,6 +2733,45 @@ async fn submit_post(
         occurred_at,
     );
     persist(tx, game, &[ev]).await
+}
+
+/// Charge the authoring principal's posting budget for a game-thread post.
+/// The budget follows the principal, not the slot, so a member cannot escape
+/// it by posting through several games. Only a capability actually held for
+/// this game exempts: global operators are budgeted like everyone else.
+async fn charge_game_post_budget(
+    tx: &mut Transaction<'_, Postgres>,
+    posting: &projections::PostingAdmission,
+    principal: &Principal,
+    caps: &CapabilitySet,
+    game: Uuid,
+    mentions: &[content_reference::SlotMention],
+) -> Result<(), Reject> {
+    let hosts_this_game = caps.iter().any(|capability| {
+        matches!(capability, Capability::HostOf(held) | Capability::CohostOf(held) if *held == game)
+    });
+    let new_mention_targets = mentions
+        .iter()
+        .map(|mention| mention.slot_id.as_str())
+        .collect::<BTreeSet<_>>()
+        .len() as u32;
+    let charge = projections::PostingCharge {
+        principal_id: principal.id(),
+        surface: projections::PostingSurface::GameThreadPost,
+        new_mention_targets,
+        standing: projections::PostingStanding {
+            hosts_this_game,
+            global_moderator: false,
+        },
+    };
+    projections::charge_posting_budget_in_tx(tx, posting, &charge, unix_seconds_now()?)
+        .await
+        .map_err(|error| match error {
+            ProjectionError::PostingBudgetExceeded(exceeded) => Reject::RateLimited {
+                retry_after_seconds: exceeded.retry_after_seconds,
+            },
+            error => Reject::from(error),
+        })
 }
 
 async fn publish_spectator_post(

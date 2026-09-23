@@ -1101,6 +1101,43 @@ const migrationFixtures = [
       },
     ],
   },
+  {
+    version: 17,
+    assertions: [
+      {
+        sql: String.raw`SELECT count(*)::text FROM posting_budget_window`,
+        expected: "0",
+        message: "0017 must start every principal with an unused posting budget",
+      },
+      {
+        sql: String.raw`SELECT pg_get_constraintdef(oid) FROM pg_constraint
+          WHERE conname = 'posting_budget_window_pkey'`,
+        expected: "PRIMARY KEY (principal_id, budget)",
+        message: "0017 must keep exactly one window row per principal and budget",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO posting_budget_window
+          (principal_id, budget, window_started_at, used, updated_at)
+        VALUES ('10000000-0000-4000-8000-000000000001', 'post_day', 10, 1, 10)`,
+        expectedError: /posting_budget_window_budget_check/iu,
+        message: "0017 must admit only the declared budget windows",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO posting_budget_window
+          (principal_id, budget, window_started_at, used, updated_at)
+        VALUES ('10000000-0000-4000-8000-000000000001', 'post_minute', 10, 0, 10)`,
+        expectedError: /posting_budget_window_used_check/iu,
+        message: "0017 must refuse an empty window row",
+      },
+      {
+        rejectedSql: String.raw`INSERT INTO posting_budget_window
+          (principal_id, budget, window_started_at, used, updated_at)
+        VALUES ('10000000-0000-4000-8000-000000000001', 'post_minute', 10, 1, 9)`,
+        expectedError: /posting_budget_window_clock_check/iu,
+        message: "0017 must refuse a window updated before it started",
+      },
+    ],
+  },
 ];
 
 const postMigrationAuthorityInvariantSql = String.raw`

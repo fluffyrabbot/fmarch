@@ -88,8 +88,23 @@ export function serverRuntimeEnvironment({ applicationUrl, env = process.env }) 
     env.FMARCH_MEDIA_READ_MAX_IN_FLIGHT ?? "16";
   childEnv.FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES =
     env.FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES ?? "67108864";
+  // Local proofs seed at fixture speed through the real HTTP boundary, so
+  // their posting budgets are raised explicitly. A proof that exercises
+  // enforcement supplies its own tight policy.
+  for (const [name, value] of Object.entries(LOCAL_PROOF_POSTING_BUDGETS)) {
+    childEnv[name] = env[name] ?? value;
+  }
   return childEnv;
 }
+
+export const LOCAL_PROOF_POSTING_BUDGETS = Object.freeze({
+  FMARCH_POSTING_POSTS_PER_MINUTE: "100000",
+  FMARCH_POSTING_POSTS_PER_HOUR: "100000",
+  FMARCH_POSTING_TOPICS_PER_HOUR: "100000",
+  FMARCH_POSTING_EDITS_PER_TEN_MINUTES: "100000",
+  FMARCH_POSTING_REPORTS_PER_HOUR: "100000",
+  FMARCH_POSTING_MENTION_TARGETS_PER_TEN_MINUTES: "100000",
+});
 
 /** Build the environment for fmarch-event-key-admin with only key-admin authority. */
 export function keyAdminDatabaseEnvironment({ keyAdminUrl, env = process.env }) {

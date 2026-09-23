@@ -113,6 +113,8 @@ test("server child environment owns only active profile handle-index custody", (
   assert.equal(defaults.FMARCH_PROFILE_HANDLE_INDEX_KID, "local-profile-index-v1");
   assert.equal(defaults.FMARCH_MEDIA_READ_MAX_IN_FLIGHT, "16");
   assert.equal(defaults.FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES, "67108864");
+  assert.equal(defaults.FMARCH_POSTING_TOPICS_PER_HOUR, "100000");
+  assert.equal(defaults.FMARCH_POSTING_POSTS_PER_MINUTE, "100000");
   assert.equal(defaults.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
 
   const explicit = serverRuntimeEnvironment({
@@ -124,8 +126,11 @@ test("server child environment owns only active profile handle-index custody", (
       FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY: "retired-profile-index-key-material-0000002",
       FMARCH_MEDIA_READ_MAX_IN_FLIGHT: "8",
       FMARCH_MEDIA_READ_MAX_IN_FLIGHT_BYTES: "33554432",
+      FMARCH_POSTING_POSTS_PER_MINUTE: "2",
     },
   });
+  assert.equal(explicit.FMARCH_POSTING_POSTS_PER_MINUTE, "2");
+  assert.equal(explicit.FMARCH_POSTING_POSTS_PER_HOUR, "100000");
   assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KEY, "proof-profile-index-key-material-00000001");
   assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KID, "proof-profile-index-v1");
   assert.equal(explicit.FMARCH_MEDIA_READ_MAX_IN_FLIGHT, "8");

@@ -2097,6 +2097,22 @@ CREATE TABLE public.post_policy (
 
 
 --
+-- Name: posting_budget_window; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.posting_budget_window (
+    principal_id uuid NOT NULL,
+    budget text NOT NULL,
+    window_started_at bigint NOT NULL,
+    used integer NOT NULL,
+    updated_at bigint NOT NULL,
+    CONSTRAINT posting_budget_window_budget_check CHECK ((budget = ANY (ARRAY['post_minute'::text, 'post_hour'::text, 'topic_hour'::text, 'edit_ten_minutes'::text, 'report_hour'::text, 'mention_ten_minutes'::text]))),
+    CONSTRAINT posting_budget_window_clock_check CHECK (((window_started_at > 0) AND (updated_at >= window_started_at))),
+    CONSTRAINT posting_budget_window_used_check CHECK ((used > 0))
+);
+
+
+--
 -- Name: privacy_subject; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3261,6 +3277,14 @@ ALTER TABLE ONLY public.post_policy
 
 
 --
+-- Name: posting_budget_window posting_budget_window_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.posting_budget_window
+    ADD CONSTRAINT posting_budget_window_pkey PRIMARY KEY (principal_id, budget);
+
+
+--
 -- Name: privacy_subject privacy_subject_exact_owner_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4276,6 +4300,13 @@ CREATE INDEX player_investigation_result_private_kid_idx ON public.player_invest
 --
 
 CREATE INDEX player_notification_audience_idx ON public.player_notification USING btree (game_id, audience_slot, phase_id, event_index);
+
+
+--
+-- Name: posting_budget_window_updated_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX posting_budget_window_updated_at_idx ON public.posting_budget_window USING btree (updated_at);
 
 
 --

@@ -6,6 +6,7 @@
 
   $: discussion = data.discussion;
   $: rejection = form?.state === "reject" ? form.message : null;
+  $: topicDraft = form?.draft?.target === "topic" ? form.draft : null;
 </script>
 
 <svelte:head>
@@ -52,8 +53,8 @@
       <section class="fm-panel" aria-label="Create discussion topic">
         <h2>Start a topic</h2>
         <form method="POST" action="?/createTopic" class="discussion-form" data-testid="discussion-create-topic-form">
-          <label class="fm-field"><span>Title</span><input name="title" required maxlength="180" data-testid="discussion-topic-title" /></label>
-          <label class="fm-field"><span>Opening post</span><textarea name="body" required maxlength="10000" data-testid="discussion-topic-body"></textarea></label>
+          <label class="fm-field"><span>Title</span><input name="title" required maxlength="180" value={topicDraft?.title ?? ""} data-testid="discussion-topic-title" /></label>
+          <label class="fm-field"><span>Opening post</span><textarea name="body" required maxlength="10000" data-testid="discussion-topic-body" value={topicDraft?.body ?? ""}></textarea></label>
           <button type="submit" class="fm-touch-button" data-testid="discussion-create-topic-submit">Create topic</button>
         </form>
       </section>

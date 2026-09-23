@@ -104,8 +104,10 @@ async fn report(pool: &PgPool, topic: Uuid, source_seq: i64, reporter: Principal
         },
         report_id,
         reporter,
+        projections::PostingStanding::default(),
         ReportReasonFamily::Harassment,
         "Please review the captured content".to_string(),
+        &projections::PostingAdmission::Unenforced,
         10,
     )
     .await

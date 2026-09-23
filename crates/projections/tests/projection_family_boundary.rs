@@ -34,6 +34,7 @@ fn forum_projection_consumes_owner_decoded_events_exhaustively() {
     for adapter in [
         "pub async fn append_discussion_and_project_in_tx(",
         "pub async fn append_discussion_and_project_expected(",
+        "pub async fn append_member_discussion_and_project_expected(",
     ] {
         let body = source
             .split(adapter)

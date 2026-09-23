@@ -23,6 +23,16 @@ const evidencePath = path.join(artifactDir, "discussion-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
+// A tight policy on the same database and port. The SvelteKit server keeps
+// its API base URL, so the member's real browser session exercises it.
+const POSTING_BUDGET_PROOF_POLICY = Object.freeze({
+  FMARCH_POSTING_POSTS_PER_MINUTE: "2",
+  FMARCH_POSTING_POSTS_PER_HOUR: "100",
+  FMARCH_POSTING_TOPICS_PER_HOUR: "100",
+  FMARCH_POSTING_EDITS_PER_TEN_MINUTES: "100",
+  FMARCH_POSTING_REPORTS_PER_HOUR: "1",
+  FMARCH_POSTING_MENTION_TARGETS_PER_TEN_MINUTES: "8",
+});
 const localProofAuth = createLocalProofAuth();
 
 function authorityPrincipalId(aliasOrId) {
@@ -110,6 +120,13 @@ try {
       topic: browserTopic.topic,
     });
     const signup = await proveSignupOrigin({ member, moderator, frontendBaseUrl, apiBaseUrl, sessions });
+    const postingBudget = await provePostingBudget({
+      member,
+      frontendBaseUrl,
+      apiBaseUrl,
+      applicationUrl: authority.applicationUrl,
+      sessions,
+    });
     const evidence = {
       version: 1,
       proof: "discussion-role-proof",
@@ -118,7 +135,7 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, locked-topic recovery, and a host-selected signup origin through private setup, public start, game/topic links and watched-topic inbox delivery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves per-member posting budgets against the API restarted under a tight policy (browser acceptance, an over-budget reply that names its wait and keeps its draft, the window reset resubmitting that draft, and the GlobalMod report exemption), the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, locked-topic recovery, and a host-selected signup origin through private setup, public start, game/topic links and watched-topic inbox delivery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
@@ -137,6 +154,7 @@ try {
       curation,
       moderation,
       signup,
+      postingBudget,
     };
     assertProof(evidence);
     await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -834,6 +852,123 @@ function discussionPostSeq(testId) {
   return seq;
 }
 
+async function provePostingBudget({ member, frontendBaseUrl, apiBaseUrl, applicationUrl, sessions }) {
+  const headers = (token) => ({ authorization: `Bearer ${token}`, "content-type": "application/json" });
+  const topic = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics`, {
+    method: "POST",
+    headers: headers(sessions.moderatorToken),
+    body: JSON.stringify({ title: "Posting budget proof", body: "Budget proof opening post." }),
+  });
+  await stopChild(server);
+  await startApi(applicationUrl, {
+    port: Number(new URL(apiBaseUrl).port),
+    postingBudget: POSTING_BUDGET_PROOF_POLICY,
+  });
+  // Sessions are bound to the API instance that issued them, and budgets
+  // follow the principal: earlier scenarios already drew on the member's
+  // windows. The scenario therefore uses a fresh member, and the browser
+  // context adopts its session.
+  const moderatorToken = await createDevSession(apiBaseUrl, "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
+  const budgetMember = "discussion_budget_member";
+  const memberToken = await createDevSession(apiBaseUrl, budgetMember, []);
+  await createAccount(apiBaseUrl, moderatorToken, "budget-member@example.test", budgetMember, []);
+  await createProfile(apiBaseUrl, memberToken, "budget_member", "Budget Member");
+  const tokens = { memberToken, moderatorToken };
+  await setSessionCookie(member, frontendBaseUrl, tokens.memberToken);
+  const reply = (token, body) => fetch(`${apiBaseUrl}/discussions/topics/${topic.topic}/posts`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify({ body, quotations: [], mentions: [] }),
+  });
+  const page = await member.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    const first = await reply(tokens.memberToken, "Budget reply one");
+    if (first.status !== 201) throw new Error(`first budgeted reply was not accepted: ${first.status}`);
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${encodeURIComponent(topic.topic)}`;
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("discussion-post-body").fill("Budget reply two");
+    await Promise.all([
+      page.waitForURL(/#post-[0-9]+$/u, { timeout: 15000 }),
+      page.getByTestId("discussion-create-post-submit").click(),
+    ]);
+    const draft = "Budget reply three survives the limit";
+    await page.getByTestId("discussion-post-body").fill(draft);
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId("discussion-create-post-submit").click(),
+    ]);
+    const alert = page.getByTestId("discussion-mutation-reject");
+    await alert.waitFor({ state: "visible" });
+    const alertText = await alert.innerText();
+    if (!/posting faster than the community limit allows\. Try again in .+; your text is kept below/u.test(alertText)) {
+      throw new Error(`over-budget reply did not name its wait: ${alertText}`);
+    }
+    const browserDraftKept = await page.getByTestId("discussion-post-body").inputValue() === draft;
+    if (!browserDraftKept) throw new Error("over-budget reply lost its unsent draft");
+
+    const overBudgetResponse = await reply(tokens.memberToken, "Budget reply over the API");
+    const overBudgetBody = await overBudgetResponse.json().catch(() => null);
+    const retryAfterSeconds = Number(overBudgetResponse.headers.get("retry-after"));
+    const overBudget = {
+      httpStatus: overBudgetResponse.status,
+      error: overBudgetBody?.error,
+      retryable: overBudgetBody?.retryable,
+      retryAfterSeconds,
+    };
+    if (overBudget.httpStatus !== 429 || overBudget.error !== "RateLimited" || overBudget.retryable !== true ||
+      !(retryAfterSeconds >= 1 && retryAfterSeconds <= 60)) {
+      throw new Error(`over-budget API reply was not a typed retryable 429: ${JSON.stringify(overBudget)}`);
+    }
+    const acceptedBefore = await page.locator('article[data-testid^="discussion-post-"]').count();
+
+    // The fixed minute window resets; the kept draft is resubmitted unchanged.
+    await delay((retryAfterSeconds + 1) * 1000);
+    await Promise.all([
+      page.waitForURL(/#post-[0-9]+$/u, { timeout: 15000 }),
+      page.getByTestId("discussion-create-post-submit").click(),
+    ]);
+    const thread = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${topic.topic}`);
+    const bodies = (thread.posts ?? []).map((post) => post.body);
+    const windowResetAccepted = bodies.includes(draft) && !bodies.includes("Budget reply over the API");
+    if (!windowResetAccepted) throw new Error(`window reset did not accept the kept draft: ${JSON.stringify(bodies)}`);
+
+    const report = (token, sourceSeq) => fetch(`${apiBaseUrl}/moderation/reports`, {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify({ surface_id: topic.topic, source_seq: sourceSeq, reason_family: "other", details: "" }),
+    });
+    const seqs = (thread.posts ?? []).map((post) => post.source_seq).slice(0, 2);
+    const memberFirst = await report(tokens.memberToken, seqs[0]);
+    const memberSecond = await report(tokens.memberToken, seqs[1]);
+    const moderatorStatuses = [];
+    for (const seq of seqs) moderatorStatuses.push((await report(tokens.moderatorToken, seq)).status);
+    const reports = {
+      memberFirstStatus: memberFirst.status,
+      memberSecondStatus: memberSecond.status,
+      memberSecondRetryAfter: Number(memberSecond.headers.get("retry-after")),
+      moderatorStatuses,
+    };
+    if (reports.memberFirstStatus !== 201 || reports.memberSecondStatus !== 429 ||
+      moderatorStatuses.join(",") !== "201,201") {
+      throw new Error(`report budget or moderator exemption drifted: ${JSON.stringify(reports)}`);
+    }
+    return {
+      status: "passed",
+      policy: POSTING_BUDGET_PROOF_POLICY,
+      topic: topic.topic,
+      acceptedReplies: 2,
+      postsVisibleBeforeReset: acceptedBefore,
+      overBudget,
+      browserDraftKept,
+      rejectionTestId: "discussion-mutation-reject",
+      windowResetAccepted,
+      reports,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 async function proveModeration({ member, moderator, frontendBaseUrl, topic }) {
   const memberPage = await member.newPage({ viewport: { width: 1024, height: 768 } });
   const moderatorPage = await moderator.newPage({ viewport: { width: 1024, height: 768 } });
@@ -903,7 +1038,16 @@ function assertProof(evidence) {
     evidence.curation?.memberCurationStatus !== 403 ||
     evidence.curation?.redirectedToCanonical !== true ||
     evidence.moderation?.status !== "passed" ||
-    evidence.signup?.status !== "passed"
+    evidence.signup?.status !== "passed" ||
+    evidence.postingBudget?.status !== "passed" ||
+    evidence.postingBudget?.acceptedReplies !== 2 ||
+    evidence.postingBudget?.overBudget?.httpStatus !== 429 ||
+    evidence.postingBudget?.overBudget?.error !== "RateLimited" ||
+    !(evidence.postingBudget?.overBudget?.retryAfterSeconds >= 1) ||
+    evidence.postingBudget?.browserDraftKept !== true ||
+    evidence.postingBudget?.windowResetAccepted !== true ||
+    evidence.postingBudget?.reports?.memberSecondStatus !== 429 ||
+    evidence.postingBudget?.reports?.moderatorStatuses?.join(",") !== "201,201"
   ) {
     throw new Error("discussion role proof must remain local, paginated, session-backed, and capability-safe");
   }
@@ -926,14 +1070,14 @@ async function dropScratchDatabase({ adminUrl, name }) {
   await runProcess("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${name}"`]);
 }
 
-async function startApi(applicationUrl) {
-  const port = await freePort();
+async function startApi(applicationUrl, { port = null, postingBudget = {} } = {}) {
+  port ??= await freePort();
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: process.env.RUST_LOG ?? "warn" }),
+    env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl, env: { ...process.env, ...postingBudget } }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: process.env.RUST_LOG ?? "warn" }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });

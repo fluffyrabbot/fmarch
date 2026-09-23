@@ -337,6 +337,7 @@ impl RuntimeConfig {
                     86_400,
                 )? as i64,
             },
+            posting: posting_budget_policy_from_env()?,
         };
         api.validate(database.max_connections as usize)?;
         let identity_delivery_gateway = identity_delivery_gateway_from_env(
@@ -733,6 +734,31 @@ fn bootstrap_admin_from_values(
             format!("unknown admin bootstrap method: {other}; expected classic or workos"),
         )),
     }
+}
+
+/// Member posting budgets; defaults are the owner-ratified moderate policy.
+/// Cross-budget rules (e.g. the mention floor) are enforced by `validate`.
+fn posting_budget_policy_from_env() -> Result<projections::PostingBudgetPolicy, std::io::Error> {
+    let defaults = projections::PostingBudgetPolicy::default();
+    let count = |name: &str, default: u32, minimum: u64| {
+        bounded_env(name, default as u64, minimum, 100_000).map(|value| value as u32)
+    };
+    Ok(projections::PostingBudgetPolicy {
+        posts_per_minute: count("FMARCH_POSTING_POSTS_PER_MINUTE", defaults.posts_per_minute, 1)?,
+        posts_per_hour: count("FMARCH_POSTING_POSTS_PER_HOUR", defaults.posts_per_hour, 1)?,
+        topics_per_hour: count("FMARCH_POSTING_TOPICS_PER_HOUR", defaults.topics_per_hour, 1)?,
+        edits_per_ten_minutes: count(
+            "FMARCH_POSTING_EDITS_PER_TEN_MINUTES",
+            defaults.edits_per_ten_minutes,
+            1,
+        )?,
+        reports_per_hour: count("FMARCH_POSTING_REPORTS_PER_HOUR", defaults.reports_per_hour, 1)?,
+        mention_targets_per_ten_minutes: count(
+            "FMARCH_POSTING_MENTION_TARGETS_PER_TEN_MINUTES",
+            defaults.mention_targets_per_ten_minutes,
+            1,
+        )?,
+    })
 }
 
 fn bounded_env(

@@ -1,10 +1,11 @@
-import { fail, redirect } from "@sveltejs/kit";
+import { redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../lib/app/capabilities.mjs";
 import { buildCommunityAuthorView } from "../../../lib/app/community-author-model.mjs";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
+import { discussionMutationFailure } from "../../../lib/server/discussion-mutation-failure.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = serverApiBaseUrl();
@@ -67,7 +68,11 @@ export const actions = {
       path: `/discussions/areas/${encodeURIComponent(params.slug)}/topics`,
       body: { title: text(form.get("title")), body: text(form.get("body")) },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to create discussion topic");
+    if (!response.ok) {
+      return discussionMutationFailure(response, "Unable to create discussion topic", {
+        draft: { target: "topic", title: text(form.get("title")), body: text(form.get("body")) },
+      });
+    }
     const topic = await response.json();
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(topic.topic)}`);
   },
@@ -114,18 +119,6 @@ async function discussionMutation({ locals, cookies, fetch, path, body }) {
     },
     body: JSON.stringify(body),
   });
-}
-
-async function mutationFailure(response, fallback) {
-  const payload = await response.json().catch(() => null);
-  return fail(response.status === 401 || response.status === 403 || response.status === 400 || response.status === 409 ? response.status : 502, mutationStatus(
-    "reject",
-    typeof payload?.message === "string" ? payload.message : fallback,
-  ));
-}
-
-function mutationStatus(state, message) {
-  return { id: "discussion-mutation", state, message };
 }
 
 async function loadJson(fetch, url, headers = { accept: "application/json" }) {

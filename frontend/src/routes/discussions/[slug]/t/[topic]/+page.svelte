@@ -8,6 +8,15 @@
   $: discussion = data.discussion;
   $: thread = discussion.thread;
   $: rejection = form?.id === "discussion-mutation" && form?.state === "reject" ? form.message : null;
+  // A rejected write returns its unsent text; the composer that sent it reopens with it.
+  $: replyDraft = form?.draft?.target === "reply" ? form.draft : null;
+  $: editDraft = form?.draft?.target === "edit" ? form.draft : null;
+
+  // Reopen the editor that sent a rejected edit, once. Never bind `open`:
+  // a bound value would collapse an editor the member opened on any refresh.
+  function openOnce(node, shouldOpen) {
+    if (shouldOpen) node.open = true;
+  }
 
   function occurredAt(value) {
     const seconds = Number(value);
@@ -130,9 +139,17 @@
               </a>
             {/if}
             {#if post.canEdit}
-              <details class="discussion-edit" data-testid={`discussion-edit-${post.sourceSeq}`}>
+              <details
+                class="discussion-edit"
+                data-testid={`discussion-edit-${post.sourceSeq}`}
+                use:openOnce={editDraft?.sourceSeq === String(post.sourceSeq)}
+              >
                 <summary>Edit</summary>
-                <DiscussionPostEditor topic={thread.topic.topic} {post} />
+                <DiscussionPostEditor
+                  topic={thread.topic.topic}
+                  {post}
+                  rejectedDraft={editDraft?.sourceSeq === String(post.sourceSeq) ? editDraft : null}
+                />
               </details>
             {/if}
             {#if post.canRetract}
@@ -197,7 +214,11 @@
             </ul>
             <input type="hidden" name="quotations" value={discussion.quotationsJson} />
           {/if}
-          <MentionComposer required={discussion.attachedQuotations.length === 0} />
+          <MentionComposer
+            required={discussion.attachedQuotations.length === 0}
+            initial={replyDraft?.body ?? ""}
+            initialMentions={replyDraft?.mentionHandles ?? []}
+          />
           <button type="submit" class="fm-touch-button" data-testid="discussion-create-post-submit">Post reply</button>
         </form>
       {:else if thread.topic.posting_state === "locked"}

@@ -185,8 +185,10 @@ async fn signup_origin_is_private_until_start_and_rebuilds_without_duplicate_del
             },
             launch_report,
             during_setup,
+            projections::PostingStanding::default(),
             ReportReasonFamily::Other,
             "An inbox destination is not post evidence".into(),
+            &projections::PostingAdmission::Unenforced,
             10,
         )
         .await,

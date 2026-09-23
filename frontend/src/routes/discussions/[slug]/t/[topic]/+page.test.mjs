@@ -341,6 +341,51 @@ test("createPost submits decided mentions alongside structured quotations", asyn
   });
 });
 
+test("an over-budget reply or edit names its wait and returns the unsent draft", async () => {
+  const rateLimited = async () => Response.json(
+    { error: "RateLimited", retryable: true, message: "posting budget post_minute is exhausted; retry in 37s" },
+    { status: 429, headers: { "retry-after": "37" } },
+  );
+  const reply = await actions.createPost({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/createPost", {
+      method: "POST",
+      body: new URLSearchParams({
+        body: "@member_a unsent reply",
+        mentions: JSON.stringify([{ handle: "member_a", offset: 0, len: 9 }]),
+      }),
+    }),
+    fetch: rateLimited,
+  });
+  assert.equal(reply.status, 429);
+  assert.equal(reply.data.id, "discussion-mutation");
+  assert.equal(reply.data.retryAfterSeconds, 37);
+  assert.match(reply.data.message, /Try again in 37 seconds; your text is kept below/u);
+  assert.deepEqual(reply.data.draft, {
+    target: "reply",
+    body: "@member_a unsent reply",
+    mentionHandles: ["member_a"],
+  });
+
+  const edit = await actions.editPost({
+    cookies: { get: () => "member-session" },
+    params: { slug: "general", topic },
+    request: new Request("http://localhost/discussions/general/t/topic?/editPost", {
+      method: "POST",
+      body: new URLSearchParams({ source_seq: "40", expected_revision: "2", body: "Unsaved edit" }),
+    }),
+    fetch: rateLimited,
+  });
+  assert.equal(edit.status, 429);
+  assert.deepEqual(edit.data.draft, {
+    target: "edit",
+    sourceSeq: "40",
+    body: "Unsaved edit",
+    mentionHandles: [],
+  });
+});
+
 test("discussion quotation helpers keep no-JS quote URLs and hidden originals honest", () => {
   assert.deepEqual(parseQuoteSeqs(new URLSearchParams("quote=40&quote=80&quote=40&quote=nope")), [40, 80]);
   assert.equal(excerptFromBody("short"), "short");

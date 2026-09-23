@@ -2,6 +2,8 @@
 mod replacement_candidate;
 #[path = "vertical/signup_origin.rs"]
 mod signup_origin;
+#[path = "vertical/posting_budget.rs"]
+mod posting_budget;
 mod support;
 
 use api::{
@@ -13659,7 +13661,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
             assert!(retry_after > 0 && retry_after <= 900);
             let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-            assert_eq!(reject.error, RejectCode::NotAuthorized);
+            assert_eq!(reject.error, RejectCode::RateLimited);
             assert!(reject.retryable);
         }
     }

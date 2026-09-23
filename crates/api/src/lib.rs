@@ -93,6 +93,7 @@ pub struct ApiState {
     command_slots: Arc<Semaphore>,
     command_principal_slots: Arc<Mutex<HashMap<PrincipalId, Weak<Semaphore>>>>,
     command_lock_timeout: Duration,
+    posting_admission: projections::PostingAdmission,
     authority_transaction_slots: Arc<Semaphore>,
     authority_transaction_limit: usize,
     media_slots: Arc<Semaphore>,
@@ -164,6 +165,7 @@ impl ApiState {
             command_slots: Arc::new(Semaphore::new(runtime.command.max_in_flight)),
             command_principal_slots: Arc::new(Mutex::new(HashMap::new())),
             command_lock_timeout: runtime.command.lock_timeout,
+            posting_admission: projections::PostingAdmission::Enforced(runtime.posting),
             authority_transaction_slots: Arc::new(Semaphore::new(authority_transaction_limit)),
             authority_transaction_limit,
             media_slots: Arc::new(Semaphore::new(runtime.media.max_in_flight)),
@@ -315,6 +317,12 @@ impl ApiState {
     pub fn with_command_limit(mut self, limit: usize) -> Self {
         assert!((1..=1_024).contains(&limit));
         self.command_slots = Arc::new(Semaphore::new(limit));
+        self
+    }
+
+    /// Replace the posting budget, e.g. a tight policy for a boundary test.
+    pub fn with_posting_admission(mut self, admission: projections::PostingAdmission) -> Self {
+        self.posting_admission = admission;
         self
     }
 
@@ -624,7 +632,13 @@ struct WorkosProviderSessionLogoutRequiredResponse {
 
 impl From<projections::ProjectionError> for ApiError {
     fn from(err: projections::ProjectionError) -> Self {
-        ApiError::Projection(err)
+        match err {
+            projections::ProjectionError::PostingBudgetExceeded(exceeded) => ApiError::RateLimited {
+                retry_after_seconds: exceeded.retry_after_seconds,
+                message: exceeded.to_string(),
+            },
+            err => ApiError::Projection(err),
+        }
     }
 }
 
@@ -752,21 +766,16 @@ impl IntoResponse for ApiError {
                 retry_after_seconds,
                 message,
             } => {
-                let retry_after_seconds = retry_after_seconds.max(1);
                 let mut response = (
                     StatusCode::TOO_MANY_REQUESTS,
                     Json(RejectMsg {
-                        error: RejectCode::NotAuthorized,
+                        error: RejectCode::RateLimited,
                         retryable: true,
                         message,
                     }),
                 )
                     .into_response();
-                response.headers_mut().insert(
-                    RETRY_AFTER,
-                    HeaderValue::from_str(retry_after_seconds.to_string().as_str())
-                        .unwrap_or_else(|_| HeaderValue::from_static("1")),
-                );
+                insert_retry_after(response.headers_mut(), retry_after_seconds);
                 return response;
             }
             ApiError::Unavailable {
@@ -782,11 +791,7 @@ impl IntoResponse for ApiError {
                     }),
                 )
                     .into_response();
-                response.headers_mut().insert(
-                    RETRY_AFTER,
-                    HeaderValue::from_str(retry_after_seconds.max(1).to_string().as_str())
-                        .unwrap_or_else(|_| HeaderValue::from_static("1")),
-                );
+                insert_retry_after(response.headers_mut(), retry_after_seconds);
                 return response;
             }
             other => other,
@@ -814,6 +819,15 @@ impl IntoResponse for ApiError {
         )
             .into_response()
     }
+}
+
+/// Every retryable 429/503 names its wait in whole seconds, never zero.
+pub(crate) fn insert_retry_after(headers: &mut axum::http::HeaderMap, retry_after_seconds: i64) {
+    headers.insert(
+        RETRY_AFTER,
+        HeaderValue::from_str(retry_after_seconds.max(1).to_string().as_str())
+            .unwrap_or_else(|_| HeaderValue::from_static("1")),
+    );
 }
 
 fn opaque_internal_error(

@@ -99,6 +99,7 @@ pub use replacement_candidates::{
     host_replacement_candidate, replacement_principal_is_active, HostReplacementCandidateRow,
 };
 mod moderation_writes;
+mod posting_budget;
 mod private_channel_projection;
 pub use game_origin::{
     game_origin_topic, game_origin_topic_exists, game_origin_topic_is_eligible,
@@ -113,6 +114,11 @@ pub use attention_writes::{
 };
 pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
 pub use moderation_writes::{append_moderation_and_project_expected, submit_moderation_report};
+pub use posting_budget::{
+    charge_posting_budget_in_tx, posting_draws, PostingAdmission, PostingBudget,
+    PostingBudgetExceeded, PostingBudgetPolicy, PostingBudgetPolicyError, PostingCharge,
+    PostingStanding, PostingSurface,
+};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
 pub use social_writes::{mute_public_profile, unmute_public_profile};
 
@@ -947,8 +953,8 @@ pub enum ProjectionError {
     PackIdentity(String),
     #[error("this active report already exists")]
     DuplicateModerationReport,
-    #[error("the reporter submission limit has been reached")]
-    ModerationReportRateLimited,
+    #[error(transparent)]
+    PostingBudgetExceeded(#[from] PostingBudgetExceeded),
     #[error("the moderation target is not public")]
     ModerationTargetNotPublic,
     #[error("the subscription target is not public")]
@@ -3259,12 +3265,44 @@ pub async fn append_discussion_and_project_expected(
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
     validate_discussion_events(events)?;
     let mut tx = pool.begin().await?;
-    let stored =
-        eventstore::append_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
-    for event in &stored {
-        fold_discussion_event(&mut tx, stream_id, event).await?;
-    }
+    let stored = append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events)
+        .await?;
     tx.commit().await?;
+    Ok(stored)
+}
+
+/// Member-authored discussion append: the author's posting budget is charged
+/// in the same transaction, so an over-budget or conflicting write appends
+/// nothing and consumes nothing.
+pub async fn append_member_discussion_and_project_expected(
+    pool: &PgPool,
+    stream_id: Uuid,
+    expected_stream_seq: i64,
+    events: &[EventInput],
+    admission: &PostingAdmission,
+    charge: &PostingCharge,
+    now: i64,
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    validate_discussion_events(events)?;
+    let mut tx = pool.begin().await?;
+    charge_posting_budget_in_tx(&mut tx, admission, charge, now).await?;
+    let stored = append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events)
+        .await?;
+    tx.commit().await?;
+    Ok(stored)
+}
+
+async fn append_discussion_expected_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    expected_stream_seq: i64,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let stored =
+        eventstore::append_expected_in_tx(tx, stream_id, expected_stream_seq, events).await?;
+    for event in &stored {
+        fold_discussion_event(tx, stream_id, event).await?;
+    }
     Ok(stored)
 }
 
