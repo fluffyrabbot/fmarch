@@ -626,14 +626,15 @@ try {
         proof: browserEvidence.dayEventRoom.proof,
       }
     : buildLiveStackReadiness(evidence);
-  if (!dayEventRoomOnly) assertLiveStackReadiness(readiness);
   evidence.readiness = readiness;
+  // Persist before asserting so a failed readiness check leaves inspectable evidence.
+  await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+  if (!dayEventRoomOnly) assertLiveStackReadiness(readiness);
   const summary = dayEventRoomOnly
     ? readiness
     : buildLiveStackProofSummary(evidence, {
         proofPath: path.relative(repoRoot, evidencePath),
       });
-  await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
   await writeFile(
     summaryMarkdownPath,
