@@ -74,7 +74,7 @@ build root. Failed worktrees and logs are retained for diagnosis.
 
 ## Environment identity
 
-The provisioning script requires Rust 1.95.0, Node 26.8.1 and npm 12.0.2. It builds
+The provisioning script requires Rust 1.95.0, Node 26.9.0 and npm 12.0.2. It builds
 PostgreSQL 16.15 with OpenSSL from the SHA-256-pinned upstream source archive,
 inside an fmarch-only toolchain root. `FMARCH_DEV_POSTGRES_BIN` selects this
 installation without introducing ambient `PG*` authority into admin commands.
