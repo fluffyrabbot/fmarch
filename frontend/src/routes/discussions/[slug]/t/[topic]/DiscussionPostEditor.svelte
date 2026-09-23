@@ -4,10 +4,19 @@
 
   export let topic;
   export let post;
+  /** Body and mentions of this post's edit the server just rejected, if any. */
+  export let rejectedDraft = null;
 
   // The keyed post owner survives refreshes, but a draft never adopts a newer
-  // optimistic revision independently from its body and decided mentions.
-  let draft = buildDiscussionEditDraft(topic, post);
+  // optimistic revision independently from its body and decided mentions. A
+  // rejected edit keeps the same base revision, so it resumes as this draft.
+  let draft = rejectedDraft === null
+    ? buildDiscussionEditDraft(topic, post)
+    : Object.freeze({
+        ...buildDiscussionEditDraft(topic, post),
+        body: rejectedDraft.body,
+        mentionHandles: Object.freeze([...rejectedDraft.mentionHandles]),
+      });
   $: snapshot = buildDiscussionEditDraft(topic, post);
   $: changed = draft.identity !== snapshot.identity;
 

@@ -119,6 +119,8 @@ pub struct ApiRuntimeConfig {
     pub authority: AuthorityBudget,
     pub media: MediaBudget,
     pub auth: AuthBudget,
+    /// Per-principal member-content budgets. Counts only; no secrets.
+    pub posting: projections::PostingBudgetPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -220,6 +222,9 @@ impl ApiRuntimeConfig {
                 "auth-attempt retention must cover both window and lockout".to_string(),
             ));
         }
+        self.posting
+            .validate()
+            .map_err(|error| ApiRuntimeConfigError(error.to_string()))?;
         if self.auth.trust_source_header && self.auth.source_signing_key.is_none() {
             return Err(ApiRuntimeConfigError(
                 "trusted auth source headers require a signing key".to_string(),
@@ -275,6 +280,7 @@ impl Default for ApiRuntimeConfig {
                 session_rotation_max_age_seconds: 86_400,
                 recent_authentication_max_age_seconds: 600,
             },
+            posting: projections::PostingBudgetPolicy::default(),
         }
     }
 }
@@ -286,6 +292,17 @@ mod tests {
     #[test]
     fn default_budget_matches_default_pool_contract() {
         ApiRuntimeConfig::default().validate(10).unwrap();
+    }
+
+    #[test]
+    fn posting_budget_that_cannot_admit_one_full_post_fails_startup() {
+        let mut config = ApiRuntimeConfig::default();
+        config.posting.mention_targets_per_ten_minutes = 7;
+        assert!(config.validate(10).is_err());
+        config.posting.mention_targets_per_ten_minutes = 8;
+        config.validate(10).unwrap();
+        config.posting.posts_per_hour = config.posting.posts_per_minute - 1;
+        assert!(config.validate(10).is_err());
     }
 
     #[test]

@@ -806,6 +806,54 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 });
 
+test("a rate-limited post is a retryable reject that carries its wait", async () => {
+  const send = (retryAfter) => sendCommand({
+    command: buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "unsent",
+    }),
+    commandIdFactory: () => "55555555-5555-4555-8555-555555555555",
+    envelopeIdFactory: () => 21,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers({
+        "content-type": "application/json",
+        ...(retryAfter === null ? {} : { "retry-after": retryAfter }),
+      }),
+      async json() {
+        return {
+          v: 3,
+          id: 21,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "RateLimited",
+              retryable: true,
+              message: "posting rate limit reached; retry in 30s",
+            },
+          },
+        };
+      },
+    }),
+  });
+  const limited = await send("30");
+  assert.equal(limited.state, "reject");
+  assert.equal(limited.error, "RateLimited");
+  assert.equal(limited.retryable, true);
+  assert.equal(limited.httpStatus, 429);
+  assert.equal(limited.retryAfterSeconds, 30);
+  assert.equal(
+    limited.message,
+    "Reject RateLimited: posting rate limit reached; retry in 30s; your post is kept, retry after 30s",
+  );
+  const unnamed = await send("soon");
+  assert.equal(unnamed.retryAfterSeconds, null);
+  assert.match(unnamed.message, /retry after a moment$/u);
+});
+
 test("command sender preserves the original command identity for every ambiguous response", async () => {
   const commandId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const command = buildPlayerCommand({
