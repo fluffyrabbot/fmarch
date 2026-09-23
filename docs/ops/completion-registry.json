@@ -2405,6 +2405,269 @@
       }
     },
     {
+      "id": "product.community.posting-rate-limits",
+      "section": "community",
+      "order": 130,
+      "title": "Per-member posting rate limits",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Posting has no rate control. The only rate limits in the runtime govern authentication failures (crates/api/src/authentication.rs), and capacity admission (docs/arch/12-capacity-and-overload.md) bounds concurrency: a global in-flight ceiling plus a one-command-per-principal fence. Neither bounds how often a member may post, so one compromised or hostile account can flood a discussion topic, a game thread, a report queue, or mention delivery at the speed of sequential requests. Closed admission lowers the probability but not the blast radius. The limit belongs at the application boundary as a typed, per-principal, per-surface budget with a retryable rejection; it is not a moderation sanction and records no durable event.",
+      "complete_when": [
+        "Topic creation, discussion posts, game-thread posts, post edits, moderation reports, and mention fan-out each enforce a declared per-principal budget; an over-budget request receives a typed retryable rejection carrying Retry-After that the composer surfaces without losing the draft; hosts and GlobalMods have a documented exemption policy; the budgets are runtime configuration with redacted debug output; and command-level and seeded browser proofs cover acceptance, rejection, window reset, and exemption."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.moderation-operations",
+        "product.community.mentions",
+        "product.game.core-loop"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/api/src/authentication.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/runtime_config.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/public_platform_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/12-capacity-and-overload.md"
+        }
+      ],
+      "remaining": [
+        "Owner decision: default budgets per surface (for example posts per minute and topics per hour) and whether game hosts and cohosts are exempt inside their own games.",
+        "Add a bounded per-principal rate store, reusing the authentication limiter's window and lockout shape rather than a second mechanism, and a typed rate-limited rejection code on the wire.",
+        "Enforce the budget at discussion topic/post/edit, game thread post, moderation report, and mention admission, before any event is appended.",
+        "Surface Retry-After in the discussion and game composers while retaining the unsent body, and extend the discussion and core-live role proofs with an over-budget case.",
+        "Document the budgets and the rejection in docs/arch/12-capacity-and-overload.md."
+      ]
+    },
+    {
+      "id": "product.community.batched-citation-previews",
+      "section": "community",
+      "order": 140,
+      "title": "Batched citation previews on topic pages",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The discussion topic page loader requests quoted-by previews with one API call per cited post (loadCitationPages in frontend/src/routes/discussions/[slug]/t/[topic]/+page.server.js), up to one per post on a 50-post page. Each call runs its own visibility-overlay query through projections::visible_public_incoming_citations. Page cost therefore grows with how often a thread is quoted, which is exactly the shape of a busy mafia discussion. A single page-scoped read returning previews for every cited post removes the fan-out without changing the citation model.",
+      "complete_when": [
+        "A topic page load issues one bounded citation-preview read for the whole page regardless of how many posts are cited; the batched read applies the same visibility, retraction, hide, and mute overlays as the per-post route; a query-plan or row-count regression ceiling guards it; and the discussion role proof still shows quoted-by previews."
+      ],
+      "depends_on": [
+        "product.community.quotations",
+        "product.community.forum-editing-curation",
+        "product.community.member-mutes"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.server.js"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/public_platform_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/lib.rs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-discussion:local"
+        }
+      ],
+      "remaining": [
+        "Add a page-scoped projection read returning bounded incoming-citation previews for a set of source sequences in one topic, with the per-post overlays applied in SQL.",
+        "Expose it as one API route keyed by topic and a bounded source_seq list, and replace loadCitationPages with a single call.",
+        "Keep or remove the per-post citations route according to remaining callers, and add a regression ceiling on queries per page load."
+      ]
+    },
+    {
+      "id": "product.community.post-formatting",
+      "section": "community",
+      "order": 150,
+      "title": "Safe post formatting, links, and spoilers",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Post bodies render as plain text with preserved whitespace plus mention links (bodySegments in frontend/src/lib/app/mention-model.mjs; white-space: pre-wrap in the topic page). URLs are not clickable, and there is no emphasis, block quote, list, code, or spoiler markup. Spoilers matter in particular for a mafia community: reviews and completed-game discussion depend on them. The stored body stays the authored text so that quotations, revision history, search, and game evidence are unchanged; formatting is a small, closed, read-time grammar parsed into typed segments and rendered without {@html}, so the strict production CSP (frontend/svelte.config.js) and the existing mention segments survive intact.",
+      "complete_when": [
+        "Discussion and game-thread posts render one shared, closed formatting grammar (at minimum paragraphs, emphasis, links with safe rel and scheme allowlist, block quotes, inline and block code, and collapsible spoilers) through typed segments without raw HTML injection; the composer offers preview; search and quotation excerpts index and cite the plain text; malformed or hostile markup degrades to literal text; property or fuzz tests cover the parser; and seeded browser proofs cover rendering, spoiler reveal by keyboard and pointer, and CSP cleanliness."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.quotations",
+        "product.community.mentions",
+        "foundation.security-release-baseline",
+        "product.game.core-loop"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/app/mention-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/components/player-thread/player-thread-model.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/svelte.config.js"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/06-security.md"
+        }
+      ],
+      "remaining": [
+        "Owner decision: the grammar (a restricted Markdown subset or phpBB-style tags familiar to the community) and whether game hosts may disable formatting per game.",
+        "Implement one parser producing typed segments that composes with mention segments, shared by the discussion and player-thread models, with a scheme allowlist for links and literal fallback for anything unrecognized.",
+        "Render the segments in the discussion and player thread without {@html}, add an accessible spoiler disclosure, and add composer preview.",
+        "Ensure search documents, quotation excerpts, and inbox previews use the plain-text projection of the body.",
+        "Add parser property tests and extend the discussion, core-live, and CSP browser proofs."
+      ]
+    },
+    {
+      "id": "product.community.forum-media",
+      "section": "community",
+      "order": 160,
+      "title": "Image attachments in public forum posts",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Uploaded media reaches only game thread posts: wire SubmitPost carries media and commands validate it (MAX_THREAD_POST_MEDIA in crates/commands/src/lib.rs), while forum::TopicCommand::SubmitPost has no media field. The upload, canonical blob store, and AVIF/WebP variant pipeline are complete and content-addressed, but serving is private and membership-gated. Public forum media needs a public-publication serving path whose visibility follows the post: a hidden, retracted, or erased post must stop serving its bytes to readers while retained moderator evidence stays available to GlobalMods.",
+      "complete_when": [
+        "A member can attach a bounded number of uploaded images with required alt text to a discussion post or topic opener; readers receive the correct variant through a public serving route whose authorization follows the post's publication visibility, so hide, retract, and data-lifecycle erasure stop reader delivery while GlobalMod evidence access remains; edits cannot swap media outside the edit rules; and seeded browser proofs cover attach, render, hide, and denied delivery."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.forum-editing-curation",
+        "product.community.moderation-operations",
+        "product.media.authenticated-upload",
+        "product.media.upload-to-private-post",
+        "product.identity.data-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/forum/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/media/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/media_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/07-images.md"
+        }
+      ],
+      "remaining": [
+        "Owner decision: whether attachments may be added or removed by an edit inside the edit window, and the per-post image limit.",
+        "Add media references to the forum post events and PostState, validated against the uploader's own upload handles, with an additive migration for the post-media relation.",
+        "Add a public-publication media route authorized by the post's current visibility overlays, and a GlobalMod evidence path for hidden content.",
+        "Add attach and alt-text controls to the discussion composer and render variants in the topic page.",
+        "Extend docs/arch/07-images.md and the discussion role proof."
+      ]
+    },
+    {
+      "id": "product.community.member-direct-messages",
+      "section": "community",
+      "order": 170,
+      "title": "Member-to-member private conversations",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "Private messaging exists only inside games (role PMs and pack-created rooms, product.private.role-pm), scoped to slots and occupancy epochs. Members have no way to message each other outside a game, which a community forum needs for hosting, replacements, and ordinary coordination. This is a new bounded owner, not an extension of game rooms: conversations are addressed to profiles, respect member mutes in both directions, feed the inbox, are encrypted at rest like private rooms, are reportable, and participate in export and erasure.",
+      "complete_when": [
+        "A community member can start a private conversation with one or more members, post, and receive inbox deliveries; a muted or suspended party cannot initiate or deliver; participants can leave; content is encrypted at rest, excluded from public search, reportable with a stated moderator-access policy, and included in member export and erasure; and seeded browser proofs cover start, reply, mute denial, report, and export."
+      ],
+      "depends_on": [
+        "product.community.closed-admission",
+        "product.community.member-mutes",
+        "product.community.subscriptions",
+        "product.community.moderation-operations",
+        "product.identity.data-lifecycle",
+        "foundation.executable-bounded-contexts"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/social/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/attention/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/trust_safety/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0003-community-platform-v2.md"
+        }
+      ],
+      "remaining": [
+        "Owner decision: group conversation limit, whether GlobalMods can read a conversation only through a participant's report or also directly, and retention after all participants leave.",
+        "Write a short RFC for the conversation owner, placing it in the RFC 0006 target DAG so it is born conforming rather than adding ratchet debt.",
+        "Implement the conversation aggregate, encrypted projection, inbox reason, mute and suspension checks, and report target.",
+        "Add conversation list and thread routes, export and erasure coverage, and a seeded role proof."
+      ]
+    },
+    {
+      "id": "product.community.inbox-email-notifications",
+      "section": "community",
+      "order": 180,
+      "title": "Opt-in email notifications for the inbox",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The in-app inbox is durable and reason-derived, but nothing reaches a member who is not looking at the site. The only outbound delivery is identity mail (invites and recovery) through the provider-abstracted, retryable, audited IdentityDeliveryGateway in crates/api/src/identity_delivery.rs. Notification mail should reuse that delivery machinery with its own admission and budget: opt-in per reason, a batched digest rather than per-event mail, a one-click unsubscribe, and no private content — no game-room, PM, or conversation bodies — in the message.",
+      "complete_when": [
+        "A member can opt in per inbox reason to immediate or digest email; deliveries batch unread inbox items, never include private-channel content, carry a signed one-click unsubscribe, respect mutes and suspension, stop on data-lifecycle transitions, reuse the audited provider gateway with its own retry and quota budget, and are covered by a local fake-provider proof without claiming live provider traffic."
+      ],
+      "depends_on": [
+        "product.community.subscriptions",
+        "product.community.mentions",
+        "product.community.member-mutes",
+        "product.identity.delivery",
+        "product.identity.data-lifecycle"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/api/src/identity_delivery.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/attention/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/inbox/+page.svelte"
+        }
+      ],
+      "remaining": [
+        "Owner decision: default opt-in state, digest cadence, and whether mention and spawned-game reasons are eligible for immediate mail.",
+        "Add per-member notification preferences and a digest scheduler that claims unread inbox items idempotently.",
+        "Generalize the delivery gateway admission so notification mail cannot starve invite and recovery delivery.",
+        "Add signed unsubscribe, preference UI, and a fake-provider delivery proof; extend the product policy draft with notification retention."
+      ]
+    },
+    {
       "id": "product.archive.completed-game-export",
       "section": "archive",
       "order": 10,
@@ -2862,6 +3125,33 @@
         "Implement the public replay query, fold, exact-moment links, and explorer surface after the required 1.0 persona/occupancy substrate and release closure are complete."
       ],
       "decision_trigger": "Promote only after required 1.0 platform scope is complete and the owner explicitly opens the post-1.0 public-history product frontier."
+    },
+    {
+      "id": "optional.forum-engagement-extras",
+      "section": "optional",
+      "order": 30,
+      "title": "Reactions, polls, bookmarks, and drafts",
+      "execution_class": "optional",
+      "status": "deferred",
+      "summary": "Common forum conveniences that a mafia community can do without at 1.0: post reactions, topic polls, personal bookmarks, and server-side draft persistence. Each is a separate small owner or projection. They stay outside required completion so that robustness and the core reading and writing experience land first.",
+      "complete_when": [
+        "Each promoted extra ships as its own capability item with typed commands, rebuildable projections, mute and moderation overlays where content is involved, and a seeded browser proof."
+      ],
+      "depends_on": [
+        "product.community.discussions",
+        "product.community.member-mutes",
+        "product.community.post-formatting"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/forum/src/lib.rs"
+        }
+      ],
+      "remaining": [
+        "Split each extra into its own registry item when promoted, with a recorded owner decision on scope."
+      ],
+      "decision_trigger": "Promote an individual extra only after required 1.0 platform scope is complete, or earlier when the owner records a community request that the existing features cannot meet."
     }
   ],
   "orchestration_rules": [

@@ -20,10 +20,10 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   assert.deepEqual(summary.byExecutionClass.code, {
     complete: 48,
     partial: 1,
-    open: 2,
+    open: 8,
     blocked: 0,
     deferred: 0,
-    total: 51,
+    total: 57,
   });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
@@ -41,7 +41,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  // Signup threads are a stated open product gap.
+  // Signup threads and the 2026-09-22 forum readiness gaps are stated open
+  // product items.
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
@@ -81,8 +82,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     partial: 0,
     open: 0,
     blocked: 0,
-    deferred: 2,
-    total: 2,
+    deferred: 3,
+    total: 3,
   });
 });
 
