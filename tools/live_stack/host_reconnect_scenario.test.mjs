@@ -49,6 +49,15 @@ test("browser helper records real trigger, fresh scoped requests and ordered rec
   assert.equal(JSON.stringify(evidence).includes("secret-ticket"), false);
 });
 
+test("socket teardown after the proof cannot rewrite its recorded evidence", async () => {
+  const fixture = browserFixture();
+  const evidence = await proveExplicitHostReconnect({ page: fixture.page, game: fixture.evidence.game, expectedCount: 1 });
+  fixture.socketListeners.get("socketerror")(new Error("late teardown error"));
+  fixture.socketListeners.get("close")();
+  assert.deepEqual(evidence.sockets, [{ pathname: "/ws", errors: [], closed: false }]);
+  assert.deepEqual(assertExplicitHostReconnect(evidence), { wakeIndex: evidence.wakeIndex, recoveryIndex: evidence.recoveryIndex });
+});
+
 test("failed trigger preserves scoped post-boundary diagnostics and removes listeners", async () => {
   const fixture = browserFixture({ fail: true });
   await assert.rejects(proveExplicitHostReconnect({ page: fixture.page, game: fixture.evidence.game, expectedCount: 1 }), (error) => {
@@ -64,6 +73,7 @@ test("failed trigger preserves scoped post-boundary diagnostics and removes list
 function browserFixture({ fail = false } = {}) {
   const evidence = explicitHostReconnectFixture();
   const listeners = new Map();
+  const socketListeners = new Map();
   const window = {
     __fmarchHostLiveProjectionEndpoint: evidence.before.endpoint,
     __fmarchHostLiveProjectionEvents: structuredClone(evidence.before.events),
@@ -75,7 +85,7 @@ function browserFixture({ fail = false } = {}) {
         listeners.get("request")(raw);
         listeners.get("response")({ request: () => raw, status: () => 200 });
       }
-      listeners.get("websocket")({ url: () => "wss://fixture.invalid/ws?ticket=secret-ticket", on() {} });
+      listeners.get("websocket")({ url: () => "wss://fixture.invalid/ws?ticket=secret-ticket", on(kind, listener) { socketListeners.set(kind, listener); } });
       window.__fmarchHostLiveProjectionEvents = structuredClone(evidence.after.events);
       if (fail) {
         window.__fmarchHostLiveProjectionStatus = { state: "error" };
@@ -85,7 +95,7 @@ function browserFixture({ fail = false } = {}) {
     },
   };
   const evaluate = async (fn, argument) => structuredClone(await runInNewContext(`(${fn.toString()})(argument)`, { window, argument }));
-  return { evidence, listeners, page: {
+  return { evidence, listeners, socketListeners, page: {
     evaluate,
     on(kind, listener) { listeners.set(kind, listener); },
     off(kind, listener) { assert.equal(listeners.get(kind), listener); listeners.delete(kind); },

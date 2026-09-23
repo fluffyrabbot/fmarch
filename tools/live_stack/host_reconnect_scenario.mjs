@@ -39,7 +39,10 @@ export async function proveExplicitHostReconnect({ page, game, expectedCount }) 
     await page.waitForFunction((count) => window.__fmarchHostVotecountProjection?.some(
       (row) => row.target === "slot_1" && row.count === count,
     ), expectedCount);
-    const evidence = { game, expectedCount, eventStart: before.eventCount, before, after: await snapshot(page), triggerSnapshot, requests, responses, sockets };
+    // Socket close listeners outlive this proof; copy their state so page
+    // teardown cannot rewrite the evidence the readiness gate re-checks.
+    const socketSnapshot = sockets.map((socket) => ({ ...socket, errors: [...socket.errors] }));
+    const evidence = { game, expectedCount, eventStart: before.eventCount, before, after: await snapshot(page), triggerSnapshot, requests: [...requests], responses: [...responses], sockets: socketSnapshot };
     const { wakeIndex, recoveryIndex } = assertExplicitHostReconnect(evidence);
     return { ...evidence, status: "passed", wakeIndex, recoveryIndex, reconnectEvent: evidence.after.events[recoveryIndex] };
   } catch (error) {
