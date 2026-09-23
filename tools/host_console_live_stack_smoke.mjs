@@ -6005,7 +6005,10 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
   const response = await fetchWithTimeout(url, { ...options, headers }, timeoutMs);
   const body = await response.json();
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
+    throw Object.assign(
+      new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`),
+      { status: response.status, body },
+    );
   }
   return preserveFixturePrincipalAliases(body);
 }

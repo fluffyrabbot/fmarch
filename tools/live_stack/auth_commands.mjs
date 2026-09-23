@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -126,12 +127,27 @@ function requiredSessionToken(session) {
   return token;
 }
 
+const FIXTURE_COMMAND_MAX_ATTEMPTS = 5;
+
+// Fail-fast HTTP admission try-locks the command's source stream and answers a
+// concurrent holder (another writer, a refresh fence) with a retryable
+// StreamConflict. Fixture drivers retry exactly that reject, resending the
+// identical serialized envelope so the command identity stays idempotent.
+export function isRetryableStreamConflict(error) {
+  const reject = error?.body?.body;
+  return error?.status === 409
+    && reject?.kind === "Reject"
+    && reject.body?.error === "StreamConflict"
+    && reject.body?.retryable === true;
+}
+
 export function createLiveStackCommandSender({
   apiBaseUrl,
   fetchJson,
   nextEnvelopeId,
   sessionTokenForPrincipal,
   uuid = randomUUID,
+  pause = delay,
 }) {
   requireString(apiBaseUrl, "apiBaseUrl");
   requireFunction(fetchJson, "fetchJson");
@@ -144,7 +160,7 @@ export function createLiveStackCommandSender({
       throw new Error(`live-stack command actor has no session: ${principalId}`);
     }
     const transportCommand = fixturePrincipalTransport(command, "command transport");
-    const response = await fetchJson(`${apiBaseUrl}/commands`, {
+    const request = {
       method: "POST",
       headers: {
         authorization: `Bearer ${sessionToken}`,
@@ -161,7 +177,19 @@ export function createLiveStackCommandSender({
           },
         },
       }),
-    });
+    };
+    let response;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        response = await fetchJson(`${apiBaseUrl}/commands`, request);
+        break;
+      } catch (error) {
+        if (!isRetryableStreamConflict(error) || attempt >= FIXTURE_COMMAND_MAX_ATTEMPTS) {
+          throw error;
+        }
+        await pause(25 * attempt);
+      }
+    }
     if (response.body?.kind !== "Ack") {
       throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
     }

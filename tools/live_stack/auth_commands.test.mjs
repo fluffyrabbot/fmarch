@@ -196,3 +196,60 @@ function sequence(values) {
     return value;
   };
 }
+
+function commandRejectError(status, error, retryable) {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    status,
+    body: { v: 3, id: 1, body: { kind: "Reject", body: { error, retryable } } },
+  });
+}
+
+test("live-stack commands retry only a retryable StreamConflict with the identical envelope", async () => {
+  const bodies = [];
+  const pauses = [];
+  let envelopeId = 0;
+  let calls = 0;
+  const sendCommand = createLiveStackCommandSender({
+    apiBaseUrl: "http://127.0.0.1:4000",
+    nextEnvelopeId: () => ++envelopeId,
+    sessionTokenForPrincipal: () => "host-token",
+    uuid: () => "command-id",
+    pause: async (ms) => { pauses.push(ms); },
+    fetchJson: async (_url, options) => {
+      bodies.push(options.body);
+      calls += 1;
+      if (calls < 3) throw commandRejectError(409, "StreamConflict", true);
+      return { body: { kind: "Ack", body: { stream_seqs: { game: 9 } } } };
+    },
+  });
+
+  const result = await sendCommand("host-h", { UnlockThread: { game: "game-id" } });
+  assert.deepEqual(result.streamSeqs, { game: 9 });
+  assert.equal(bodies.length, 3);
+  assert.equal(new Set(bodies).size, 1);
+  assert.deepEqual(pauses, [25, 50]);
+});
+
+test("live-stack commands surface non-retryable rejects and exhausted conflicts", async () => {
+  for (const [error, expectedCalls] of [
+    [commandRejectError(409, "StreamConflict", false), 1],
+    [commandRejectError(409, "Forbidden", true), 1],
+    [commandRejectError(503, "StreamConflict", true), 1],
+    [commandRejectError(409, "StreamConflict", true), 5],
+  ]) {
+    let calls = 0;
+    const sendCommand = createLiveStackCommandSender({
+      apiBaseUrl: "http://127.0.0.1:4000",
+      nextEnvelopeId: () => 1,
+      sessionTokenForPrincipal: () => "host-token",
+      uuid: () => "command-id",
+      pause: async () => {},
+      fetchJson: async () => {
+        calls += 1;
+        throw error;
+      },
+    });
+    await assert.rejects(sendCommand("host-h", { LockThread: { game: "game-id" } }), (thrown) => thrown === error);
+    assert.equal(calls, expectedCalls);
+  }
+});
