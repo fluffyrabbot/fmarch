@@ -15,6 +15,7 @@ const REJECT_CODES = new Set([
   "ActionAlreadySubmitted",
   "InvalidRole",
   "StreamConflict",
+  "RateLimited",
   "CommandIdConflict",
   "UnknownGame",
   "UnknownSlot",
@@ -394,6 +395,8 @@ export function normalizeCommandResponse({
     }
     requiredString(reject.message, "Reject.message");
     const retryable = reject.retryable === true;
+    const retryAfterSeconds =
+      reject.error === "RateLimited" ? retryAfterHeaderSeconds(response) : null;
     return Object.freeze({
       state: "reject",
       commandId,
@@ -401,7 +404,8 @@ export function normalizeCommandResponse({
       httpStatus: response.status,
       error: reject.error,
       retryable,
-      message: rejectMessage(reject, retryable, { requestEnvelope }),
+      retryAfterSeconds,
+      message: rejectMessage(reject, retryable, { requestEnvelope, retryAfterSeconds }),
       requestEnvelope,
       serverEnvelope,
     });
@@ -410,8 +414,14 @@ export function normalizeCommandResponse({
   throw new TypeError("server response must be a wire Ack or Reject envelope");
 }
 
-function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
+function rejectMessage(reject, retryable, { requestEnvelope, retryAfterSeconds = null } = {}) {
   const base = `Reject ${reject.error}: ${reject.message}`;
+  if (reject.error === "RateLimited") {
+    // Retrying before the window resets fails again; the retry control keeps
+    // the same command and its unsent body.
+    const wait = retryAfterSeconds === null ? "a moment" : `${retryAfterSeconds}s`;
+    return `${base}; your post is kept, retry after ${wait}`;
+  }
   if (
     reject.error === "PhaseLocked" &&
     requestEnvelope?.body?.body?.command?.SubmitAction !== undefined
@@ -471,6 +481,13 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
     return base;
   }
   return `${base}; reload and retry`;
+}
+
+/** Whole seconds from a delta-seconds Retry-After header, or null. */
+function retryAfterHeaderSeconds(response) {
+  const value = response?.headers?.get?.("retry-after");
+  if (typeof value !== "string" || !/^[0-9]{1,6}$/u.test(value.trim())) return null;
+  return Math.max(1, Number(value.trim()));
 }
 
 function requiredString(value, field) {

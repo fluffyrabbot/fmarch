@@ -80,6 +80,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "player_investigation_result",
     "player_notification",
     "post_policy",
+    "posting_budget_window",
     "privacy_subject",
     "private_channel_member",
     "profile_mute",

@@ -6,6 +6,10 @@ import { serverApiBaseUrl } from "../../../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
 import { parseSubmittedMentions } from "../../../../../lib/app/mention-model.mjs";
 import {
+  discussionMutationFailure,
+  draftMentionHandles,
+} from "../../../../../lib/server/discussion-mutation-failure.mjs";
+import {
   DISCUSSION_CITATION_PREVIEW_LIMIT,
   buildDiscussionThreadView,
   canonicalAreaSlug,
@@ -184,14 +188,10 @@ export const actions = {
         details: text(form.get("details")),
       },
     });
-    const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      return fail([400, 401, 404, 409, 429].includes(response.status) ? response.status : 502, {
-        id: "discussion-report",
-        state: "reject",
-        message: payload?.message ?? "Unable to submit report",
-      });
+      return discussionMutationFailure(response, "Unable to submit report", { id: "discussion-report" });
     }
+    const payload = await response.json().catch(() => null);
     return {
       id: "discussion-report",
       state: "ack",
@@ -211,7 +211,11 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts`,
       body: { body: text(form.get("body")), quotations, mentions },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to post discussion reply");
+    if (!response.ok) {
+      return discussionMutationFailure(response, "Unable to post discussion reply", {
+        draft: { target: "reply", body: text(form.get("body")), mentionHandles: draftMentionHandles(mentions) },
+      });
+    }
     const topic = await response.json();
     const anchor = topic.last_post_seq === null ? "" : `#post-${topic.last_post_seq}`;
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}${anchor}`);
@@ -232,7 +236,16 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts/${sourceSeq}`,
       body: { body: text(form.get("body")), mentions, expected_revision: expectedRevision },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to edit this post");
+    if (!response.ok) {
+      return discussionMutationFailure(response, "Unable to edit this post", {
+        draft: {
+          target: "edit",
+          sourceSeq,
+          body: text(form.get("body")),
+          mentionHandles: draftMentionHandles(mentions),
+        },
+      });
+    }
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}#post-${sourceSeq}`);
   },
   retractPost: async ({ locals, cookies, fetch, params, request }) => {
@@ -248,7 +261,7 @@ export const actions = {
       method: "DELETE",
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts/${sourceSeq}`,
     });
-    if (!response.ok) return mutationFailure(response, "Unable to retract this post");
+    if (!response.ok) return discussionMutationFailure(response, "Unable to retract this post");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}#post-${sourceSeq}`);
   },
   rename: async ({ locals, cookies, fetch, params, request }) => {
@@ -260,7 +273,7 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
       body: { title: text(form.get("title")) },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to rename this topic");
+    if (!response.ok) return discussionMutationFailure(response, "Unable to rename this topic");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
   },
   move: async ({ locals, cookies, fetch, params, request }) => {
@@ -273,7 +286,7 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
       body: { area_slug: areaSlug },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to move this topic");
+    if (!response.ok) return discussionMutationFailure(response, "Unable to move this topic");
     throw redirect(303, `/discussions/${encodeURIComponent(areaSlug)}/t/${encodeURIComponent(params.topic)}`);
   },
   pin: async ({ locals, cookies, fetch, params, request }) => {
@@ -286,7 +299,7 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/curation`,
       body: { pinned },
     });
-    if (!response.ok) return mutationFailure(response, pinned ? "Unable to pin this topic" : "Unable to unpin this topic");
+    if (!response.ok) return discussionMutationFailure(response, pinned ? "Unable to pin this topic" : "Unable to unpin this topic");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
   },
   postingState: async ({ locals, cookies, fetch, params, request }) => {
@@ -298,7 +311,7 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/moderation`,
       body: { posting_state: text(form.get("posting_state")) },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to update topic posting state");
+    if (!response.ok) return discussionMutationFailure(response, "Unable to update topic posting state");
     throw redirect(303, `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
   },
   visibility: async ({ locals, cookies, fetch, params, request }) => {
@@ -311,7 +324,7 @@ export const actions = {
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/moderation`,
       body: { visibility },
     });
-    if (!response.ok) return mutationFailure(response, "Unable to update topic visibility");
+    if (!response.ok) return discussionMutationFailure(response, "Unable to update topic visibility");
     throw redirect(303, visibility === "hidden"
       ? `/discussions/${encodeURIComponent(params.slug)}`
       : `/discussions/${encodeURIComponent(params.slug)}/t/${encodeURIComponent(params.topic)}`);
@@ -355,14 +368,7 @@ async function mutation({ locals, cookies, fetch, path, body = undefined, method
   });
 }
 
-async function mutationFailure(response, fallback) {
-  const payload = await response.json().catch(() => null);
-  return fail([400, 401, 403, 404, 409].includes(response.status) ? response.status : 502, {
-    id: "discussion-mutation",
-    state: "reject",
-    message: typeof payload?.message === "string" ? payload.message : fallback,
-  });
-}
+
 
 function optionalSequence(value) {
   return typeof value === "string" && /^[1-9][0-9]*$/u.test(value) ? value : null;

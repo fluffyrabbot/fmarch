@@ -46,6 +46,7 @@ use wire::{
 pub(super) struct PublicPlatformHttpState {
     pool: PgPool,
     auth: AuthHttpState,
+    posting: projections::PostingAdmission,
 }
 
 impl FromRef<PublicPlatformHttpState> for AuthHttpState {
@@ -55,8 +56,16 @@ impl FromRef<PublicPlatformHttpState> for AuthHttpState {
 }
 
 impl PublicPlatformHttpState {
-    pub(super) fn new(pool: PgPool, auth: AuthHttpState) -> Self {
-        Self { pool, auth }
+    pub(super) fn new(
+        pool: PgPool,
+        auth: AuthHttpState,
+        posting: projections::PostingAdmission,
+    ) -> Self {
+        Self {
+            pool,
+            auth,
+            posting,
+        }
     }
 }
 
@@ -132,6 +141,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .with_state(PublicPlatformHttpState::new(
             state.pool.clone(),
             state.auth.clone(),
+            state.posting_admission.clone(),
         ))
 }
 
@@ -415,6 +425,35 @@ where
     }
 }
 
+/// Member authentication that also records the posting standing a budgeted
+/// write needs, for surfaces that do not require a public profile.
+struct PostingMemberAuthentication {
+    principal_id: PrincipalId,
+    standing: projections::PostingStanding,
+}
+
+impl<S> FromRequestParts<S> for PostingMemberAuthentication
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
+        let auth = AuthHttpState::from_ref(state);
+        let principal_id = request.context.principal_id();
+        require_active_community_membership(&auth.pool, principal_id).await?;
+        Ok(Self {
+            principal_id,
+            standing: projections::PostingStanding {
+                hosts_this_game: false,
+                global_moderator: is_global_moderator(request.context.global_capabilities()),
+            },
+        })
+    }
+}
+
 /// Anonymous-or-member resolution for public read surfaces: an absent
 /// Authorization header means anonymous; a present but invalid credential
 /// still rejects with the account-unauthorized error.
@@ -462,6 +501,10 @@ impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthenticati
         Ok(Self(AuthenticatedDiscussionProfile {
             profile_id,
             principal_id,
+            standing: projections::PostingStanding {
+                hosts_this_game: false,
+                global_moderator: is_global_moderator(request.context.global_capabilities()),
+            },
         }))
     }
 }
@@ -980,7 +1023,14 @@ async fn create_discussion_topic(
         },
     )
     .map_err(forum_reject_api_error)?;
-    append_forum_events(&state.pool, topic_id, 0, events, profile.principal_id).await?;
+    append_member_forum_events(
+        &state,
+        topic_id,
+        0,
+        events,
+        profile.posting_charge(projections::PostingSurface::DiscussionTopic, 0),
+    )
+    .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .expect("projected discussion topic is readable");
@@ -1012,6 +1062,7 @@ async fn create_discussion_post(
     let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
         .await
         .map_err(content_reference_reject_api_error)?;
+    let new_mention_targets = distinct_new_mention_targets(&mentions, &[]);
     let content = PostContent::new(&thread, body, &request.quotations, &mentions)
         .map_err(forum_reject_api_error)?;
     let events = forum::decide_topic(
@@ -1022,12 +1073,12 @@ async fn create_discussion_post(
         },
     )
     .map_err(forum_reject_api_error)?;
-    append_forum_events(
-        &state.pool,
+    append_member_forum_events(
+        &state,
         topic,
         current.version,
         events,
-        profile.principal_id,
+        profile.posting_charge(projections::PostingSurface::DiscussionPost, new_mention_targets),
     )
     .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
@@ -1061,6 +1112,7 @@ async fn edit_discussion_post(
     let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
         .await
         .map_err(content_reference_reject_api_error)?;
+    let new_mention_targets = distinct_new_mention_targets(&mentions, &post.mentions);
     let topic_state = forum_topic_state(&current)?;
     let context = PostDecisionContext::new(&topic_state, &post).map_err(forum_reject_api_error)?;
     let events = forum::decide_post(
@@ -1074,12 +1126,12 @@ async fn edit_discussion_post(
         },
     )
     .map_err(forum_reject_api_error)?;
-    append_forum_events(
-        &state.pool,
+    append_member_forum_events(
+        &state,
         topic,
         current.version,
         events,
-        profile.principal_id,
+        profile.posting_charge(projections::PostingSurface::DiscussionEdit, new_mention_targets),
     )
     .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
@@ -1232,7 +1284,7 @@ async fn curate_discussion_topic(
 
 async fn submit_moderation_report(
     State(state): State<PublicPlatformHttpState>,
-    MemberAuthentication(principal_id): MemberAuthentication,
+    reporter: PostingMemberAuthentication,
     Json(request_body): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
     let request = request_body;
@@ -1254,9 +1306,11 @@ async fn submit_moderation_report(
         &state.pool,
         target,
         Uuid::new_v4(),
-        principal_id,
+        reporter.principal_id,
+        reporter.standing,
         reason,
         details.to_string(),
+        &state.posting,
         unix_now_seconds(),
     )
     .await
@@ -1451,16 +1505,12 @@ fn moderation_projection_api_error(error: projections::ProjectionError) -> ApiEr
             error: RejectCode::StreamConflict,
             message: "this active report already exists".to_string(),
         },
-        projections::ProjectionError::ModerationReportRateLimited => ApiError::RateLimited {
-            retry_after_seconds: 86_400,
-            message: "the reporter submission limit has been reached".to_string(),
-        },
         projections::ProjectionError::ModerationTargetNotPublic => ApiError::Reject {
             status: StatusCode::NOT_FOUND,
             error: RejectCode::NotAuthorized,
             message: "the moderation target is not public".to_string(),
         },
-        error => ApiError::Projection(error),
+        error => ApiError::from(error),
     }
 }
 
@@ -1497,6 +1547,28 @@ async fn visible_discussion_topic(
 struct AuthenticatedDiscussionProfile {
     profile_id: Uuid,
     principal_id: PrincipalId,
+    standing: projections::PostingStanding,
+}
+
+impl AuthenticatedDiscussionProfile {
+    fn posting_charge(
+        &self,
+        surface: projections::PostingSurface,
+        new_mention_targets: u32,
+    ) -> projections::PostingCharge {
+        projections::PostingCharge {
+            principal_id: self.principal_id,
+            surface,
+            new_mention_targets,
+            standing: self.standing,
+        }
+    }
+}
+
+fn is_global_moderator(global_capabilities: &[String]) -> bool {
+    global_capabilities
+        .iter()
+        .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
 }
 
 async fn require_global_mod(
@@ -1505,11 +1577,7 @@ async fn require_global_mod(
     action: &str,
 ) -> Result<PrincipalId, ApiError> {
     let authorization = authorization_context(&state.auth, token).await?;
-    if authorization
-        .global_capabilities()
-        .iter()
-        .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
-    {
+    if is_global_moderator(authorization.global_capabilities()) {
         return Ok(authorization.principal_id());
     }
     Err(ApiError::Reject {
@@ -1589,19 +1657,7 @@ async fn append_forum_events(
     events: Vec<TopicEvent>,
     principal_id: PrincipalId,
 ) -> Result<(), ApiError> {
-    let occurred_at = unix_now_seconds();
-    let events: Vec<_> = events
-        .into_iter()
-        .map(|event| {
-            EventInput::new(
-                event.kind(),
-                1,
-                event.payload(),
-                ActorId::Principal(principal_id),
-                occurred_at,
-            )
-        })
-        .collect();
+    let events = forum_event_inputs(events, principal_id, unix_now_seconds());
     match projections::append_discussion_and_project_expected(
         pool,
         topic_id,
@@ -1616,6 +1672,71 @@ async fn append_forum_events(
         ),
         Err(error) => Err(ApiError::Projection(error)),
     }
+}
+
+/// Member-authored forum write: the same append, with the author's posting
+/// budget charged in its transaction.
+async fn append_member_forum_events(
+    state: &PublicPlatformHttpState,
+    topic_id: Uuid,
+    expected_version: i64,
+    events: Vec<TopicEvent>,
+    charge: projections::PostingCharge,
+) -> Result<(), ApiError> {
+    let occurred_at = unix_now_seconds();
+    let events = forum_event_inputs(events, charge.principal_id, occurred_at);
+    match projections::append_member_discussion_and_project_expected(
+        &state.pool,
+        topic_id,
+        expected_version,
+        events.as_slice(),
+        &state.posting,
+        &charge,
+        occurred_at,
+    )
+    .await
+    {
+        Ok(_) => Ok(()),
+        Err(projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => Err(
+            discussion_conflict("discussion changed concurrently; refresh and try again"),
+        ),
+        Err(error) => Err(ApiError::from(error)),
+    }
+}
+
+fn forum_event_inputs(
+    events: Vec<TopicEvent>,
+    principal_id: PrincipalId,
+    occurred_at: i64,
+) -> Vec<EventInput> {
+    events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                ActorId::Principal(principal_id),
+                occurred_at,
+            )
+        })
+        .collect()
+}
+
+/// Profiles this write newly notifies: distinct resolved targets not already
+/// mentioned by the revision it replaces.
+fn distinct_new_mention_targets(
+    mentions: &[content_reference::MentionCandidate],
+    previous: &[content_reference::ProfileMention],
+) -> u32 {
+    let already: std::collections::BTreeSet<Uuid> =
+        previous.iter().map(|mention| mention.profile_id).collect();
+    mentions
+        .iter()
+        .map(|mention| mention.profile_id)
+        .filter(|profile_id| !already.contains(profile_id))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len() as u32
 }
 
 fn forum_reject_api_error(reject: ForumReject) -> ApiError {

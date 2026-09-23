@@ -2,6 +2,8 @@
 mod replacement_candidate;
 #[path = "vertical/signup_origin.rs"]
 mod signup_origin;
+#[path = "vertical/posting_budget.rs"]
+mod posting_budget;
 mod support;
 
 use api::{

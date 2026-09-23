@@ -420,6 +420,10 @@ pub enum Reject {
     /// Optimistic-concurrency conflict — reload, revalidate, RETRY (bounded).
     #[error("stream conflict (retryable)")]
     StreamConflict,
+    /// The author's posting budget is exhausted. Retry the same command after
+    /// `retry_after_seconds`; nothing was appended and no receipt was stored.
+    #[error("posting rate limit reached; retry in {retry_after_seconds}s")]
+    RateLimited { retry_after_seconds: i64 },
     /// The command id was already committed for a different command payload.
     #[error("command id already used for a different payload")]
     CommandIdConflict,
@@ -483,6 +487,16 @@ pub enum Reject {
 impl Reject {
     /// Whether the caller should reload + revalidate + retry (bounded).
     pub fn is_retryable(&self) -> bool {
-        matches!(self, Reject::StreamConflict)
+        matches!(self, Reject::StreamConflict | Reject::RateLimited { .. })
+    }
+
+    /// Seconds the caller must wait before a retry can succeed.
+    pub fn retry_after_seconds(&self) -> Option<i64> {
+        match self {
+            Reject::RateLimited {
+                retry_after_seconds,
+            } => Some(*retry_after_seconds),
+            _ => None,
+        }
     }
 }

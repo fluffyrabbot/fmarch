@@ -14,19 +14,24 @@ use trust_safety::{
 use uuid::Uuid;
 
 use crate::{
-    fold_moderation_event, moderation_domain_error, ModerationReportReceiptRow, ProjectionError,
+    charge_posting_budget_in_tx, fold_moderation_event, moderation_domain_error,
+    ModerationReportReceiptRow, PostingAdmission, PostingCharge, PostingStanding, PostingSurface,
+    ProjectionError,
 };
 
 /// Submit a public-content report under one transaction-scoped target lock.
-/// The lock makes case creation, active-report deduplication, and the bounded
-/// per-reporter rate check one atomic decision.
+/// The lock makes case creation and active-report deduplication one atomic
+/// decision; the reporter's posting budget is charged in the same transaction.
+#[allow(clippy::too_many_arguments)]
 pub async fn submit_moderation_report(
     pool: &PgPool,
     target: ModerationTarget,
     report_id: Uuid,
     reporter_principal_id: PrincipalId,
+    reporter_standing: PostingStanding,
     reason: ReportReasonFamily,
     details: String,
+    admission: &PostingAdmission,
     occurred_at: i64,
 ) -> Result<ModerationReportReceiptRow, ProjectionError> {
     let mut tx = pool.begin().await?;
@@ -41,16 +46,18 @@ pub async fn submit_moderation_report(
         .execute(&mut *tx)
         .await?;
     let evidence = capture_moderation_evidence(&mut tx, &target).await?;
-    let recent: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM moderation_report WHERE reporter_principal_id = $1 AND submitted_at >= $2",
+    charge_posting_budget_in_tx(
+        &mut tx,
+        admission,
+        &PostingCharge {
+            principal_id: reporter_principal_id,
+            surface: PostingSurface::ModerationReport,
+            new_mention_targets: 0,
+            standing: reporter_standing,
+        },
+        occurred_at,
     )
-    .bind(reporter_principal_id.as_uuid())
-    .bind(occurred_at.saturating_sub(86_400))
-    .fetch_one(&mut *tx)
     .await?;
-    if recent >= 10 {
-        return Err(ProjectionError::ModerationReportRateLimited);
-    }
 
     let existing = moderation_case_state_for_target(&mut tx, &target).await?;
     if let Some(state) = &existing {
