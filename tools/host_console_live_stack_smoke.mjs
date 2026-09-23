@@ -5048,9 +5048,6 @@ async function driveModeratorBrowser(
   }
 
   const deadlineLabel = await page.getByTestId("host-console-deadline").innerText();
-  const occupantLabel = await page
-    .getByTestId("host-console-slot-occupant")
-    .innerText();
   const historyLabel = await page.getByTestId("host-console-history").innerText();
   if (deadlineLabel.trim() !== actionEvidence.find((action) => action.id === "extend_deadline").liveDelivery.expectedLabel) {
     throw new Error(`deadline label did not update from real API: ${deadlineLabel}`);
@@ -5062,11 +5059,29 @@ async function driveModeratorBrowser(
   const replacementSlot = replacementState.slots?.find((slot) => slot.slot_id === "slot-7");
   if (
     !replacementSlot?.public_name ||
-    replacementSlot.assigned_principal_id !== PLAYER_ROWAN_PRINCIPAL_ID ||
-    occupantLabel.trim() !== replacementSlot.public_name
+    replacementSlot.assigned_principal_id !== PLAYER_ROWAN_PRINCIPAL_ID
   ) {
-    throw new Error(`replacement persona label did not update from real API: ${occupantLabel}`);
+    throw new Error(`replacement did not reach the real API: ${JSON.stringify(replacementSlot)}`);
   }
+  // The occupant fact renders from the live host projection, which converges
+  // after the replacement resync; require convergence to the API's persona
+  // name rather than sampling the DOM once.
+  const occupantLabel = await page
+    .waitForFunction(
+      (expected) => {
+        const text = document.querySelector('[data-testid="host-console-slot-occupant"]')?.innerText?.trim();
+        return text === expected ? text : false;
+      },
+      replacementSlot.public_name,
+      { timeout: 15_000 },
+    )
+    .then((handle) => handle.jsonValue())
+    .catch(async () => {
+      const rendered = await page.getByTestId("host-console-slot-occupant").innerText();
+      throw new Error(
+        `replacement persona label did not converge to the real API: rendered=${JSON.stringify(rendered)} api=${JSON.stringify(replacementSlot.public_name)} slot=${JSON.stringify(replacementSlot)}`,
+      );
+    });
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
   }
