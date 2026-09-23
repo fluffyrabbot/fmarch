@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 49,
+    complete: 50,
     partial: 1,
-    open: 7,
+    open: 6,
     blocked: 0,
     deferred: 0,
     total: 57,
@@ -41,8 +41,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  // Signup linkage is complete; the 2026-09-22 forum readiness gaps remain
-  // stated open product items.
+  // Signup linkage and posting budgets are complete; the other 2026-09-22
+  // forum readiness gaps remain stated open product items.
   assert.equal(summary.productCapabilitiesComplete, false);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
@@ -57,6 +57,11 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   );
   assert.equal(
     registry.items.find((item) => item.id === "product.community.forum-editing-curation")
+      ?.status,
+    "complete",
+  );
+  assert.equal(
+    registry.items.find((item) => item.id === "product.community.posting-rate-limits")
       ?.status,
     "complete",
   );
