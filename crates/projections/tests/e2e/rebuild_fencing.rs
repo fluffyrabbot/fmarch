@@ -271,8 +271,10 @@ impl CommunityFixture {
                     },
                     Uuid::new_v4(),
                     principal,
+                    projections::PostingStanding::default(),
                     ReportReasonFamily::Harassment,
                     "concurrent moderation".into(),
+                    &projections::PostingAdmission::Unenforced,
                     10,
                 )
                 .await

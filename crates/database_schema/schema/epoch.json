@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "00d762d5934f70d4ecf747df99141716798c6307364b4527af2daf0a2fb917db",
+  "current_schema_sha256": "dff8b5aa9307bee19057500d0fdeff70823be92260867af2044690ff939194fa",
   "migrations": [
     {
       "version": 1,
@@ -82,7 +82,12 @@
       "version": 16,
       "filename": "0016_game_origin_topic.sql",
       "sha256": "8a57a7996a89b875aa8a213f201444cc7b4045a0facc16d87ac36ffc1dad9da5"
+    },
+    {
+      "version": 17,
+      "filename": "0017_posting_budget_window.sql",
+      "sha256": "1e6a4a2104d559d0b415140eb6baa916dcc95e2e0835a2c47cffc783e67f6371"
     }
   ],
-  "authority_fingerprint_sha256": "5f8d357bc2c17582eab6bdd414dd08dbd815ff9de52f8c811f971d824c9a34c1"
+  "authority_fingerprint_sha256": "241aca40d8d0c5b1626fc0f0d326c5f6e4be67e12543095d478ebd4fbfb1eb53"
 }

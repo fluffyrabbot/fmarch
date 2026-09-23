@@ -276,8 +276,10 @@ async fn open_and_hide(
         },
         Uuid::new_v4(),
         reporter,
+        projections::PostingStanding::default(),
         ReportReasonFamily::Spam,
         format!("{} visibility lattice contract", fixture.label),
+        &projections::PostingAdmission::Unenforced,
         occurred_at,
     )
     .await

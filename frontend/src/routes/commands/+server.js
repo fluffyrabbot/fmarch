@@ -19,8 +19,9 @@ export async function POST({ cookies, fetch, locals, request }) {
     body: await request.arrayBuffer(),
     signal: request.signal,
   });
-  return new Response(response.body, {
-    status: response.status,
-    headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
-  });
+  const headers = { "content-type": response.headers.get("content-type") ?? "application/json" };
+  // A rate-limited command names its wait; the composer needs it to hold the draft.
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter !== null) headers["retry-after"] = retryAfter;
+  return new Response(response.body, { status: response.status, headers });
 }

@@ -2662,8 +2662,10 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         target.clone(),
         report_id,
         reporter,
+        projections::PostingStanding::default(),
         ReportReasonFamily::Harassment,
         "direct abuse".into(),
+        &projections::PostingAdmission::Unenforced,
         10,
     )
     .await
@@ -2675,8 +2677,10 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             target.clone(),
             Uuid::new_v4(),
             reporter,
+            projections::PostingStanding::default(),
             ReportReasonFamily::Harassment,
             "duplicate".into(),
+            &projections::PostingAdmission::Unenforced,
             11,
         )
         .await,
@@ -2791,8 +2795,10 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         target,
         Uuid::new_v4(),
         reporter,
+        projections::PostingStanding::default(),
         ReportReasonFamily::Harassment,
         "new report after restoration".into(),
+        &projections::PostingAdmission::Unenforced,
         14,
     )
     .await
@@ -2871,7 +2877,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
             2,
         ),
     ];
-    for index in 0..11 {
+    for index in 0..12 {
         events.push(EventInput::new(
             "PostSubmitted",
             1,
@@ -2890,38 +2896,61 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         .await
         .unwrap()
         .posts;
-    assert_eq!(posts.len(), 11);
-    for (index, post) in posts.iter().take(10).enumerate() {
+    assert_eq!(posts.len(), 12);
+    let admission = projections::PostingAdmission::Enforced(projections::PostingBudgetPolicy::default());
+    let member = projections::PostingStanding::default();
+    let report = |source_seq: i64, standing: projections::PostingStanding, at: i64| {
         projections::submit_moderation_report(
             &pool,
             ModerationTarget {
-                public: PublicContentRef::new(game, post.source_seq),
+                public: PublicContentRef::new(game, source_seq),
             },
             Uuid::new_v4(),
             reporter,
+            standing,
             ReportReasonFamily::Other,
             String::new(),
-            100 + index as i64,
+            &admission,
+            at,
         )
-        .await
-        .unwrap();
+    };
+    for (index, post) in posts.iter().take(10).enumerate() {
+        report(post.source_seq, member, 100 + index as i64).await.unwrap();
     }
-    let rejected = projections::submit_moderation_report(
-        &pool,
-        ModerationTarget {
-            public: PublicContentRef::new(game, posts[10].source_seq),
-        },
-        Uuid::new_v4(),
-        reporter,
-        ReportReasonFamily::Other,
-        String::new(),
-        111,
+    let rejected = report(posts[10].source_seq, member, 111).await;
+    let Err(ProjectionError::PostingBudgetExceeded(exceeded)) = rejected else {
+        panic!("the eleventh report inside one hour must exhaust the budget: {rejected:?}");
+    };
+    assert_eq!(exceeded.budget, projections::PostingBudget::ReportHour);
+    assert_eq!(exceeded.retry_after_seconds, 100 + 3_600 - 111);
+    let unfiled: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM moderation_report WHERE reporter_principal_id = $1",
     )
-    .await;
-    assert!(matches!(
-        rejected,
-        Err(ProjectionError::ModerationReportRateLimited)
-    ));
+    .bind(reporter.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(unfiled, 10, "a rejected report appends nothing");
+
+    // Moderation standing is exempt from the report budget; members are not.
+    let moderator = projections::PostingStanding {
+        hosts_this_game: false,
+        global_moderator: true,
+    };
+    report(posts[10].source_seq, moderator, 112).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>(
+            "SELECT used FROM posting_budget_window WHERE principal_id = $1 AND budget = 'report_hour'",
+        )
+        .bind(reporter.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        10,
+        "the rejected attempt rolled its charge back"
+    );
+    // The fixed window resets: the member files again once it has elapsed.
+    report(posts[11].source_seq, member, 100 + 3_600).await.unwrap();
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -3074,8 +3103,10 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         moderation_target,
         Uuid::new_v4(),
         reporter,
+        projections::PostingStanding::default(),
         ReportReasonFamily::Spam,
         "spam".into(),
+        &projections::PostingAdmission::Unenforced,
         9,
     )
     .await
@@ -4542,4 +4573,126 @@ async fn member_inbox_cursor_rebuild_is_deterministic(pool: sqlx::PgPool) {
     .await
     .unwrap();
     assert_eq!(row, replayed);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn posting_budget_windows_reject_reset_and_roll_back_atomically(pool: sqlx::PgPool) {
+    use projections::{
+        charge_posting_budget_in_tx, PostingAdmission, PostingBudget, PostingBudgetPolicy,
+        PostingCharge, PostingStanding, PostingSurface,
+    };
+    let author = auxiliary_principal(0x2401);
+    let admission = PostingAdmission::Enforced(PostingBudgetPolicy {
+        posts_per_minute: 2,
+        posts_per_hour: 3,
+        mention_targets_per_ten_minutes: 8,
+        ..PostingBudgetPolicy::default()
+    });
+    let post = |mentions| PostingCharge {
+        principal_id: author,
+        surface: PostingSurface::DiscussionPost,
+        new_mention_targets: mentions,
+        standing: PostingStanding::default(),
+    };
+    let charge = |charge: PostingCharge, now: i64| {
+        let pool = pool.clone();
+        let admission = admission.clone();
+        async move {
+            let mut tx = pool.begin().await.unwrap();
+            let result = charge_posting_budget_in_tx(&mut tx, &admission, &charge, now).await;
+            if result.is_ok() {
+                tx.commit().await.unwrap();
+            }
+            result
+        }
+    };
+    let used = |budget: &'static str| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i32>(
+                "SELECT used FROM posting_budget_window WHERE principal_id = $1 AND budget = $2",
+            )
+            .bind(author.as_uuid())
+            .bind(budget)
+            .fetch_optional(&pool)
+            .await
+            .unwrap()
+        }
+    };
+
+    charge(post(0), 1_000).await.unwrap();
+    charge(post(0), 1_030).await.unwrap();
+    let Err(ProjectionError::PostingBudgetExceeded(exceeded)) = charge(post(0), 1_045).await else {
+        panic!("the third post inside one minute must exhaust post_minute");
+    };
+    assert_eq!(exceeded.budget, PostingBudget::PostMinute);
+    assert_eq!(exceeded.retry_after_seconds, 1_000 + 60 - 1_045);
+    assert_eq!(used("post_minute").await, Some(2), "a rejection rolls back every draw");
+    assert_eq!(used("post_hour").await, Some(2));
+
+    // The minute window resets, but the hourly window still binds: the longest
+    // exhausted wait is the one reported.
+    charge(post(0), 1_060).await.unwrap();
+    let Err(ProjectionError::PostingBudgetExceeded(exceeded)) = charge(post(0), 1_130).await else {
+        panic!("the fourth post inside one hour must exhaust post_hour");
+    };
+    assert_eq!(exceeded.budget, PostingBudget::PostHour);
+    assert_eq!(exceeded.retry_after_seconds, 1_000 + 3_600 - 1_130);
+
+    // Mention targets are units, not requests, and share the write's verdict.
+    let mentions = PostingCharge {
+        principal_id: author,
+        surface: PostingSurface::DiscussionEdit,
+        new_mention_targets: 8,
+        standing: PostingStanding::default(),
+    };
+    charge(mentions, 1_200).await.unwrap();
+    assert!(matches!(
+        charge(PostingCharge { new_mention_targets: 1, ..mentions }, 1_201).await,
+        Err(ProjectionError::PostingBudgetExceeded(exceeded))
+            if exceeded.budget == PostingBudget::MentionTenMinutes
+    ));
+    assert_eq!(used("edit_ten_minutes").await, Some(1));
+
+    // Unenforced admission and exempt standing leave no rows at all.
+    let other = auxiliary_principal(0x2402);
+    let host_post = PostingCharge {
+        principal_id: other,
+        surface: PostingSurface::GameThreadPost,
+        new_mention_targets: 3,
+        standing: PostingStanding {
+            hosts_this_game: true,
+            global_moderator: false,
+        },
+    };
+    for _ in 0..5 {
+        charge(host_post, 2_000).await.unwrap();
+    }
+    let mut tx = pool.begin().await.unwrap();
+    for _ in 0..5 {
+        charge_posting_budget_in_tx(&mut tx, &PostingAdmission::Unenforced, &post(4), 2_000)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
+    let rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM posting_budget_window WHERE principal_id = $1",
+    )
+    .bind(other.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows, 0);
+
+    // Idle windows of other principals are garbage once the widest window passes.
+    charge(
+        PostingCharge {
+            principal_id: other,
+            ..post(0)
+        },
+        10_000,
+    )
+    .await
+    .unwrap();
+    assert_eq!(used("post_hour").await, None, "the author's idle rows were collected");
 }
