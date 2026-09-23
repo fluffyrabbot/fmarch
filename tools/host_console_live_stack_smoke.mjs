@@ -5059,7 +5059,10 @@ async function driveModeratorBrowser(
   const replacementSlot = replacementState.slots?.find((slot) => slot.slot_id === "slot-7");
   if (
     !replacementSlot?.public_name ||
-    replacementSlot.assigned_principal_id !== PLAYER_ROWAN_PRINCIPAL_ID
+    !replacementSlot.assigned_principal_id ||
+    // fetchJson restores fixture aliases, so normalize before comparing ids.
+    fixturePrincipalAuthorityId(replacementSlot.assigned_principal_id)
+      !== PLAYER_ROWAN_PRINCIPAL_ID
   ) {
     throw new Error(`replacement did not reach the real API: ${JSON.stringify(replacementSlot)}`);
   }
