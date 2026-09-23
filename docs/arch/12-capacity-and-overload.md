@@ -109,6 +109,51 @@ or cancelled command cannot starve logout, account/session disablement, or signi
 Pre-commit expiry and commit ambiguity both return retryable `503` responses that require the caller
 to reuse the exact command id; idempotent receipts resolve the latter safely.
 
+## Posting budgets
+
+Capacity admission bounds concurrency, not frequency: one hostile or compromised
+member could still flood a topic, a game thread, the report queue, or mention
+delivery at the speed of sequential requests. Member-authored writes therefore
+draw from per-principal fixed-window budgets (`projections::posting_budget`).
+The windows are part of each budget's identity; the counts are runtime
+configuration, and the defaults are the owner-ratified moderate policy:
+
+| Budget | Window | Default | Environment variable | Drawn by |
+|---|---:|---:|---|---|
+| `post_minute` | 60 s | 10 | `FMARCH_POSTING_POSTS_PER_MINUTE` | Discussion topic (its opening post), discussion reply, game-thread `SubmitPost` |
+| `post_hour` | 1 h | 120 | `FMARCH_POSTING_POSTS_PER_HOUR` | Same as `post_minute`; must not be below it |
+| `topic_hour` | 1 h | 5 | `FMARCH_POSTING_TOPICS_PER_HOUR` | Discussion topic creation |
+| `edit_ten_minutes` | 10 min | 20 | `FMARCH_POSTING_EDITS_PER_TEN_MINUTES` | Discussion post edit |
+| `report_hour` | 1 h | 10 | `FMARCH_POSTING_REPORTS_PER_HOUR` | Moderation report |
+| `mention_ten_minutes` | 10 min | 20 | `FMARCH_POSTING_MENTION_TARGETS_PER_TEN_MINUTES` | One unit per distinct profile or slot a write newly notifies; an edit counts only targets its previous revision did not mention. Must admit one full post (8 mentions). |
+
+Exemptions follow the author's standing, decided once in `posting_draws`:
+
+- A host or cohost writing their own game's thread is not budgeted. Only a
+  capability held for that game counts; the `GlobalAdmin`/`GlobalMod`
+  escalation that satisfies `HostOf` for authority does not exempt anyone.
+- A `GlobalMod` or `GlobalAdmin` is exempt from the edit and report budgets,
+  which moderation work uses, and budgeted on posting and mentions like any
+  member.
+- Retraction, topic curation, and moderation actions are not budgeted.
+
+The charge runs inside the write's own transaction, after validation and before
+the append, as an upsert on one `posting_budget_window` row per
+`(principal, budget)`. Concurrent writers serialize on that row, so the check
+and the increment are one decision. An over-budget write, a stream conflict,
+or any later failure rolls the whole transaction back: nothing is appended, no
+command receipt is stored, and no budget is consumed. Rows idle for longer than
+the widest window are removed opportunistically, 256 per charge.
+
+Rejection is `429` + `Retry-After` (seconds until the exhausted window resets)
+with the typed code `RateLimited` and `retryable: true`. It is flow control, not
+a sanction: it records no event and no audit row. Discussion forms return the
+unsent title, body, and mentions with the rejection and reopen their composer
+with them. A game post's retry control keeps the same command id and body, and
+retrying it after the wait is safe because the rejected attempt stored nothing.
+In-process command entry points (`commands::handle`, fixtures, seeders) run
+unenforced; only the authenticated HTTP boundary charges budget.
+
 ## Query and command invariants
 
 - Public thread, discussion, game-index, and search responses have server-clamped page sizes.

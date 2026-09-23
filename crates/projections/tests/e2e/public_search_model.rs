@@ -918,8 +918,10 @@ async fn apply_mutation(
                     },
                     Uuid::new_v4(),
                     *reporter,
+                    projections::PostingStanding::default(),
                     ReportReasonFamily::Spam,
                     "stateful model report".into(),
+                    &projections::PostingAdmission::Unenforced,
                     100 + step as i64,
                 )
                 .await

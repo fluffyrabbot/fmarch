@@ -53,6 +53,7 @@ pub(super) struct CommandHttpState {
     command_slots: Arc<Semaphore>,
     command_principal_slots: Arc<Mutex<HashMap<principal::PrincipalId, Weak<Semaphore>>>>,
     command_lock_timeout: Duration,
+    posting_admission: projections::PostingAdmission,
     authority_transaction_slots: Arc<Semaphore>,
 }
 
@@ -74,6 +75,7 @@ impl CommandHttpState {
             command_slots: state.command_slots.clone(),
             command_principal_slots: state.command_principal_slots.clone(),
             command_lock_timeout: state.command_lock_timeout,
+            posting_admission: state.posting_admission.clone(),
             authority_transaction_slots: state.authority_transaction_slots.clone(),
         }
     }
@@ -409,6 +411,7 @@ async fn apply_authorized_command_in_tx(
         &Principal::authenticated(authorization.principal_id()),
         command_id,
         command,
+        &state.posting_admission,
     )
     .await
     .map_err(|reject| {
@@ -798,14 +801,19 @@ fn command_commit_outcome_unknown_response(id: u64) -> Response {
 }
 
 fn command_retryable_reject_response(id: u64, reject: commands::Reject) -> Response {
-    (
+    let retry_after_seconds = reject.retry_after_seconds();
+    let mut response = (
         command_reject_status(&reject),
         Json(ServerEnvelope::new(
             id,
             ServerMsg::Reject(RejectMsg::from(reject)),
         )),
     )
-        .into_response()
+        .into_response();
+    if let Some(seconds) = retry_after_seconds {
+        crate::insert_retry_after(response.headers_mut(), seconds);
+    }
+    response
 }
 
 fn command_api_error_response(id: u64, error: ApiError) -> Response {
@@ -1031,6 +1039,12 @@ fn protocol_reject(message: impl Into<String>) -> RejectMsg {
 }
 
 pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
+    if let Some(retry_after_seconds) = reject.retry_after_seconds() {
+        return ApiError::RateLimited {
+            retry_after_seconds,
+            message: reject.to_string(),
+        };
+    }
     let status = command_reject_status(&reject);
     let error = RejectCode::from(&reject);
     let message = reject.to_string();
@@ -1048,6 +1062,7 @@ fn command_reject_status(reject: &commands::Reject) -> StatusCode {
         commands::Reject::UnknownGame
         | commands::Reject::UnknownSlot
         | commands::Reject::UnknownDayEvent => StatusCode::NOT_FOUND,
+        commands::Reject::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
         commands::Reject::NotAuthorized
         | commands::Reject::NotHost
         | commands::Reject::CohostPermissionDenied(_)
