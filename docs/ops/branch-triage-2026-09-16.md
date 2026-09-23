@@ -45,3 +45,37 @@ for b in $(git branch -r --no-merged origin/main); do
   git cherry origin/main $b
 done
 ```
+
+## Disposition applied — 2026-09-22
+
+The owner approved every `delete` disposition above. Before deletion each tip
+was re-read and `git cherry origin/main <branch>` matched the finding recorded
+here (zero `+` lines for cherry-equivalent branches; the explained residual for
+superseded and benchmark branches). The fourteen remote branches were deleted
+with `git push origin --delete`, and the local `thinkpad/reconcile-20260827`
+tracking ref with `git branch -dr`. Restore any of them from its tip:
+`git push origin <sha>:refs/heads/<branch>`.
+
+| Branch | Deleted tip |
+|---|---|
+| `feat/modular-themes` | `a9848d66` |
+| `ops/release-authority-20260907` | `9bb24462` |
+| `reliability/day-event-health-20260908` | `33af0a1d` |
+| `reliability/rebuild-fencing-20260908` | `8eeb34f0` |
+| `reliability/runtime-supervisor-20260907` | `298847e0` |
+| `reliability/identity-delivery-saga-20260907` | `b0ba8157` |
+| `reliability/media-operations-20260907` | `9279f7b9` |
+| `ops/coverage-gates-20260907` | `5c351705` |
+| `ops/coverage-gates-final-20260907` | `ee83137a` |
+| `ops/coverage-gates-integrated-20260907` | `1bc64241` |
+| `proof/benchmark-authentication-20260908` | `6749436e` |
+| `proof/benchmark-presentation-20260908` | `6bbe2f5a` |
+| `proof/benchmark-scheduler-20260908` | `a8e9f3b5` |
+| `proof/benchmark-wire-20260908` | `7400aa3f` |
+| `thinkpad/reconcile-20260827` (tracking ref) | `0b3a6a65` |
+
+Not covered by this triage: 24 further remote branches that are
+cherry-equivalent to `main` and 11 dated 2026-09-16 or later that carry
+unlanded work, chief among them `fix/weekly-release-20260918` (49 commits on
+`fed835f9`, including signup threads and RFC 0006 step 2). Those need their
+own triage.
