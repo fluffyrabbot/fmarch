@@ -2430,8 +2430,8 @@
       "order": 130,
       "title": "Per-member posting rate limits",
       "execution_class": "code",
-      "status": "open",
-      "summary": "Posting has no rate control. The only rate limits in the runtime govern authentication failures (crates/api/src/authentication.rs), and capacity admission (docs/arch/12-capacity-and-overload.md) bounds concurrency: a global in-flight ceiling plus a one-command-per-principal fence. Neither bounds how often a member may post, so one compromised or hostile account can flood a discussion topic, a game thread, a report queue, or mention delivery at the speed of sequential requests. Closed admission lowers the probability but not the blast radius. The limit belongs at the application boundary as a typed, per-principal, per-surface budget with a retryable rejection; it is not a moderation sanction and records no durable event.",
+      "status": "complete",
+      "summary": "Member-authored writes draw from per-principal fixed-window budgets (projections::posting_budget), charged inside the write's own transaction after validation and before the append, so a rejected, conflicting, or rolled-back write appends nothing, stores no command receipt, and consumes no budget. Owner-ratified moderate defaults: 10 posts/minute and 120/hour (discussion topics, replies, game-thread SubmitPost), 5 topics/hour, 20 edits/10 min, 10 reports/hour, and 20 newly notified mention targets/10 min; counts are FMARCH_POSTING_* runtime configuration validated at startup. Hosts and cohosts are exempt only in their own game thread (a held HostOf/CohostOf, never the global escalation); GlobalMod/GlobalAdmin are exempt from the edit and report budgets only. Over-budget writes are 429 + Retry-After with the typed retryable RateLimited code; discussion composers return the unsent draft and game posts keep their retry command. Rate limiting is flow control, not a sanction, and records no event.",
       "complete_when": [
         "Topic creation, discussion posts, game-thread posts, post edits, moderation reports, and mention fan-out each enforce a declared per-principal budget; an over-budget request receives a typed retryable rejection carrying Retry-After that the composer surfaces without losing the draft; hosts and GlobalMods have a documented exemption policy; the budgets are runtime configuration with redacted debug output; and command-level and seeded browser proofs cover acceptance, rejection, window reset, and exemption."
       ],
@@ -2444,11 +2444,15 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/api/src/authentication.rs"
+          "value": "crates/projections/src/posting_budget.rs"
         },
         {
           "kind": "source",
-          "value": "crates/api/src/runtime_config.rs"
+          "value": "crates/database_schema/migrations/0017_posting_budget_window.sql"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
         },
         {
           "kind": "source",
@@ -2456,16 +2460,43 @@
         },
         {
           "kind": "source",
+          "value": "crates/api/src/command_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/runtime_config.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical/posting_budget.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/e2e.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/lib/server/discussion-mutation-failure.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/discussion_role_proof.mjs"
+        },
+        {
+          "kind": "source",
           "value": "docs/arch/12-capacity-and-overload.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:database-schema:static"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-discussion:local"
         }
       ],
-      "remaining": [
-        "Owner decision: default budgets per surface (for example posts per minute and topics per hour) and whether game hosts and cohosts are exempt inside their own games.",
-        "Add a bounded per-principal rate store, reusing the authentication limiter's window and lockout shape rather than a second mechanism, and a typed rate-limited rejection code on the wire.",
-        "Enforce the budget at discussion topic/post/edit, game thread post, moderation report, and mention admission, before any event is appended.",
-        "Surface Retry-After in the discussion and game composers while retaining the unsent body, and extend the discussion and core-live role proofs with an over-budget case.",
-        "Document the budgets and the rejection in docs/arch/12-capacity-and-overload.md."
-      ]
+      "remaining": [],
+      "decision_trigger": "Revisit the default budgets once hosted beta traffic shows real posting rates, or if a legitimate game format (fast-paced day phases) routinely approaches post_minute."
     },
     {
       "id": "product.community.batched-citation-previews",
