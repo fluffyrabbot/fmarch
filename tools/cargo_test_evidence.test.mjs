@@ -64,3 +64,35 @@ test("cargo evidence persists the named passed body", async () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("cargo evidence reads libtest results from stdout when cargo stderr lands mid-line", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "fmarch-cargo-evidence-"));
+  try {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    const promise = runCargoTestEvidence({
+      argv: ["--required", "first_case", "--", "cargo", "test"],
+      outputDir: directory,
+      env: {},
+      spawnCommand: () => child,
+    });
+    // libtest prints the name, runs the body, then prints the verdict; cargo's
+    // status lines arrive on stderr and may be read in between.
+    child.stdout.write("running 1 test\ntest first_case ... ");
+    await new Promise((resolveTick) => setImmediate(resolveTick));
+    child.stderr.write("     Running tests/next_binary.rs (target/debug/deps/next_binary)\n");
+    await new Promise((resolveTick) => setImmediate(resolveTick));
+    child.stdout.write("ok\n");
+    child.stdout.end();
+    child.stderr.end();
+    await new Promise((resolveTick) => setImmediate(resolveTick));
+    child.emit("close", 0, null);
+    assert.equal(await promise, 0);
+    const report = JSON.parse(readFileSync(join(directory, "cargo-test-evidence.json"), "utf8"));
+    assert.equal(report.status, "passed");
+    assert.deepEqual(report.required_tests, [{ required: "first_case", observed: "first_case" }]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

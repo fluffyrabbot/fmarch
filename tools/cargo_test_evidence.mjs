@@ -53,26 +53,27 @@ export async function runCargoTestEvidence({
   mkdirSync(outputDir, { recursive: true });
   const started = now();
   let testBodyStarted = null;
-  let output = "";
+  // libtest writes result lines to stdout while cargo writes status lines to
+  // stderr. The pipes are read independently, so a merged transcript can split
+  // "test NAME ... ok" around a stderr line; parse results from stdout alone.
+  let testOutput = "";
   const child = spawnCommand(command[0], command.slice(1), {
     env: { ...env, CARGO_TERM_COLOR: "never" },
     stdio: ["inherit", "pipe", "pipe"],
   });
-  for (const [stream, destination] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
-    stream?.on("data", (chunk) => {
-      const text = chunk.toString();
-      output += text;
-      if (testBodyStarted === null && /(?:^|\n)running \d+ tests?(?:\n|$)/u.test(output)) {
-        testBodyStarted = now();
-      }
-      destination.write(chunk);
-    });
-  }
+  child.stdout?.on("data", (chunk) => {
+    testOutput += chunk.toString();
+    if (testBodyStarted === null && /(?:^|\n)running \d+ tests?(?:\n|$)/u.test(testOutput)) {
+      testBodyStarted = now();
+    }
+    process.stdout.write(chunk);
+  });
+  child.stderr?.on("data", (chunk) => process.stderr.write(chunk));
   const result = await new Promise((resolveResult, rejectResult) => {
     child.once("error", rejectResult);
     child.once("close", (status, signal) => resolveResult({ status, signal }));
   });
-  const passed = passedRustTestNames(output);
+  const passed = passedRustTestNames(testOutput);
   let claims = [];
   let claimError = null;
   try {
