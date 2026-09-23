@@ -1,7 +1,9 @@
 # Cachy canonical verification
 
-Status: qualified on 2026-09-06. fluffycachy is canonical for ordinary Linux
-application verification; native macOS/Safari acceptance remains separate.
+Status: qualified on 2026-09-06; requalified for Node 26.9.0 on 2026-09-23
+(see [Node 26.9.0 requalification](#node-2690-requalification)). fluffycachy is
+canonical for ordinary Linux application verification; native macOS/Safari
+acceptance remains separate.
 
 ## Qualification evidence
 
@@ -266,3 +268,31 @@ Historical and negative selection cases live in
 the strict `CommandMsg` regression `32e8623b`, live protocol v3, and the scheduler
 checkpoint `f64bed5b`. Sprint qualification retains full sweeps; release and
 periodic exhaustive qualification retain forced full sweeps.
+
+### Node 26.9.0 requalification
+
+CachyOS upgraded `nodejs` 26.8.1 → 26.9.0 on 2026-09-21. The exact version
+assertions in `scripts/provision-linux-proof.sh` and `scripts/linux-proof.sh`
+then failed every job at setup without output. The pin moved deliberately in
+`18159a23`; the first forced audit at that commit exposed two defects that
+were fixed before qualification: a stdout/stderr interleaving race in
+`tools/cargo_test_evidence.mjs` that reported a passing required test as absent
+(`d6a94d0e`), and advisory GHSA-9rgm-9g3h-6x36 in `devalue` (`f7245b26`).
+
+Code checkpoint: `f7245b265e4c6afa85e289a2a78ce4904bc3d0d1`.
+Environment SHA-256: `d64ea250b1f4048214c96a06627052ddd916da9b19851b16767a23d1ce9c3ab6`.
+Kernel 6.18.48-cachyos-lts, Rust 1.95.0, Node 26.9.0, npm 12.0.2.
+
+| Sweep | Signed fleet job | Coverage | Reused lanes | Elapsed |
+|---|---|---|---:|---:|
+| Forced audit | `20260923T012154Z-3341f5de` | 70/70 passed | 0 | 37.87 min |
+| Warm full | `20260923T020024Z-42d9fe7a` | 70/70 passed | 69 | 0.01 min |
+
+Deviation from qualification step 1: both sweeps reused the existing
+`fmarch-canonical-lts-v1` build/database root instead of a fresh one, because
+the Cachy home volume had 31 GiB free (95% used) and the retained
+`fmarch-canonical-v1` diagnostic root (47 GiB) was not approved for removal.
+The Node change alters the environment identity, so no lane evidence from the
+previous environment could be reused, and the forced audit executed every
+lane. Step 4 (MeSH contention and interrupted-job recovery) was not re-run;
+this change touches no admission, lock, or recovery code.
