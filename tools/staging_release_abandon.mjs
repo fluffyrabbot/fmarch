@@ -109,9 +109,11 @@ function assertRecoveryHistories(intent, histories, failure) {
 const recoveryStatus = document => document.failed_migration ? 'retired-after-failed-migration' : 'abandoned-before-deployment';
 
 function assertStopped(pid) {
-  assert.ok(Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid, 'invalid stopped coordinator PID');
-  try {process.kill(pid,0); assert.fail('coordinator PID is still alive');}
-  catch (error) {if(error.code !== 'ESRCH') throw error;}
+  if(pid !== null) {
+    assert.ok(Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid, 'invalid stopped coordinator PID');
+    try {process.kill(pid,0); assert.fail('coordinator PID is still alive');}
+    catch (error) {if(error.code !== 'ESRCH') throw error;}
+  }
   const processes = execFileSync('ps',['-axo','command='],{encoding:'utf8'});
   assert.equal(processes.split('\n').some(s=> /(?:^|\s)node\s+(?:\S*\/)?release_coordinator\.mjs(?:\s|$)/u.test(s)), false,
     'another local release coordinator is active');
@@ -155,7 +157,8 @@ export async function main(argv=process.argv.slice(2)) {
     else {assert.ok(['--lease','--commit','--stopped-pid','--confirm-stopped','--resume-fence','--failed-migrator','--failure-intent'].includes(argv[i]),'unknown recovery option');args[argv[i].slice(2)]=argv[++i];}
   }
   const token=assertFullCommit(args.lease), releaseCommit=assertFullCommit(args.commit);
-  const pid=Number(args['stopped-pid']);
+  const pid=args['stopped-pid'] === undefined ? null : Number(args['stopped-pid']);
+  assert.ok(pid !== null || args['failed-migrator'] || args['resume-fence'], 'pre-deployment abandonment requires the stopped PID');
   assert.equal(args['confirm-stopped'],token,'confirm all coordinators for this exact lease are stopped');
   assertStopped(pid);
   let fence=args['resume-fence'];

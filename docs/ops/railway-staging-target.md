@@ -699,8 +699,8 @@ archives the fence on `release-recoveries/staging-<original-lease>`, and deletes
 only the exact fence using an expected-value push. Any new deployment or error
 retains the fence. If interrupted after fencing, repeat the original arguments
 with `--apply --resume-fence <fence>`; it verifies the remote fence and resumes
-the same settle/evidence checks. Never use this procedure after a deployment
-exists, fabricate a missing intent, or generically delete a release lock.
+the same settle/evidence checks. The default mode cannot run after a deployment
+exists. Never fabricate a missing intent or generically delete a release lock.
 Recovery records live under `target/releases/staging/recoveries/` and are
 retained independently from checkout cleanup. A lost fence-publication response
 requires inspecting the remote lock before attempting recovery; a lost final
@@ -717,6 +717,9 @@ requires the exact operation's completion record.
 If the first migration fails before any API/frontend deployment and the release
 must be retired to repair a prerequisite, the same recovery command accepts
 `--failed-migrator <deployment-id> --failure-intent <generation-00-intent.json>`.
+If the completed coordinator process ID was not retained, this mode permits
+omitting `--stopped-pid`; the explicit all-host stopped confirmation, local
+process scan, remote fence, and settle interval remain mandatory.
 This mode requires exactly one release-window deployment: the specified migrator,
 with its original operation ID, image digest, canonical target, `NEVER` restart
 policy, and exactly one stopped `CRASHED` instance. It rejects later generations,
