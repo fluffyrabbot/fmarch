@@ -532,7 +532,7 @@ function validateHostedEnvironmentVariables({
     );
   }
 
-  validateHostedIdentityDelivery(`${environment} API`, api);
+  validateHostedIdentityDelivery(`${environment} API`, api, { frontendUrl });
   validateHostedRuntimeBudgets(`${environment} API`, api);
   assert.equal(
     frontend.FMARCH_API_BASE_URL,
@@ -733,7 +733,9 @@ function isCanonicalBase64Key(value) {
   }
 }
 
-function validateHostedIdentityDelivery(name, variables) {
+export const RESEND_EMAILS_ENDPOINT = "https://api.resend.com/emails";
+
+function validateHostedIdentityDelivery(name, variables, { frontendUrl } = {}) {
   const mode = variables.FMARCH_CLASSIC_AUTH;
   assert.ok(
     mode === "0" || mode === "1",
@@ -786,6 +788,38 @@ function validateHostedIdentityDelivery(name, variables) {
   assertSecretRelation(
     isStrongOpaqueSecret(variables.FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN),
     `${name} identity-delivery authentication token must be a non-placeholder value of at least 32 characters`,
+  );
+  const adapter = variables.FMARCH_IDENTITY_DELIVERY_ADAPTER ?? "http-json";
+  assert.ok(
+    ["http-json", "resend"].includes(adapter),
+    `${name} identity-delivery adapter must be http-json or resend`,
+  );
+  if (adapter === "http-json") {
+    assert.ok(
+      variables.FMARCH_IDENTITY_DELIVERY_SENDER === undefined &&
+        variables.FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN === undefined,
+      `${name} identity-delivery sender and link origin belong only to the resend adapter`,
+    );
+    return;
+  }
+  assert.equal(
+    variables.FMARCH_IDENTITY_DELIVERY_ENDPOINT,
+    RESEND_EMAILS_ENDPOINT,
+    `${name} resend identity delivery must post to ${RESEND_EMAILS_ENDPOINT}`,
+  );
+  const sender = variables.FMARCH_IDENTITY_DELIVERY_SENDER;
+  assert.ok(
+    typeof sender === "string" &&
+      sender === sender.trim() &&
+      /@[^@\s>]+\.[^@\s>]+>?$/u.test(sender) &&
+      !/[\u0000-\u001f\u007f]/u.test(sender) &&
+      !/(?:placeholder|example|replace[\s_-]*me)/iu.test(sender),
+    `${name} resend identity delivery needs a real single-line sender address`,
+  );
+  assert.equal(
+    variables.FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN,
+    `${new URL(frontendUrl).origin}/`,
+    `${name} identity-delivery links must point at the canonical frontend origin`,
   );
 }
 

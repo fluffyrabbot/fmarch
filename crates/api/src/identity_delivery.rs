@@ -13,6 +13,9 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
+mod resend;
+pub use resend::ResendIdentityDeliveryGateway;
+
 pub const LOCAL_DETERMINISTIC_PROVIDER_ID: &str = "local-deterministic";
 pub const DISABLED_PROVIDER_ID: &str = "disabled";
 

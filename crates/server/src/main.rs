@@ -951,7 +951,13 @@ fn identity_delivery_gateway_from_env(
     let total_timeout = optional_env("FMARCH_IDENTITY_DELIVERY_TOTAL_TIMEOUT_MS")?;
     let max_response_bytes = optional_env("FMARCH_IDENTITY_DELIVERY_MAX_RESPONSE_BYTES")?;
     let local_fail_first = optional_env("FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT")?;
+    let adapter = optional_env("FMARCH_IDENTITY_DELIVERY_ADAPTER")?;
+    let sender = optional_env("FMARCH_IDENTITY_DELIVERY_SENDER")?;
+    let link_origin = optional_env("FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN")?;
     let http_companion_configured = provider_id.is_some()
+        || adapter.is_some()
+        || sender.is_some()
+        || link_origin.is_some()
         || auth_token.is_some()
         || connect_timeout.is_some()
         || response_timeout.is_some()
@@ -1060,14 +1066,58 @@ fn identity_delivery_gateway_from_env(
                         .to_string(),
                 ));
             }
-            api::identity_delivery::HttpJsonIdentityDeliveryGateway::configured(
-                provider_id,
-                endpoint,
-                Some(auth_token),
-                timeouts,
-            )
-            .map(|gateway| std::sync::Arc::new(gateway) as _)
-            .map_err(invalid_runtime_config)
+            match adapter.as_deref().unwrap_or("http-json") {
+                "http-json" => {
+                    if sender.is_some() || link_origin.is_some() {
+                        return Err(invalid_runtime_config(
+                            "FMARCH_IDENTITY_DELIVERY_SENDER and FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN are valid only for the resend adapter"
+                                .to_string(),
+                        ));
+                    }
+                    api::identity_delivery::HttpJsonIdentityDeliveryGateway::configured(
+                        provider_id,
+                        endpoint,
+                        Some(auth_token),
+                        timeouts,
+                    )
+                    .map(|gateway| std::sync::Arc::new(gateway) as _)
+                    .map_err(invalid_runtime_config)
+                }
+                "resend" => {
+                    let sender = sender.filter(|value| !value.is_empty()).ok_or_else(|| {
+                        invalid_runtime_config(
+                            "the resend adapter requires FMARCH_IDENTITY_DELIVERY_SENDER".to_string(),
+                        )
+                    })?;
+                    let link_origin = link_origin
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| {
+                            invalid_runtime_config(
+                                "the resend adapter requires FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN"
+                                    .to_string(),
+                            )
+                        })?
+                        .parse::<url::Url>()
+                        .map_err(|error| {
+                            invalid_runtime_config(format!(
+                                "FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN is invalid: {error}"
+                            ))
+                        })?;
+                    api::identity_delivery::ResendIdentityDeliveryGateway::configured(
+                        provider_id,
+                        endpoint,
+                        auth_token,
+                        sender,
+                        link_origin,
+                        timeouts,
+                    )
+                    .map(|gateway| std::sync::Arc::new(gateway) as _)
+                    .map_err(invalid_runtime_config)
+                }
+                other => Err(invalid_runtime_config(format!(
+                    "unknown FMARCH_IDENTITY_DELIVERY_ADAPTER: {other}; expected http-json or resend"
+                ))),
+            }
         }
     }
 }

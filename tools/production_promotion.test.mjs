@@ -1135,6 +1135,46 @@ test("hosted variables require isolated production identity credentials", async 
       }),
     /provider id must name a versioned, environment-specific generation instead of a generic adapter/,
   );
+  const resendProduction = {
+    ...productionApi,
+    FMARCH_IDENTITY_DELIVERY_ADAPTER: "resend",
+    FMARCH_IDENTITY_DELIVERY_ENDPOINT: "https://api.resend.com/emails",
+    FMARCH_IDENTITY_DELIVERY_SENDER: "fmarch <invites@mail.fmarch.app>",
+    FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN: "https://fmarch-frontend-production.up.railway.app/",
+  };
+  assert.doesNotThrow(() => validateHostedVariables({ ...ready, productionApi: resendProduction }));
+  for (const [override, pattern] of [
+    [{ FMARCH_IDENTITY_DELIVERY_ADAPTER: "smtp" }, /adapter must be http-json or resend/],
+    [
+      { FMARCH_IDENTITY_DELIVERY_ENDPOINT: "https://relay.fmarch.app/emails" },
+      /must post to https:\/\/api\.resend\.com\/emails/,
+    ],
+    [{ FMARCH_IDENTITY_DELIVERY_SENDER: undefined }, /real single-line sender address/],
+    [
+      { FMARCH_IDENTITY_DELIVERY_SENDER: "fmarch <invites@mail.fmarch.app>\nBcc: x@y.org" },
+      /real single-line sender address/,
+    ],
+    [
+      { FMARCH_IDENTITY_DELIVERY_LINK_ORIGIN: "https://fmarch-frontend-staging.up.railway.app/" },
+      /links must point at the canonical frontend origin/,
+    ],
+  ]) {
+    assert.throws(
+      () => validateHostedVariables({ ...ready, productionApi: { ...resendProduction, ...override } }),
+      pattern,
+    );
+  }
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_IDENTITY_DELIVERY_SENDER: "fmarch <invites@mail.fmarch.app>",
+        },
+      }),
+    /belong only to the resend adapter/,
+  );
   assert.throws(
     () =>
       validateHostedVariables({
