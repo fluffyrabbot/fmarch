@@ -940,6 +940,8 @@
         "tools/release_git_authority.mjs",
         "tools/release_git_authority.test.mjs",
         "tools/fleet_release_proof.mjs",
+        "tools/source_content_report.mjs",
+        "tools/staging_release_abandon.mjs",
         "tools/immutable_json_receipt.mjs",
         "tools/release_gameday.mjs",
         "tools/release_gameday_contract.mjs",

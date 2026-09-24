@@ -10,6 +10,7 @@ import {
   exactImageRuntimeBinaries,
   runExactImageContentSmoke,
   validateStaticRuntimePolicy,
+  validateRuntimeImage,
 } from "./exact_image_content_smoke.mjs";
 
 test("static runtime contract includes every shipped binary", () => {
@@ -62,4 +63,8 @@ test("runtime policy rejects missing binaries and mutable image references", () 
     () => assertImmutableRuntimeReference("ghcr.io/example/runtime:latest"),
     /immutable repository@sha256/,
   );
+});
+
+test("immutable image validation fails before starting any local process without source proof", () => {
+  assert.throws(() => validateRuntimeImage({reference:`example/runtime@sha256:${'a'.repeat(64)}`, env:{}}), /signed canonical source content report/);
 });

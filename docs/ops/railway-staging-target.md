@@ -669,3 +669,40 @@ does not mutate or by itself prove that topology exists in live Railway state.
 The contract does not prove a Railway account exists, that a deployment
 succeeded, that either URL is externally reachable, or that any hosted
 identity, operations, release, or production requirement has been met.
+
+
+## Canonical Source Content And Pre-deployment Abandonment
+
+The Cachy audit now runs `node tools/source_content_report.mjs` after the full
+proof sweep. Its stdout is a Linux source-registry report bound to the checked
+commit inside the signed fleet envelope. The coordinator authenticates that
+envelope before comparing the report with two deterministic executions of the
+immutable runtime image. Image validation never invokes host Cargo; a missing
+source report fails closed before any container subprocess.
+
+For a coordinator failure before any deployment exists, first stop all
+coordinators for the exact lease. `node tools/staging_release_abandon.mjs
+--lease <lease> --commit <lease-source-commit> --stopped-pid <old-local-pid>
+--confirm-stopped <lease>` performs read-only eligibility checks. It scans every
+page of all three staging services' deployment history, including deleted
+entries, and refuses empty/incomplete history, unfinished deployments, or any
+deployment within five minutes before the lease or later. It verifies the
+original remote lease, parent, tree and canonical topology. The stopped-PID
+check covers this Mac; the operator confirmation additionally attests that no
+other coordinator for the lease remains running on any host.
+
+After reviewing eligibility, repeat with `--apply`. Recovery replaces the live
+lease using an expected-value push with a distinct abandonment fence. Ordinary
+coordinators reject that fence. It waits six minutes for prior Railway requests
+to settle, checks all history again, durably publishes immutable evidence,
+archives the fence on `release-recoveries/staging-<original-lease>`, and deletes
+only the exact fence using an expected-value push. Any new deployment or error
+retains the fence. If interrupted after fencing, repeat the original arguments
+with `--apply --resume-fence <fence>`; it verifies the remote fence and resumes
+the same settle/evidence checks. Never use this procedure after a deployment
+exists, fabricate a missing intent, or generically delete a release lock.
+Recovery records live under `target/releases/staging/recoveries/` and are
+retained independently from checkout cleanup. A lost fence-publication response
+requires inspecting the remote lock before attempting recovery; a lost final
+delete/result response requires inspecting both the remote lock and immutable
+archive/evidence, never blindly starting another abandonment.

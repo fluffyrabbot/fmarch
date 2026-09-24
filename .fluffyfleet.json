@@ -49,7 +49,8 @@
           "bash scripts/linux-proof.sh --mode sprint --base \"$FLEET_COMPARISON_SHA\" --jobs 2 --keep-going"
         ],
         "audit": [
-          "bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going"
+          "bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going",
+          "node tools/source_content_report.mjs"
         ]
       }
     }

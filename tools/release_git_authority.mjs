@@ -595,10 +595,10 @@ export function assertStagingReleaseMutationLease(
   );
 }
 
-function defaultStagingLeaseToken(intent) {
+function defaultStagingLeaseToken(intent, parent = intent.release_commit) {
   const result = execFileSync(
     "git",
-    ["commit-tree", `${intent.release_commit}^{tree}`, "-p", intent.release_commit],
+    ["commit-tree", `${intent.release_commit}^{tree}`, "-p", parent],
     {
       cwd: repoRoot,
       encoding: "utf8",
@@ -808,4 +808,53 @@ export async function withStagingReleaseMutationLease(
     throw retainedStagingLeaseError(error, lease.token);
   }
   return result;
+}
+
+// Recovery replaces the live lease before inspecting for late platform dispatches.
+// Ordinary coordinators cannot validate this distinct document as a release lease.
+export function fenceStagingReleaseForAbandonment({token, releaseCommit, stoppedPid, historySha256}) {
+  const original = readStagingReleaseMutationLease({token, releaseCommit});
+  const document = {version:1, kind:'fmarch-staging-abandonment-fence', release_commit:releaseCommit,
+    original_token:token, original_intent:original, stopped_pid:stoppedPid,
+    history_sha256:historySha256, created_at:new Date().toISOString()};
+  const fence = defaultStagingLeaseToken(document, token);
+  try { gitText(['push', `--force-with-lease=${STAGING_RELEASE_MUTATION_LOCK_REF}:${token}`,
+    CANONICAL_RELEASE_REMOTE_URL, `${fence}:${STAGING_RELEASE_MUTATION_LOCK_REF}`]);
+  } catch (error) {
+    throw new Error(`fence publication outcome must be inspected; proposed fence ${fence}, original lease ${token}: ${error.message}`);
+  }
+  return {fence, document};
+}
+
+export function readStagingAbandonmentFence({fence, token, releaseCommit}) {
+  assertFullCommit(fence);
+  const snapshot = defaultStagingLeaseSnapshot(fence, releaseCommit);
+  assert.equal(snapshot.remoteToken, fence);
+  assert.equal(snapshot.fetchedToken, fence);
+  assert.equal(snapshot.parent, token);
+  assert.equal(snapshot.tree, snapshot.expectedTree);
+  const document = JSON.parse(snapshot.message);
+  assert.equal(document.kind, 'fmarch-staging-abandonment-fence');
+  assert.equal(document.version, 1);
+  assert.equal(document.original_token, token);
+  assert.equal(document.release_commit, releaseCommit);
+  assert.deepEqual(document.original_intent, JSON.parse(gitText(['show','-s','--format=%B',token])), 'recovery original intent drifted');
+  assert.equal(gitText(['show','-s','--format=%P',token]), releaseCommit);
+  assert.equal(gitText(['show','-s','--format=%T',token]), snapshot.expectedTree);
+  validateStagingReleaseMutationLeaseIntentShape(document.original_intent);
+  assert.equal(document.original_intent.release_commit, releaseCommit);
+  assertCanonicalInstant(document.created_at, 'abandonment fence time');
+  assert.match(document.history_sha256 ?? '', digestPattern);
+  return document;
+}
+
+export function archiveStagingAbandonmentFence({fence, token, releaseCommit}) {
+  readStagingAbandonmentFence({fence, token, releaseCommit});
+  const ref = `refs/heads/release-recoveries/staging-${token}`;
+  const existing = gitText(['ls-remote','--refs',CANONICAL_RELEASE_REMOTE_URL,ref]);
+  if (existing) {
+    assert.equal(existing.split(/\s+/u)[0], fence, 'recovery archive differs');
+    return;
+  }
+  gitText(['push',`--force-with-lease=${ref}:`,CANONICAL_RELEASE_REMOTE_URL,`${fence}:${ref}`]);
 }

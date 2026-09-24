@@ -16,5 +16,5 @@ test('narrow Linux modes use controller-pinned base and the common heavy workflo
 
 test('audit forces the complete graph under the canonical workflow', () => {
   const p = JSON.parse(fs.readFileSync(new URL('../.fluffyfleet.json', import.meta.url))).profiles.linux;
-  assert.deepEqual(p.verificationModes.audit, ['bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going']);
+  assert.deepEqual(p.verificationModes.audit, ['bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going', 'node tools/source_content_report.mjs']);
 });

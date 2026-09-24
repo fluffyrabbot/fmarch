@@ -984,7 +984,9 @@ test("staging validates the immutable amd64 runtime while production reuses its 
       environment: "staging",
       runtimeRepository: "ghcr.io/fluffyrabbot/fmarch-runtime",
       runtimeDigest,
-      validate({ reference }) {
+      sourceContent: {kind:"fmarch-source-content", content:{status:"ok"}},
+      validate({ reference, hostOutput }) {
+        assert.equal(hostOutput, JSON.stringify({status:"ok"}));
         validatedReference = reference;
         return runtimeValidation;
       },
@@ -1856,4 +1858,70 @@ test("staging bootstrap is staging-only, confirmed per commit, and bound into th
   );
   assert.notEqual(ordinary, bootstrapPath);
   assert.match(path.basename(bootstrapPath), /^bootstrap\./u);
+});
+
+// These helpers are pure; the actual coordinator authenticates the envelope first.
+import {sourceContentFromVerifiedEnvelope} from './fleet_release_proof.mjs';
+import {completeHistory, assertNoReleaseDeployments, finishAbandonment, ABANDONMENT_SETTLE_MS} from './staging_release_abandon.mjs';
+import {CANONICAL_RELEASE_TOPOLOGY} from './release_coordinator_contract.mjs';
+
+test('source report is singular and bound to the qualified commit', () => {
+  const commit='a'.repeat(40);
+  const report={version:1,kind:'fmarch-source-content',commit,platform:'linux',content:{status:'ok',registry_hash:'b'.repeat(64),pack_count:5,program_count:5,packs:[],programs:[]}};
+  const step={label:'verify: node tools/source_content_report.mjs',stdout:JSON.stringify(report)};
+  const envelope={document:{evidence:{steps:[step]}}};
+  assert.deepEqual(sourceContentFromVerifiedEnvelope(envelope,commit),report);
+  assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,'c'.repeat(40)),/commit drifted/);
+  envelope.document.evidence.steps=[];
+  assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,commit),/exactly one/);
+  envelope.document.evidence.steps=[step,step];
+  assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,commit),/exactly one/);
+});
+
+test('abandonment scans every history page and rejects incomplete or repeating pages',async()=>{
+  const calls=[];
+  const rows=await completeHistory(async cursor=>{
+    calls.push(cursor);
+    return cursor===null ? {edges:[{node:{id:'one'}}],pageInfo:{hasNextPage:true,endCursor:'next'}} : {edges:[{node:{id:'two'}}],pageInfo:{hasNextPage:false}};
+  });
+  assert.deepEqual(calls,[null,'next']); assert.equal(rows.length,2);
+  await assert.rejects(completeHistory(async()=>({edges:[],pageInfo:{}})),/completeness/);
+  await assert.rejects(completeHistory(async()=>({edges:[],pageInfo:{hasNextPage:true,endCursor:'same'}})),/cursor stalled/);
+  await assert.rejects(completeHistory(async()=>({edges:[{node:{id:'same'}}],pageInfo:{hasNextPage:true,endCursor:'next'}})),/duplicate/);
+});
+
+test('abandonment rejects any release-window deployment, empty service, or unfinished job',()=>{
+  const intent={operation_kind:'release-coordinator',created_at:'2026-09-24T00:00:00.000Z'};
+  const old={id:'old',createdAt:'2026-08-01T00:00:00.000Z',status:'SUCCESS'};
+  const histories=Object.fromEntries(Object.values(CANONICAL_RELEASE_TOPOLOGY.services).map(id=>[id,[{...old}]]));
+  assert.equal(assertNoReleaseDeployments(intent,histories),histories);
+  const id=CANONICAL_RELEASE_TOPOLOGY.services.migrator;
+  for(const change of [{createdAt:'2026-09-24T00:00:00.000Z'},{createdAt:'2026-09-23T23:58:00.000Z'},{createdAt:null},{status:'BUILDING'},{status:'QUEUED'}]) {
+    const modified=structuredClone(histories);Object.assign(modified[id][0],change);
+    assert.throws(()=>assertNoReleaseDeployments(intent,modified));
+  }
+  assert.throws(()=>assertNoReleaseDeployments(intent,{...histories,[id]:[]}));
+  assert.throws(()=>assertNoReleaseDeployments({...intent,operation_kind:'release-game-day'},histories));
+});
+
+test('abandonment retains the fence on changed history, early recovery, or receipt failure', async()=>{
+  const histories=Object.fromEntries(Object.values(CANONICAL_RELEASE_TOPOLOGY.services).map(id=>[id,[{id:'old',createdAt:'2026-08-01T00:00:00.000Z',status:'SUCCESS'}]]));
+  const document={created_at:'2026-09-24T01:00:00.000Z',original_intent:{operation_kind:'release-coordinator',created_at:'2026-09-24T00:00:00.000Z'},history_sha256:receiptDigest(histories)};
+  const events=[];
+  const ops={now:()=>Date.parse(document.created_at)+ABANDONMENT_SETTLE_MS,
+    assertStopped:()=>events.push('stopped'),assertFence:()=>events.push('fence'),histories:()=>histories,
+    publishEvidence:()=>events.push('evidence'),archiveFence:()=>events.push('archive'),
+    releaseFence:()=>events.push('release'),publishResult:()=>events.push('result')};
+  const args={document,token:'a'.repeat(40),fence:'b'.repeat(40),releaseCommit:'c'.repeat(40)};
+  await finishAbandonment(args,ops);
+  assert.deepEqual(events,['stopped','fence','evidence','archive','stopped','fence','release','result']);
+  events.length=0;
+  await assert.rejects(finishAbandonment(args,{...ops,now:()=>0}),/settle interval/);
+  assert.equal(events.length,0);
+  await assert.rejects(finishAbandonment(args,{...ops,publishEvidence:()=>{throw Error('disk failure');}}),/disk failure/);
+  assert.equal(events.includes('release'),false);
+  events.length=0;
+  const changed=structuredClone(histories);changed[CANONICAL_RELEASE_TOPOLOGY.services.api][0].id='changed';
+  await assert.rejects(finishAbandonment(args,{...ops,histories:()=>changed}),/history changed/);
+  assert.equal(events.includes('release'),false);
 });

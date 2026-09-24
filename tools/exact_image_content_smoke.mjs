@@ -131,6 +131,7 @@ function run(command, args, options = {}) {
     stdio: options.capture ? "pipe" : "inherit",
     env: options.env,
     maxBuffer: 32 * 1024 * 1024,
+    timeout: 5 * 60_000,
   });
   if (result.error) {
     throw new Error(`${command} ${args.join(" ")} could not start: ${result.error.message}`);
@@ -155,7 +156,7 @@ export function resolveExactImageEngine(env = {}) {
 
 function availableEngine(env) {
   const engine = resolveExactImageEngine(env);
-  const probe = spawnSync(engine, ["info"], { encoding: "utf8", stdio: "pipe" });
+  const probe = spawnSync(engine, ["info"], { encoding: "utf8", stdio: "pipe", timeout: 30_000 });
   if (probe.status === 0) return engine;
   throw new Error(`runtime-image validation requires a working ${engine} engine`);
 }
@@ -290,22 +291,12 @@ function compareRuntimeContent({ hostOutput, first, second, reference, engine })
 
 export function validateRuntimeImage({ reference, env = process.env, hostOutput = null } = {}) {
   assertImmutableRuntimeReference(reference);
+  if (typeof hostOutput !== "string" || !hostOutput.trim()) {
+    throw new Error("runtime validation requires the signed canonical source content report; local Cargo is forbidden");
+  }
   const engine = availableEngine(env);
   run(engine, ["pull", "--platform", "linux/amd64", reference], { capture: true, env });
-  const checkoutReport = hostOutput ?? run(
-    "python3",
-    [
-      "scripts/with-heavy-build-lock.py",
-      "cargo",
-      "run",
-      "--quiet",
-      "-p",
-      "server",
-      "--",
-      "--check-content",
-    ],
-    { capture: true, env },
-  ).trim();
+  const checkoutReport = hostOutput;
   const first = run(
     engine,
     ["run", "--rm", "--platform", "linux/amd64", "--entrypoint", "/bin/sh", reference, "-c", runtimeValidationCheck],

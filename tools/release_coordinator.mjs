@@ -438,6 +438,7 @@ export function releaseRuntimeValidation({
   runtimeRepository,
   runtimeDigest,
   reusedRuntimeValidation = null,
+  sourceContent,
   validate = validateRuntimeImage,
 }) {
   if (environment === "production") {
@@ -446,7 +447,11 @@ export function releaseRuntimeValidation({
   }
   assert.equal(environment, "staging", "unsupported release environment");
   assert.equal(reusedRuntimeValidation, null, "staging must validate its runtime image directly");
-  const attestation = validate({ reference: `${runtimeRepository}@${runtimeDigest}` });
+  assert.equal(sourceContent?.kind, "fmarch-source-content", "staging requires canonical source content");
+  const attestation = validate({
+    reference: `${runtimeRepository}@${runtimeDigest}`,
+    hostOutput: JSON.stringify(sourceContent.content),
+  });
   return assertRuntimeValidationAttestation(attestation, runtimeDigest);
 }
 
@@ -2321,6 +2326,7 @@ export async function main(argv = process.argv.slice(2)) {
       runtimeRepository: config.runtimeImage,
       runtimeDigest,
       reusedRuntimeValidation,
+      sourceContent: fleetProof.source_content,
     });
     const attemptReceipt = await bindAttempt(
       args.environment,

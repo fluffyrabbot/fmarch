@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const cwd = fileURLToPath(new URL('..', import.meta.url));
+assert.equal(process.platform, 'linux', 'Source content proof runs only on canonical Linux');
+assert.equal(process.env.FLEET_VERIFICATION_MODE, 'audit');
+const run = (command, args) => execFileSync(command, args, {cwd, encoding:'utf8', timeout:1_200_000, stdio:['ignore','pipe','inherit']}).trim();
+const commit = run('git', ['rev-parse','HEAD']);
+assert.match(commit, /^[0-9a-f]{40}$/u);
+assert.equal(run('git',['status','--porcelain','--untracked-files=no']), '', 'Source content checkout must be clean');
+const content = JSON.parse(run('python3', ['scripts/with-heavy-build-lock.py','cargo','run','--quiet','-p','server','--bin','server','--','--check-content']));
+assert.equal(run('git',['rev-parse','HEAD']), commit);
+assert.equal(run('git',['status','--porcelain','--untracked-files=no']), '');
+console.log(JSON.stringify({version:1,kind:'fmarch-source-content',commit,platform:process.platform,content}));

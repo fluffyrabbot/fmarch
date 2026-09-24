@@ -50,7 +50,8 @@ export async function loadFleetReleaseProof({
   ]);
   const manifest = JSON.parse(manifestBytes);
   const authority = fleetReleaseAuthority(manifest);
-  return validateFleetProofReceipt(JSON.parse(receiptBytes), {
+  const envelope = JSON.parse(receiptBytes);
+  const proof = validateFleetProofReceipt(envelope, {
     expectedCommit: commit,
     publicKeyPem,
     expectedJobId,
@@ -66,4 +67,22 @@ export async function loadFleetReleaseProof({
     now,
     ...(maxAgeMilliseconds === undefined ? {} : { maxAgeMilliseconds }),
   });
+  return {...proof, source_content: sourceContentFromVerifiedEnvelope(envelope, commit)};
+}
+
+// Call only after the complete envelope signature, workflow and commit are verified.
+export function sourceContentFromVerifiedEnvelope(envelope, commit) {
+  const steps = envelope.document.evidence.steps.filter(s => s.label === "verify: node tools/source_content_report.mjs");
+  assert.equal(steps.length, 1, "audit must contain exactly one canonical source content report");
+  const report = JSON.parse(steps[0].stdout);
+  assert.equal(report.kind, "fmarch-source-content");
+  assert.equal(report.version, 1);
+  assert.equal(report.commit, commit, "source content report commit drifted");
+  assert.equal(report.platform, "linux");
+  assert.equal(report.content?.status, "ok");
+  assert.match(report.content.registry_hash ?? "", /^[0-9a-f]{64}$/u);
+  assert.equal(report.content.pack_count, 5);
+  assert.equal(report.content.program_count, 5);
+  assert.ok(Array.isArray(report.content.packs) && Array.isArray(report.content.programs));
+  return report;
 }
