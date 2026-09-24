@@ -78,11 +78,17 @@ export function parseArguments(argv) {
     else if (argument === "--resume-lease") result.resumeLease = requiredValue(argv, ++index, argument);
     else if (argument === "--schema-epoch-reset") result.schemaEpochReset = Number.parseInt(requiredValue(argv, ++index, argument), 10);
     else if (argument === "--output") result.output = requiredValue(argv, ++index, argument);
+    else if (argument === "--bootstrap-staging") result.bootstrapStaging = true;
     else if (argument === "--check") result.check = true;
     else if (argument === "--help" || argument === "-h") result.help = true;
     else throw new Error(`unknown release coordinator argument: ${argument}`);
   }
   assert.ok(["staging", "production"].includes(result.environment), "--environment must be staging or production");
+  assert.equal(
+    result.environment === "production" && result.bootstrapStaging === true,
+    false,
+    "--bootstrap-staging is staging-only",
+  );
   assert.equal(
     result.environment === "production" && result.resumeLease !== undefined,
     false,
@@ -147,9 +153,14 @@ export function runtimeConfig(environment, env = process.env) {
   };
 }
 
-export function stagingCoordinatorMutationLeaseBindings({ fleetProof, schemaEpochReset = null }) {
+export function stagingCoordinatorMutationLeaseBindings({
+  fleetProof,
+  schemaEpochReset = null,
+  bootstrap = false,
+}) {
   assert.ok(fleetProof && typeof fleetProof === "object", "staging lease requires fleet proof");
   return {
+    acceptance_mode: bootstrap ? "bootstrap" : "authenticated",
     fleet_job_id: fleetProof.job_id,
     fleet_receipt_sha256: fleetProof.receipt_sha256,
     schema_epoch_reset: schemaEpochReset,
@@ -2071,7 +2082,7 @@ export function releaseOutputPath(config, commit, requestedPath = null) {
   assertFullCommit(commit);
   if (requestedPath) return path.resolve(requestedPath);
   const filename = config.environment === "staging"
-    ? `${commit}.${assertFullCommit(
+    ? `${config.stagingBootstrap === true ? "bootstrap." : ""}${commit}.${assertFullCommit(
       config.stagingMutationLease?.token,
       "staging release mutation lease token",
     )}.json`
@@ -2081,9 +2092,9 @@ export function releaseOutputPath(config, commit, requestedPath = null) {
 
 export function validateCompletedStagingReleaseReceipt(
   receipt,
-  { commit, lease, fleetProof, schemaEpochReset = null },
+  { commit, lease, fleetProof, schemaEpochReset = null, bootstrap = false },
 ) {
-  const completed = assertReleaseReceipt(receipt);
+  const completed = assertReleaseReceipt(receipt, { bootstrap });
   assert.equal(completed.environment, "staging", "completed receipt is not staging-scoped");
   assert.equal(completed.commit, commit, "completed staging receipt commit drifted");
   assert.equal(
@@ -2114,7 +2125,7 @@ export async function revalidateCompletedStagingRelease(
       fetchHealth(url, commit, kind, topology),
   } = {},
 ) {
-  assertReleaseReceipt(receipt);
+  assertReleaseReceipt(receipt, { bootstrap: config.stagingBootstrap === true });
   assert.equal(receipt.environment, "staging");
   await assertAuthority(config);
   const deploymentSpecifications = [
@@ -2168,14 +2179,30 @@ export async function revalidateCompletedStagingRelease(
   return true;
 }
 
+/**
+ * Bootstrap deploys staging before any admitted account can exist, so it
+ * skips authenticated acceptance. It requires an operator confirmation bound
+ * to the exact commit, and its receipt is a distinct kind that production
+ * promotion rejects; a full staging release must follow.
+ */
+export function assertStagingBootstrapConfirmation(commit, env = process.env) {
+  assert.equal(
+    env.FMARCH_STAGING_BOOTSTRAP_CONFIRM,
+    `staging-bootstrap:${commit}`,
+    `--bootstrap-staging requires FMARCH_STAGING_BOOTSTRAP_CONFIRM=staging-bootstrap:${commit}`,
+  );
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArguments(argv);
   if (args.help) {
-    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--production-lock <lease-commit>] [--resume-lease <staging-lease-commit>] [--schema-epoch-reset N] [--output <production-receipt-path>] [--check]");
+    console.log("Usage: node tools/release_coordinator.mjs --environment staging|production --commit <40-char-sha> --fleet-receipt <signed-fleet-envelope.json> --fleet-job <exact-job-id> [--fleet-public-key path] [--reuse-staging-receipt path] [--production-lock <lease-commit>] [--resume-lease <staging-lease-commit>] [--schema-epoch-reset N] [--bootstrap-staging] [--output <production-receipt-path>] [--check]");
     return;
   }
   const commit = assertFullCommit(args.commit ?? commandText("git", ["rev-parse", "HEAD"]));
   const repository = validateRepository(commit, args.environment);
+  const bootstrap = args.bootstrapStaging === true;
+  if (bootstrap) assertStagingBootstrapConfirmation(commit);
   if (args.schemaEpochReset !== undefined) {
     validateRequestedSchemaEpoch(args.schemaEpochReset, await checkedInSchemaEpoch(commit));
   }
@@ -2200,7 +2227,8 @@ export async function main(argv = process.argv.slice(2)) {
     releaseReadiness = validateProductionReleaseReadiness(registry);
   }
   const config = runtimeConfig(args.environment);
-  const acceptanceEnv = {...process.env, FMARCH_HOSTED_EXPECTED_COMMIT: commit, FMARCH_HOSTED_MATRIX_API_URL: config.apiUrl, FMARCH_HOSTED_MATRIX_FRONTEND_URL: config.frontendUrl, FMARCH_HOSTED_AUTHENTICATED: '1'};
+  config.stagingBootstrap = bootstrap;
+  const acceptanceEnv = {...process.env, FMARCH_HOSTED_EXPECTED_COMMIT: commit, FMARCH_HOSTED_MATRIX_API_URL: config.apiUrl, FMARCH_HOSTED_MATRIX_FRONTEND_URL: config.frontendUrl, FMARCH_HOSTED_AUTHENTICATED: bootstrap ? '0' : '1'};
   if (args.check) {
     console.log(`release coordination check passed for ${args.environment} ${commit}`);
     return;
@@ -2264,6 +2292,7 @@ export async function main(argv = process.argv.slice(2)) {
           lease: config.stagingMutationLease,
           fleetProof,
           schemaEpochReset: args.schemaEpochReset ?? null,
+          bootstrap,
         });
         await revalidateCompletedStagingRelease(config, completed);
         return {
@@ -2275,10 +2304,12 @@ export async function main(argv = process.argv.slice(2)) {
         };
       }
       await assertStagingMutationAuthority(config);
-      await prepareAuthenticatedAcceptance(acceptanceEnv, {
-        api: config.apiUrl,
-        frontend: config.frontendUrl,
-      });
+      if (!bootstrap) {
+        await prepareAuthenticatedAcceptance(acceptanceEnv, {
+          api: config.apiUrl,
+          frontend: config.frontendUrl,
+        });
+      }
     }
 
     const artifacts = await resolveArtifacts(args, config, commit, fleetProof, {
@@ -2368,6 +2399,7 @@ export async function main(argv = process.argv.slice(2)) {
       hostedAcceptance,
       schemaEpochReset,
       topology: config.topology,
+      bootstrap,
     });
     await withReleaseMutationAuthority(config, () => publishImmutableJson(output, receipt));
     return {
@@ -2395,6 +2427,7 @@ export async function main(argv = process.argv.slice(2)) {
   const bindings = stagingCoordinatorMutationLeaseBindings({
     fleetProof,
     schemaEpochReset: args.schemaEpochReset ?? null,
+    bootstrap,
   });
   const result = await withStagingReleaseMutationLease(
     {
@@ -2423,6 +2456,7 @@ export async function main(argv = process.argv.slice(2)) {
     status: "passed",
     replay: result.replay,
     environment: "staging",
+    acceptance: bootstrap ? "bootstrap-public-only" : "authenticated",
     commit,
     runtimeDigest: result.runtimeDigest,
     frontendDigest: result.frontendDigest,

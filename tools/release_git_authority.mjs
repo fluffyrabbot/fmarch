@@ -104,8 +104,12 @@ function assertStagingReleaseMutationBindings(operationKind, bindings) {
   if (operationKind === "release-coordinator") {
     assert.deepEqual(
       Object.keys(bindings).sort(),
-      ["fleet_job_id", "fleet_receipt_sha256", "schema_epoch_reset"],
+      ["acceptance_mode", "fleet_job_id", "fleet_receipt_sha256", "schema_epoch_reset"],
       "staging coordinator lease bindings drifted",
+    );
+    assert.ok(
+      ["authenticated", "bootstrap"].includes(bindings.acceptance_mode),
+      "staging coordinator acceptance mode is invalid",
     );
     assert.match(bindings.fleet_job_id ?? "", /\S/u, "staging coordinator fleet job is invalid");
     assertSha256(bindings.fleet_receipt_sha256, "staging coordinator fleet receipt digest");

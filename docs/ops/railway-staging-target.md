@@ -382,6 +382,35 @@ business integrity or plaintext confidentiality after API compromise.
     accept an operator-selected replacement target.
 12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Log out and require the browser to traverse the constrained WorkOS session-logout endpoint before returning to the canonical frontend root; then complete a fresh WorkOS sign-in. If classic-plus-WorkOS is enabled, also attach WorkOS to a recently authenticated Classic principal, require the link flow to traverse the same provider logout, and prove a fresh WorkOS sign-in succeeds afterward. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
+## First Staging Release Onto An Empty Community
+
+An ordinary staging release requires authenticated acceptance by two admitted
+test accounts before it mutates anything. On an empty staging community those
+accounts cannot exist: admission, invitations, and the founder grant ship in
+the release itself. The coordinator therefore has an explicit bootstrap mode:
+
+```sh
+export FMARCH_STAGING_BOOTSTRAP_CONFIRM=staging-bootstrap:<full-sha>
+npm run release:staging -- --commit <full-sha> --fleet-receipt <signed-envelope.json> --fleet-job <job-id> --bootstrap-staging
+```
+
+Bootstrap runs every other gate — signed Cachy audit, migrator, API and
+frontend deployment by digest, health, the search sentinel, and the public
+hosted readiness/browser check — but records authenticated journeys as
+`unproven`. Its receipt is the distinct kind `fmarch-staging-bootstrap-release`,
+written as `target/releases/staging/bootstrap.<commit>.<lease>.json`, and the
+lease binds `acceptance_mode: bootstrap`. Production promotion, staging replay,
+and every other consumer of `assertReleaseReceipt` reject it.
+
+Before bootstrap, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` so the first
+WorkOS sign-in receives GlobalAdmin and a founder membership, and configure
+identity delivery (the `resend` adapter in `deploy/railway/api.env.example`).
+After bootstrap: sign in as the founder, invite a second account from `/admin`,
+accept the mailed invitation, capture both sessions with
+`proof:hosted:login`, run `proof:hosted:prepare`, then run an ordinary
+authenticated staging release of the same or a later commit. Only that
+receipt is promotion evidence.
+
 ## Canonical Release Proof
 
 A release checkpoint uses the forced full Cachy workflow, not a local cache receipt:

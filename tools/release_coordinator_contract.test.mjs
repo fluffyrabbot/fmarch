@@ -32,6 +32,7 @@ import {
   databaseOneShotDisarmInput,
   databaseIdentityVariables,
   oneShotDatabaseVariables,
+  assertStagingBootstrapConfirmation,
   parseArguments,
   publishFreshImage,
   parseMigrationCompletion,
@@ -40,6 +41,7 @@ import {
   releaseRuntimeValidation,
   revalidateCompletedStagingRelease,
   releaseOutputPath,
+  stagingCoordinatorMutationLeaseBindings,
   runEpochResetJournal,
   runJournaledDatabaseOneShot,
   runtimeConfig,
@@ -449,6 +451,7 @@ test("staging mutations revalidate the exact remote lease before every write", a
     releaseCommit: commit,
     operationKind: "release-coordinator",
     bindings: {
+      acceptance_mode: "authenticated",
       fleet_job_id: fleetProof.job_id,
       fleet_receipt_sha256: fleetProof.receipt_sha256,
       schema_epoch_reset: null,
@@ -1732,4 +1735,125 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     }),
     /frontend image drifted from staging/,
   );
+});
+
+test("staging bootstrap records a distinct receipt kind that promotion and replay reject", () => {
+  const health = {
+    api: {
+      ok: true,
+      release_commit: commit,
+      database_schema: true,
+      database_identity: {
+        project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+        environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+        environment: "staging",
+      },
+      event_encryption: true,
+      object_storage: true,
+      subject_authority: true,
+    },
+    frontend: { status: "ok", release_commit: commit },
+  };
+  const publicOnly = {
+    status: "passed",
+    generatedAt: "2026-09-07T12:45:00.000Z",
+    checkerCommit: commit,
+    target: {
+      commit,
+      api: "https://fmarch-staging.up.railway.app",
+      frontend: "https://fmarch-frontend-staging.up.railway.app",
+    },
+    authenticatedJourneys: "unproven",
+  };
+  const inputs = {
+    environment: "staging",
+    commit,
+    runtimeDigest,
+    frontendDigest,
+    deployments: {
+      migrator: deployment("migrator", runtimeDigest),
+      api: deployment("api", runtimeDigest),
+      frontend: deployment("frontend", frontendDigest),
+    },
+    health,
+    schemaHead: "0017_posting_budget_window.sql",
+    fleetProof,
+    attemptReceipt,
+    runtimeValidation,
+    hostedAcceptance: publicOnly,
+    sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
+    generatedAt: new Date("2026-09-07T12:50:00.000Z"),
+  };
+  assert.throws(
+    () => buildReleaseReceipt(inputs),
+    assert.AssertionError,
+    "an ordinary staging release still requires authenticated journeys",
+  );
+  const receipt = buildReleaseReceipt({ ...inputs, bootstrap: true });
+  assert.equal(receipt.kind, "fmarch-staging-bootstrap-release");
+  assert.equal(assertReleaseReceipt(receipt, { bootstrap: true }), receipt);
+  assert.throws(() => assertReleaseReceipt(receipt), /kind drifted/);
+  assert.throws(
+    () => assertFreshStagingReleaseReceipt(receipt, { now: releaseNow }),
+    /kind drifted/,
+    "production promotion must never consume a bootstrap receipt",
+  );
+  assert.throws(
+    () => validateCompletedStagingReleaseReceipt(receipt, {
+      commit,
+      lease: { token: receipt.staging_mutation_lease_commit },
+      fleetProof,
+    }),
+    /kind drifted/,
+    "a full staging release must not replay a bootstrap receipt",
+  );
+  assert.throws(
+    () => buildReleaseReceipt({
+      ...inputs,
+      bootstrap: true,
+      hostedAcceptance: {
+        ...publicOnly,
+        authenticatedJourneys: { status: "passed" },
+      },
+    }),
+    /must not claim authenticated journeys/,
+  );
+  assert.throws(
+    () => buildReleaseReceipt({ ...inputs, environment: "production", bootstrap: true }),
+    /only staging may record a bootstrap release/,
+  );
+});
+
+test("staging bootstrap is staging-only, confirmed per commit, and bound into the lease", () => {
+  assert.equal(parseArguments(["--bootstrap-staging"]).bootstrapStaging, true);
+  assert.throws(
+    () => parseArguments(["--environment", "production", "--bootstrap-staging"]),
+    /staging-only/,
+  );
+  assert.throws(() => assertStagingBootstrapConfirmation(commit, {}), /FMARCH_STAGING_BOOTSTRAP_CONFIRM/);
+  assert.throws(
+    () => assertStagingBootstrapConfirmation(commit, {
+      FMARCH_STAGING_BOOTSTRAP_CONFIRM: `staging-bootstrap:${"f".repeat(40)}`,
+    }),
+    /FMARCH_STAGING_BOOTSTRAP_CONFIRM/,
+  );
+  assert.doesNotThrow(() => assertStagingBootstrapConfirmation(commit, {
+    FMARCH_STAGING_BOOTSTRAP_CONFIRM: `staging-bootstrap:${commit}`,
+  }));
+  assert.equal(
+    stagingCoordinatorMutationLeaseBindings({ fleetProof, bootstrap: true }).acceptance_mode,
+    "bootstrap",
+  );
+  assert.equal(
+    stagingCoordinatorMutationLeaseBindings({ fleetProof }).acceptance_mode,
+    "authenticated",
+  );
+  const lease = { token: "e".repeat(40) };
+  const ordinary = releaseOutputPath({ environment: "staging", stagingMutationLease: lease }, commit);
+  const bootstrapPath = releaseOutputPath(
+    { environment: "staging", stagingMutationLease: lease, stagingBootstrap: true },
+    commit,
+  );
+  assert.notEqual(ordinary, bootstrapPath);
+  assert.match(path.basename(bootstrapPath), /^bootstrap\./u);
 });

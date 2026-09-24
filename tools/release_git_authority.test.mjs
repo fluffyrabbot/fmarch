@@ -46,6 +46,7 @@ const fleetReceiptSha256 = "d".repeat(64);
 const stagingReceiptSha256 = "e".repeat(64);
 const fleetJobId = "job-123";
 const stagingBindings = {
+  acceptance_mode: "authenticated",
   fleet_job_id: fleetJobId,
   fleet_receipt_sha256: fleetReceiptSha256,
   schema_epoch_reset: null,

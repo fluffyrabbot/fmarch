@@ -181,6 +181,10 @@ forced remote audit before accepting this new environment.
 mutation and requires live authenticated acceptance before writing a version-4
 release receipt. Earlier release receipts do not satisfy the current gate. Production
 does not run the synthetic staging journeys.
+On an empty staging community no admitted account can exist yet; use the
+explicit bootstrap release in
+[the staging runbook](railway-staging-target.md#first-staging-release-onto-an-empty-community),
+whose receipt production promotion rejects, then capture the sessions below.
 
 The dedicated test accounts must already be admitted through fmarch's ordinary
 community admission. `proof:hosted:login` opens Chromium on Cachy's desktop for
