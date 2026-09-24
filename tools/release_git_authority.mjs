@@ -812,11 +812,11 @@ export async function withStagingReleaseMutationLease(
 
 // Recovery replaces the live lease before inspecting for late platform dispatches.
 // Ordinary coordinators cannot validate this distinct document as a release lease.
-export function fenceStagingReleaseForAbandonment({token, releaseCommit, stoppedPid, historySha256}) {
+export function fenceStagingReleaseForAbandonment({token, releaseCommit, stoppedPid, historySha256, failedMigration = null}) {
   const original = readStagingReleaseMutationLease({token, releaseCommit});
   const document = {version:1, kind:'fmarch-staging-abandonment-fence', release_commit:releaseCommit,
     original_token:token, original_intent:original, stopped_pid:stoppedPid,
-    history_sha256:historySha256, created_at:new Date().toISOString()};
+    history_sha256:historySha256, ...(failedMigration ? {failed_migration:failedMigration} : {}), created_at:new Date().toISOString()};
   const fence = defaultStagingLeaseToken(document, token);
   try { gitText(['push', `--force-with-lease=${STAGING_RELEASE_MUTATION_LOCK_REF}:${token}`,
     CANONICAL_RELEASE_REMOTE_URL, `${fence}:${STAGING_RELEASE_MUTATION_LOCK_REF}`]);

@@ -892,7 +892,7 @@ function assertNonemptyDeploymentId(value, label) {
 function deploymentById(config, serviceId, deploymentId) {
   assertNonemptyDeploymentId(deploymentId, "Railway deployment ID");
   const deployment = railwayApi(
-    "query Deployment($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId meta } }",
+    "query Deployment($id: String!) { deployment(id: $id) { id status projectId environmentId serviceId meta deploymentStopped instances { id status } } }",
     { id: deploymentId },
   ).deployment;
   assert.equal(deployment.id, deploymentId, "Railway returned the wrong deployment ID");
@@ -944,6 +944,25 @@ export async function waitForDeployment(
   throw new Error(`${label} did not reach a terminal deployment state within its bounded wait`);
 }
 
+// Railway V2 can leave deployment.status SUCCESS after its sole instance crashes.
+// A one-shot is terminal only when the platform confirms every instance stopped.
+export function oneShotExecutionOutcome(deployment) {
+  if (deployment.status === 'FAILED') return deployment;
+  if (deployment.deploymentStopped !== true) return null;
+  assert.ok(Array.isArray(deployment.instances) && deployment.instances.length > 0,
+    'stopped one-shot has no instance evidence');
+  assert.equal(new Set(deployment.instances.map(instance => instance.id)).size,
+    deployment.instances.length, 'one-shot instance evidence is duplicated');
+  assert.ok(deployment.instances.every(instance => typeof instance.id === 'string' && instance.id),
+    'one-shot instance identity is missing');
+  if (deployment.instances.every(instance => instance.status === 'CRASHED')) {
+    return {...deployment, platform_status: deployment.status, status: 'CRASHED'};
+  }
+  // Completion output remains mandatory even after a clean instance stop.
+  if (deployment.instances.every(instance => ['EXITED', 'STOPPED'].includes(instance.status))) return deployment;
+  throw new Error('stopped one-shot has unknown or mixed instance outcomes');
+}
+
 async function waitForOneShotTerminal(
   config,
   serviceId,
@@ -967,7 +986,10 @@ async function waitForOneShotTerminal(
       if (actualDigest) {
         assert.equal(actualDigest, expectedDigest, `${label} started from an unexpected digest`);
       }
-      if (TERMINAL_DEPLOYMENT_STATES.has(deployment.status)) return deployment;
+      if (TERMINAL_DEPLOYMENT_STATES.has(deployment.status)) {
+        const outcome = oneShotExecutionOutcome(deployment);
+        if (outcome) return outcome;
+      }
     }
     await sleep(pollMilliseconds);
   }
@@ -1096,6 +1118,8 @@ function databaseOneShotFailure(intent, deployment) {
     intent_receipt_sha256: intent.receipt_sha256,
     deployment_id: deployment.id,
     status: deployment.status,
+    ...(deployment.instances ? {platform_status: deployment.platform_status ?? deployment.status,
+      deployment_stopped: deployment.deploymentStopped, instances: deployment.instances} : {}),
   };
   return { ...base, receipt_sha256: receiptDigest(base) };
 }

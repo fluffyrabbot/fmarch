@@ -1925,3 +1925,43 @@ test('abandonment retains the fence on changed history, early recovery, or recei
   await assert.rejects(finishAbandonment(args,{...ops,histories:()=>changed}),/history changed/);
   assert.equal(events.includes('release'),false);
 });
+
+import {oneShotExecutionOutcome} from './release_coordinator.mjs';
+import {assertFailedMigration} from './staging_release_abandon.mjs';
+
+test('one-shot execution uses stopped instance evidence despite Railway SUCCESS',()=>{
+  const row={id:'deployment',status:'SUCCESS',deploymentStopped:true,instances:[{id:'instance',status:'CRASHED'}]};
+  assert.equal(oneShotExecutionOutcome(row).status,'CRASHED');
+  assert.equal(oneShotExecutionOutcome(row).platform_status,'SUCCESS');
+  assert.equal(oneShotExecutionOutcome({...row,deploymentStopped:false}),null);
+  for(const status of ['EXITED','STOPPED']) assert.equal(oneShotExecutionOutcome({...row,instances:[{id:'i',status}]}).status,'SUCCESS');
+  for(const instances of [[],[{id:'i',status:'RUNNING'}],[{id:'i',status:'CRASHED'},{id:'i',status:'CRASHED'}],[{id:'i',status:'CRASHED'},{id:'j',status:'EXITED'}]]) {
+    assert.throws(()=>oneShotExecutionOutcome({...row,instances}));
+  }
+});
+
+test('failed migration retirement binds one crashed operation and refuses any application deployment',async()=>{
+  const config=runtimeConfig('staging',{});
+  config.stagingMutationLease={token:'b'.repeat(40)};
+  const op=bindDatabaseOneShotIntent({config,commit:'a'.repeat(40),phase:'migrate',generation:0,
+    repository:'ghcr.io/fluffyrabbot/fmarch-runtime',digest:'sha256:'+ 'c'.repeat(64),startCommand:'fmarch-migrate',variables:{}});
+  const intent={operation_kind:'release-coordinator',release_commit:op.release_commit,created_at:'2026-09-24T00:00:00.000Z'};
+  const failure={intent:op,lease:config.stagingMutationLease.token,deployment_id:'failed'};
+  const histories=Object.fromEntries(Object.values(CANONICAL_RELEASE_TOPOLOGY.services).map(id=>[id,[{id:'old-'+id,createdAt:'2026-08-01T00:00:00.000Z',status:'SUCCESS'}]]));
+  const row={id:'failed',createdAt:'2026-09-24T00:01:00.000Z',status:'SUCCESS',projectId:op.project_id,
+    environmentId:op.environment_id,serviceId:op.service_id,deploymentStopped:true,instances:[{id:'instance',status:'CRASHED'}],
+    meta:{imageDigest:op.digest,image:`${op.repository}@${op.digest}`,serviceManifest:{deploy:{startCommand:op.start_command,restartPolicyType:'NEVER'}}}};
+  histories[op.service_id].push(row);
+  assert.equal(assertFailedMigration(intent,histories,failure),histories);
+  for(const mutate of [h=>h[op.service_id][1].instances[0].status='RUNNING',h=>h[op.service_id][1].deploymentStopped=false,
+    h=>h[op.service_id].push({...row,id:'another'}),h=>h[CANONICAL_RELEASE_TOPOLOGY.services.api].push(row),
+    h=>h[op.service_id][1].meta.serviceManifest.deploy.startCommand='fmarch-migrate',h=>h[op.service_id][1].meta.imageDigest='sha256:'+'d'.repeat(64)]) {
+    const copy=structuredClone(histories); mutate(copy); assert.throws(()=>assertFailedMigration(intent,copy,failure));
+  }
+  const document={created_at:'2026-09-24T01:00:00.000Z',original_intent:intent,failed_migration:failure,history_sha256:receiptDigest(histories)};
+  let result;
+  await finishAbandonment({document,token:failure.lease,fence:'d'.repeat(40),releaseCommit:op.release_commit},{
+    now:()=>Date.parse(document.created_at)+ABANDONMENT_SETTLE_MS,assertStopped:()=>{},assertFence:()=>{},histories:()=>histories,
+    publishEvidence:()=>{},archiveFence:()=>{},releaseFence:()=>{},publishResult:r=>result=r});
+  assert.equal(result.status,'retired-after-failed-migration');
+});

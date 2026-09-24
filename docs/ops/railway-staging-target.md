@@ -706,3 +706,25 @@ retained independently from checkout cleanup. A lost fence-publication response
 requires inspecting the remote lock before attempting recovery; a lost final
 delete/result response requires inspecting both the remote lock and immutable
 archive/evidence, never blindly starting another abandonment.
+
+### A failed first migration with Railway V2
+
+Railway can report a deployment as `SUCCESS` while its stopped instance is
+`CRASHED`. The coordinator waits for instance termination and preserves that
+instance evidence when classifying a one-shot failure. A clean exit still
+requires the exact operation's completion record.
+
+If the first migration fails before any API/frontend deployment and the release
+must be retired to repair a prerequisite, the same recovery command accepts
+`--failed-migrator <deployment-id> --failure-intent <generation-00-intent.json>`.
+This mode requires exactly one release-window deployment: the specified migrator,
+with its original operation ID, image digest, canonical target, `NEVER` restart
+policy, and exactly one stopped `CRASHED` instance. It rejects later generations,
+additional deployments, missing history, and every application deployment. The
+fence records the failure intent, waits for outstanding requests, rechecks the
+complete histories, and emits `retired-after-failed-migration`. It does not claim
+that the database is unchanged: inspect migration state and repair the failed
+prerequisite before a fresh coordinated release. Never relabel or edit an old
+migration receipt to make it pass. The database identity bootstrap described
+above must precede the first normal migration; an empty community does not imply
+that this infrastructure identity has already been provisioned.
