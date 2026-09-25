@@ -3790,7 +3790,7 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
             "EffectNotification",
         ]
     );
-    for (effect_index, event_pair) in planned.chunks_exact(2).enumerate() {
+    for (effect_index, event_pair) in planned.as_chunks::<2>().0.iter().enumerate() {
         let grant = &event_pair[0];
         assert_eq!(grant.actor, ActorId::Host);
         assert_eq!(grant.payload["actor"], "external");
@@ -3850,7 +3850,9 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
     let notices = player_notifications(&pool, game).await.unwrap();
     assert_eq!(notices.len(), 2);
     assert!(notices.iter().all(|notice| {
-        notice.audience_slot == "slot_1" && notice.effect == "grant" && notice.phase_id.as_str() == "D01"
+        notice.audience_slot == "slot_1"
+            && notice.effect == "grant"
+            && notice.phase_id.as_str() == "D01"
     }));
     let projection_audit = audit_rebuild(&pool, game).await.unwrap();
     assert!(
@@ -4665,7 +4667,10 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
     assert_eq!(snapshot.phase_deadline, Some(1_799_999_999));
     assert_eq!(
         snapshot.phase_policy.cadence,
-        vec![domain::phase::PhaseKind::Day, domain::phase::PhaseKind::Night],
+        vec![
+            domain::phase::PhaseKind::Day,
+            domain::phase::PhaseKind::Night
+        ],
         "snapshot must carry the declared pack cadence"
     );
     assert_eq!(
@@ -11140,10 +11145,12 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
 
     let notifications = player_notifications(&pool, game).await.unwrap();
     assert!(
-        notifications.iter().any(|notice| notice.phase_id.as_str() == "N02"
-            && notice.audience_slot == "slot_2"
-            && notice.effect == "bulletproof_vest"
-            && notice.status == "marked"),
+        notifications
+            .iter()
+            .any(|notice| notice.phase_id.as_str() == "N02"
+                && notice.audience_slot == "slot_2"
+                && notice.effect == "bulletproof_vest"
+                && notice.status == "marked"),
         "vest item mark should notify the recipient"
     );
     assert!(
@@ -12670,8 +12677,7 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
 
     // Kill slot_1 via a ResolutionApplied envelope (the engine's seam).
     let applied = domain::events::ResolutionApplied {
-        phase_id: domain::phase::PhaseId::parse("N01")
-            .expect("static test phase id is canonical"),
+        phase_id: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: "r1".into(),
         result_version: domain::RESULT_VERSION,
         seed: 1,
@@ -13290,7 +13296,12 @@ async fn game_posts_are_unreachable_by_the_forum_edit_path(pool: PgPool) {
         stored_event_count_by_kinds(
             &pool,
             game,
-            &["DiscussionPostEdited", "DiscussionPostRetracted", "PostEdited", "PostRetracted"],
+            &[
+                "DiscussionPostEdited",
+                "DiscussionPostRetracted",
+                "PostEdited",
+                "PostRetracted"
+            ],
         )
         .await,
         0

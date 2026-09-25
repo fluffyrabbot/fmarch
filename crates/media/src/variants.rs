@@ -995,7 +995,11 @@ fn prepare_variant_set(
             check_variant_dimensions(key, width, height, limits)?;
             let resized =
                 resize_premultiplied(rgba8_pixels, handle.width(), handle.height(), width, height)?;
-            let has_alpha = resized.chunks_exact(4).any(|pixel| pixel[3] != 255);
+            let has_alpha = resized
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] != 255);
             let encoded = encode_variant(key, &resized, width, height, has_alpha, limits)?;
             aggregate = aggregate.checked_add(encoded.len() as u64).ok_or(
                 MediaError::VariantAggregateBytesExceeded {
@@ -1144,7 +1148,7 @@ fn resize_premultiplied(
             bytes: source.len(),
         }
     })?;
-    for pixel in source.chunks_exact(4) {
+    for pixel in source.as_chunks::<4>().0.iter() {
         let alpha = u16::from(pixel[3]);
         premultiplied.push(((u16::from(pixel[0]) * alpha + 127) / 255) as u8);
         premultiplied.push(((u16::from(pixel[1]) * alpha + 127) / 255) as u8);
@@ -1159,7 +1163,7 @@ fn resize_premultiplied(
         image::imageops::resize(&image, width, height, FilterType::Lanczos3)
     };
     let mut output = resized.into_raw();
-    for pixel in output.chunks_exact_mut(4) {
+    for pixel in output.as_chunks_mut::<4>().0.iter_mut() {
         let alpha = u16::from(pixel[3]);
         if alpha == 0 {
             pixel[..3].fill(0);
@@ -1648,7 +1652,9 @@ mod tests {
         height: u32,
     ) -> Vec<u8> {
         let premultiplied: Vec<u8> = source
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|pixel| {
                 let alpha = u16::from(pixel[3]);
                 [
@@ -1662,7 +1668,7 @@ mod tests {
         let source_image = RgbaImage::from_raw(source_width, source_height, premultiplied).unwrap();
         let mut resized =
             image::imageops::resize(&source_image, width, height, FilterType::Lanczos3).into_raw();
-        for pixel in resized.chunks_exact_mut(4) {
+        for pixel in resized.as_chunks_mut::<4>().0.iter_mut() {
             let alpha = u16::from(pixel[3]);
             if alpha == 0 {
                 pixel[..3].fill(0);
