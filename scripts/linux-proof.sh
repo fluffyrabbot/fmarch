@@ -11,7 +11,7 @@ fi
 export FMARCH_DEV_POSTGRES_BIN="$FMARCH_PROOF_TOOLCHAIN_ROOT/postgresql-16.15-openssl/bin"
 export PATH="$FMARCH_DEV_POSTGRES_BIN:$PATH"
 [[ $(uname -s) == Linux && $(node --version) == v26.9.0 && $(npm --version) == 12.0.2 ]]
-[[ $(rustc --version) == 'rustc 1.95.0 '* && $(pg_ctl --version) == 'pg_ctl (PostgreSQL) 16.15' ]]
+[[ $(rustc --version) == 'rustc 1.98.1 '* && $(pg_ctl --version) == 'pg_ctl (PostgreSQL) 16.15' ]]
 export CARGO_BUILD_JOBS=2
 export FMARCH_DEV_POSTGRES_HOST=127.0.0.1
 export FMARCH_DEV_POSTGRES_PORT=15544
