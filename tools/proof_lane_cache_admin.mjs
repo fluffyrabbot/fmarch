@@ -26,6 +26,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  PROOF_CACHE_INPUT_SCHEMA,
   computeLaneProofKey,
   reusableLaneIds,
   proofToolchain,
@@ -203,7 +204,9 @@ export function scanProofCache({ root }) {
         if (!proofKey || raw.proof_key !== proofKey) {
           throw new Error('cache entry proof key does not match its directory');
         }
-        const { entry } = readProofCacheEntry(root, laneId, proofKey);
+        // Historical input contracts remain custody evidence. Reuse admission
+        // is stricter than integrity validation and is reported separately.
+        const { entry } = readProofCacheEntry(root, laneId, proofKey, { allowHistoricalInputs: true });
         entries.push({
           valid: true,
           directory,
@@ -212,6 +215,8 @@ export function scanProofCache({ root }) {
           bytes,
           stateSha256,
           createdAt: entry.created_at ?? null,
+          inputSchema: entry.inputs.schema,
+          inputContractCompatible: entry.inputs.schema === PROOF_CACHE_INPUT_SCHEMA,
           entry,
         });
       } catch (error) {
@@ -259,7 +264,7 @@ function objectChanges(before = {}, after = {}) {
 }
 
 function contractChanges(beforePayload, afterPayload) {
-  const fields = ['schema', 'dependency_lane_ids', 'lanes', 'areas', 'matchers'];
+  const fields = ['schema', 'dependency_lane_ids', 'lanes', 'runner', 'areas', 'matchers'];
   return fields.flatMap((field) => {
     const before = beforePayload?.[field];
     const after = afterPayload?.[field];
@@ -281,6 +286,8 @@ export function explainProofCacheLane(laneId, manifest, options) {
     .sort((left, right) => timestamp(right.createdAt) - timestamp(left.createdAt) || String(left.proofKey).localeCompare(String(right.proofKey)));
   const exact = candidates.find((candidate) => candidate.proofKey === computed.proofKey);
   const baseline = candidates.find((candidate) => candidate.valid && candidate.proofKey !== computed.proofKey) ?? null;
+  const contractChanged = exact?.valid && !exact.inputContractCompatible ||
+    !exact && baseline?.valid && !baseline.inputContractCompatible;
   const changes = baseline ? {
     inputs: inputChanges(baseline.entry.inputs, computed.payload),
     toolchain: objectChanges(baseline.entry.inputs?.toolchain, computed.payload.toolchain),
@@ -289,16 +296,22 @@ export function explainProofCacheLane(laneId, manifest, options) {
   return {
     lane_id: laneId,
     eligible: reusableLaneIds(manifest).has(laneId),
-    status: exact?.valid ? 'hit' : exact ? 'corrupt' : 'miss',
+    status: exact?.valid && exact.inputContractCompatible ? 'hit' : exact && !exact.valid ? 'corrupt' : 'miss',
+    reason: contractChanged ? 'input-contract-changed' : exact && !exact.valid ? 'corrupt-entry' : exact ? null : 'not-found',
     proof_key: computed.proofKey,
+    input_schema: PROOF_CACHE_INPUT_SCHEMA,
     exact_entry: exact ? {
       valid: exact.valid,
+      input_schema: exact.inputSchema ?? null,
+      input_contract_compatible: exact.inputContractCompatible ?? false,
       created_at: exact.createdAt ?? null,
       source_receipt_id: exact.entry?.source_receipt_id ?? null,
       reason: exact.reason ?? null,
     } : null,
     compared_to: baseline ? {
       proof_key: baseline.proofKey,
+      input_schema: baseline.inputSchema,
+      input_contract_compatible: baseline.inputContractCompatible,
       created_at: baseline.createdAt,
       source_receipt_id: baseline.entry.source_receipt_id,
     } : null,
@@ -306,6 +319,9 @@ export function explainProofCacheLane(laneId, manifest, options) {
     candidates: candidates.map((candidate) => ({
       proof_key: candidate.proofKey,
       valid: candidate.valid,
+      input_schema: candidate.inputSchema ?? null,
+      input_contract_compatible: candidate.inputContractCompatible ?? false,
+      reuse_rejection: candidate.valid && !candidate.inputContractCompatible ? 'input-contract-changed' : null,
       created_at: candidate.createdAt ?? null,
       source_receipt_id: candidate.entry?.source_receipt_id ?? null,
       bytes: candidate.bytes,
@@ -445,6 +461,8 @@ export function planProofCacheGc({
 }
 
 function serializableGcEntry(root, entry) {
+  // Preserve the historical custody inventory shape. Input-contract freshness
+  // controls reuse, not integrity, retention or immutable receipt hashes.
   return {
     directory: relative(root, entry.directory).replaceAll('\\', '/'),
     lane_id: entry.laneId,
@@ -1116,6 +1134,10 @@ function formatExplanation(explanation) {
   ];
   if (explanation.exact_entry?.source_receipt_id) lines.push(`  source receipt: ${explanation.exact_entry.source_receipt_id}`);
   if (explanation.exact_entry?.reason) lines.push(`  corruption: ${explanation.exact_entry.reason}`);
+  if (explanation.reason === 'input-contract-changed') {
+    const priorSchema = explanation.exact_entry?.input_schema ?? explanation.compared_to?.input_schema;
+    lines.push(`  input-contract-changed: schema ${priorSchema} is obsolete; expected ${explanation.input_schema}; fresh execution required`);
+  }
   if (explanation.compared_to) lines.push(`  compared with: ${explanation.compared_to.proof_key} (${explanation.compared_to.source_receipt_id})`);
   for (const change of explanation.changes.inputs) {
     lines.push(`  ${change.kind} input ${change.path}: ${change.before?.sha256 ?? '-'} -> ${change.after?.sha256 ?? '-'}`);

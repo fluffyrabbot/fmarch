@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -43,6 +43,7 @@ function lane(command, assertionTargets = []) {
     kind: 'shell',
     command,
     assertion_targets: assertionTargets,
+    cache_inputs: { groups: [], paths: [] },
     execution: {
       class: 'cargo', timeout_seconds: 10,
       argv: command.split(' '), resources: [],
@@ -52,6 +53,18 @@ function lane(command, assertionTargets = []) {
 
 function manifest() {
   return {
+    cache_inputs: {
+      version: 1,
+      global: [
+        ...['Cargo.lock', 'Cargo.toml', 'package.json', 'package-lock.json',
+          'frontend/package.json', 'frontend/package-lock.json', 'rust-toolchain.toml',
+          'scripts/with-proof-node.sh', 'tools/proof_lane_cache.mjs',
+          'tools/proof_lane_execution.mjs', 'tools/proof_lane_select.mjs']
+          .map((path) => ({ kind: 'file', path })),
+        { kind: 'glob', path: 'crates/*/migrations/**' },
+      ],
+      groups: {}, packages: {},
+    },
     lanes: {
       audit: lane('cargo test -p commands --test semantic_audit', ['commands/test/semantic_audit']),
       canonical: lane('cargo test -p commands --lib', ['commands/lib']),
@@ -165,7 +178,7 @@ test('canonical proof keys exclude registry packages from full locked metadata',
   const result = computeLaneProofKey('canonical', manifest(), {
     root, files, metadata: fullMetadata, toolchain,
   });
-  assert.equal(result.payload.matchers.some((path) => path.includes('registry/serde')), false);
+  assert.equal(result.payload.matchers.some(({ path }) => path.includes('registry/serde')), false);
 });
 
 test('proof keys bind migrations, dependency locks, toolchains, commands, and fixtures', (t) => {
@@ -250,4 +263,183 @@ test('passing lane in a failed checkpoint can qualify a later checkpoint only wi
   assert.ok(loadProofCacheHits(['audit'], manifest(), options).hits.has('audit'));
   writeFileSync(join(root, 'crates/domain/src/lib.rs'), 'changed dependency');
   assert.equal(loadProofCacheHits(['audit'], manifest(), options).hits.size, 0);
+});
+
+function addFiles(root, files, additions) {
+  for (const [path, content] of Object.entries(additions)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content);
+    if (!files.includes(path)) files.push(path);
+  }
+}
+
+test('literal route names are never interpreted as patterns, and declared globs stay patterns', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const routes = [
+    'frontend/src/routes/g/[game]/host/+page.svelte',
+    'frontend/src/routes/discussions/[slug]/+page.svelte',
+    'frontend/src/routes/assets/[...path]/+server.js',
+  ];
+  const accidentalMatch = 'frontend/src/routes/g/g/host/+page.svelte';
+  addFiles(root, files, Object.fromEntries([...routes, accidentalMatch].map((path) => [path, 'original'])));
+  const spec = manifest();
+  spec.lanes.audit.cache_inputs.paths = routes.map((path) => ({ kind: 'file', path }));
+  const compute = () => computeLaneProofKey('audit', spec, { root, files, metadata: metadata(root), toolchain });
+  const original = compute();
+  for (const path of routes) {
+    assert.ok(original.payload.inputs.some((input) => input.path === path), path);
+    writeFileSync(join(root, path), 'changed');
+    assert.notEqual(compute().proofKey, original.proofKey, path);
+    writeFileSync(join(root, path), 'original');
+  }
+  assert.ok(!original.payload.inputs.some((input) => input.path === accidentalMatch));
+  writeFileSync(join(root, accidentalMatch), 'unrelated');
+  assert.equal(compute().proofKey, original.proofKey);
+
+  spec.lanes.audit.cache_inputs.paths = [{ kind: 'prefix', path: 'frontend/src/routes/g/[game]/' }];
+  assert.ok(compute().payload.inputs.some((input) => input.path === routes[0]));
+  assert.ok(!compute().payload.inputs.some((input) => input.path === accidentalMatch));
+
+  spec.lanes.audit.cache_inputs.paths = [{ kind: 'glob', path: 'frontend/src/routes/**/+page.svelte' }];
+  for (const path of [routes[0], routes[1], accidentalMatch]) {
+    assert.ok(compute().payload.inputs.some((input) => input.path === path), path);
+  }
+  assert.ok(!compute().payload.inputs.some((input) => input.path === routes[2]));
+});
+
+test('declared route scopes bind additions and deletions independently of file enumeration order', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const spec = manifest();
+  spec.lanes.audit.cache_inputs.paths = [{ kind: 'prefix', path: 'frontend/src/routes/' }];
+  const compute = () => computeLaneProofKey('audit', spec, { root, files, metadata: metadata(root), toolchain });
+  const empty = compute().proofKey;
+  const path = 'frontend/src/routes/g/[game]/+page.svelte';
+  addFiles(root, files, { [path]: 'route' });
+  const added = compute();
+  assert.notEqual(added.proofKey, empty);
+  files.reverse();
+  assert.equal(compute().proofKey, added.proofKey);
+  rmSync(join(root, path));
+  assert.equal(compute().proofKey, empty);
+});
+
+test('hard dependency lanes and transitive package fixture declarations enter the consumer key', (t) => {
+  const { root, files } = fixtureRoot(t);
+  addFiles(root, files, { 'fixtures/domain.json': 'domain', 'tools/preparation.mjs': 'prep' });
+  const spec = manifest();
+  spec.cache_inputs.packages.domain = [{ kind: 'file', path: 'fixtures/domain.json' }];
+  spec.lanes.shared.cache_inputs.paths = [{ kind: 'file', path: 'tools/preparation.mjs' }];
+  spec.lanes.audit.depends_on = ['shared'];
+  const compute = () => computeLaneProofKey('audit', spec, { root, files, metadata: metadata(root), toolchain });
+  const original = compute().proofKey;
+  for (const path of ['fixtures/domain.json', 'tools/preparation.mjs']) {
+    const before = readFileSync(join(root, path));
+    writeFileSync(join(root, path), 'mutated');
+    assert.notEqual(compute().proofKey, original, path);
+    writeFileSync(join(root, path), before);
+  }
+});
+
+test('key computation rejects misspelled supplemental packages and binds runner policy', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const spec = manifest();
+  spec.cache_inputs.packages.domian = [{ kind: 'file', path: 'package.json' }];
+  const compute = () => computeLaneProofKey('audit', spec, { root, files, metadata: metadata(root), toolchain });
+  assert.throws(compute, /unknown package domian/);
+  delete spec.cache_inputs.packages.domian;
+  spec.runner = { max_parallel: 1 };
+  const before = compute().proofKey;
+  spec.runner.max_parallel = 2;
+  assert.notEqual(compute().proofKey, before);
+});
+
+const repositoryManifest = JSON.parse(readFileSync(new URL('../docs/ops/proof-lane-manifest.json', import.meta.url), 'utf8'));
+
+function repositoryFixture(t) {
+  const fixture = fixtureRoot(t);
+  addFiles(fixture.root, fixture.files, {
+    'frontend/src/routes/g/[game]/host/+page.svelte': 'host-page',
+    'frontend/src/routes/discussions/[slug]/+page.svelte': 'discussion-page',
+    'tools/live_stack/host_invite_retry_scenario.mjs': 'browser-helper',
+    'tools/cargo_test_evidence.mjs': 'cargo-evidence-wrapper',
+    'tools/fixtures/im_human_v4/day_vote_resolution.fmarch.json': 'day-vote-fixture',
+    'docs/ops/proof-runs.json': 'proof-runs',
+    'docs/arch/09-engine-and-packs.md': 'engine-contract',
+    'packs/example/pack.json': 'pack',
+    'programs/example.json': 'program',
+    'crates/commands/tests/pipeline/day_events.rs': 'imported-proof-source',
+    'crates/forum_postgres/src/lib.rs': 'postgres-source',
+    'crates/event_actor/src/lib.rs': 'event-actor',
+    'crates/eventstore/src/lib.rs': 'eventstore',
+    'crates/operator_proof/src/lib.rs': 'operator-proof',
+    'crates/operator_api/src/lib.rs': 'operator-api',
+    'crates/identity/src/lib.rs': 'identity',
+    'crates/projections/src/lib.rs': 'projections',
+  });
+  const names = [...new Set(['commands', 'domain', 'membership', 'forum_postgres', 'event_actor', 'eventstore',
+    'operator_proof', 'operator_api', 'identity', 'projections', ...Object.keys(repositoryManifest.cache_inputs.packages)])];
+  fixture.metadata = { packages: names.map((name) => ({
+    name,
+    manifest_path: join(fixture.root, 'crates', name, 'Cargo.toml'),
+    dependencies: name === 'operator_api' ? [{ name: 'operator_proof' }] : [],
+  })) };
+  fixture.compute = (laneId) => computeLaneProofKey(laneId, repositoryManifest, {
+    root: fixture.root, files: fixture.files, metadata: fixture.metadata, toolchain,
+  });
+  return fixture;
+}
+
+test('both production host browser lane keys include and react to the literal host route', (t) => {
+  const { root, compute } = repositoryFixture(t);
+  const path = 'frontend/src/routes/g/[game]/host/+page.svelte';
+  const ids = ['test:host-console-live-stack-smoke', 'test:host-console-day-event-room-live-stack'];
+  const before = ids.map(compute);
+  for (const result of before) assert.ok(result.payload.inputs.some((input) => input.path === path));
+  writeFileSync(join(root, path), 'only the host route changed');
+  for (const [index, id] of ids.entries()) assert.notEqual(compute(id).proofKey, before[index].proofKey, id);
+});
+
+test('production pure Rust keys exclude unrelated UI tools but bind source, locks, runtime and toolchain', (t) => {
+  const { root, files, metadata: packageMetadata, compute } = repositoryFixture(t);
+  const laneId = 'cargo:event-actor';
+  const before = compute(laneId);
+  for (const path of ['frontend/src/routes/g/[game]/host/+page.svelte', 'tools/live_stack/host_invite_retry_scenario.mjs']) {
+    assert.ok(!before.payload.inputs.some((input) => input.path === path), path);
+    writeFileSync(join(root, path), 'unrelated change');
+    assert.equal(compute(laneId).proofKey, before.proofKey, path);
+  }
+  for (const path of ['crates/event_actor/src/lib.rs', 'Cargo.lock', 'rust-toolchain.toml',
+    'scripts/with-proof-node.sh', 'tools/proof_lane_execution.mjs', 'crates/database_schema/migrations/0001.sql']) {
+    const bytes = readFileSync(join(root, path));
+    writeFileSync(join(root, path), 'relevant change');
+    assert.notEqual(compute(laneId).proofKey, before.proofKey, path);
+    writeFileSync(join(root, path), bytes);
+  }
+  assert.notEqual(computeLaneProofKey(laneId, repositoryManifest, {
+    root, files, metadata: packageMetadata, toolchain: { ...toolchain, rustc: 'new compiler' },
+  }).proofKey, before.proofKey);
+});
+
+test('production runtime reads and cross-crate imported proof sources remain cache dependencies', (t) => {
+  const { root, compute } = repositoryFixture(t);
+  const cases = [
+    ['cargo:domain', 'tools/fixtures/im_human_v4/day_vote_resolution.fmarch.json'],
+    ['cargo:operator-proof', 'docs/ops/proof-runs.json'],
+    ['cargo:operator_api', 'docs/arch/09-engine-and-packs.md'],
+    ['cargo:operator_api', 'crates/commands/tests/pipeline/day_events.rs'],
+    ['cargo:eventstore', 'crates/membership/src/lib.rs'],
+    ['cargo:identity', 'crates/membership/Cargo.toml'],
+    ['cargo:projections', 'crates/forum_postgres/src/lib.rs'],
+    ['cargo:forum-postgres', 'tools/cargo_test_evidence.mjs'],
+    ['cargo:commands-pg', 'packs/example/pack.json'],
+    ['cargo:commands-pg', 'programs/example.json'],
+  ];
+  for (const [laneId, path] of cases) {
+    const before = compute(laneId);
+    assert.ok(before.payload.inputs.some((input) => input.path === path), `${laneId}: ${path}`);
+    const bytes = readFileSync(join(root, path));
+    writeFileSync(join(root, path), 'runtime dependency changed');
+    assert.notEqual(compute(laneId).proofKey, before.proofKey, `${laneId}: ${path}`);
+    writeFileSync(join(root, path), bytes);
+  }
 });

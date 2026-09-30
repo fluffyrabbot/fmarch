@@ -82,6 +82,7 @@ import {
   workspaceFiles,
   workspaceMetadata,
 } from './proof_lane_cache.mjs';
+import { validateCacheInputContract } from './proof_lane_inputs.mjs';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
@@ -932,6 +933,9 @@ async function main(argv) {
   const admissionMetadata = proofAdmissionMetadata(argv);
   const manifest = loadManifest();
   validateExecutionManifest(manifest);
+  validateCacheInputContract(manifest, admissionMetadata ? {
+    packageNames: workspacePackagesFromMetadata(admissionMetadata).map((pkg) => pkg.name),
+  } : {});
   if (measuring) {
     // Cheapest first, so a long sweep banks its easy lanes before the slow ones.
     const laneIds = args.measureAll
