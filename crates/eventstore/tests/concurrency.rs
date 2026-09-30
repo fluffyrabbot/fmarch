@@ -9,8 +9,8 @@ use eventstore::{
     rehearse_runtime_kek_retirement, reseal_delivery_credential_in_tx,
     reseal_private_projection_in_tx, rewrap_stream_data_keys, rewrap_stream_data_keys_by_kid_batch,
     rotate_stream_data_key, runtime_kek_reference_report, runtime_kek_status,
-    validate_stream_export, ActorId, DirectEnvelopeResealContext, EventInput, ExportEvent,
-    ExportStreamKey, RuntimeKekLifecycle, RuntimeKekRetirementEvidence, StreamExport,
+    validate_stream_export, DirectEnvelopeResealContext, EventInput, ExportEvent, ExportStreamKey,
+    RuntimeKekLifecycle, RuntimeKekRetirementEvidence, StreamExport,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -82,7 +82,7 @@ fn vote(target: &str, phase: &str) -> EventInput {
         "VoteSubmitted",
         1,
         serde_json::json!({ "target": target, "phase_id": phase, "weight": 1.0 }),
-        ActorId::Slot("slot_1".into()),
+        serde_json::json!({"type":"Slot","id":"slot_1"}),
         1,
     )
 }
@@ -97,7 +97,7 @@ fn private_post(body: &str) -> EventInput {
             "body": body,
             "phase_id": "D01",
         }),
-        ActorId::Slot("slot_1".into()),
+        serde_json::json!({"type":"Slot","id":"slot_1"}),
         1,
     )
 }

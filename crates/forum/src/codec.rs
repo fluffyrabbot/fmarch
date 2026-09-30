@@ -6,7 +6,7 @@
 //! verbatim, not passed through today's command normalization or admission rules.
 
 use content_reference::{ProfileMention, Quotation};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
@@ -15,7 +15,7 @@ use crate::{PostingState, TopicVisibility};
 
 /// A successfully decoded persisted fact. The optional historical author is
 /// deliberate: newly decided `TopicEvent` values always carry an author.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "payload", deny_unknown_fields)]
 pub enum DecodedForumEvent {
     #[serde(rename = "DiscussionAreaCreated")]
@@ -28,13 +28,21 @@ pub enum DecodedForumEvent {
     TopicCreated {
         area_id: Uuid,
         title: String,
-        #[serde(default, deserialize_with = "present_profile")]
+        #[serde(
+            default,
+            deserialize_with = "present_profile",
+            skip_serializing_if = "Option::is_none"
+        )]
         author_profile_id: Option<Uuid>,
     },
     #[serde(rename = "DiscussionPostSubmitted")]
     PostSubmitted {
         body: String,
-        #[serde(default, deserialize_with = "present_profile")]
+        #[serde(
+            default,
+            deserialize_with = "present_profile",
+            skip_serializing_if = "Option::is_none"
+        )]
         author_profile_id: Option<Uuid>,
         #[serde(default, deserialize_with = "reference_list")]
         quotations: Vec<Quotation>,
@@ -76,6 +84,90 @@ pub enum ForumDecodeError {
         #[source]
         source: serde_json::Error,
     },
+}
+
+impl DecodedForumEvent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::AreaCreated { .. } => crate::AREA_CREATED,
+            Self::TopicCreated { .. } => crate::TOPIC_CREATED,
+            Self::PostSubmitted { .. } => crate::POST_SUBMITTED,
+            Self::PostEdited { .. } => crate::POST_EDITED,
+            Self::PostRetracted { .. } => crate::POST_RETRACTED,
+            Self::PostingStateChanged { .. } => crate::POSTING_STATE_CHANGED,
+            Self::VisibilityChanged { .. } => crate::VISIBILITY_CHANGED,
+            Self::TopicRenamed { .. } => crate::TOPIC_RENAMED,
+            Self::TopicMoved { .. } => crate::TOPIC_MOVED,
+            Self::PinnedChanged { .. } => crate::TOPIC_PINNED_CHANGED,
+        }
+    }
+
+    /// Encoding is owned by the context, including the historical omission of
+    /// unknown profile attribution. Callers never assemble a kind/JSON pair.
+    pub fn payload(&self) -> Value {
+        serde_json::to_value(self)
+            .expect("forum facts contain only serializable domain values")
+            .get("payload")
+            .expect("all forum facts carry a payload")
+            .clone()
+    }
+}
+
+impl From<crate::AreaCreated> for DecodedForumEvent {
+    fn from(event: crate::AreaCreated) -> Self {
+        Self::AreaCreated {
+            slug: event.slug,
+            title: event.title,
+            description: event.description,
+        }
+    }
+}
+
+impl From<crate::TopicEvent> for DecodedForumEvent {
+    fn from(event: crate::TopicEvent) -> Self {
+        use crate::TopicEvent;
+        match event {
+            TopicEvent::Created {
+                area_id,
+                title,
+                author_profile_id,
+            } => Self::TopicCreated {
+                area_id,
+                title,
+                author_profile_id: Some(author_profile_id),
+            },
+            TopicEvent::PostSubmitted {
+                body,
+                author_profile_id,
+                quotations,
+                mentions,
+            } => Self::PostSubmitted {
+                body,
+                author_profile_id: Some(author_profile_id),
+                quotations,
+                mentions,
+            },
+            TopicEvent::PostEdited {
+                source_seq,
+                body,
+                mentions,
+                revision,
+            } => Self::PostEdited {
+                source_seq,
+                body,
+                mentions,
+                revision,
+            },
+            TopicEvent::PostRetracted { source_seq } => Self::PostRetracted { source_seq },
+            TopicEvent::PostingStateChanged { posting_state } => {
+                Self::PostingStateChanged { posting_state }
+            }
+            TopicEvent::VisibilityChanged { visibility } => Self::VisibilityChanged { visibility },
+            TopicEvent::Renamed { title } => Self::TopicRenamed { title },
+            TopicEvent::Moved { area_id } => Self::TopicMoved { area_id },
+            TopicEvent::PinnedChanged { pinned } => Self::PinnedChanged { pinned },
+        }
+    }
 }
 
 /// Decode exactly the forum-owned kind/version pair. A consumer must stop on

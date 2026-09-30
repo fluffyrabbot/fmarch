@@ -9,7 +9,7 @@ use commands::{
     advance_day_event_automation_as_scheduler, load_engine_snapshot, CohostPermissionClass,
     Command, Reject,
 };
-use eventstore::ActorId;
+use event_actor::ActorId;
 use projections::{
     audit_rebuild, day_event_narratives, day_event_participation, day_events, day_programs,
     phase_state, slot_effects,
@@ -1253,7 +1253,7 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
         .into_iter()
         .find(|event| event.kind == "DayEventResolved")
         .expect("automatic resolution fact");
-    assert_eq!(resolution.actor, eventstore::ActorId::System);
+    assert_eq!(resolution.actor, event_actor::ActorId::System);
     assert_service_audit_initiator(&resolution.meta, "day-event-automation");
     assert_eq!(
         resolution.meta["authority_used"],

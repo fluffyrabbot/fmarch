@@ -63,7 +63,8 @@ impl PostingBudgetPolicy {
         }
         // A single post may carry this many mentions; a smaller window budget
         // would reject a legal post forever instead of asking it to wait.
-        if (self.mention_targets_per_ten_minutes as usize) < content_reference::MAX_MENTIONS_PER_POST
+        if (self.mention_targets_per_ten_minutes as usize)
+            < content_reference::MAX_MENTIONS_PER_POST
         {
             return Err(PostingBudgetPolicyError(format!(
                 "mention budget must admit one full post ({} mentions)",
@@ -122,9 +123,7 @@ impl PostingBudget {
         match self {
             PostingBudget::PostMinute => 60,
             PostingBudget::EditTenMinutes | PostingBudget::MentionTenMinutes => 600,
-            PostingBudget::PostHour | PostingBudget::TopicHour | PostingBudget::ReportHour => {
-                3_600
-            }
+            PostingBudget::PostHour | PostingBudget::TopicHour | PostingBudget::ReportHour => 3_600,
         }
     }
 }
@@ -252,8 +251,7 @@ pub async fn charge_posting_budget_in_tx(
         .fetch_one(&mut **tx)
         .await?;
         if used as i64 > policy.max(budget) as i64 {
-            let retry_after_seconds =
-                (window_started_at + budget.window_seconds() - now).max(1);
+            let retry_after_seconds = (window_started_at + budget.window_seconds() - now).max(1);
             if exceeded.is_none_or(|current| retry_after_seconds > current.retry_after_seconds) {
                 exceeded = Some(PostingBudgetExceeded {
                     budget,
@@ -346,7 +344,10 @@ mod tests {
                 (PostingBudget::TopicHour, 1),
             ]
         );
-        for surface in [PostingSurface::DiscussionPost, PostingSurface::GameThreadPost] {
+        for surface in [
+            PostingSurface::DiscussionPost,
+            PostingSurface::GameThreadPost,
+        ] {
             assert_eq!(
                 posting_draws(&charge(surface, 0, member)),
                 vec![(PostingBudget::PostHour, 1), (PostingBudget::PostMinute, 1)]

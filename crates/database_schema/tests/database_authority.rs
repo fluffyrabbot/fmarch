@@ -19,6 +19,26 @@ const LOCAL_APPLICATION_PASSWORD: &str = "fmarch-local-application-password";
 const LOCAL_KEY_ADMIN_PASSWORD: &str = "fmarch-local-key-admin-password";
 
 #[sqlx::test(migrations = "./migrations")]
+async fn typed_forum_journal_guards_reject_owner_mutation(owner: PgPool) {
+    for statement in [
+        "UPDATE public.event_integration_outbox SET kind = kind",
+        "DELETE FROM public.event_integration_outbox",
+        "TRUNCATE TABLE public.event_integration_outbox",
+        "UPDATE public.forum_area_reservation SET slug = slug",
+        "DELETE FROM public.forum_area_reservation",
+        "TRUNCATE TABLE public.forum_area_reservation",
+    ] {
+        let error = sqlx::query(sqlx::AssertSqlSafe(statement.to_string()))
+            .execute(&owner)
+            .await
+            .expect_err("append-only guards also constrain the migration owner");
+        let database = error.as_database_error().expect("database trigger error");
+        assert_eq!(database.code().as_deref(), Some("P0001"));
+        assert!(database.message().contains("events is append-only"));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     reconcile_database_authority(&owner, APPLICATION_PASSWORD, KEY_ADMIN_PASSWORD)
         .await
@@ -250,6 +270,12 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         "TRUNCATE TABLE public.events",
         "UPDATE public.events SET kind = kind",
         "DELETE FROM public.events",
+        "TRUNCATE TABLE public.event_integration_outbox",
+        "UPDATE public.event_integration_outbox SET kind = kind",
+        "DELETE FROM public.event_integration_outbox",
+        "TRUNCATE TABLE public.forum_area_reservation",
+        "UPDATE public.forum_area_reservation SET slug = slug",
+        "DELETE FROM public.forum_area_reservation",
         "DELETE FROM public.auth_session",
         "UPDATE public.event_direct_key_sentinel SET lifecycle = 'retiring' WHERE kid = 'authority-proof'",
         "SET session_replication_role = replica",
@@ -290,6 +316,9 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         "CREATE TABLE public.authority_escape (id bigint)",
         "INSERT INTO public.events (stream_id, stream_seq, kind, version, occurred_at, sealed_version, stream_key_epoch, sealed_nonce, sealed_body) VALUES ('00000000-0000-0000-0000-000000000001', 1, 'proof', 1, 1, 3, 1, decode(repeat('00', 24), 'hex'), decode(repeat('00', 16), 'hex'))",
         "DELETE FROM public.auth_delivery_intent",
+        "SELECT * FROM public.event_integration_outbox",
+        "SELECT * FROM public.forum_area_reservation",
+        "INSERT INTO public.forum_area_reservation (area_id, slug) VALUES ('18000000-0000-4000-8000-000000000001', 'forbidden')",
         "DELETE FROM public.auth_delivery_provider_attempt_fence",
         "TRUNCATE TABLE public.event_stream_keys",
         "UPDATE public.auth_delivery_intent SET status = status",

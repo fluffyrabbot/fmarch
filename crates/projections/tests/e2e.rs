@@ -14,6 +14,9 @@ mod publication_replay_contract;
 #[path = "e2e/rebuild_fencing.rs"]
 mod rebuild_fencing;
 
+use projections::test_support::{
+    append_discussion_and_project, append_discussion_and_project_expected,
+};
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
@@ -26,12 +29,12 @@ use domain::pack::{GrantKind, Pack};
 use domain::phase::PhaseId;
 use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
-use eventstore::{ActorId, EventInput, StoreError};
+use event_actor::ActorId;
+use eventstore::{EventInput, StoreError};
 use game_persona_application::GamePersonaPresentation;
 use game_platform::{GamePersonaId, GamePersonaName};
 use projections::{
-    action_counters, action_grants, append_and_project, append_discussion_and_project,
-    append_discussion_and_project_expected, audit_rebuild, day_vote_outcomes,
+    action_counters, action_grants, append_and_project, audit_rebuild, day_vote_outcomes,
     discussion_area_by_slug, discussion_posts, discussion_topic_by_id, discussion_topics,
     game_index, host_phase_controls, host_prompts, operator_game_index, phase_state,
     player_notifications, public_profile_by_handle, public_search, rebuild,
@@ -2897,7 +2900,8 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         .unwrap()
         .posts;
     assert_eq!(posts.len(), 12);
-    let admission = projections::PostingAdmission::Enforced(projections::PostingBudgetPolicy::default());
+    let admission =
+        projections::PostingAdmission::Enforced(projections::PostingBudgetPolicy::default());
     let member = projections::PostingStanding::default();
     let report = |source_seq: i64, standing: projections::PostingStanding, at: i64| {
         projections::submit_moderation_report(
@@ -2915,7 +2919,9 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         )
     };
     for (index, post) in posts.iter().take(10).enumerate() {
-        report(post.source_seq, member, 100 + index as i64).await.unwrap();
+        report(post.source_seq, member, 100 + index as i64)
+            .await
+            .unwrap();
     }
     let rejected = report(posts[10].source_seq, member, 111).await;
     let Err(ProjectionError::PostingBudgetExceeded(exceeded)) = rejected else {
@@ -2950,7 +2956,9 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         "the rejected attempt rolled its charge back"
     );
     // The fixed window resets: the member files again once it has elapsed.
-    report(posts[11].source_seq, member, 100 + 3_600).await.unwrap();
+    report(posts[11].source_seq, member, 100 + 3_600)
+        .await
+        .unwrap();
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -4627,7 +4635,11 @@ async fn posting_budget_windows_reject_reset_and_roll_back_atomically(pool: sqlx
     };
     assert_eq!(exceeded.budget, PostingBudget::PostMinute);
     assert_eq!(exceeded.retry_after_seconds, 1_000 + 60 - 1_045);
-    assert_eq!(used("post_minute").await, Some(2), "a rejection rolls back every draw");
+    assert_eq!(
+        used("post_minute").await,
+        Some(2),
+        "a rejection rolls back every draw"
+    );
     assert_eq!(used("post_hour").await, Some(2));
 
     // The minute window resets, but the hourly window still binds: the longest
@@ -4675,13 +4687,12 @@ async fn posting_budget_windows_reject_reset_and_roll_back_atomically(pool: sqlx
             .unwrap();
     }
     tx.commit().await.unwrap();
-    let rows: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM posting_budget_window WHERE principal_id = $1",
-    )
-    .bind(other.as_uuid())
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM posting_budget_window WHERE principal_id = $1")
+            .bind(other.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(rows, 0);
 
     // Idle windows of other principals are garbage once the widest window passes.
@@ -4694,5 +4705,9 @@ async fn posting_budget_windows_reject_reset_and_roll_back_atomically(pool: sqlx
     )
     .await
     .unwrap();
-    assert_eq!(used("post_hour").await, None, "the author's idle rows were collected");
+    assert_eq!(
+        used("post_hour").await,
+        None,
+        "the author's idle rows were collected"
+    );
 }

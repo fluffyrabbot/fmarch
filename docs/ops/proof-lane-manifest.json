@@ -31,6 +31,11 @@
     }
   },
   "lanes": {
+    "cargo:event-actor": {"kind": "shell", "command": "cargo test -p event_actor --lib", "assertion_targets": ["event_actor/lib"], "execution": {"class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "event_actor", "--lib"], "resources": [{"kind": "lock", "name": "cargo-target"}]}},
+    "cargo:game-event-codec": {"kind": "shell", "command": "cargo test -p game_event_codec --lib", "assertion_targets": ["game_event_codec/lib"], "execution": {"class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "game_event_codec", "--lib"], "resources": [{"kind": "lock", "name": "cargo-target"}]}},
+    "cargo:forum-application": {"kind": "shell", "command": "cargo test -p forum_application --lib", "assertion_targets": ["forum_application/lib"], "execution": {"class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "forum_application", "--lib"], "resources": [{"kind": "lock", "name": "cargo-target"}]}},
+    "cargo:forum-journal": {"kind": "shell", "command": "cargo test -p forum_journal --lib", "assertion_targets": ["forum_journal/lib"], "execution": {"class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "forum_journal", "--lib"], "resources": [{"kind": "lock", "name": "cargo-target"}]}},
+    "cargo:forum-postgres": {"coverage": ["Forum aggregate authority despite corrupted query projections, real session and profile admission, and atomic journal/outbox/budget/projector rollback"], "kind": "shell", "phase": "focused", "command": "cargo test -p forum_postgres --test authority -- --test-threads=1", "assertion_targets": ["forum_postgres/test/authority"], "execution": {"class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "forged_query_topic_cannot_reopen_locked_or_hidden_canonical_policy", "--required", "forged_post_author_revision_clock_and_body_cannot_grant_authority", "--required", "curation_uses_live_session_authority_and_canonical_current_state", "--required", "projector_and_outbox_failures_roll_back_events_facts_budget_and_query_rows", "--required", "missing_integration_fact_fails_readiness_instead_of_silently_passing_decode", "--required", "forged_public_profile_cannot_admit_a_canonically_private_author", "--required", "profile_admission_shares_identity_locks_without_waiting_on_profile_rows", "--required", "forum_commit_completes_while_profile_writer_waits_on_shared_authority", "--", "cargo", "test", "-p", "forum_postgres", "--test", "authority", "--", "--test-threads=1"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}},
     "cargo:day-event-runtime": { "coverage": ["Lease takeover, cancellation, retry timing, and pool starvation"],"kind": "shell", "phase": "focused", "command": "cargo test -p commands --test pipeline scheduler_ -- --test-threads=1", "assertion_targets": ["commands/test/pipeline"], "execution": {"class": "postgres", "timeout_seconds": 300, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "scheduler_slow_game_does_not_preclaim_ready_game_and_retries_from_completion", "--required", "scheduler_cancellation_discards_connection_and_expired_lease_recovers", "--", "cargo", "test", "-p", "commands", "--test", "pipeline", "scheduler_", "--", "--test-threads=1"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL"}]}},
     "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings", "measurement": "diff-sensitive", "execution": { "class": "cargo", "timeout_seconds": 1800, "argv": ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
     "cargo:content-reference": { "kind": "shell", "command": "cargo test -p content_reference --lib --test universe_boundary", "assertion_targets": ["content_reference/lib", "content_reference/test/universe_boundary"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "content_reference", "--lib", "--test", "universe_boundary"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
@@ -139,7 +144,7 @@
       "outputs": ["docs/ops/completeness-scorecard.md"],
       "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:completeness-scorecard"], "resources": [] }
     },
-    "test:proof-lane-contract": { "phase": "focused","kind": "npm", "execution": {"class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": []}, "write_command": "npm run generate:rust-reference", "inputs": ["crates/domain/src/ir.rs", "crates/domain/src/phase.rs", "crates/domain/src/state.rs", "crates/eventstore/src/lib.rs", "crates/domain/src/events.rs", "crates/game_platform/src/lib.rs", "crates/domain/src/pack/model.rs", "crates/domain/src/resolver.rs", "tools/rust_reference.mjs"], "outputs": ["docs/reference/rust-contracts.md"]},
+    "test:proof-lane-contract": { "phase": "focused","kind": "npm", "execution": {"class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": []}, "write_command": "npm run generate:rust-reference", "inputs": ["crates/domain/src/ir.rs", "crates/domain/src/phase.rs", "crates/domain/src/state.rs", "crates/eventstore/src/lib.rs", "crates/event_actor/src/lib.rs", "crates/domain/src/events.rs", "crates/game_platform/src/lib.rs", "crates/domain/src/pack/model.rs", "crates/domain/src/resolver.rs", "tools/rust_reference.mjs"], "outputs": ["docs/reference/rust-contracts.md"]},
     "test:proof-cache-maintenance": { "cache": false, "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-cache-maintenance"], "resources": [] } },
     "test:production-promotion": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:production-promotion"], "resources": [] } },
     "test:release-coordinator": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:release-coordinator"], "resources": [] } },
@@ -157,6 +162,101 @@
     "test:dev-test-game-community-subscriptions": {"phase": "acceptance", "kind": "npm", "execution": {"class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:dev-test-game-community-subscriptions"], "resources": [{"kind": "lock", "name": "cargo-target"}, {"kind": "lock", "name": "browser"}, {"kind": "lock", "name": "frontend-worktree"}, {"kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL"}, {"kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR"}]}}
   },
   "areas": [
+    {
+      "id": "crate:event-actor",
+      "tier": "active",
+      "paths": [
+        "crates/event_actor/"
+      ],
+      "crate": "event_actor",
+      "dependency_lanes": [
+        "cargo:event-actor",
+        "cargo:clippy-workspace"
+      ],
+      "lanes": [
+        "cargo:event-actor",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.executable-bounded-contexts"
+      ]
+    },
+    {
+      "id": "crate:game-event-codec",
+      "tier": "active",
+      "paths": [
+        "crates/game_event_codec/"
+      ],
+      "crate": "game_event_codec",
+      "dependency_lanes": [
+        "cargo:game-event-codec",
+        "cargo:clippy-workspace"
+      ],
+      "lanes": [
+        "cargo:game-event-codec",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.executable-bounded-contexts"
+      ]
+    },
+    {
+      "id": "crate:forum-application",
+      "tier": "active",
+      "paths": [
+        "crates/forum_application/"
+      ],
+      "crate": "forum_application",
+      "dependency_lanes": [
+        "cargo:forum-application",
+        "cargo:clippy-workspace"
+      ],
+      "lanes": [
+        "cargo:forum-application",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.executable-bounded-contexts"
+      ]
+    },
+    {
+      "id": "crate:forum-journal",
+      "tier": "active",
+      "paths": [
+        "crates/forum_journal/"
+      ],
+      "crate": "forum_journal",
+      "dependency_lanes": [
+        "cargo:forum-journal",
+        "cargo:clippy-workspace"
+      ],
+      "lanes": [
+        "cargo:forum-journal",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.executable-bounded-contexts"
+      ]
+    },
+    {
+      "id": "crate:forum-postgres",
+      "tier": "active",
+      "paths": [
+        "crates/forum_postgres/"
+      ],
+      "crate": "forum_postgres",
+      "dependency_lanes": [
+        "cargo:forum-postgres",
+        "cargo:clippy-workspace"
+      ],
+      "lanes": [
+        "cargo:forum-postgres",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.executable-bounded-contexts"
+      ]
+    },
     {
       "id": "commands:day-event-runtime",
       "tier": "frozen",
@@ -277,7 +377,7 @@
     },
     {
       "id": "crate:eventstore",
-      "tier": "frozen",
+      "tier": "active",
       "paths": ["crates/eventstore/"],
       "crate": "eventstore",
       "dependency_lanes": ["cargo:eventstore", "cargo:clippy-workspace"],
@@ -286,7 +386,7 @@
     },
     {
       "id": "eventstore:tests",
-      "tier": "frozen",
+      "tier": "active",
       "paths": ["crates/eventstore/tests/"],
       "lanes": ["cargo:eventstore", "cargo:clippy-workspace"],
       "capabilities": ["foundation.event-store-projections"]
@@ -576,7 +676,7 @@
     },
     {
       "id": "crate:public-platform",
-      "tier": "frozen",
+      "tier": "active",
       "paths": ["crates/forum/"],
       "crate": "forum",
       "dependency_lanes": ["cargo:public-platform", "cargo:clippy-workspace"],

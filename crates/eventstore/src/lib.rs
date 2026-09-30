@@ -1,7 +1,7 @@
 //! `eventstore` — the append-only event log over Postgres (doc 02 / doc 10).
 //!
-//! IO crate. Depends on `domain` for event *types*; `domain` stays pure (no
-//! sqlx/tokio leaks back into it). All queries are sqlx **runtime** queries
+//! Context-neutral IO crate. Business events, actors, and upcasts belong to
+//! context codecs. All queries are sqlx **runtime** queries
 //! (`sqlx::query` / `query_as`) — NOT the compile-time `query!` macros — so
 //! `cargo build` succeeds with no database running. Compile-time query checking
 //! is deferred hardening (see FRICTION).
@@ -11,7 +11,6 @@
 //! trigger that rejects either at the database level (doc 02). Runtime KEK
 //! rotation updates only the wrapping envelope in `event_stream_keys`.
 
-use principal::PrincipalId;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
@@ -23,31 +22,7 @@ use std::sync::Mutex;
 use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
-pub mod upcaster;
-
-pub use upcaster::upcast;
-
-/// Who or what caused an event (doc 10 `ActorId`).
-///
-/// RULING (doc 10 left the JSON shape unspecified): adjacently-tagged
-/// `{ "type": <variant>, "id": <uuid-or-omitted> }`. The engine only ever emits
-/// `Slot`/`System`; platform events distinguish a credential
-/// [`Principal`](Self::Principal) from the pseudonymous
-/// [`PrivacySubject`](Self::PrivacySubject) used after private claims have been
-/// sealed. They must never share a catch-all `User(String)` variant.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "id")]
-pub enum ActorId {
-    Slot(String),
-    Host,
-    System,
-    /// An authenticated platform principal. This is the canonical UUID-backed
-    /// authority identifier, never an account or provider subject.
-    Principal(PrincipalId),
-    /// A privacy/erasure subject. It is deliberately not a principal and cannot
-    /// be used for authorization.
-    PrivacySubject(Uuid),
-}
+pub mod journal;
 
 /// An event ready to be appended. `stream_seq` is assigned by the store
 /// (`current_max + 1..`), never by the caller — that is the optimistic
@@ -60,7 +35,7 @@ pub struct EventInput {
     pub version: i16,
     /// Typed body. Shape is determined by `kind`.
     pub payload: serde_json::Value,
-    pub actor: ActorId,
+    pub actor: serde_json::Value,
     /// LogicalTime (u64) captured as data at write time (determinism, doc 02).
     pub occurred_at: i64,
     #[serde(default)]
@@ -75,44 +50,18 @@ impl EventInput {
         kind: impl Into<String>,
         version: i16,
         payload: serde_json::Value,
-        actor: ActorId,
+        actor: impl Into<serde_json::Value>,
         occurred_at: i64,
     ) -> Self {
         EventInput {
             kind: kind.into(),
             version,
             payload,
-            actor,
+            actor: actor.into(),
             occurred_at,
             causation_id: None,
             meta: serde_json::json!({}),
         }
-    }
-
-    /// Persist a resolver envelope. Header version tracks [`domain::RESULT_VERSION`].
-    pub fn resolution_applied(
-        payload: serde_json::Value,
-        actor: ActorId,
-        occurred_at: i64,
-    ) -> Self {
-        Self::new(
-            "ResolutionApplied",
-            i16::try_from(domain::RESULT_VERSION).expect("RESULT_VERSION fits event header"),
-            payload,
-            actor,
-            occurred_at,
-        )
-    }
-
-    /// Persist a resolver trace. Header version tracks [`domain::TRACE_VERSION`].
-    pub fn resolution_trace(payload: serde_json::Value, actor: ActorId, occurred_at: i64) -> Self {
-        Self::new(
-            "ResolutionTrace",
-            i16::try_from(domain::TRACE_VERSION).expect("TRACE_VERSION fits event header"),
-            payload,
-            actor,
-            occurred_at,
-        )
     }
 }
 
@@ -125,7 +74,7 @@ pub struct StoredEvent {
     pub kind: String,
     pub version: i16,
     pub payload: serde_json::Value,
-    pub actor: ActorId,
+    pub actor: serde_json::Value,
     pub occurred_at: i64,
     pub causation_id: Option<Uuid>,
     pub meta: serde_json::Value,
@@ -137,7 +86,7 @@ pub struct StoredEvent {
 #[serde(deny_unknown_fields)]
 struct EventBody {
     payload: serde_json::Value,
-    actor: ActorId,
+    actor: serde_json::Value,
     causation_id: Option<Uuid>,
     meta: serde_json::Value,
 }
@@ -148,7 +97,7 @@ struct EventBody {
 #[derive(Serialize)]
 struct EventBodyRef<'a> {
     payload: &'a serde_json::Value,
-    actor: &'a ActorId,
+    actor: &'a serde_json::Value,
     causation_id: Option<Uuid>,
     #[serde(serialize_with = "serialize_normalized_meta")]
     meta: &'a serde_json::Value,
@@ -674,8 +623,8 @@ pub async fn append(
     Ok(stored)
 }
 
-/// Load a full stream in canonical order (`stream_seq` ascending), each row
-/// passed through the upcaster seam (`eventstore::upcast`).
+/// Load a full stream in canonical order (`stream_seq` ascending). Envelopes
+/// retain their exact persisted encoding; context codecs own decode and upcast.
 pub async fn load_stream(pool: &PgPool, stream_id: Uuid) -> Result<Vec<StoredEvent>, StoreError> {
     load_stream_with(pool, stream_id).await
 }
@@ -722,7 +671,7 @@ where
                e.sealed_version, e.stream_key_epoch, e.sealed_nonce, e.sealed_body,
                k.wrap_version, k.wrap_kid, k.wrap_nonce, k.wrapped_dek
         FROM events e
-        JOIN event_stream_keys k
+        LEFT JOIN event_stream_keys k
           ON k.stream_id = e.stream_id AND k.key_epoch = e.stream_key_epoch
         WHERE e.stream_id = $1 AND e.stream_seq > $2
         ORDER BY e.stream_seq ASC
@@ -755,7 +704,7 @@ where
                 entry.insert(unwrap_stream_data_key(wrapped)?)
             }
         };
-        out.push(upcast(open_stored_event(
+        out.push(open_stored_event(
             seq,
             stream_id,
             stream_seq,
@@ -764,7 +713,7 @@ where
             occurred_at,
             &sealed,
             data_key,
-        )?));
+        )?);
     }
     Ok(out)
 }
@@ -1007,7 +956,7 @@ pub async fn import_stream_in_tx(
         .bind(&validated_event.sealed.ciphertext)
         .fetch_one(&mut **tx)
         .await?;
-        imported.push(upcast(StoredEvent {
+        imported.push(StoredEvent {
             seq: row.try_get("seq")?,
             stream_id: export.stream_id,
             stream_seq: event.stream_seq,
@@ -1018,7 +967,7 @@ pub async fn import_stream_in_tx(
             occurred_at: event.occurred_at,
             causation_id: validated_event.body.causation_id,
             meta: validated_event.body.meta,
-        }));
+        });
     }
     Ok(imported)
 }

@@ -6,10 +6,12 @@
 //! a moved topic carries its posts' publication hrefs to the new area; and
 //! every fold rebuilds byte-identically from the stream.
 
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
+use projections::test_support::append_discussion_and_project;
 use projections::{
-    append_discussion_and_project, discussion_area_by_id, discussion_topic_by_id,
-    discussion_topics, public_search, rebuild_discussion_stream, PublicSearchFilter,
+    discussion_area_by_id, discussion_topic_by_id, discussion_topics, public_search,
+    rebuild_discussion_stream, PublicSearchFilter,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
@@ -114,9 +116,19 @@ async fn curate(
     .unwrap();
 }
 
-async fn topic_ids(pool: &sqlx::PgPool, area: Uuid, cursor: Option<projections::DiscussionTopicCursor>, limit: i64) -> (Vec<Uuid>, Option<projections::DiscussionTopicCursor>) {
-    let page = discussion_topics(pool, area, cursor, limit, None).await.unwrap();
-    (page.topics.iter().map(|topic| topic.topic_id).collect(), page.next_cursor)
+async fn topic_ids(
+    pool: &sqlx::PgPool,
+    area: Uuid,
+    cursor: Option<projections::DiscussionTopicCursor>,
+    limit: i64,
+) -> (Vec<Uuid>, Option<projections::DiscussionTopicCursor>) {
+    let page = discussion_topics(pool, area, cursor, limit, None)
+        .await
+        .unwrap();
+    (
+        page.topics.iter().map(|topic| topic.topic_id).collect(),
+        page.next_cursor,
+    )
 }
 
 async fn surface_snapshot(pool: &sqlx::PgPool, topic: Uuid) -> serde_json::Value {
@@ -185,7 +197,16 @@ async fn pinned_topics_lead_the_first_page_and_stay_out_of_cursor_pages(pool: sq
     create_area(&pool, area, "curation", author, 2).await;
     let topics: Vec<Uuid> = (0..5).map(|index| Uuid::from_u128(410 + index)).collect();
     for (index, topic) in topics.iter().enumerate() {
-        create_topic(&pool, area, *topic, &format!("Topic {index}"), author, profile, 10 + index as i64 * 2).await;
+        create_topic(
+            &pool,
+            area,
+            *topic,
+            &format!("Topic {index}"),
+            author,
+            profile,
+            10 + index as i64 * 2,
+        )
+        .await;
     }
     // Newest first before any curation: 4, 3, 2, 1, 0.
     let (first, cursor) = topic_ids(&pool, area, None, 2).await;
@@ -193,12 +214,37 @@ async fn pinned_topics_lead_the_first_page_and_stay_out_of_cursor_pages(pool: sq
     let (second, _) = topic_ids(&pool, area, cursor, 2).await;
     assert_eq!(second, vec![topics[2], topics[1]]);
 
-    let before = discussion_topic_by_id(&pool, topics[1]).await.unwrap().unwrap();
-    curate(&pool, topics[1], "DiscussionTopicPinnedChanged", serde_json::json!({ "pinned": true }), moderator, 30).await;
-    curate(&pool, topics[0], "DiscussionTopicPinnedChanged", serde_json::json!({ "pinned": true }), moderator, 31).await;
-    let after = discussion_topic_by_id(&pool, topics[1]).await.unwrap().unwrap();
+    let before = discussion_topic_by_id(&pool, topics[1])
+        .await
+        .unwrap()
+        .unwrap();
+    curate(
+        &pool,
+        topics[1],
+        "DiscussionTopicPinnedChanged",
+        serde_json::json!({ "pinned": true }),
+        moderator,
+        30,
+    )
+    .await;
+    curate(
+        &pool,
+        topics[0],
+        "DiscussionTopicPinnedChanged",
+        serde_json::json!({ "pinned": true }),
+        moderator,
+        31,
+    )
+    .await;
+    let after = discussion_topic_by_id(&pool, topics[1])
+        .await
+        .unwrap()
+        .unwrap();
     assert!(after.pinned);
-    assert_eq!(after.updated_seq, before.updated_seq, "pinning is not activity");
+    assert_eq!(
+        after.updated_seq, before.updated_seq,
+        "pinning is not activity"
+    );
     assert_eq!(after.version, before.version + 1);
 
     // Pinned lead the first page in their own newest-first order, ahead of
@@ -210,9 +256,20 @@ async fn pinned_topics_lead_the_first_page_and_stay_out_of_cursor_pages(pool: sq
     assert_eq!(second, vec![topics[2]], "cursor pages skip pinned topics");
     assert!(cursor.is_none());
 
-    curate(&pool, topics[1], "DiscussionTopicPinnedChanged", serde_json::json!({ "pinned": false }), moderator, 32).await;
+    curate(
+        &pool,
+        topics[1],
+        "DiscussionTopicPinnedChanged",
+        serde_json::json!({ "pinned": false }),
+        moderator,
+        32,
+    )
+    .await;
     let (first, _) = topic_ids(&pool, area, None, 5).await;
-    assert_eq!(first, vec![topics[0], topics[4], topics[3], topics[2], topics[1]]);
+    assert_eq!(
+        first,
+        vec![topics[0], topics[4], topics[3], topics[2], topics[1]]
+    );
 
     let snapshot = surface_snapshot(&pool, topics[1]).await;
     rebuild_discussion_stream(&pool, topics[1]).await.unwrap();
@@ -233,14 +290,34 @@ async fn rename_and_move_refile_the_surface_without_reordering_the_area(pool: sq
     let topic = Uuid::from_u128(420);
     let sibling = Uuid::from_u128(421);
     create_topic(&pool, general, topic, "Lantern policy", author, profile, 10).await;
-    create_topic(&pool, general, sibling, "Ballot policy", author, profile, 20).await;
+    create_topic(
+        &pool,
+        general,
+        sibling,
+        "Ballot policy",
+        author,
+        profile,
+        20,
+    )
+    .await;
     let before = discussion_topic_by_id(&pool, topic).await.unwrap().unwrap();
     let post_seq = before.last_post_seq.unwrap();
 
-    curate(&pool, topic, "DiscussionTopicRenamed", serde_json::json!({ "title": "Lantern policy (archived)" }), moderator, 30).await;
+    curate(
+        &pool,
+        topic,
+        "DiscussionTopicRenamed",
+        serde_json::json!({ "title": "Lantern policy (archived)" }),
+        moderator,
+        30,
+    )
+    .await;
     let renamed = discussion_topic_by_id(&pool, topic).await.unwrap().unwrap();
     assert_eq!(renamed.title, "Lantern policy (archived)");
-    assert_eq!(renamed.updated_seq, before.updated_seq, "rename is not activity");
+    assert_eq!(
+        renamed.updated_seq, before.updated_seq,
+        "rename is not activity"
+    );
     let (order, _) = topic_ids(&pool, general, None, 10).await;
     assert_eq!(order, vec![sibling, topic]);
     let surface_title: String =
@@ -253,14 +330,32 @@ async fn rename_and_move_refile_the_surface_without_reordering_the_area(pool: sq
     let archived = public_search(&pool, "archived", PublicSearchFilter::All, None, 10, None)
         .await
         .unwrap();
-    assert!(archived.results.iter().any(|row| row.title == "Lantern policy (archived)"));
+    assert!(archived
+        .results
+        .iter()
+        .any(|row| row.title == "Lantern policy (archived)"));
 
-    curate(&pool, topic, "DiscussionTopicMoved", serde_json::json!({ "area_id": archive }), moderator, 31).await;
+    curate(
+        &pool,
+        topic,
+        "DiscussionTopicMoved",
+        serde_json::json!({ "area_id": archive }),
+        moderator,
+        31,
+    )
+    .await;
     let moved = discussion_topic_by_id(&pool, topic).await.unwrap().unwrap();
     assert_eq!(moved.area_id, archive);
-    assert_eq!(moved.updated_seq, before.updated_seq, "move is not activity");
     assert_eq!(
-        discussion_area_by_id(&pool, moved.area_id).await.unwrap().unwrap().slug,
+        moved.updated_seq, before.updated_seq,
+        "move is not activity"
+    );
+    assert_eq!(
+        discussion_area_by_id(&pool, moved.area_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .slug,
         "archive"
     );
     let (general_order, _) = topic_ids(&pool, general, None, 10).await;
@@ -295,7 +390,10 @@ async fn rename_and_move_refile_the_surface_without_reordering_the_area(pool: sq
     .unwrap();
     assert_eq!(
         document_hrefs,
-        vec![expected_href.clone(), format!("{expected_href}#post-{post_seq}")]
+        vec![
+            expected_href.clone(),
+            format!("{expected_href}#post-{post_seq}")
+        ]
     );
 
     let snapshot = surface_snapshot(&pool, topic).await;

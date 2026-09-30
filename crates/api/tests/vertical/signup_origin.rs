@@ -1,7 +1,8 @@
 use super::*;
 use commands::{Command as DomainCommand, Reject};
 use content_reference::PublicContentRef;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 
 async fn origin_fixture(pool: &sqlx::PgPool) -> (caps::Principal, Uuid, Uuid) {
     let host_id = PrincipalId::fixture("signup_host");
@@ -27,7 +28,7 @@ async fn origin_fixture(pool: &sqlx::PgPool) -> (caps::Principal, Uuid, Uuid) {
     .as_uuid();
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         pool,
         area,
         &[EventInput::new(
@@ -40,7 +41,7 @@ async fn origin_fixture(pool: &sqlx::PgPool) -> (caps::Principal, Uuid, Uuid) {
     )
     .await
     .unwrap();
-    projections::append_discussion_and_project(pool, topic, &[
+    projections::test_support::append_discussion_and_project(pool, topic, &[
         EventInput::new("DiscussionTopicCreated", 1, serde_json::json!({"area_id":area,"title":"Signup topic","author_profile_id":profile}), ActorId::Principal(host_id), 3),
         EventInput::new("DiscussionPostSubmitted", 1, serde_json::json!({"body":"Join us","author_profile_id":profile}), ActorId::Principal(host_id), 4),
     ]).await.unwrap();
@@ -119,7 +120,7 @@ async fn signup_origin_accepts_only_own_visible_topic_and_is_immutable(pool: sql
         eventstore::load_stream(&pool, game).await.unwrap().len(),
         original.len()
     );
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         &pool,
         topic,
         &[EventInput::new(
@@ -175,7 +176,7 @@ async fn signup_admission_serializes_with_topic_hiding_and_rejects_empty_lock_cy
 ) {
     let (host, _, topic) = origin_fixture(&pool).await;
     let mut hiding = pool.begin().await.unwrap();
-    projections::append_discussion_and_project_in_tx(
+    projections::test_support::append_discussion_and_project_in_tx(
         &mut hiding,
         topic,
         &[EventInput::new(

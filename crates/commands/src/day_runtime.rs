@@ -10,7 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use caps::Principal;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use game_platform::day_schedule;
 use sha2::{Digest, Sha256};
 use sqlx::{
@@ -262,7 +263,7 @@ async fn publish_day_event_narratives_in_tx(
             &narrative.template_hash,
         );
         let phase = current_phase(tx, game).await?;
-        let stream = eventstore::load_stream_in_tx(tx, game)
+        let stream = game_event_codec::load_stream_in_tx(tx, game)
             .await
             .map_err(|error| Reject::Internal(error.to_string()))?;
         let occurred_at = next_stream_logical_time(&stream);
@@ -639,7 +640,7 @@ pub(crate) async fn observe_day_event_schedules_in_tx(
         .await?
         .ok_or_else(|| day_event_reject("schedule observation requires an active phase"))?;
     let phase_id = phase.phase_id.clone();
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let stream = game_event_codec::load_stream_in_tx(tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
     let timeline = day_schedule_timeline(&stream)?;

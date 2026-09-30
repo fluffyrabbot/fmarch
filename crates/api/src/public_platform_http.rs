@@ -14,11 +14,8 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use content_reference::{self, Quotation, DEFAULT_POST_CITATION_LIMIT};
-use eventstore::{ActorId, EventInput};
-use forum::{
-    self, ForumReject, PostBody, PostCommand, PostContent, PostDecisionContext, PostingState,
-    TopicCommand, TopicEvent, TopicState, TopicTitle, TopicVisibility,
-};
+use forum::{ForumReject, PostingState, TopicVisibility};
+use forum_application::{ForumApplicationError, ForumCommand, MentionInput};
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -479,36 +476,6 @@ where
     }
 }
 
-/// Member authentication that also resolves the caller's public profile, so
-/// discussion write surfaces cannot post without one.
-struct DiscussionProfileAuthentication(AuthenticatedDiscussionProfile);
-
-impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthentication {
-    type Rejection = ApiError;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &PublicPlatformHttpState,
-    ) -> Result<Self, Self::Rejection> {
-        let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
-        let principal_id = request.context.principal_id();
-        require_active_community_membership(&state.pool, principal_id).await?;
-        let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
-            .await?
-            .ok_or_else(|| {
-                discussion_conflict("create a public profile before posting publicly")
-            })?;
-        Ok(Self(AuthenticatedDiscussionProfile {
-            profile_id,
-            principal_id,
-            standing: projections::PostingStanding {
-                hosts_this_game: false,
-                global_moderator: is_global_moderator(request.context.global_capabilities()),
-            },
-        }))
-    }
-}
-
 fn parse_member_mute_cursor(value: &str) -> Result<projections::MemberMuteCursor, ApiError> {
     let (updated_seq, relationship_id) = value
         .split_once(':')
@@ -812,6 +779,16 @@ struct DiscussionPostMentionInput {
     len: usize,
 }
 
+impl From<DiscussionPostMentionInput> for MentionInput {
+    fn from(value: DiscussionPostMentionInput) -> Self {
+        Self {
+            handle: value.handle,
+            offset: value.offset,
+            len: value.len,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct CreateDiscussionPostRequest {
     body: String,
@@ -959,221 +936,118 @@ async fn create_discussion_area(
     auth: AuthenticatedRequest,
     Json(request): Json<CreateDiscussionAreaRequest>,
 ) -> Result<(StatusCode, Json<DiscussionArea>), ApiError> {
-    let principal_id = require_global_mod(&state, &auth.bearer, "discussion area creation").await?;
-
-    let slug = validate_discussion_slug(request.slug.as_str())?;
-    let title = validate_discussion_text(request.title.as_str(), "discussion area title", 160)?;
-    let description = validate_discussion_text(
-        request.description.as_str(),
-        "discussion area description",
-        500,
-    )?;
-    if projections::discussion_area_by_slug(&state.pool, slug.as_str())
-        .await?
-        .is_some()
-    {
-        return Err(discussion_conflict(
-            "discussion area already exists; choose a new area slug",
-        ));
-    }
     let area_id = Uuid::new_v4();
-    let created = forum::AreaCreated {
-        slug: slug.clone(),
-        title,
-        description,
-    };
-    projections::append_discussion_and_project(
-        &state.pool,
-        area_id,
-        &[EventInput::new(
-            created.kind(),
-            1,
-            created.payload(),
-            ActorId::Principal(principal_id),
-            unix_now_seconds(),
-        )],
+    execute_forum_command(
+        &state,
+        auth.context,
+        ForumCommand::CreateArea {
+            area_id,
+            slug: request.slug,
+            title: request.title,
+            description: request.description,
+        },
     )
     .await?;
-    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
+    let area = projections::discussion_area_by_id(&state.pool, area_id)
         .await?
-        .expect("projected discussion area is readable");
+        .ok_or_else(forum_service_unavailable)?;
     Ok((StatusCode::CREATED, Json(DiscussionArea::from(area))))
 }
 
 async fn create_discussion_topic(
     State(state): State<PublicPlatformHttpState>,
     Path(slug): Path<String>,
-    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+    auth: AccountAuthenticatedRequest,
     Json(request): Json<CreateDiscussionTopicRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion area"))?;
-    let title = TopicTitle::new(&request.title).map_err(forum_reject_api_error)?;
-    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
     let topic_id = Uuid::new_v4();
-    let events = forum::decide_topic(
-        None,
-        TopicCommand::Create {
+    execute_forum_command(
+        &state,
+        auth.context,
+        ForumCommand::CreateTopic {
             topic_id,
-            area_id: area.area_id,
-            title,
-            opening_body: body,
-            author_profile_id: profile.profile_id,
+            area_slug: slug,
+            title: request.title,
+            body: request.body,
         },
     )
-    .map_err(forum_reject_api_error)?;
-    append_member_forum_events(
-        &state,
-        topic_id,
-        0,
-        events,
-        profile.posting_charge(projections::PostingSurface::DiscussionTopic, 0),
-    )
     .await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
+    Ok((
+        StatusCode::CREATED,
+        Json(projected_forum_topic(&state.pool, topic_id).await?),
+    ))
 }
 
 async fn create_discussion_post(
     State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
-    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+    auth: AccountAuthenticatedRequest,
     Json(request): Json<CreateDiscussionPostRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let current = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current)?;
-    let thread = projections::quotation_thread_for_discussion(
-        &state.pool,
-        topic,
-        Some(profile.principal_id),
-    )
-    .await?;
-    if request.mentions.len() > content_reference::MAX_MENTIONS_PER_POST {
-        return Err(content_reference_reject_api_error(
-            content_reference::ContentReferenceReject::TooManyMentions,
-        ));
-    }
-    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
-    let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
-        .await
-        .map_err(content_reference_reject_api_error)?;
-    let new_mention_targets = distinct_new_mention_targets(&mentions, &[]);
-    let content = PostContent::new(&thread, body, &request.quotations, &mentions)
-        .map_err(forum_reject_api_error)?;
-    let events = forum::decide_topic(
-        Some(&topic_state),
-        TopicCommand::SubmitPost {
-            content,
-            author_profile_id: profile.profile_id,
+    execute_forum_command(
+        &state,
+        auth.context,
+        ForumCommand::SubmitPost {
+            topic_id: topic,
+            body: request.body,
+            quotations: request.quotations,
+            mentions: request
+                .mentions
+                .into_iter()
+                .map(MentionInput::from)
+                .collect(),
         },
     )
-    .map_err(forum_reject_api_error)?;
-    append_member_forum_events(
-        &state,
-        topic,
-        current.version,
-        events,
-        profile.posting_charge(projections::PostingSurface::DiscussionPost, new_mention_targets),
-    )
     .await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
+    Ok((
+        StatusCode::CREATED,
+        Json(projected_forum_topic(&state.pool, topic).await?),
+    ))
 }
 
-/// Author edit of an own forum post. The route is keyed by a discussion topic
-/// id and loads its write state from `discussion_topic`, so a game id has no
-/// topic row here and cannot reach `decide_post`; game posts have no edit
-/// path anywhere.
+/// The application replays a canonical forum stream and enforces ownership,
+/// current revision, and posting policy in the append transaction.
 async fn edit_discussion_post(
     State(state): State<PublicPlatformHttpState>,
     Path((topic, source_seq)): Path<(Uuid, i64)>,
-    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+    auth: AccountAuthenticatedRequest,
     Json(request): Json<EditDiscussionPostRequest>,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
-    let current = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let post = projections::discussion_post_write_state(&state.pool, topic, source_seq)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion post"))?;
-    if request.mentions.len() > content_reference::MAX_MENTIONS_PER_POST {
-        return Err(content_reference_reject_api_error(
-            content_reference::ContentReferenceReject::TooManyMentions,
-        ));
-    }
-    let body = PostBody::new(&request.body).map_err(forum_reject_api_error)?;
-    let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
-        .await
-        .map_err(content_reference_reject_api_error)?;
-    let new_mention_targets = distinct_new_mention_targets(&mentions, &post.mentions);
-    let topic_state = forum_topic_state(&current)?;
-    let context = PostDecisionContext::new(&topic_state, &post).map_err(forum_reject_api_error)?;
-    let events = forum::decide_post(
-        context,
-        PostCommand::Edit {
-            body,
-            mentions,
-            author_profile_id: profile.profile_id,
+    execute_forum_command(
+        &state,
+        auth.context,
+        ForumCommand::EditPost {
+            topic_id: topic,
+            source_seq,
+            body: request.body,
             expected_revision: request.expected_revision,
-            now: unix_now_seconds(),
+            mentions: request
+                .mentions
+                .into_iter()
+                .map(MentionInput::from)
+                .collect(),
         },
     )
-    .map_err(forum_reject_api_error)?;
-    append_member_forum_events(
-        &state,
-        topic,
-        current.version,
-        events,
-        profile.posting_charge(projections::PostingSurface::DiscussionEdit, new_mention_targets),
-    )
     .await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok(Json(DiscussionTopic::from(topic)))
+    Ok(Json(projected_forum_topic(&state.pool, topic).await?))
 }
 
-/// Author retraction of an own forum post: a read-time overlay, never a
-/// delete. History and cited excerpts survive; the placeholder remains.
+/// Retraction preserves the canonical post and its cited historical excerpts.
 async fn retract_discussion_post(
     State(state): State<PublicPlatformHttpState>,
     Path((topic, source_seq)): Path<(Uuid, i64)>,
-    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
+    auth: AccountAuthenticatedRequest,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
-    let current = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let post = projections::discussion_post_write_state(&state.pool, topic, source_seq)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion post"))?;
-    let topic_state = forum_topic_state(&current)?;
-    let context = PostDecisionContext::new(&topic_state, &post).map_err(forum_reject_api_error)?;
-    let events = forum::decide_post(
-        context,
-        PostCommand::Retract {
-            author_profile_id: profile.profile_id,
+    execute_forum_command(
+        &state,
+        auth.context,
+        ForumCommand::RetractPost {
+            topic_id: topic,
+            source_seq,
         },
     )
-    .map_err(forum_reject_api_error)?;
-    append_forum_events(
-        &state.pool,
-        topic,
-        current.version,
-        events,
-        profile.principal_id,
-    )
     .await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok(Json(DiscussionTopic::from(topic)))
+    Ok(Json(projected_forum_topic(&state.pool, topic).await?))
 }
 
 async fn discussion_post_citations(
@@ -1200,86 +1074,55 @@ async fn moderate_discussion_topic(
     auth: AuthenticatedRequest,
     Json(request): Json<ModerateDiscussionTopicRequest>,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
-    let principal_id = require_global_mod(&state, &auth.bearer, "discussion moderation").await?;
-    let current = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current)?;
     let command = match (
         request.posting_state.as_deref(),
         request.visibility.as_deref(),
     ) {
-        (Some(posting_state), None) => TopicCommand::SetPostingState {
+        (Some(posting_state), None) => ForumCommand::SetPostingState {
+            topic_id: topic,
             posting_state: PostingState::parse(posting_state).map_err(forum_reject_api_error)?,
         },
-        (None, Some(visibility)) => TopicCommand::SetVisibility {
+        (None, Some(visibility)) => ForumCommand::SetVisibility {
+            topic_id: topic,
             visibility: TopicVisibility::parse(visibility).map_err(forum_reject_api_error)?,
         },
         _ => {
-            return Err(ApiError::Reject {
-                status: StatusCode::BAD_REQUEST,
-                error: RejectCode::Internal,
-                message:
-                    "discussion moderation must change exactly one of posting_state or visibility"
-                        .to_string(),
-            })
+            return Err(moderation_bad_request(
+                "discussion moderation must change exactly one of posting_state or visibility",
+            ))
         }
     };
-    let events =
-        forum::decide_topic(Some(&topic_state), command).map_err(forum_reject_api_error)?;
-    append_forum_events(&state.pool, topic, current.version, events, principal_id).await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok(Json(DiscussionTopic::from(topic)))
+    execute_forum_command(&state, auth.context, command).await?;
+    Ok(Json(projected_forum_topic(&state.pool, topic).await?))
 }
 
-/// GlobalMod topic curation. Rename, move, and pin are filing decisions, so
-/// they are independent of posting state; a locked topic can still be filed.
 async fn curate_discussion_topic(
     State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
     auth: AuthenticatedRequest,
     Json(request): Json<CurateDiscussionTopicRequest>,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
-    let principal_id = require_global_mod(&state, &auth.bearer, "discussion curation").await?;
-    let current = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = forum_topic_state(&current)?;
-    let command = match (
-        request.title.as_deref(),
-        request.area_slug.as_deref(),
-        request.pinned,
-    ) {
-        (Some(title), None, None) => TopicCommand::Rename {
-            title: TopicTitle::new(title).map_err(forum_reject_api_error)?,
+    let command = match (request.title, request.area_slug, request.pinned) {
+        (Some(title), None, None) => ForumCommand::RenameTopic {
+            topic_id: topic,
+            title,
         },
-        (None, Some(area_slug), None) => {
-            let area = projections::discussion_area_by_slug(&state.pool, area_slug)
-                .await?
-                .ok_or_else(|| discussion_not_found("discussion area"))?;
-            TopicCommand::Move {
-                area_id: area.area_id,
-            }
-        }
-        (None, None, Some(pinned)) => TopicCommand::SetPinned { pinned },
+        (None, Some(area_slug), None) => ForumCommand::MoveTopic {
+            topic_id: topic,
+            area_slug,
+        },
+        (None, None, Some(pinned)) => ForumCommand::SetPinned {
+            topic_id: topic,
+            pinned,
+        },
         _ => {
-            return Err(ApiError::Reject {
-                status: StatusCode::BAD_REQUEST,
-                error: RejectCode::Internal,
-                message: "discussion curation must change exactly one of title, area_slug, or pinned"
-                    .to_string(),
-            })
+            return Err(moderation_bad_request(
+                "discussion curation must change exactly one of title, area_slug, or pinned",
+            ))
         }
     };
-    let events =
-        forum::decide_topic(Some(&topic_state), command).map_err(forum_reject_api_error)?;
-    append_forum_events(&state.pool, topic, current.version, events, principal_id).await?;
-    let topic = projections::discussion_topic_by_id(&state.pool, topic)
-        .await?
-        .expect("projected discussion topic is readable");
-    Ok(Json(DiscussionTopic::from(topic)))
+    execute_forum_command(&state, auth.context, command).await?;
+    Ok(Json(projected_forum_topic(&state.pool, topic).await?))
 }
 
 async fn submit_moderation_report(
@@ -1544,27 +1387,6 @@ async fn visible_discussion_topic(
     Ok(topic)
 }
 
-struct AuthenticatedDiscussionProfile {
-    profile_id: Uuid,
-    principal_id: PrincipalId,
-    standing: projections::PostingStanding,
-}
-
-impl AuthenticatedDiscussionProfile {
-    fn posting_charge(
-        &self,
-        surface: projections::PostingSurface,
-        new_mention_targets: u32,
-    ) -> projections::PostingCharge {
-        projections::PostingCharge {
-            principal_id: self.principal_id,
-            surface,
-            new_mention_targets,
-            standing: self.standing,
-        }
-    }
-}
-
 fn is_global_moderator(global_capabilities: &[String]) -> bool {
     global_capabilities
         .iter()
@@ -1605,25 +1427,6 @@ fn parse_discussion_topic_cursor(
     })
 }
 
-fn validate_discussion_slug(value: &str) -> Result<String, ApiError> {
-    let slug = value.trim().to_ascii_lowercase();
-    if !(2..=48).contains(&slug.len())
-        || slug.starts_with('-')
-        || slug.ends_with('-')
-        || !slug
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "discussion area slug must be 2 to 48 lowercase letters, digits, or hyphens"
-                .to_string(),
-        });
-    }
-    Ok(slug)
-}
-
 fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<String, ApiError> {
     let text = value.trim();
     if text.is_empty() || text.len() > max_len {
@@ -1636,107 +1439,83 @@ fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<
     Ok(text.to_string())
 }
 
-fn forum_topic_state(topic: &projections::DiscussionTopicRow) -> Result<TopicState, ApiError> {
-    Ok(TopicState {
-        topic_id: topic.topic_id,
-        area_id: topic.area_id,
-        title: topic.title.clone(),
-        pinned: topic.pinned,
-        posting_state: PostingState::parse(topic.posting_state.as_str())
-            .map_err(forum_reject_api_error)?,
-        visibility: TopicVisibility::parse(topic.visibility.as_str())
-            .map_err(forum_reject_api_error)?,
-        version: topic.version,
-    })
-}
-
-async fn append_forum_events(
-    pool: &PgPool,
-    topic_id: Uuid,
-    expected_version: i64,
-    events: Vec<TopicEvent>,
-    principal_id: PrincipalId,
-) -> Result<(), ApiError> {
-    let events = forum_event_inputs(events, principal_id, unix_now_seconds());
-    match projections::append_discussion_and_project_expected(
-        pool,
-        topic_id,
-        expected_version,
-        events.as_slice(),
-    )
-    .await
-    {
-        Ok(_) => Ok(()),
-        Err(projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => Err(
-            discussion_conflict("discussion changed concurrently; refresh and try again"),
-        ),
-        Err(error) => Err(ApiError::Projection(error)),
-    }
-}
-
-/// Member-authored forum write: the same append, with the author's posting
-/// budget charged in its transaction.
-async fn append_member_forum_events(
+async fn execute_forum_command(
     state: &PublicPlatformHttpState,
-    topic_id: Uuid,
-    expected_version: i64,
-    events: Vec<TopicEvent>,
-    charge: projections::PostingCharge,
-) -> Result<(), ApiError> {
-    let occurred_at = unix_now_seconds();
-    let events = forum_event_inputs(events, charge.principal_id, occurred_at);
-    match projections::append_member_discussion_and_project_expected(
-        &state.pool,
-        topic_id,
-        expected_version,
-        events.as_slice(),
-        &state.posting,
-        &charge,
-        occurred_at,
-    )
-    .await
-    {
-        Ok(_) => Ok(()),
-        Err(projections::ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => Err(
-            discussion_conflict("discussion changed concurrently; refresh and try again"),
-        ),
-        Err(error) => Err(ApiError::from(error)),
+    authorization: identity::AuthorizationContext,
+    command: ForumCommand,
+) -> Result<forum_application::ForumCommit, ApiError> {
+    let principal = authorization.principal_id();
+    let now = unix_now_seconds();
+    let store = forum_postgres::PgForumStore::new(
+        state.pool.clone(),
+        state.posting.clone(),
+        authorization,
+        state.auth.session_policy.clone(),
+        now,
+    );
+    forum_application::execute(&store, command, principal, now)
+        .await
+        .map_err(forum_application_api_error)
+}
+
+async fn projected_forum_topic(pool: &PgPool, topic: Uuid) -> Result<DiscussionTopic, ApiError> {
+    projections::discussion_topic_by_id(pool, topic)
+        .await?
+        .map(DiscussionTopic::from)
+        .ok_or_else(forum_service_unavailable)
+}
+
+fn forum_application_api_error(
+    error: ForumApplicationError<forum_postgres::ForumPostgresError>,
+) -> ApiError {
+    use forum_postgres::ForumPostgresError as Port;
+    match error {
+        ForumApplicationError::Decision(reject) => forum_reject_api_error(reject),
+        ForumApplicationError::AuthorRequired => {
+            discussion_conflict("create a public profile before posting publicly")
+        }
+        ForumApplicationError::ModeratorRequired => ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "discussion administration requires GlobalMod".to_string(),
+        },
+        ForumApplicationError::AreaNotFound => discussion_not_found("discussion area"),
+        ForumApplicationError::AreaSlugTaken | ForumApplicationError::AreaAlreadyExists => {
+            discussion_conflict("discussion area already exists; choose a new area slug")
+        }
+        error @ (ForumApplicationError::InvalidAreaSlug
+        | ForumApplicationError::InvalidAreaTitle
+        | ForumApplicationError::InvalidAreaDescription) => {
+            moderation_bad_request(error.to_string())
+        }
+        ForumApplicationError::Port(Port::MembershipRequired) => unauthorized_account(),
+        ForumApplicationError::Port(Port::NotForumStream) => {
+            discussion_not_found("discussion topic")
+        }
+        ForumApplicationError::Port(Port::Database(error)) => ApiError::Db(error),
+        ForumApplicationError::Port(Port::Projection(error)) => ApiError::from(error),
+        ForumApplicationError::Port(Port::Identity(error)) => ApiError::from(error),
+        ForumApplicationError::Port(Port::Profile(error)) => profile_application_api_error(error),
+        ForumApplicationError::Port(Port::Journal(eventstore::journal::JournalError::Store(
+            eventstore::StoreError::Conflict { .. },
+        ))) => discussion_conflict("discussion changed concurrently; refresh and try again"),
+        ForumApplicationError::Port(Port::Journal(
+            eventstore::journal::JournalError::Database(error),
+        )) => ApiError::Db(error),
+        ForumApplicationError::Port(
+            Port::Journal(_) | Port::Membership(_) | Port::Replay(_) | Port::InvalidAreaReservation,
+        )
+        | ForumApplicationError::Replay(_)
+        | ForumApplicationError::InvalidCommit => forum_service_unavailable(),
     }
 }
 
-fn forum_event_inputs(
-    events: Vec<TopicEvent>,
-    principal_id: PrincipalId,
-    occurred_at: i64,
-) -> Vec<EventInput> {
-    events
-        .into_iter()
-        .map(|event| {
-            EventInput::new(
-                event.kind(),
-                1,
-                event.payload(),
-                ActorId::Principal(principal_id),
-                occurred_at,
-            )
-        })
-        .collect()
-}
-
-/// Profiles this write newly notifies: distinct resolved targets not already
-/// mentioned by the revision it replaces.
-fn distinct_new_mention_targets(
-    mentions: &[content_reference::MentionCandidate],
-    previous: &[content_reference::ProfileMention],
-) -> u32 {
-    let already: std::collections::BTreeSet<Uuid> =
-        previous.iter().map(|mention| mention.profile_id).collect();
-    mentions
-        .iter()
-        .map(|mention| mention.profile_id)
-        .filter(|profile_id| !already.contains(profile_id))
-        .collect::<std::collections::BTreeSet<_>>()
-        .len() as u32
+fn forum_service_unavailable() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::SERVICE_UNAVAILABLE,
+        error: RejectCode::Internal,
+        message: "discussion service is temporarily unavailable".to_string(),
+    }
 }
 
 fn forum_reject_api_error(reject: ForumReject) -> ApiError {
@@ -1763,31 +1542,6 @@ fn forum_reject_api_error(reject: ForumReject) -> ApiError {
         },
         message: reject.to_string(),
     }
-}
-
-/// Resolve mention handles to currently public profiles inside the posting
-/// path. Unknown, private, and redacted handles all miss `public_profile`,
-/// so they collapse to one non-disclosing reject before the pure span
-/// decision runs.
-async fn resolve_discussion_mentions(
-    pool: &sqlx::PgPool,
-    mentions: &[DiscussionPostMentionInput],
-) -> Result<Vec<content_reference::MentionCandidate>, content_reference::ContentReferenceReject> {
-    let mut candidates = Vec::with_capacity(mentions.len());
-    for mention in mentions {
-        let normalized = mention.handle.trim().to_ascii_lowercase();
-        let resolved = projections::public_profile_by_handle(pool, normalized.as_str())
-            .await
-            .map_err(|_| content_reference::ContentReferenceReject::UnknownMentionTarget)?
-            .ok_or(content_reference::ContentReferenceReject::UnknownMentionTarget)?;
-        candidates.push(content_reference::MentionCandidate {
-            profile_id: resolved.profile_id,
-            handle: resolved.handle,
-            offset: mention.offset,
-            len: mention.len,
-        });
-    }
-    Ok(candidates)
 }
 
 fn content_reference_reject_api_error(

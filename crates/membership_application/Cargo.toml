@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+event_actor = { path = "../event_actor", version = "0.1.0" }
 base64 = "0.22"
 community_membership = { path = "../community_membership", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }

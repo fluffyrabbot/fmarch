@@ -65,12 +65,12 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0017_posting_budget_window.sql");
-  assert.equal(report.migration_file_count, 17);
+  assert.equal(report.migration_head, "0018_typed_forum_journal.sql");
+  assert.equal(report.migration_file_count, 18);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 106);
-  assert.equal(report.trigger_count, 38);
+  assert.equal(report.table_count, 108);
+  assert.equal(report.trigger_count, 40);
   assert.equal(report.function_count, 17);
   assert.equal(report.view_count, 2);
   assert.doesNotMatch(checkedSnapshot, /admin_grant/u);
@@ -245,6 +245,22 @@ test("identity delivery provider generations are retained and exactly fenced", (
     checkedSnapshot,
     /CREATE TABLE public\.auth_delivery_provider_authority \([\s\S]*auth_delivery_provider_authority_lifecycle_check/u,
   );
+});
+
+test("typed forum journal migration seals facts and preserves append-only source authority", () => {
+  const migration = checkedMigrations["0018_typed_forum_journal.sql"];
+  assert.match(migration, /PRIMARY KEY \(source_seq, fact_index\)/u);
+  assert.match(migration, /FOREIGN KEY \(source_seq\) REFERENCES public\.events\(seq\)/u);
+  assert.match(migration, /source_seq > 0 AND fact_index >= 0/u);
+  assert.match(migration, /context <> '' AND kind <> '' AND version > 0/u);
+  assert.match(migration, /sealed_version = 1 AND stream_key_epoch > 0/u);
+  assert.match(migration, /octet_length\(sealed_nonce\) = 24 AND octet_length\(sealed_body\) >= 16/u);
+  assert.doesNotMatch(migration, /\bpayload\s+jsonb\b/u);
+  assert.match(migration, /PRIMARY KEY \(area_id\)/u);
+  assert.match(migration, /UNIQUE \(slug\)/u);
+  for (const table of ["event_integration_outbox", "forum_area_reservation"]) {
+    assert.match(migration, new RegExp(`CREATE TRIGGER ${table}_no_mutation\\s+BEFORE DELETE OR UPDATE OR TRUNCATE ON public\\.${table}\\s+FOR EACH STATEMENT EXECUTE FUNCTION public\\.events_forbid_mutation\\(\\);`, "u"));
+  }
 });
 
 test("database schema permits a contiguous destructive forward migration", async () => {

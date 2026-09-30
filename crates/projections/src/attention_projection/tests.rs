@@ -1,7 +1,8 @@
 //! Public attention is derived from event-time membership, independent of
 //! transaction commit order and the source chosen for a later rebuild.
 use attention::WatchTarget;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use principal::PrincipalId;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
@@ -45,7 +46,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     let watcher_profile = create_profile(pool, watcher).await;
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         pool,
         area,
         &[EventInput::new(
@@ -58,7 +59,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     )
     .await
     .unwrap();
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         pool,
         topic,
         &[
@@ -304,7 +305,7 @@ async fn historical_forum_actor_suppresses_self_delivery_without_profile_attribu
     let fixture = fixture(&pool).await;
     let author_watch = subscribe(&pool, fixture.author, fixture.topic).await;
     let reader_watch = subscribe(&pool, fixture.watcher, fixture.topic).await;
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         &pool,
         fixture.topic,
         &[EventInput::new(
@@ -411,7 +412,7 @@ async fn watch_reconciliation_preserves_mentions_and_origin_delivery(pool: PgPoo
     let fixture = fixture(&pool).await;
     let subscription = subscribe(&pool, fixture.watcher, fixture.topic).await;
     let game = start_game(&pool, &fixture, true).await;
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         &pool,
         fixture.topic,
         &[EventInput::new(
@@ -458,9 +459,13 @@ async fn watch_reconciliation_preserves_mentions_and_origin_delivery(pool: PgPoo
 async fn topic_rebuild_waits_for_attention_before_destructive_projection_writes(pool: PgPool) {
     let fixture = fixture(&pool).await;
     let subscription = subscribe(&pool, fixture.watcher, fixture.topic).await;
-    crate::append_discussion_and_project(&pool, fixture.topic, &[post_event(&fixture)])
-        .await
-        .unwrap();
+    crate::test_support::append_discussion_and_project(
+        &pool,
+        fixture.topic,
+        &[post_event(&fixture)],
+    )
+    .await
+    .unwrap();
     let mut watch_tx = pool.begin().await.unwrap();
     let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *watch_tx)

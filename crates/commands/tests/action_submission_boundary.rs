@@ -46,8 +46,8 @@ fn action_submission_has_one_typed_owner_without_dispatch_or_persistence_drift()
         "load_engine_phase_input_in_tx(",
         "\"ActionSubmitted\"",
         "domain::resolve_instant(",
-        "EventInput::resolution_applied(",
-        "EventInput::resolution_trace(",
+        "game_event_codec::resolution_applied(",
+        "game_event_codec::resolution_trace(",
         "persist(tx, request.game, &events).await",
     ] {
         assert!(

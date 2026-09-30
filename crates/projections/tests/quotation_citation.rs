@@ -1,11 +1,13 @@
 //! First-class quotations fold into public and private citation indexes identically.
 
 use content_reference::{PostKind, PostRef};
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
+use projections::test_support::append_discussion_and_project;
 use projections::{
-    append_and_project, append_discussion_and_project, discussion_posts,
-    off_page_game_citation_counts, public_thread_view, rebuild, rebuild_discussion_stream,
-    visible_incoming_citations, visible_public_incoming_citations,
+    append_and_project, discussion_posts, off_page_game_citation_counts, public_thread_view,
+    rebuild, rebuild_discussion_stream, visible_incoming_citations,
+    visible_public_incoming_citations,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,

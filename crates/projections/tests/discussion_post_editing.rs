@@ -8,12 +8,13 @@
 //! rebuild byte-identically from the stream.
 
 use attention::WatchTarget;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
+use projections::test_support::append_discussion_and_project;
 use projections::{
-    append_discussion_and_project, discussion_post_write_state, discussion_posts,
-    discussion_topic_by_id, public_inbox, public_search, quotation_thread_for_discussion,
-    rebuild_discussion_stream, subscribe_to_public_target, visible_public_incoming_citations,
-    PublicSearchFilter,
+    discussion_post_write_state, discussion_posts, discussion_topic_by_id, public_inbox,
+    public_search, quotation_thread_for_discussion, rebuild_discussion_stream,
+    subscribe_to_public_target, visible_public_incoming_citations, PublicSearchFilter,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
@@ -208,7 +209,11 @@ async fn revision_rows(pool: &sqlx::PgPool, source_seq: i64) -> Vec<(i64, String
     .collect()
 }
 
-async fn search_document_bodies(pool: &sqlx::PgPool, topic: Uuid, source_seq: i64) -> Vec<(String, i64)> {
+async fn search_document_bodies(
+    pool: &sqlx::PgPool,
+    topic: Uuid,
+    source_seq: i64,
+) -> Vec<(String, i64)> {
     sqlx::query(
         "SELECT body, updated_seq FROM public_search_document WHERE surface_id = $1 AND source_seq = $2",
     )
@@ -356,7 +361,8 @@ async fn invalid_forum_batches_do_not_append_or_project_even_if_caller_commits(p
         // caller retaining its other work must not commit a partial batch.
         let mut tx = pool.begin().await.unwrap();
         let result =
-            projections::append_discussion_and_project_in_tx(&mut tx, topic, &events).await;
+            projections::test_support::append_discussion_and_project_in_tx(&mut tx, topic, &events)
+                .await;
         assert!(matches!(
             result,
             Err(projections::ProjectionError::ForumCodec(_))
@@ -368,7 +374,7 @@ async fn invalid_forum_batches_do_not_append_or_project_even_if_caller_commits(p
             result,
             Err(projections::ProjectionError::ForumCodec(_))
         ));
-        let result = projections::append_discussion_and_project_expected(
+        let result = projections::test_support::append_discussion_and_project_expected(
             &pool,
             topic,
             expected_version,
@@ -469,7 +475,9 @@ async fn semantic_batch_failure_rolls_back_its_savepoint_before_outer_commit(poo
         .execute(&mut *outer)
         .await
         .unwrap();
-    let result = projections::append_discussion_and_project_in_tx(&mut outer, topic, &events).await;
+    let result =
+        projections::test_support::append_discussion_and_project_in_tx(&mut outer, topic, &events)
+            .await;
     match result {
         Err(projections::ProjectionError::Db(sqlx::Error::Protocol(message))) => {
             assert_eq!(
@@ -516,7 +524,7 @@ async fn successful_nested_append_remains_owned_by_outer_commit_or_rollback(pool
     let events_before = eventstore::load_stream(&pool, topic).await.unwrap();
     for commit in [false, true] {
         let mut outer = pool.begin().await.unwrap();
-        let stored = projections::append_discussion_and_project_in_tx(
+        let stored = projections::test_support::append_discussion_and_project_in_tx(
             &mut outer,
             topic,
             &[EventInput::new(
@@ -580,8 +588,8 @@ async fn unsupported_durable_forum_event_stops_rebuild_without_destroying_projec
     let profile = create_test_profile(&pool, author, "codec_replay", 1).await;
     create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
     let before = topic_snapshot(&pool, topic).await;
-    // The existing untyped journal admits a future schema. Replay must stop at
-    // the forum-owned decoder even though its fields resemble version 1.
+    // Deliberately forge a retained unknown encoding through the raw storage seam.
+    // Typed replay must fail before replacing any projection.
     eventstore::append(
         &pool,
         topic,
@@ -599,9 +607,7 @@ async fn unsupported_durable_forum_event_stops_rebuild_without_destroying_projec
     let result = rebuild_discussion_stream(&pool, topic).await;
     assert!(matches!(
         result,
-        Err(projections::ProjectionError::ForumCodec(
-            forum::ForumDecodeError::UnsupportedVersion { version: 2, .. }
-        ))
+        Err(projections::ProjectionError::Journal(_))
     ));
     assert_eq!(topic_snapshot(&pool, topic).await, before);
     assert_eq!(
@@ -661,7 +667,10 @@ async fn edit_appends_history_reindexes_search_and_never_notifies_watchers(pool:
     )
     .await;
     let before = discussion_topic_by_id(&pool, topic).await.unwrap().unwrap();
-    assert_eq!(inbox_rows(&pool, watcher).await, vec![(reply, "watch".to_string(), 7)]);
+    assert_eq!(
+        inbox_rows(&pool, watcher).await,
+        vec![(reply, "watch".to_string(), 7)]
+    );
 
     let edit_seq = edit_post(
         &pool,
@@ -672,7 +681,9 @@ async fn edit_appends_history_reindexes_search_and_never_notifies_watchers(pool:
     )
     .await;
 
-    let page = discussion_posts(&pool, topic, None, 10, None).await.unwrap();
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
     let edited = page
         .posts
         .iter()
@@ -689,7 +700,12 @@ async fn edit_appends_history_reindexes_search_and_never_notifies_watchers(pool:
     // The superseded text is history, never rewritten.
     assert_eq!(
         revision_rows(&pool, reply).await,
-        vec![(0, "Original wording about lanterns".to_string(), edit_seq, 8)]
+        vec![(
+            0,
+            "Original wording about lanterns".to_string(),
+            edit_seq,
+            8
+        )]
     );
 
     // Search reads the current body under the edit's cursor position.
@@ -700,19 +716,29 @@ async fn edit_appends_history_reindexes_search_and_never_notifies_watchers(pool:
     let lanterns = public_search(&pool, "lanterns", PublicSearchFilter::All, None, 10, None)
         .await
         .unwrap();
-    assert!(lanterns.results.is_empty(), "the superseded body must leave search");
+    assert!(
+        lanterns.results.is_empty(),
+        "the superseded body must leave search"
+    );
     let ballots = public_search(&pool, "ballots", PublicSearchFilter::All, None, 10, None)
         .await
         .unwrap();
     assert_eq!(ballots.results.len(), 1);
 
     // Edits are not activity: no watch delivery, no topic reorder, no new post.
-    assert_eq!(inbox_rows(&pool, watcher).await, vec![(reply, "watch".to_string(), 7)]);
+    assert_eq!(
+        inbox_rows(&pool, watcher).await,
+        vec![(reply, "watch".to_string(), 7)]
+    );
     let after = discussion_topic_by_id(&pool, topic).await.unwrap().unwrap();
     assert_eq!(after.updated_seq, before.updated_seq);
     assert_eq!(after.post_count, before.post_count);
     assert_eq!(after.last_post_seq, before.last_post_seq);
-    assert_eq!(after.version, before.version + 1, "the stream version still advances");
+    assert_eq!(
+        after.version,
+        before.version + 1,
+        "the stream version still advances"
+    );
 
     // The write state the API hands to decide_topic reflects the new revision.
     let state = discussion_post_write_state(&pool, topic, reply)
@@ -732,7 +758,10 @@ async fn edit_appends_history_reindexes_search_and_never_notifies_watchers(pool:
     let snapshot = topic_snapshot(&pool, topic).await;
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(topic_snapshot(&pool, topic).await, snapshot);
-    assert_eq!(inbox_rows(&pool, watcher).await, vec![(reply, "watch".to_string(), 7)]);
+    assert_eq!(
+        inbox_rows(&pool, watcher).await,
+        vec![(reply, "watch".to_string(), 7)]
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -762,7 +791,10 @@ async fn edit_delivers_added_mentions_and_keeps_removed_ones_delivered(pool: sql
         7,
     )
     .await;
-    assert_eq!(inbox_rows(&pool, first).await, vec![(reply, "mention".to_string(), 7)]);
+    assert_eq!(
+        inbox_rows(&pool, first).await,
+        vec![(reply, "mention".to_string(), 7)]
+    );
     assert!(inbox_rows(&pool, second).await.is_empty());
 
     edit_post(
@@ -781,13 +813,28 @@ async fn edit_delivers_added_mentions_and_keeps_removed_ones_delivered(pool: sql
 
     // The newly addressed profile is told; the one the edit dropped is not
     // untold. The edge on the post, however, is the current decision only.
-    assert_eq!(inbox_rows(&pool, second).await, vec![(reply, "mention".to_string(), 8)]);
-    assert_eq!(inbox_rows(&pool, first).await, vec![(reply, "mention".to_string(), 7)]);
-    let page = discussion_posts(&pool, topic, None, 10, None).await.unwrap();
-    let edited = page.posts.iter().find(|post| post.source_seq == reply).unwrap();
+    assert_eq!(
+        inbox_rows(&pool, second).await,
+        vec![(reply, "mention".to_string(), 8)]
+    );
+    assert_eq!(
+        inbox_rows(&pool, first).await,
+        vec![(reply, "mention".to_string(), 7)]
+    );
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
+    let edited = page
+        .posts
+        .iter()
+        .find(|post| post.source_seq == reply)
+        .unwrap();
     assert_eq!(edited.mentions.len(), 1);
     assert_eq!(
-        edited.mentions[0].profile.as_ref().map(|profile| profile.handle.as_str()),
+        edited.mentions[0]
+            .profile
+            .as_ref()
+            .map(|profile| profile.handle.as_str()),
         Some("second_target")
     );
     let inbox = public_inbox(&pool, second, None, 10).await.unwrap();
@@ -808,14 +855,23 @@ async fn edit_delivers_added_mentions_and_keeps_removed_ones_delivered(pool: sql
         9,
     )
     .await;
-    assert_eq!(inbox_rows(&pool, second).await, vec![(reply, "mention".to_string(), 8)]);
+    assert_eq!(
+        inbox_rows(&pool, second).await,
+        vec![(reply, "mention".to_string(), 8)]
+    );
     assert_eq!(revision_rows(&pool, reply).await.len(), 2);
 
     let snapshot = topic_snapshot(&pool, topic).await;
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(topic_snapshot(&pool, topic).await, snapshot);
-    assert_eq!(inbox_rows(&pool, first).await, vec![(reply, "mention".to_string(), 7)]);
-    assert_eq!(inbox_rows(&pool, second).await, vec![(reply, "mention".to_string(), 8)]);
+    assert_eq!(
+        inbox_rows(&pool, first).await,
+        vec![(reply, "mention".to_string(), 7)]
+    );
+    assert_eq!(
+        inbox_rows(&pool, second).await,
+        vec![(reply, "mention".to_string(), 8)]
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -864,23 +920,39 @@ async fn retraction_withholds_content_drops_search_and_preserves_cited_excerpts(
     retract_post(&pool, topic, author, claim, 9).await;
 
     // The seat stays; the content goes.
-    let page = discussion_posts(&pool, topic, None, 10, None).await.unwrap();
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
     assert_eq!(page.posts.len(), 3);
-    let retracted = page.posts.iter().find(|post| post.source_seq == claim).unwrap();
+    let retracted = page
+        .posts
+        .iter()
+        .find(|post| post.source_seq == claim)
+        .unwrap();
     assert!(retracted.retracted);
     assert_eq!(retracted.body, "");
     assert!(retracted.quotations.is_empty());
     assert!(retracted.mentions.is_empty());
     assert_eq!(retracted.revision, 0);
-    assert_eq!(retracted.citation_count, 1, "incoming citations keep counting");
     assert_eq!(
-        retracted.author.as_ref().map(|author| author.handle.as_str()),
+        retracted.citation_count, 1,
+        "incoming citations keep counting"
+    );
+    assert_eq!(
+        retracted
+            .author
+            .as_ref()
+            .map(|author| author.handle.as_str()),
         Some("retracting_author"),
         "the placeholder is still attributed so readers know who withdrew it"
     );
 
     // The quoting post keeps the snapshot it cited.
-    let quoting_post = page.posts.iter().find(|post| post.source_seq == quoting).unwrap();
+    let quoting_post = page
+        .posts
+        .iter()
+        .find(|post| post.source_seq == quoting)
+        .unwrap();
     assert_eq!(quoting_post.quotations.len(), 1);
     assert_eq!(quoting_post.quotations[0].excerpt, "bold claim");
     let citations = visible_public_incoming_citations(
@@ -909,14 +981,21 @@ async fn retraction_withholds_content_drops_search_and_preserves_cited_excerpts(
     .fetch_optional(&pool)
     .await
     .unwrap();
-    assert_eq!(publication_body.as_deref(), Some("A bold claim about the lantern"));
+    assert_eq!(
+        publication_body.as_deref(),
+        Some("A bold claim about the lantern")
+    );
 
     // A retracted post can no longer be quoted; the write model sees it as
     // not visible while the rest of the thread is unchanged.
     let thread = quotation_thread_for_discussion(&pool, topic, None)
         .await
         .unwrap();
-    let claim_state = thread.posts.iter().find(|post| post.source_seq == claim).unwrap();
+    let claim_state = thread
+        .posts
+        .iter()
+        .find(|post| post.source_seq == claim)
+        .unwrap();
     assert!(!claim_state.visible);
     assert!(thread
         .posts
@@ -934,12 +1013,17 @@ async fn retraction_withholds_content_drops_search_and_preserves_cited_excerpts(
     assert_eq!(after.updated_seq, before.updated_seq);
     assert_eq!(after.post_count, before.post_count);
     assert_eq!(after.version, before.version + 1);
-    assert_eq!(inbox_rows(&pool, quoter).await, vec![(claim, "mention".to_string(), 7)]);
+    assert_eq!(
+        inbox_rows(&pool, quoter).await,
+        vec![(claim, "mention".to_string(), 7)]
+    );
 
     let snapshot = topic_snapshot(&pool, topic).await;
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(topic_snapshot(&pool, topic).await, snapshot);
-    let rebuilt = discussion_posts(&pool, topic, None, 10, None).await.unwrap();
+    let rebuilt = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
     assert_eq!(rebuilt.posts, page.posts);
 }
 
@@ -951,7 +1035,8 @@ async fn edit_or_retraction_naming_a_post_outside_the_topic_is_refused(pool: sql
     let author = test_principal(28);
     ensure_test_principal(&pool, author).await;
     let author_profile = create_test_profile(&pool, author, "cross_topic", 1).await;
-    let opening = create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let opening =
+        create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
     append_discussion_and_project(
         &pool,
         other_topic,
@@ -1008,7 +1093,9 @@ async fn edit_or_retraction_naming_a_post_outside_the_topic_is_refused(pool: sql
         .await
         .unwrap()
         .is_none());
-    let page = discussion_posts(&pool, topic, None, 10, None).await.unwrap();
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
     assert_eq!(page.posts[0].body, "Opening claim");
     assert_eq!(page.posts[0].revision, 0);
     assert!(!page.posts[0].retracted);

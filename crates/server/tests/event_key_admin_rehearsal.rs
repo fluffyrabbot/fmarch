@@ -3,7 +3,8 @@
 use std::process::Command;
 use std::sync::{Mutex, MutexGuard};
 
-use eventstore::{ActorId, EventInput, RuntimeKekLifecycle};
+use event_actor::ActorId;
+use eventstore::{EventInput, RuntimeKekLifecycle};
 use identity::{MethodKind, PrincipalId};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;

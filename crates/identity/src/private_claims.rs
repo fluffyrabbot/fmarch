@@ -19,6 +19,8 @@ pub enum PrivateClaimError {
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     #[error(transparent)]
+    Identity(#[from] crate::IdentityFlowError),
+    #[error(transparent)]
     Privacy(#[from] SubjectPrivacyError),
     #[error("private claim payload is invalid: {0}")]
     Payload(#[from] serde_json::Error),
@@ -75,6 +77,51 @@ async fn lock_active_subject(
         || lifecycle_state != "active"
         || principal_status != "active"
         || tombstoned
+    {
+        return Err(PrivateClaimError::SubjectUnavailable);
+    }
+    Ok(())
+}
+
+/// Stabilize an active subject for a read without upgrading a caller's shared
+/// identity gate to mutation authority. Callers must discover identifiers
+/// without row locks, enter this gate, then re-read their current claim pointer.
+/// Claim writers and erasure take incompatible principal/subject locks, so the
+/// pointer remains stable until this transaction ends. Do not lock a dependent
+/// profile row: profile edits may already hold that row while waiting here.
+pub async fn lock_active_subject_for_read(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+    subject_id: SubjectId,
+) -> Result<(), PrivateClaimError> {
+    crate::methods::lock_identity_delivery_gate(tx, &principal_id).await?;
+    let principal_status: String =
+        sqlx::query_scalar("SELECT status FROM platform_principal WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
+            .fetch_one(&mut **tx)
+            .await?;
+    if principal_status != "active" {
+        return Err(PrivateClaimError::PrincipalUnavailable);
+    }
+    let row = sqlx::query(
+        r#"
+        SELECT subject.principal_id, subject.lifecycle_state,
+               EXISTS (
+                   SELECT 1 FROM subject_tombstone AS tombstone
+                   WHERE tombstone.subject_id = subject.subject_id
+               ) AS tombstoned
+        FROM privacy_subject AS subject
+        WHERE subject.subject_id = $1
+        FOR SHARE OF subject
+        "#,
+    )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(PrivateClaimError::SubjectUnavailable)?;
+    if row.try_get::<Option<Uuid>, _>("principal_id")? != Some(principal_id.as_uuid())
+        || row.try_get::<String, _>("lifecycle_state")? != "active"
+        || row.try_get::<bool, _>("tombstoned")?
     {
         return Err(PrivateClaimError::SubjectUnavailable);
     }
@@ -196,6 +243,33 @@ pub async fn open_active_subject_claim<T: for<'de> Deserialize<'de>>(
     scope_key: Option<&str>,
 ) -> Result<T, PrivateClaimError> {
     lock_active_subject(tx, subject_id).await?;
+    open_locked_subject_claim(tx, subject_id, claim_id, claim_kind, scope_id, scope_key).await
+}
+
+/// Open a claim using only shared read authority. The explicit owner/subject
+/// binding is revalidated even when a caller has already entered the gate to
+/// discover its current claim pointer.
+pub async fn open_active_subject_claim_for_read<T: for<'de> Deserialize<'de>>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    claim_kind: &str,
+    scope_id: Uuid,
+    scope_key: Option<&str>,
+) -> Result<T, PrivateClaimError> {
+    lock_active_subject_for_read(tx, principal_id, subject_id).await?;
+    open_locked_subject_claim(tx, subject_id, claim_id, claim_kind, scope_id, scope_key).await
+}
+
+async fn open_locked_subject_claim<T: for<'de> Deserialize<'de>>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    claim_kind: &str,
+    scope_id: Uuid,
+    scope_key: Option<&str>,
+) -> Result<T, PrivateClaimError> {
     let envelope = sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         SELECT envelope

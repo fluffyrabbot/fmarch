@@ -2021,7 +2021,9 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
         .expect("thread view includes White Wolf King night announcement");
     assert!(
         night_thread.posts.iter().any(|post| {
-            post.phase_id.as_ref().is_some_and(|phase_id| phase_id.as_str() == "N01")
+            post.phase_id
+                .as_ref()
+                .is_some_and(|phase_id| phase_id.as_str() == "N01")
                 && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post
                     .body
@@ -3966,7 +3968,8 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
             &host,
             Command::OpenDayPhase {
                 game,
-                phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
+                phase: domain::phase::PhaseId::parse("N02")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -11329,7 +11332,9 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
     assert!(
         revote_tally
             .iter()
-            .any(|row| row.phase_id.as_str() == "D01R1" && row.candidate_slot == "slot_4" && row.count == 3),
+            .any(|row| row.phase_id.as_str() == "D01R1"
+                && row.candidate_slot == "slot_4"
+                && row.count == 3),
         "revote ballots are keyed to the new D01R1 window"
     );
 
@@ -12313,7 +12318,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "D01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -12396,7 +12401,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
                 "targets": ["slot_3"],
                 "phase_id": "D02"
             }),
-            eventstore::ActorId::Slot("slot_2".into()),
+            event_actor::ActorId::Slot("slot_2".into()),
             0,
         )],
     )
@@ -12436,7 +12441,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
                 "targets": [],
                 "phase_id": "D03"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -12601,7 +12606,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
                 "targets": ["slot_4"],
                 "phase_id": "D01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -12734,7 +12739,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
                 "targets": ["slot_2"],
                 "phase_id": "D01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -12912,8 +12917,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
     .unwrap();
 
     let queued = domain::events::ResolutionApplied {
-        phase_id: domain::phase::PhaseId::parse("D01")
-            .expect("static test phase id is canonical"),
+        phase_id: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         run_id: "resolution:test:D01:white_wolf_carry".into(),
         result_version: domain::RESULT_VERSION,
         seed: 930013,
@@ -12972,7 +12976,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
             "ResolutionApplied",
             1,
             serde_json::to_value(&queued).unwrap(),
-            eventstore::ActorId::System,
+            event_actor::ActorId::System,
             1,
         )],
     )
@@ -13002,7 +13006,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
                 "targets": ["slot_3", "slot_4"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_6".into()),
+            event_actor::ActorId::Slot("slot_6".into()),
             2,
         )],
     )
@@ -13345,7 +13349,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -13588,7 +13592,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -13621,7 +13625,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
                 "targets": ["slot_1"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -13835,7 +13839,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -13869,7 +13873,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
                     "targets": ["slot_1"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -13882,7 +13886,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
                     "targets": ["slot_2"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 1,
             ),
         ],
@@ -14101,7 +14105,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14114,7 +14118,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14127,7 +14131,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 0,
             ),
         ],
@@ -14312,7 +14316,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14325,7 +14329,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14338,7 +14342,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 0,
             ),
         ],
@@ -14534,7 +14538,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14547,7 +14551,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -14560,7 +14564,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 0,
             ),
         ],
@@ -14765,7 +14769,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
                 "phase_id": "D01",
                 "metadata": { "ita_session_id": "d1" }
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -15029,7 +15033,7 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
                 "metadata": { "ita_session_id": "d1" },
                 "submitted_at": submitted_at
             }),
-            eventstore::ActorId::Slot(actor.into()),
+            event_actor::ActorId::Slot(actor.into()),
             0,
         )
     })
@@ -15313,7 +15317,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
             "ResolutionApplied",
             1,
             serde_json::to_value(&prior_death).expect("prior death envelope serializes"),
-            eventstore::ActorId::System,
+            event_actor::ActorId::System,
             0,
         )],
     )
@@ -15345,7 +15349,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
                 "metadata": { "ita_session_id": "d1" },
                 "submitted_at": 10
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -16393,7 +16397,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
             "ResolutionApplied",
             1,
             serde_json::to_value(&prior_death).expect("intervening death envelope serializes"),
-            eventstore::ActorId::System,
+            event_actor::ActorId::System,
             0,
         )],
     )
@@ -17103,7 +17107,7 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
                 "metadata": { "ita_session_id": "d1" },
                 "submitted_at": submitted_at
             }),
-            eventstore::ActorId::Slot(actor.into()),
+            event_actor::ActorId::Slot(actor.into()),
             0,
         )
     })
@@ -25447,7 +25451,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                 "started_at": 40,
                 "finished_at": 40
             }),
-            eventstore::ActorId::System,
+            event_actor::ActorId::System,
             0,
         )],
     )
@@ -25466,7 +25470,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                     "actor": actor,
                     "target": "slot_3"
                 }),
-                eventstore::ActorId::Slot(actor.into()),
+                event_actor::ActorId::Slot(actor.into()),
                 0,
             )],
         )
@@ -25565,7 +25569,9 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         .posts
         .iter()
         .find(|post| {
-            post.phase_id.as_ref().is_some_and(|phase_id| phase_id.as_str() == "D02")
+            post.phase_id
+                .as_ref()
+                .is_some_and(|phase_id| phase_id.as_str() == "D02")
                 && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains("Day 2 announcement")
         })
@@ -26715,7 +26721,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
                 "targets": ["slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -26790,7 +26796,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
                 "targets": ["slot_1"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_2".into()),
+            event_actor::ActorId::Slot("slot_2".into()),
             0,
         )],
     )
@@ -26900,7 +26906,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -26959,7 +26965,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -27064,7 +27070,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -27077,7 +27083,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
                     "targets": ["slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 0,
             ),
         ],
@@ -27223,7 +27229,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
                 "targets": [],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -27364,7 +27370,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -27411,7 +27417,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -27607,7 +27613,7 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -27620,7 +27626,7 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
                     "targets": ["slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
         ],
@@ -27786,7 +27792,7 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28135,7 +28141,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
                 "targets": ["slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28195,7 +28201,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
                 "targets": ["slot_3"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_2".into()),
+            event_actor::ActorId::Slot("slot_2".into()),
             0,
         )],
     )
@@ -28265,7 +28271,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
                 "targets": ["slot_4"],
                 "phase_id": "N03"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28439,7 +28445,7 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28626,7 +28632,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
                 "targets": ["slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28660,7 +28666,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
                     "targets": ["slot_3"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -28673,7 +28679,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
                     "targets": [],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
         ],
@@ -28799,7 +28805,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
                 "targets": ["slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -28884,7 +28890,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
                 "targets": ["slot_3"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_2".into()),
+            event_actor::ActorId::Slot("slot_2".into()),
             0,
         )],
     )
@@ -29243,7 +29249,7 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -29824,7 +29830,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -29962,7 +29968,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -29975,7 +29981,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -30159,7 +30165,7 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -30347,7 +30353,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -30360,7 +30366,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -30540,7 +30546,7 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -30553,7 +30559,7 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -30724,7 +30730,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -30737,7 +30743,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -30750,7 +30756,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 2,
             ),
         ],
@@ -31130,7 +31136,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -31143,7 +31149,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -31344,7 +31350,7 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -31516,7 +31522,7 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -31993,7 +31999,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32006,7 +32012,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -32213,7 +32219,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32226,7 +32232,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 1,
             ),
         ],
@@ -32443,7 +32449,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
                     "targets": ["slot_1", "slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32456,7 +32462,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 0,
             ),
         ],
@@ -32594,7 +32600,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
                     "targets": ["slot_2", "slot_3", "slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32607,7 +32613,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -32620,7 +32626,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_6".into()),
+                event_actor::ActorId::Slot("slot_6".into()),
                 2,
             ),
             eventstore::EventInput::new(
@@ -32633,7 +32639,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
                     "targets": ["slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_7".into()),
+                event_actor::ActorId::Slot("slot_7".into()),
                 3,
             ),
         ],
@@ -32800,7 +32806,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_5"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32813,7 +32819,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32826,7 +32832,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_6".into()),
+                event_actor::ActorId::Slot("slot_6".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32839,7 +32845,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_5"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_7".into()),
+                event_actor::ActorId::Slot("slot_7".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32852,7 +32858,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32865,7 +32871,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32878,7 +32884,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_10"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_8".into()),
+                event_actor::ActorId::Slot("slot_8".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -32891,7 +32897,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                     "targets": ["slot_10"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_9".into()),
+                event_actor::ActorId::Slot("slot_9".into()),
                 0,
             ),
         ],
@@ -33515,7 +33521,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -33528,7 +33534,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -33541,7 +33547,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
                     "targets": ["slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
         ],
@@ -33693,7 +33699,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_3", "slot_4"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -33706,7 +33712,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -33719,7 +33725,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 2,
             ),
             eventstore::EventInput::new(
@@ -33732,7 +33738,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_7"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_6".into()),
+                event_actor::ActorId::Slot("slot_6".into()),
                 3,
             ),
             eventstore::EventInput::new(
@@ -33745,7 +33751,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_1"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_7".into()),
+                event_actor::ActorId::Slot("slot_7".into()),
                 4,
             ),
             eventstore::EventInput::new(
@@ -33758,7 +33764,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                     "targets": ["slot_9"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_8".into()),
+                event_actor::ActorId::Slot("slot_8".into()),
                 5,
             ),
         ],
@@ -34052,7 +34058,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_7", "slot_8"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -34065,7 +34071,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_8", "slot_9"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -34078,7 +34084,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_9", "slot_10"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_3".into()),
+                event_actor::ActorId::Slot("slot_3".into()),
                 2,
             ),
             eventstore::EventInput::new(
@@ -34091,7 +34097,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_10", "slot_11"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 3,
             ),
             eventstore::EventInput::new(
@@ -34104,7 +34110,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_11", "slot_12"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 4,
             ),
             eventstore::EventInput::new(
@@ -34117,7 +34123,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
                     "targets": ["slot_7"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_6".into()),
+                event_actor::ActorId::Slot("slot_6".into()),
                 5,
             ),
         ],
@@ -35238,7 +35244,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -35251,7 +35257,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -35264,7 +35270,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 2,
             ),
         ],
@@ -35426,7 +35432,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_2".into()),
+                event_actor::ActorId::Slot("slot_2".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -35439,7 +35445,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
                     "targets": ["slot_2"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -35452,7 +35458,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
                     "targets": ["slot_3"],
                     "phase_id": "N01"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 2,
             ),
         ],
@@ -35610,7 +35616,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
                 "targets": ["slot_2", "slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -35654,7 +35660,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_4".into()),
+            event_actor::ActorId::Slot("slot_4".into()),
             0,
         )],
     )
@@ -35790,7 +35796,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
                 "targets": ["slot_2", "slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -35824,7 +35830,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
                     "targets": ["slot_2"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_4".into()),
+                event_actor::ActorId::Slot("slot_4".into()),
                 0,
             ),
             eventstore::EventInput::new(
@@ -35837,7 +35843,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
                     "targets": ["slot_3"],
                     "phase_id": "N02"
                 }),
-                eventstore::ActorId::Slot("slot_5".into()),
+                event_actor::ActorId::Slot("slot_5".into()),
                 1,
             ),
         ],
@@ -36049,7 +36055,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
             "ResolutionApplied",
             1,
             serde_json::to_value(setup_link).unwrap(),
-            eventstore::ActorId::Host,
+            event_actor::ActorId::Host,
             0,
         )],
     )
@@ -36079,7 +36085,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -36280,7 +36286,7 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -36476,7 +36482,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -36520,7 +36526,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
                 "targets": ["slot_1"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -36659,7 +36665,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -36699,7 +36705,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
                 "targets": ["slot_1"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -36891,7 +36897,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -36931,7 +36937,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
                 "targets": ["slot_1"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_3".into()),
+            event_actor::ActorId::Slot("slot_3".into()),
             0,
         )],
     )
@@ -37118,7 +37124,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -37636,7 +37642,7 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -37804,7 +37810,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
                 "targets": ["slot_2", "slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -37840,17 +37846,21 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
     let notifications = player_notifications(&pool, game).await.unwrap();
     assert_eq!(notifications.len(), 2);
     assert!(
-        notifications.iter().any(|notice| notice.phase_id.as_str() == "N01"
-            && notice.audience_slot == "slot_2"
-            && notice.effect == "lovers_link"
-            && notice.status == "link_lovers_n01"),
+        notifications
+            .iter()
+            .any(|notice| notice.phase_id.as_str() == "N01"
+                && notice.audience_slot == "slot_2"
+                && notice.effect == "lovers_link"
+                && notice.status == "link_lovers_n01"),
         "slot_2 should receive private lover knowledge"
     );
     assert!(
-        notifications.iter().any(|notice| notice.phase_id.as_str() == "N01"
-            && notice.audience_slot == "slot_3"
-            && notice.effect == "lovers_link"
-            && notice.status == "link_lovers_n01"),
+        notifications
+            .iter()
+            .any(|notice| notice.phase_id.as_str() == "N01"
+                && notice.audience_slot == "slot_3"
+                && notice.effect == "lovers_link"
+                && notice.status == "link_lovers_n01"),
         "slot_3 should receive private lover knowledge"
     );
 
@@ -37877,7 +37887,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_4".into()),
+            event_actor::ActorId::Slot("slot_4".into()),
             0,
         )],
     )
@@ -38025,7 +38035,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
                 "targets": ["slot_2", "slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -38058,7 +38068,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
                 "targets": ["slot_2"],
                 "phase_id": "N02"
             }),
-            eventstore::ActorId::Slot("slot_4".into()),
+            event_actor::ActorId::Slot("slot_4".into()),
             0,
         )],
     )
@@ -38260,7 +38270,7 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
                 "targets": ["slot_2", "slot_3"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )

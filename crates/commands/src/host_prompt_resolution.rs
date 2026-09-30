@@ -14,7 +14,8 @@ use super::{
 use domain::pack::{
     HostPromptDecisionKind, HostPromptResolutionEffect, HostPromptResolutionEffectPolicy,
 };
-use eventstore::{ActorId, EventInput, StoredEvent};
+use event_actor::ActorId;
+use eventstore::{EventInput, StoredEvent};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
@@ -94,7 +95,7 @@ pub(super) async fn resolve_host_prompt(
         return Err(Reject::PromptAlreadyResolved);
     }
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let stream = game_event_codec::load_stream_in_tx(tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
@@ -142,18 +143,18 @@ pub(super) async fn resolve_host_prompt(
                 prompt_resolved_seq: next_seq,
             })?;
 
-            events.push(EventInput::resolution_applied(
-                serde_json::to_value(rebuilt.applied)
+            events.push(
+                game_event_codec::resolution_applied(
+                    &rebuilt.applied,
+                    ActorId::System,
+                    next_seq + 1,
+                )
+                .map_err(|error| Reject::Internal(error.to_string()))?,
+            );
+            events.push(
+                game_event_codec::resolution_trace(&rebuilt.trace, ActorId::System, next_seq + 2)
                     .map_err(|error| Reject::Internal(error.to_string()))?,
-                ActorId::System,
-                next_seq + 1,
-            ));
-            events.push(EventInput::resolution_trace(
-                serde_json::to_value(rebuilt.trace)
-                    .map_err(|error| Reject::Internal(error.to_string()))?,
-                ActorId::System,
-                next_seq + 2,
-            ));
+            );
         }
         HostPromptEffect::AdvancePhase {
             phase_id,

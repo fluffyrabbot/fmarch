@@ -45,14 +45,14 @@ fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_d
 
     for preserved_contract in [
         "projections::host_prompts(",
-        "eventstore::load_stream_in_tx(",
+        "game_event_codec::load_stream_in_tx(",
         "load_pack(&pack_artifact_from_stream(",
         "\"HostPromptResolved\"",
         "host_prompt_effect(",
         "host_prompt_public_resolution(",
         "public_resolution does not match rebuilt prompt effect",
-        "EventInput::resolution_applied(",
-        "EventInput::resolution_trace(",
+        "game_event_codec::resolution_applied(",
+        "game_event_codec::resolution_trace(",
         "\"PhaseAdvanced\"",
         "persist(tx, game, &events).await",
     ] {

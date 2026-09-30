@@ -1,0 +1,15 @@
+[package]
+name = "forum_application"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+forum = { path = "../forum", version = "0.1.0" }
+content_reference = { path = "../content_reference", version = "0.1.0" }
+principal = { path = "../principal", version = "0.1.0" }
+thiserror = "1"
+uuid = { version = "1", features = ["serde"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

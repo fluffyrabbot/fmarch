@@ -175,9 +175,13 @@ async fn discussion_rebuild_preserves_post_committed_while_waiting(pool: PgPool)
         replay.close().await;
     });
     wait_for_blocker(&pool, replay_pid, writer_pid).await;
-    projections::append_discussion_and_project_in_tx(&mut writer, topic, &[post("concurrent")])
-        .await
-        .unwrap();
+    projections::test_support::append_discussion_and_project_in_tx(
+        &mut writer,
+        topic,
+        &[post("concurrent")],
+    )
+    .await
+    .unwrap();
     writer.commit().await.unwrap();
     tokio::time::timeout(Duration::from_secs(5), task)
         .await

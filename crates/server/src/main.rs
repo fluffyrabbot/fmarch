@@ -744,15 +744,27 @@ fn posting_budget_policy_from_env() -> Result<projections::PostingBudgetPolicy, 
         bounded_env(name, default as u64, minimum, 100_000).map(|value| value as u32)
     };
     Ok(projections::PostingBudgetPolicy {
-        posts_per_minute: count("FMARCH_POSTING_POSTS_PER_MINUTE", defaults.posts_per_minute, 1)?,
+        posts_per_minute: count(
+            "FMARCH_POSTING_POSTS_PER_MINUTE",
+            defaults.posts_per_minute,
+            1,
+        )?,
         posts_per_hour: count("FMARCH_POSTING_POSTS_PER_HOUR", defaults.posts_per_hour, 1)?,
-        topics_per_hour: count("FMARCH_POSTING_TOPICS_PER_HOUR", defaults.topics_per_hour, 1)?,
+        topics_per_hour: count(
+            "FMARCH_POSTING_TOPICS_PER_HOUR",
+            defaults.topics_per_hour,
+            1,
+        )?,
         edits_per_ten_minutes: count(
             "FMARCH_POSTING_EDITS_PER_TEN_MINUTES",
             defaults.edits_per_ten_minutes,
             1,
         )?,
-        reports_per_hour: count("FMARCH_POSTING_REPORTS_PER_HOUR", defaults.reports_per_hour, 1)?,
+        reports_per_hour: count(
+            "FMARCH_POSTING_REPORTS_PER_HOUR",
+            defaults.reports_per_hour,
+            1,
+        )?,
         mention_targets_per_ten_minutes: count(
             "FMARCH_POSTING_MENTION_TARGETS_PER_TEN_MINUTES",
             defaults.mention_targets_per_ten_minutes,
@@ -1338,6 +1350,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     eventstore::attest_active_runtime_kek(&pool).await?;
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
+    forum_postgres::audit_decode(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
     profile_application::verify_profile_handle_index_consistency(&pool).await?;
     let workos_verifier = identity::WorkosAccessTokenVerifier::from_env()

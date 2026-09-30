@@ -17,12 +17,16 @@ const migrationFilenamePattern = /^(\d{4})_([a-z0-9_]+)\.sql$/u;
 const requiredCatalogMarkers = Object.freeze([
   "CREATE TABLE public.events (",
   "CREATE TABLE public.event_stream_keys (",
+  "CREATE TABLE public.event_integration_outbox (",
+  "CREATE TABLE public.forum_area_reservation (",
   "CREATE TABLE public.public_search_document (",
   "CREATE FUNCTION public.events_forbid_mutation()",
   "CREATE FUNCTION public.event_direct_envelope_write_guard()",
   "CREATE VIEW public.event_direct_key_reference AS",
   "CREATE VIEW public.attention_destination AS",
   "CREATE TRIGGER events_no_update",
+  "CREATE TRIGGER event_integration_outbox_no_mutation",
+  "CREATE TRIGGER forum_area_reservation_no_mutation",
 ]);
 
 function sha256(value) {
@@ -145,7 +149,7 @@ export async function inspectDatabaseSchema({
   const triggerCount = countLines(currentSchema, /^CREATE TRIGGER /u);
   const functionCount = countLines(currentSchema, /^CREATE FUNCTION /u);
   const viewCount = countLines(currentSchema, /^CREATE VIEW /u);
-  if (tableCount !== 106 || triggerCount !== 38 || functionCount !== 17 || viewCount !== 2) {
+  if (tableCount !== 108 || triggerCount !== 40 || functionCount !== 17 || viewCount !== 2) {
     throw new Error(
       `canonical catalog counts drifted: tables=${tableCount} triggers=${triggerCount} functions=${functionCount} views=${viewCount}`,
     );

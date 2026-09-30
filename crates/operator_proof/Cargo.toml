@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+game_event_codec = { path = "../game_event_codec", version = "0.1.0" }
 caps = { path = "../caps", version = "0.1.0" }
 commands = { path = "../commands", version = "0.1.0" }
 database_schema = { path = "../database_schema", version = "0.1.0" }

@@ -8971,7 +8971,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
                 "targets": ["slot_1"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_2".into()),
+            event_actor::ActorId::Slot("slot_2".into()),
             0,
         )],
     )
@@ -12723,7 +12723,7 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
             "ResolutionApplied",
             1,
             serde_json::to_value(&applied).unwrap(),
-            eventstore::ActorId::System,
+            event_actor::ActorId::System,
             2,
         )],
     )

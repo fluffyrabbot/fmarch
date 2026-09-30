@@ -30,7 +30,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use caps::{Capability, CapabilitySet, Principal};
 use content_reference::{self, ContentReferenceReject};
 use domain::pack::ItaSessionControlKind;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use game_persona_application::GamePersonaApplicationError;
 use game_platform::{
     GamePersonaId, GamePersonaName, GamePersonaPresentation, OccupancyId, OccupancyTransitionId,
@@ -267,7 +268,7 @@ pub(crate) async fn load_engine_phase_input_in_tx(
     };
     let usable = checkpoint.filter(|row| row.result_version == domain::RESULT_VERSION as i16);
     let after_seq = usable.as_ref().map(|row| row.stream_seq).unwrap_or(0);
-    let tail = eventstore::load_stream_after_in_tx(tx, game, after_seq)
+    let tail = game_event_codec::load_stream_after_in_tx(tx, game, after_seq)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let phase_id = phase_id.clone();
@@ -599,7 +600,10 @@ async fn handle_in_tx(
     }
     let audit_context = command_audit_context(tx, principal, command_id, &command).await?;
     let ack = COMMAND_AUDIT_CONTEXT
-        .scope(audit_context, handle_command(tx, principal, command, posting))
+        .scope(
+            audit_context,
+            handle_command(tx, principal, command, posting),
+        )
         .await?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
 
@@ -1551,7 +1555,7 @@ async fn start_game(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::PhaseResolve).await?;
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let stream = game_event_codec::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
@@ -1673,7 +1677,7 @@ async fn resolved_locked_phase_stream(
         return Err(Reject::InvalidTarget);
     }
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let stream = game_event_codec::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if !stream.iter().any(|event| {
@@ -2237,7 +2241,7 @@ async fn assign_slot_with_name(
         ActorId::Host,
         0,
     ));
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let stream = game_event_codec::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if stream.iter().any(|event| event.kind == "GameStarted") {
@@ -3051,16 +3055,18 @@ async fn resolve_phase(
         .map_err(|e| Reject::Internal(format!("invalid resolution trace: {e}")))?;
     let applied_json =
         serde_json::to_value(&output.applied).map_err(|e| Reject::Internal(e.to_string()))?;
-    let applied_ev = EventInput::resolution_applied(
-        applied_json.clone(),
+    let applied_ev = game_event_codec::resolution_applied(
+        &output.applied,
         ActorId::System,
         phase_input.next_stream_seq,
-    );
-    let trace_ev = EventInput::resolution_trace(
-        serde_json::to_value(&output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
+    )
+    .map_err(|error| Reject::Internal(error.to_string()))?;
+    let trace_ev = game_event_codec::resolution_trace(
+        &output.trace,
         ActorId::System,
         phase_input.next_stream_seq,
-    );
+    )
+    .map_err(|error| Reject::Internal(error.to_string()))?;
     let lock_ev = EventInput::new(
         "ThreadLocked",
         1,
@@ -4934,7 +4940,7 @@ mod tests {
             kind: "PhaseAdvanced".to_string(),
             version: 1,
             payload: serde_json::json!({ "phase_id": "D01R02" }),
-            actor: eventstore::ActorId::Host,
+            actor: event_actor::ActorId::Host,
             occurred_at: 0,
             causation_id: None,
             meta: serde_json::json!({}),

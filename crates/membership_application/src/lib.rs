@@ -10,7 +10,8 @@ use community_membership::{
     InvitationState, InvitationStatus, MembershipCommand, MembershipEvent, MembershipId,
     MembershipOrigin, MembershipState, MembershipStatus,
 };
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use hmac::{Hmac, Mac};
 use identity::{IssuedSession, SessionPolicy};
 use principal::PrincipalId;
@@ -584,6 +585,21 @@ pub async fn membership_for_principal(
     )
     .bind(principal_id.as_uuid())
     .fetch_optional(pool)
+    .await?
+    .map(MembershipId::from_uuid))
+}
+
+/// Hold active admission while another context commits a member-authored fact.
+/// Membership lifecycle mutations take an exclusive lock on this same row.
+pub async fn active_membership_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+) -> Result<Option<MembershipId>, MembershipApplicationError> {
+    Ok(sqlx::query_scalar::<_, Uuid>(
+        "SELECT membership_id FROM community_membership WHERE active_principal_id = $1 AND status = 'active' FOR SHARE",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut **tx)
     .await?
     .map(MembershipId::from_uuid))
 }

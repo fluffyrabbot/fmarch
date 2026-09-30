@@ -60,7 +60,7 @@ pub async fn set_reading_checkpoint(
         attention::READING_CHECKPOINT_SET,
         1,
         serde_json::json!(position),
-        eventstore::ActorId::Principal(principal),
+        event_actor::ActorId::Principal(principal),
         occurred_at,
     );
     let mut tx = pool.begin().await?;

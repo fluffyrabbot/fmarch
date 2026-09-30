@@ -7,9 +7,11 @@ use content_reference::{
 mod codec;
 mod content;
 mod post;
+mod replay;
 pub use codec::{decode_event, DecodedForumEvent, ForumDecodeError};
 pub use content::{PostBody, PostContent, TopicTitle};
 pub use post::{decide_post, PostCommand, PostDecisionContext};
+pub use replay::{AreaAggregate, AreaState, ForumEventRecord, ForumReplayError, TopicAggregate};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;

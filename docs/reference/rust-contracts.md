@@ -283,7 +283,7 @@ Source: [crates/domain/src/state.rs](../../crates/domain/src/state.rs#L19) (type
 
 ## ActorId
 
-Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L40) (enum).
+Source: [crates/event_actor/src/lib.rs](../../crates/event_actor/src/lib.rs#L13) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -295,21 +295,21 @@ Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L40) (
 
 ## EventInput
 
-Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L56) (struct).
+Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L31) (struct).
 
 | Member | Rust declaration |
 |---|---|
 | <code>kind</code> | <code>kind: String</code> |
 | <code>version</code> | <code>version: i16</code> |
 | <code>payload</code> | <code>payload: serde_json::Value</code> |
-| <code>actor</code> | <code>actor: ActorId</code> |
+| <code>actor</code> | <code>actor: serde_json::Value</code> |
 | <code>occurred_at</code> | <code>occurred_at: i64</code> |
 | <code>causation_id</code> | <code>causation_id: Option&lt;Uuid&gt;</code> |
 | <code>meta</code> | <code>meta: serde_json::Value</code> |
 
 ## StoredEvent
 
-Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L121) (struct).
+Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L70) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -319,7 +319,7 @@ Source: [crates/eventstore/src/lib.rs](../../crates/eventstore/src/lib.rs#L121) 
 | <code>kind</code> | <code>kind: String</code> |
 | <code>version</code> | <code>version: i16</code> |
 | <code>payload</code> | <code>payload: serde_json::Value</code> |
-| <code>actor</code> | <code>actor: ActorId</code> |
+| <code>actor</code> | <code>actor: serde_json::Value</code> |
 | <code>occurred_at</code> | <code>occurred_at: i64</code> |
 | <code>causation_id</code> | <code>causation_id: Option&lt;Uuid&gt;</code> |
 | <code>meta</code> | <code>meta: serde_json::Value</code> |

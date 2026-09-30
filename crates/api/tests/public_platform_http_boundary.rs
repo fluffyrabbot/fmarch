@@ -103,15 +103,13 @@ fn public_platform_http_has_one_typed_owner_without_transport_or_persistence_dri
 /// slot-authored evidence in a live game. This test makes that absence a
 /// contract rather than an omission: the game command boundary rejects every
 /// edit-shaped input at deserialization, the command enums carry no such
-/// variant, and the only edit routes are keyed by a discussion topic whose
-/// write state is loaded from `discussion_topic`, so a game `PostRef` cannot
-/// reach `forum::decide_topic`.
+/// variant, and the only edit routes dispatch to the forum application whose
+/// journal codec admits canonical forum facts before a decision can run.
 #[test]
 fn game_threads_have_no_edit_or_retract_path() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let wire_source = std::fs::read_to_string(repo_root.join("wire/src/lib.rs")).unwrap();
-    let commands_source =
-        std::fs::read_to_string(repo_root.join("commands/src/model.rs")).unwrap();
+    let commands_source = std::fs::read_to_string(repo_root.join("commands/src/model.rs")).unwrap();
     let public_platform_http = std::fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/public_platform_http.rs"),
     )
@@ -127,7 +125,13 @@ fn game_threads_have_no_edit_or_retract_path() {
     // Runtime proof: every edit-shaped command is refused at the wire and
     // pipeline boundaries before any authority check could run.
     let game = uuid::Uuid::new_v4();
-    for variant in ["EditPost", "RetractPost", "PostEdited", "PostRetracted", "DeletePost"] {
+    for variant in [
+        "EditPost",
+        "RetractPost",
+        "PostEdited",
+        "PostRetracted",
+        "DeletePost",
+    ] {
         let payload = serde_json::json!({
             variant: {
                 "game": game,
@@ -159,7 +163,13 @@ fn game_threads_have_no_edit_or_retract_path() {
             .nth(1)
             .and_then(|rest| rest.split("\n}\n").next())
             .unwrap_or_else(|| panic!("{name} must declare pub enum Command"));
-        for forbidden in ["EditPost", "RetractPost", "DeletePost", "Edit {", "Retract {"] {
+        for forbidden in [
+            "EditPost",
+            "RetractPost",
+            "DeletePost",
+            "Edit {",
+            "Retract {",
+        ] {
             assert!(
                 !command_enum.contains(forbidden),
                 "{name}::Command grew a game post edit path: {forbidden}"
@@ -172,23 +182,29 @@ fn game_threads_have_no_edit_or_retract_path() {
     }
 
     // Route proof: the only edit and retract handlers live on the discussion
-    // topic route, load the topic through discussion_topic_by_id, and are
-    // decided by the forum write model. Game HTTP owns none of them.
+    // topic route and dispatch intent to the forum application. Game HTTP
+    // owns none of them; query rows cannot supply a forum write aggregate.
     assert!(public_platform_http.contains(
         "\"/discussions/topics/{topic}/posts/{source_seq}\",\n            axum::routing::put(edit_discussion_post).delete(retract_discussion_post),"
     ));
-    for handler in ["async fn edit_discussion_post(", "async fn retract_discussion_post("] {
+    for handler in [
+        "async fn edit_discussion_post(",
+        "async fn retract_discussion_post(",
+    ] {
         let body = public_platform_http
             .split(handler)
             .nth(1)
             .and_then(|rest| rest.split("\n}\n").next())
             .unwrap_or_else(|| panic!("public platform HTTP must own {handler}"));
-        assert!(body.contains("DiscussionProfileAuthentication(profile)"));
-        assert!(body.contains("projections::discussion_topic_by_id(&state.pool, topic)"));
-        assert!(body.contains("projections::discussion_post_write_state(&state.pool, topic, source_seq)"));
-        assert!(body.contains("PostDecisionContext::new(&topic_state, &post)"));
-        assert!(body.contains("forum::decide_post("));
-        assert!(!body.contains("game"), "{handler} must not reach for game state");
+        assert!(body.contains("auth: AccountAuthenticatedRequest"));
+        assert!(body.contains("execute_forum_command("));
+        assert!(body.contains("ForumCommand::"));
+        assert!(!body.contains("discussion_post_write_state"));
+        assert!(!body.contains("decide_post"));
+        assert!(
+            !body.contains("game"),
+            "{handler} must not reach for game state"
+        );
     }
     for source in [&game_http, &command_http] {
         for forbidden in [
@@ -205,5 +221,55 @@ fn game_threads_have_no_edit_or_retract_path() {
                 "game or command HTTP acquired a post edit path: {forbidden}"
             );
         }
+    }
+}
+
+#[test]
+fn forum_http_only_translates_intent_and_reads_committed_responses() {
+    let source = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/public_platform_http.rs"),
+    )
+    .unwrap();
+    assert!(source.contains("forum_application::execute(&store, command, principal, now)"));
+    assert!(source.contains("forum_postgres::PgForumStore::new("));
+    for handler in [
+        "create_discussion_area",
+        "create_discussion_topic",
+        "create_discussion_post",
+        "edit_discussion_post",
+        "retract_discussion_post",
+        "moderate_discussion_topic",
+        "curate_discussion_topic",
+    ] {
+        let declaration = format!("async fn {handler}(");
+        let body = source
+            .split(&declaration)
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .unwrap_or_else(|| panic!("missing forum handler {handler}"));
+        assert!(
+            body.contains("execute_forum_command("),
+            "{handler} bypasses the application"
+        );
+        assert!(
+            !body.contains(".expect("),
+            "{handler} panics on a missing response projection"
+        );
+    }
+    for forbidden in [
+        "EventInput",
+        "decide_topic",
+        "decide_post",
+        "forum_topic_state",
+        "discussion_post_write_state",
+        "append_forum_events",
+        "append_member_forum_events",
+        "resolve_discussion_mentions",
+        "DiscussionProfileAuthentication",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "forum transport regained write ownership: {forbidden}"
+        );
     }
 }

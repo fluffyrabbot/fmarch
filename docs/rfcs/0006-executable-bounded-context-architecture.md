@@ -123,6 +123,7 @@ These fail `npm run test:architecture-fitness` immediately:
 | Policy | Enforced rule |
 |---|---|
 | `hard:pure-context-inward-only` | Pure context manifests cannot depend on runtime, transport, persistence, HTTP, object-store, or operator crates. |
+| `hard:event-journal-is-context-neutral` | The journal stores opaque actors and payloads; context codecs own domain and principal values. |
 | `hard:event-journal-no-outward-dependencies` | `eventstore` cannot depend on API, command, projection, capability, wire, server, or operator layers. |
 | `hard:api-does-not-import-operations-plane` | `api` cannot acquire `operator_api`, `operator_proof`, or `server`. |
 | `hard:public-server-does-not-import-proof-engine` | The public server cannot directly acquire `operator_proof`; its existing `operator_api` edge is target debt, not permission to deepen it. |
@@ -160,7 +161,6 @@ as their migration steps land:
 | `target:public-runtime-is-adapter-only` | The public runtime owns composition and transport only; it does not import commands, projections, SQL, identity/privacy implementations, media storage, operator code, or domain engines. |
 | `target:http-api-has-no-persistence` | HTTP code has no SQL, eventstore, projections, command implementation, identity implementation, schema, or object-storage dependency. |
 | `target:wire-has-no-internal-dependencies` | The transport contract contains DTOs and serialization primitives only. Mapping belongs to adapters. |
-| `target:event-journal-is-context-neutral` | The event journal has no game/domain or principal dependency. Context codecs own those values. |
 | `target:monolithic-projections-have-no-write-authority` | The monolithic projection crate disappears; no read projector can append canonical facts or open privacy claims through a global authority. |
 
 Target bans are architecture decisions, not lint warnings. “Reported debt” means
@@ -456,6 +456,36 @@ end of every item.
 An edge may move only inward during this sequence. Temporary compatibility
 routes, dual event kinds, dual writes, and a generic “all contexts” repository
 are explicitly rejected.
+
+## Migration ledger
+
+The typed-journal/forum cut installs context-neutral storage, typed expected-version
+append, authenticated integration facts in an encrypted transactional outbox, and
+source-to-outbox completeness audit. `event_actor` owns the existing actor value;
+`game_event_codec` owns resolver envelope versions and upcasting. Storage no longer
+imports `domain` or `principal`; that target is now a hard ban.
+
+`forum_application` owns replay-based topic/post decisions and transaction completion.
+`forum_postgres` implements narrow identity, membership, profile, source, and budget
+ports. HTTP passes intent and revalidated session authority. Query rows can restrict
+quotation visibility but cannot supply canonical bodies, revisions, authors, or
+posting policy. `forum_journal` owns the typed codec and integration facts. Raw forum
+fixture construction is confined to a debug-only test-support module; release code
+has one forum write path.
+
+The hub ratchets explicitly add `event_actor` to server/API/projections, the forum
+application and Postgres adapter to API, the forum startup audit to server, and
+forum/game codecs to projections. These edges replace embedded authority and
+storage-owned decoding; they do not authorize additional cross-context SQL. Query
+and projector extraction, context-specific schemas/roles, all non-forum typed event
+owners, cursor-driven consumers, and projector generations remain unfinished.
+Steps 3 and 4 are therefore partial, not complete.
+
+Forum envelopes now require sealed `journal_context: forum` metadata. Existing
+unmarked development forum streams fail readiness and require an explicit disposable
+development-data reset before this code is deployed. This change does not reset any
+environment. Raw event archives preserve their original payload/version bytes;
+archive export/restore of integration outbox facts remains a separate obligation.
 
 ## Trade-offs and preserved invariants
 

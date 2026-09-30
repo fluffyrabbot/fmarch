@@ -1,4 +1,5 @@
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use game_platform::{GamePersonaName, GamePersonaPresentation};
 use identity::{
     prepare_subject_authority_for_service, random_tombstone_alias, reconcile_subject_revocations,
@@ -331,10 +332,13 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         .to_string()
         .contains(&principal.to_string()));
     assert!(!matches!(
-        &canonical[0].actor,
-        ActorId::Principal(user) if user == &principal
+        ActorId::decode(&canonical[0].actor).unwrap(),
+        ActorId::Principal(user) if user == principal
     ));
-    assert!(matches!(&canonical[0].actor, ActorId::PrivacySubject(_)));
+    assert!(matches!(
+        ActorId::decode(&canonical[0].actor).unwrap(),
+        ActorId::PrivacySubject(_)
+    ));
 
     let raw_event: (i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
         "SELECT stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1",
@@ -546,8 +550,8 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
         .to_string()
         .contains("Canary Persona Name"));
     assert!(!matches!(
-        &canonical[0].actor,
-        ActorId::Principal(actor) if actor == &principal
+        ActorId::decode(&canonical[0].actor).unwrap(),
+        ActorId::Principal(actor) if actor == principal
     ));
 
     let alias = identity::test_support::erase_member(&pool, &principal, 10)

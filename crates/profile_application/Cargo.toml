@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+event_actor = { path = "../event_actor", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }
 identity = { path = "../identity", version = "0.1.0" }
 profile_handle_index = { path = "../profile_handle_index", version = "0.1.0" }

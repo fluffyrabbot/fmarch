@@ -19,8 +19,9 @@ export const SOURCES = [
     'ConversionOriginRecord', 'EffectRecord', 'SlotState', 'Seed',
     'LogicalTime',
   ]],
+  ['crates/event_actor/src/lib.rs', ['ActorId']],
   ['crates/eventstore/src/lib.rs', [
-    'ActorId', 'EventInput', 'StoredEvent',
+    'EventInput', 'StoredEvent',
   ]],
   ['crates/domain/src/events.rs', [
     'InnerEvent', 'ResolutionApplied', 'ResolutionTrace', 'DayVoteOutcome',

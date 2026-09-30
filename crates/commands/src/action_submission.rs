@@ -18,7 +18,8 @@ use domain::{
     },
     IrAbility, Modifier, RoleModifier,
 };
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use sqlx::{postgres::PgPool, Postgres, Transaction};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -163,18 +164,22 @@ pub(super) async fn submit_action(
         domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION).map_err(
             |error| Reject::Internal(format!("invalid instant resolution trace: {error}")),
         )?;
-        events.push(EventInput::resolution_applied(
-            serde_json::to_value(&output.applied)
-                .map_err(|error| Reject::Internal(error.to_string()))?,
-            ActorId::System,
-            phase_input.next_stream_seq + 1,
-        ));
-        events.push(EventInput::resolution_trace(
-            serde_json::to_value(&output.trace)
-                .map_err(|error| Reject::Internal(error.to_string()))?,
-            ActorId::System,
-            phase_input.next_stream_seq + 2,
-        ));
+        events.push(
+            game_event_codec::resolution_applied(
+                &output.applied,
+                ActorId::System,
+                phase_input.next_stream_seq + 1,
+            )
+            .map_err(|error| Reject::Internal(error.to_string()))?,
+        );
+        events.push(
+            game_event_codec::resolution_trace(
+                &output.trace,
+                ActorId::System,
+                phase_input.next_stream_seq + 2,
+            )
+            .map_err(|error| Reject::Internal(error.to_string()))?,
+        );
     }
     persist(tx, request.game, &events).await
 }

@@ -8,7 +8,7 @@ use crate::{
 };
 use caps::Principal;
 use domain::phase::{PhaseId, PhaseKind};
-use eventstore::ActorId;
+use event_actor::ActorId;
 use principal::PrincipalId;
 use projections::audit_rebuild;
 use serde::Serialize;
@@ -208,7 +208,7 @@ pub async fn audit_resolution_envelopes(
     pool: &PgPool,
     game: Uuid,
 ) -> Result<ResolutionEnvelopeAuditReport, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = game_event_codec::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let mut phases = Vec::new();
@@ -513,7 +513,7 @@ pub async fn inspect_resolution_traces(
     game: Uuid,
     run_id: Option<&str>,
 ) -> Result<ResolutionTraceInspectionReport, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = game_event_codec::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let mut traces = Vec::new();
@@ -859,7 +859,7 @@ async fn resolution_payload_for_phase(
     game: Uuid,
     phase_id: &PhaseId,
 ) -> Result<serde_json::Value, Reject> {
-    eventstore::load_stream(pool, game)
+    game_event_codec::load_stream(pool, game)
         .await
         .map_err(|err| Reject::Internal(err.to_string()))?
         .into_iter()
@@ -1116,7 +1116,7 @@ pub async fn load_engine_snapshot(
     game: Uuid,
     phase_id: &PhaseId,
 ) -> Result<domain::StateSnapshot, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = game_event_codec::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     Ok(EngineInputBuilder::new(game, &stream, phase_id.clone())
@@ -1133,7 +1133,7 @@ pub async fn load_engine_phase_input(
     game: Uuid,
     phase_id: &PhaseId,
 ) -> Result<EnginePhaseInputAudit, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = game_event_codec::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let phase_input = EngineInputBuilder::new(game, &stream, phase_id.clone()).build()?;
@@ -1157,7 +1157,7 @@ pub async fn audit_engine_snapshot_identity_boundary(
     game: Uuid,
     phase_id: &PhaseId,
 ) -> Result<EngineSnapshotIdentityAudit, Reject> {
-    let stream = eventstore::load_stream(pool, game)
+    let stream = game_event_codec::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let snapshot = EngineInputBuilder::new(game, &stream, phase_id.clone())

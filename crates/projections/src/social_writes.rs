@@ -126,7 +126,7 @@ async fn append_member_mute_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::Principal(principal_id),
+                event_actor::ActorId::Principal(principal_id),
                 occurred_at,
             )
         })

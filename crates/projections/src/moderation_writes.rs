@@ -143,7 +143,7 @@ fn moderation_event_inputs(
                     1
                 },
                 event.payload(),
-                eventstore::ActorId::Principal(actor_principal_id),
+                event_actor::ActorId::Principal(actor_principal_id),
                 occurred_at,
             )
         })

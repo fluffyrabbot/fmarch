@@ -9,6 +9,7 @@ default = []
 test-support = []
 
 [dependencies]
+event_actor = { path = "../event_actor", version = "0.1.0" }
 argon2 = "0.5"
 async-trait = "0.1"
 base64 = "0.22"

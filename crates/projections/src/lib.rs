@@ -943,6 +943,10 @@ pub struct PublicProfileRow {
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectionError {
     #[error(transparent)]
+    Journal(#[from] eventstore::journal::JournalError),
+    #[error(transparent)]
+    ForumReplay(#[from] forum::ForumReplayError),
+    #[error(transparent)]
     Store(#[from] StoreError),
     #[error(transparent)]
     ForumCodec(#[from] forum::ForumDecodeError),
@@ -1483,8 +1487,8 @@ async fn fold_event(
 
         // ── engine resolution envelope: unwrap and fold inner events ──
         "ResolutionApplied" => {
-            let applied = domain::validate_resolution_json(&ev.payload, domain::RESULT_VERSION)
-                .map_err(|e| ProjectionError::Payload {
+            let applied =
+                game_event_codec::decode_applied(ev).map_err(|e| ProjectionError::Payload {
                     kind: ev.kind.clone(),
                     source: serde::de::Error::custom(e.to_string()),
                 })?;
@@ -1535,11 +1539,9 @@ async fn fold_event(
             }
         }
         "ResolutionTrace" => {
-            domain::validate_trace_json(&ev.payload, domain::TRACE_VERSION).map_err(|e| {
-                ProjectionError::Payload {
-                    kind: ev.kind.clone(),
-                    source: serde::de::Error::custom(e.to_string()),
-                }
+            game_event_codec::decode_trace(ev).map_err(|e| ProjectionError::Payload {
+                kind: ev.kind.clone(),
+                source: serde::de::Error::custom(e.to_string()),
             })?;
         }
         "HostPromptResolved" => {
@@ -3209,111 +3211,6 @@ pub async fn append_and_project_in_tx(
     Ok(stored)
 }
 
-/// Append a non-game discussion event stream and fold its public projection in
-/// the same transaction. Discussion streams intentionally do not enter the
-/// game-only fold/rebuild path.
-pub async fn append_discussion_and_project(
-    pool: &PgPool,
-    stream_id: Uuid,
-    events: &[EventInput],
-) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let mut tx = pool.begin().await?;
-    let stored = append_discussion_and_project_in_tx(&mut tx, stream_id, events).await?;
-    tx.commit().await?;
-    Ok(stored)
-}
-
-/// Transactional form of [`append_discussion_and_project`]. The complete batch
-/// owns a savepoint so a fold error rolls back both journal and projection
-/// writes without discarding unrelated work in the caller's transaction.
-pub async fn append_discussion_and_project_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    stream_id: Uuid,
-    events: &[EventInput],
-) -> Result<Vec<StoredEvent>, ProjectionError> {
-    validate_discussion_events(events)?;
-    let mut batch = sqlx::Acquire::begin(&mut *tx).await?;
-    let result: Result<Vec<StoredEvent>, ProjectionError> = async {
-        let stored = append_in_tx(&mut batch, stream_id, events).await?;
-        for event in &stored {
-            fold_discussion_event(&mut batch, stream_id, event).await?;
-        }
-        Ok(stored)
-    }
-    .await;
-    match result {
-        Ok(stored) => {
-            batch.commit().await?;
-            Ok(stored)
-        }
-        Err(error) => {
-            // Finish rollback before returning; a rollback failure supersedes
-            // the fold error because atomic recovery is no longer confirmed.
-            batch.rollback().await?;
-            Err(error)
-        }
-    }
-}
-
-/// Append a community command only if the topic stream is still at the version
-/// used to decide it. The expected-version check and projection fold commit in
-/// the same transaction.
-pub async fn append_discussion_and_project_expected(
-    pool: &PgPool,
-    stream_id: Uuid,
-    expected_stream_seq: i64,
-    events: &[EventInput],
-) -> Result<Vec<StoredEvent>, ProjectionError> {
-    validate_discussion_events(events)?;
-    let mut tx = pool.begin().await?;
-    let stored =
-        append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
-    tx.commit().await?;
-    Ok(stored)
-}
-
-/// Member-authored discussion append: the author's posting budget is charged
-/// in the same transaction, so an over-budget or conflicting write appends
-/// nothing and consumes nothing.
-pub async fn append_member_discussion_and_project_expected(
-    pool: &PgPool,
-    stream_id: Uuid,
-    expected_stream_seq: i64,
-    events: &[EventInput],
-    admission: &PostingAdmission,
-    charge: &PostingCharge,
-    now: i64,
-) -> Result<Vec<StoredEvent>, ProjectionError> {
-    validate_discussion_events(events)?;
-    let mut tx = pool.begin().await?;
-    charge_posting_budget_in_tx(&mut tx, admission, charge, now).await?;
-    let stored =
-        append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
-    tx.commit().await?;
-    Ok(stored)
-}
-
-async fn append_discussion_expected_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    stream_id: Uuid,
-    expected_stream_seq: i64,
-    events: &[EventInput],
-) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let stored =
-        eventstore::append_expected_in_tx(tx, stream_id, expected_stream_seq, events).await?;
-    for event in &stored {
-        fold_discussion_event(tx, stream_id, event).await?;
-    }
-    Ok(stored)
-}
-
-fn validate_discussion_events(events: &[EventInput]) -> Result<(), ProjectionError> {
-    for event in events {
-        forum::decode_event(&event.kind, event.version, &event.payload)?;
-    }
-    Ok(())
-}
-
 pub async fn member_mute_state(
     pool: &PgPool,
     principal_id: PrincipalId,
@@ -3504,8 +3401,8 @@ async fn fold_subscription_state(
     subscription_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let principal_id = match &event.actor {
-        eventstore::ActorId::Principal(principal) => principal,
+    let principal_id = match &decode_actor(&event.actor, &event.kind)? {
+        event_actor::ActorId::Principal(principal) => *principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3615,8 +3512,8 @@ async fn fold_member_mute_event(
     relationship_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let principal_id = match &event.actor {
-        eventstore::ActorId::Principal(principal) => principal,
+    let principal_id = match &decode_actor(&event.actor, &event.kind)? {
+        event_actor::ActorId::Principal(principal) => *principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3728,8 +3625,8 @@ async fn fold_moderation_event(
     case_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let actor = match &event.actor {
-        eventstore::ActorId::Principal(principal) => *principal,
+    let actor = match &decode_actor(&event.actor, &event.kind)? {
+        event_actor::ActorId::Principal(principal) => *principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3982,11 +3879,23 @@ pub async fn rebuild_discussion_stream(
     if !is_topic_stream && !is_area_stream {
         return Ok(());
     }
-    // Validate the entire retained stream before replacing any projected row.
-    // The shared journal upcaster passes unknown kinds/versions through; this
-    // source-owned codec must reject them rather than silently skip a fact.
-    for event in &events {
-        forum::decode_event(&event.kind, event.version, &event.payload)?;
+    // Source admission and complete outbox derivation precede destructive work.
+    eventstore::journal::audit_source_outbox_in_tx::<forum_journal::ForumCodec>(
+        &mut tx,
+        eventstore::journal::StreamId::new(stream_id),
+    )
+    .await?;
+    let records: Vec<_> = events
+        .iter()
+        .map(|event| {
+            eventstore::journal::decode::<forum_journal::ForumCodec>(event)
+                .map(forum_journal::replay_record)
+        })
+        .collect::<Result<_, _>>()?;
+    if is_topic_stream {
+        forum::TopicAggregate::replay(stream_id, &records)?;
+    } else {
+        forum::AreaAggregate::replay(stream_id, &records)?;
     }
     if is_topic_stream {
         attention_projection::lock_surface(&mut tx, stream_id).await?;
@@ -4008,7 +3917,7 @@ pub async fn rebuild_discussion_stream(
             .await?;
     }
     for event in &events {
-        fold_discussion_event(&mut tx, stream_id, event).await?;
+        project_discussion_event(&mut tx, stream_id, event).await?;
     }
     tx.commit().await?;
     Ok(())
@@ -4130,8 +4039,8 @@ pub(crate) async fn fold_member_inbox_cursor_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let principal_id = match &event.actor {
-        eventstore::ActorId::Principal(principal) => *principal,
+    let principal_id = match &decode_actor(&event.actor, &event.kind)? {
+        event_actor::ActorId::Principal(principal) => *principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -4187,13 +4096,12 @@ pub async fn rebuild_member_inbox_cursor_stream(
     {
         return Ok(());
     }
-    let principal_id = match &events
+    let cursor_event = events
         .iter()
         .find(|event| event.kind == attention::INBOX_CURSOR_ADVANCED)
-        .expect("inbox cursor stream has an advance event")
-        .actor
-    {
-        eventstore::ActorId::Principal(principal) => *principal,
+        .expect("inbox cursor stream has an advance event");
+    let principal_id = match decode_actor(&cursor_event.actor, &cursor_event.kind)? {
+        event_actor::ActorId::Principal(principal) => principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: attention::INBOX_CURSOR_ADVANCED.to_string(),
@@ -4212,14 +4120,14 @@ pub async fn rebuild_member_inbox_cursor_stream(
     Ok(())
 }
 
-async fn fold_discussion_event(
+pub async fn project_discussion_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     use forum::DecodedForumEvent;
 
-    let decoded = forum::decode_event(&event.kind, event.version, &event.payload)?;
+    let decoded = eventstore::journal::decode::<forum_journal::ForumCodec>(event)?.event;
     // The source stream is already locked. Fence publication/attention rows
     // before touching them, including during replay, to avoid row/gate cycles.
     attention_projection::lock_surface(tx, stream_id).await?;
@@ -4326,8 +4234,8 @@ async fn fold_discussion_event(
             .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
-            let author_principal_id = match &event.actor {
-                eventstore::ActorId::Principal(principal) => Some(*principal),
+            let author_principal_id = match &decode_actor(&event.actor, &event.kind)? {
+                event_actor::ActorId::Principal(principal) => Some(*principal),
                 _ => None,
             };
             publications::record_publication(
@@ -4354,7 +4262,7 @@ async fn fold_discussion_event(
             attention_projection::publish_forum_post(
                 tx,
                 stream_id,
-                publications::forum_watch_delivery(event),
+                publications::forum_watch_delivery(event)?,
             )
             .await?;
             fan_out_profile_mentions(
@@ -4430,8 +4338,8 @@ async fn fold_discussion_event(
             .bind(source_seq)
             .fetch_one(&mut **tx)
             .await?;
-            let author_principal_id = match &event.actor {
-                eventstore::ActorId::Principal(principal) => Some(*principal),
+            let author_principal_id = match &decode_actor(&event.actor, &event.kind)? {
+                event_actor::ActorId::Principal(principal) => Some(*principal),
                 _ => None,
             };
             publications::record_publication_revision(tx, stream_id, source_seq, &body, event.seq)
@@ -4722,8 +4630,8 @@ fn canonical_profile_subject(event: &StoredEvent) -> Result<SubjectId, Projectio
         }
     }
     let subject_id = SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
-    match &event.actor {
-        eventstore::ActorId::PrivacySubject(actor_subject)
+    match &decode_actor(&event.actor, &event.kind)? {
+        event_actor::ActorId::PrivacySubject(actor_subject)
             if *actor_subject == subject_id.as_uuid() =>
         {
             Ok(subject_id)
@@ -4740,8 +4648,8 @@ fn validate_canonical_profile_event(event: &EventInput) -> Result<(), Projection
             validate_active_profile_payload(&event.payload, &event.kind)?;
             let subject_id = uuid_field(&event.payload, "subject_id", &event.kind)?;
             uuid_field(&event.payload, "claim_id", &event.kind)?;
-            match &event.actor {
-                eventstore::ActorId::PrivacySubject(actor_subject)
+            match &decode_actor(&event.actor, &event.kind)? {
+                event_actor::ActorId::PrivacySubject(actor_subject)
                     if *actor_subject == subject_id =>
                 {
                     Ok(())
@@ -4760,8 +4668,8 @@ fn validate_canonical_profile_event(event: &EventInput) -> Result<(), Projection
                     "invalid canonical profile redaction alias: {error}"
                 ))
             })?;
-            match &event.actor {
-                eventstore::ActorId::PrivacySubject(actor_subject)
+            match &decode_actor(&event.actor, &event.kind)? {
+                event_actor::ActorId::PrivacySubject(actor_subject)
                     if *actor_subject == subject_id =>
                 {
                     Ok(())
@@ -8405,8 +8313,8 @@ pub async fn discussion_post_write_state(
 }
 
 /// Load every discussion post in a topic so the write model can decide quotations.
-pub async fn quotation_thread_for_discussion(
-    pool: &PgPool,
+pub async fn quotation_thread_for_discussion<'e, E: sqlx::PgExecutor<'e>>(
+    executor: E,
     topic_id: Uuid,
     viewer_principal_id: Option<PrincipalId>,
 ) -> Result<QuotationThreadState, ProjectionError> {
@@ -8435,7 +8343,7 @@ pub async fn quotation_thread_for_discussion(
     )
     .bind(topic_id)
     .bind(viewer_principal_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     let mut posts = Vec::with_capacity(rows.len());
     for row in rows {
@@ -9305,8 +9213,8 @@ fn discussion_author_row(row: &sqlx::postgres::PgRow) -> Option<DiscussionAuthor
 
 /// Read public profile material. The table's existence is the visibility
 /// proof: private and redacted profiles have no plaintext projection row.
-pub async fn public_profile_by_handle(
-    pool: &PgPool,
+pub async fn public_profile_by_handle<'e, E: sqlx::PgExecutor<'e>>(
+    executor: E,
     handle: &str,
 ) -> Result<Option<PublicProfileRow>, ProjectionError> {
     let row = sqlx::query(
@@ -9319,7 +9227,7 @@ pub async fn public_profile_by_handle(
         "#,
     )
     .bind(handle)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
     Ok(row.map(public_profile_row))
 }
@@ -11779,7 +11687,7 @@ fn vote_target(p: &serde_json::Value, kind: &str) -> Result<String, ProjectionEr
 fn author_from_payload(
     p: &serde_json::Value,
     kind: &str,
-    actor: &eventstore::ActorId,
+    actor: &serde_json::Value,
 ) -> Result<GameThreadAuthor, ProjectionError> {
     let author = p
         .get("author")
@@ -11797,23 +11705,23 @@ fn author_from_payload(
     if matches!(&author, GameThreadAuthor::Slot { slot_id } if slot_id.trim().is_empty()) {
         return payload_error(kind, "author.slot_id must not be empty");
     }
-    match (&author, actor) {
-        (GameThreadAuthor::Slot { slot_id }, eventstore::ActorId::Slot(actor_slot))
+    match (&author, &decode_actor(actor, kind)?) {
+        (GameThreadAuthor::Slot { slot_id }, event_actor::ActorId::Slot(actor_slot))
             if slot_id == actor_slot =>
         {
             Ok(author)
         }
-        (GameThreadAuthor::Slot { .. }, eventstore::ActorId::Slot(_)) => {
+        (GameThreadAuthor::Slot { .. }, event_actor::ActorId::Slot(_)) => {
             payload_error(kind, "author.slot_id must match the event actor slot")
         }
         (GameThreadAuthor::Slot { .. }, _) => {
             payload_error(kind, "a slot author requires a slot event actor")
         }
-        (GameThreadAuthor::HostNarrator, eventstore::ActorId::Host) => Ok(author),
+        (GameThreadAuthor::HostNarrator, event_actor::ActorId::Host) => Ok(author),
         (GameThreadAuthor::HostNarrator, _) => {
             payload_error(kind, "a host_narrator author requires a host event actor")
         }
-        (GameThreadAuthor::System, eventstore::ActorId::System) => Ok(author),
+        (GameThreadAuthor::System, event_actor::ActorId::System) => Ok(author),
         (GameThreadAuthor::System, _) => {
             payload_error(kind, "a system author requires a system event actor")
         }
@@ -11839,3 +11747,17 @@ fn thread_author_from_row(
         }),
     }
 }
+
+fn decode_actor(
+    value: &serde_json::Value,
+    kind: &str,
+) -> Result<event_actor::ActorId, ProjectionError> {
+    event_actor::ActorId::decode(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
+/// Fixture writers use the typed journal and are absent from release builds.
+#[cfg(debug_assertions)]
+pub mod test_support;

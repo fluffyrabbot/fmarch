@@ -11,7 +11,8 @@ use commands::{
     ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus, VoteTarget,
     LARGE_ACTION_GRAPH_PERFORMANCE_SEED, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use projections::{
     action_counters, action_grants, action_history, audit_rebuild, day_vote_outcomes,
     delayed_death_queues, game_result, host_prompts, investigation_memory, phase_state,
@@ -7300,7 +7301,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
                 "targets": ["slot_2"],
                 "phase_id": "D01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )
@@ -7350,7 +7351,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
                 "targets": ["slot_3", "slot_4"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_6".into()),
+            event_actor::ActorId::Slot("slot_6".into()),
             0,
         )],
     )
@@ -7772,7 +7773,7 @@ async fn assert_mafia_universe_bomber_case(
                 "targets": ["slot_2"],
                 "phase_id": "N01"
             }),
-            eventstore::ActorId::Slot("slot_1".into()),
+            event_actor::ActorId::Slot("slot_1".into()),
             0,
         )],
     )

@@ -857,16 +857,18 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
 
     let semantic_expectations_checked = fixture.expectations.count();
     if semantic_expectations_checked > 0 {
-        let applied_payloads = match eventstore::load_stream(pool, game).await.map(|events| {
-            events
-                .into_iter()
-                .filter(|event| {
-                    event.kind == "ResolutionApplied"
-                        && event.payload["phase_id"].as_str() == Some(fixture.phase.as_str())
-                })
-                .map(|event| event.payload)
-                .collect::<Vec<_>>()
-        }) {
+        let applied_payloads = match game_event_codec::load_stream(pool, game)
+            .await
+            .map(|events| {
+                events
+                    .into_iter()
+                    .filter(|event| {
+                        event.kind == "ResolutionApplied"
+                            && event.payload["phase_id"].as_str() == Some(fixture.phase.as_str())
+                    })
+                    .map(|event| event.payload)
+                    .collect::<Vec<_>>()
+            }) {
             Ok(payloads) if !payloads.is_empty() => payloads,
             Ok(_) => {
                 return RunReport {
@@ -1146,7 +1148,7 @@ async fn validate_semantic_expectations(
     }
 
     if !expectations.stream_events.is_empty() {
-        let stream_events = eventstore::load_stream(pool, game)
+        let stream_events = game_event_codec::load_stream(pool, game)
             .await
             .map_err(|err| format!("fetch stream events failed: {err}"))?
             .into_iter()

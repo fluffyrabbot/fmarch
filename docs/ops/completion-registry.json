@@ -433,7 +433,7 @@
       "title": "Executable bounded-context architecture",
       "execution_class": "code",
       "status": "partial",
-      "summary": "RFC 0006 is a twelve-step atomic migration from the persistence-centred application toward explicit bounded contexts over a typed journal and projector platform. Steps 1 and 2 landed: tools/architecture_fitness.mjs enforces the active hard bans (pure contexts stay inward-only) and the four integration-hub dependency ratchets, and reports the accepted target bans as explicit migration debt (31 target dependency edges at last count). HTTP projection rebuild and resolution replay routes are deleted; saved artifact reads remain, and canonical tests cover concurrent writer fencing and absent replay authority. The remaining steps are architecture migration, not product capability, and are sequenced by the RFC itself; they are recorded here so the RFC's status pointer resolves truthfully rather than to implied completion. The forum precursor now has validated title/content values, explicit single-post decision contexts, an exhaustive versioned event codec, preflight validation before destructive replay, and append/project savepoint rollback. These strengthen the current boundary without claiming the journal/application split is complete.",
+      "summary": "RFC 0006 remains a partial twelve-step architecture migration. Steps 1 and 2 establish fitness hard bans and remove HTTP replay authority. Steps 3 and 4 now have a context-neutral encrypted journal with opaque actors, typed expected-version append, codec-derived encrypted integration facts, source-to-outbox completeness audit, and a pure forum application that replays authoritative topic/post history before deciding. The Postgres adapter owns atomic admission, posting-budget, append, and projection work; HTTP no longer decides forum writes and projections no longer expose forum command entry points. Corrupted topic, post, and public-profile query rows cannot grant posting, editing, or curation authority. Remaining context codec adoption, archive outbox preservation, schema/role separation, and forum query/projector extraction keep both steps partial.",
       "complete_when": [
         "All accepted target bans are active hard bans with zero target debt, every production dependency edge conforms to the RFC 0006 target DAG, every event row passes its owning typed codec audit, commands authorize from aggregate or operational authority rather than query projections, the concurrent append/rebuild proof shows no lost projection update, privacy provisioning and erasure crash/retry matrices end in valid states with complete receipts, the catalog proof shows schema ownership and least-privilege grants, the public binary carries no operator/proof or raw privacy-key authority, wire generation proves no internal dependency, and the forced full local proof sweep passes from a reset database."
       ],
@@ -473,31 +473,75 @@
         {
           "kind": "source",
           "value": "crates/projections/tests/discussion_post_editing.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/eventstore/src/journal.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/eventstore/src/journal/tests.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/event_actor/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/game_event_codec/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum/src/replay.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum_application/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum_application/src/tests.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum_journal/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum_postgres/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/forum_postgres/tests/authority.rs"
         }
       ],
       "remaining": [
-        "Steps 3-12 of the RFC 0006 atomic migration sequence: install the context-neutral typed journal; make forum the reference vertical slice with its own application, journal, Postgres, query, and projector owners; cut social, attention, and trust-safety separately; replace commands with GameApplication and GameAggregate; land projector generations; rebuild privacy provisioning and erasure; split schemas, owners, roles, and pools; split runtime processes; rebaseline transport v3; and delete migration debt.",
+        "Finish RFC 0006 step 3: migrate remaining context encodings and raw journal callers behind their owned codecs, audit every canonical row, preserve and validate encrypted integration facts through archive export/restore and key administration, and give the journal its owned schema, roles, and grants.",
+        "Finish step 4: extract forum query and projector owners, move forum tables and database authority behind context-owned schemas/roles, and replace remaining shared projection integration with named application ports while preserving source replay, admission, budget, attention convergence, and rollback contracts.",
+        "Continue steps 5-12: cut social, attention, and trust-safety separately; replace commands with GameApplication and GameAggregate; land projector generations; rebuild privacy provisioning and erasure; split schemas, owners, roles, and pools; split runtime processes; rebaseline transport v3; and delete migration debt.",
         "Each landed step must promote the ratchet edges it removes to active hard bans in the same commit; target debt only moves toward zero."
       ],
       "recommended_slice": {
-        "objective": "Implement RFC 0006 step 3: introduce a context-neutral typed journal boundary, typed expected-version append and loaded event envelopes, and explicit codec admission. Move raw eventstore access behind context adapters, retaining sealed-event and privacy custody contracts. Use the forum codec as the first consumer and preserve append-plus-project atomicity and concurrent append/rebuild fencing. Then continue step 4 with a forum application owner that authorizes from aggregate state rather than query projections.",
+        "objective": "Complete the journal integration-fact durability boundary before extracting forum queries and projectors: preserve encrypted outbox rows in archive export/restore, audit source-derived completeness after round trips and key rotation, and add strict context codecs for remaining raw journal consumers. Then split forum query/projector ownership and database grants without returning decisions to disposable read models.",
         "paths": [
           "docs/rfcs/0006-executable-bounded-context-architecture.md",
+          "crates/eventstore/src/journal.rs",
           "crates/eventstore/src/lib.rs",
-          "crates/forum/src/codec.rs",
+          "crates/forum_journal/src/lib.rs",
+          "crates/forum_postgres/src/lib.rs",
           "crates/projections/src/lib.rs",
-          "crates/api/src/public_platform_http.rs",
+          "crates/server/tests/event_key_admin_rehearsal.rs",
           "tools/architecture_fitness.mjs"
         ],
         "proof_commands": [
           "npm run test:architecture-fitness",
-          "npm run test:documentation",
+          "npm run test:proof-lane-contract",
           "npm run proof:remote -- --mode sprint"
         ],
         "non_claims": [
-          "Preserve sealed event custody, exact expected-version semantics, and atomic append/project failure behavior.",
-          "Do not introduce a forum application wrapper that still delegates authority to query projections.",
-          "Promote removed dependency edges to hard bans; do not call the twelve-step migration complete."
+          "Keep RFC 0006 steps 3 and 4 partial until remaining codecs, archive durability, schema/role ownership, and forum query/projector separation are proven.",
+          "Preserve sealed event and integration-fact custody, expected-version semantics, budget rollback, live session/profile admission, and attention convergence locks.",
+          "Do not restore forum authority to query projections or expose replay through HTTP; promote removed dependency edges to hard bans."
         ]
       }
     },

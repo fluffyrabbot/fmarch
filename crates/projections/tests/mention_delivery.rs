@@ -7,11 +7,12 @@
 //! resolves identity only.
 
 use attention::WatchTarget;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
+use projections::test_support::append_discussion_and_project;
 use projections::{
-    advance_member_inbox_read_cursor, advance_subscription_read_cursor,
-    append_discussion_and_project, discussion_posts, mute_public_profile, public_inbox,
-    rebuild_discussion_stream, subscribe_to_public_target,
+    advance_member_inbox_read_cursor, advance_subscription_read_cursor, discussion_posts,
+    mute_public_profile, public_inbox, rebuild_discussion_stream, subscribe_to_public_target,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfileId,

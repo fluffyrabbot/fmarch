@@ -5,7 +5,8 @@
 //! between HTTP and projections: projections fold canonical facts; identity
 //! owns subject keys; and `social` owns the pure profile state machine.
 
-use eventstore::{ActorId, EventInput, StoreError};
+use event_actor::ActorId;
+use eventstore::{EventInput, StoreError};
 use identity::{
     ensure_active_subject, insert_subject_claim, open_active_subject_claim, ClaimId, SubjectId,
 };
@@ -36,6 +37,61 @@ pub struct OwnerProfile {
     pub profile_id: ProfileId,
     pub presentation: ProfilePresentation,
     pub revision: ProfileRevision,
+}
+
+/// Source-owned public attribution admission. A forged public-profile query
+/// row cannot make a private or erased profile eligible to author a post.
+pub async fn public_posting_profile_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+) -> Result<Option<ProfileId>, ProfileApplicationError> {
+    // Discovery never waits on a profile row held by an owner edit. Enter the
+    // subject's shared authority boundary before reading its current pointer.
+    let subject_id = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT subject_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active'",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(subject_id) = subject_id else {
+        return Ok(None);
+    };
+    let subject_id = SubjectId::from_uuid(subject_id);
+    identity::lock_active_subject_for_read(tx, principal_id, subject_id).await?;
+    let row = sqlx::query(
+        "SELECT profile_id, subject_id, current_claim_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active'",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let profile_id: uuid::Uuid = row.try_get("profile_id")?;
+    if row.try_get::<uuid::Uuid, _>("subject_id")? != subject_id.as_uuid() {
+        return Err(ProfileApplicationError::InvalidState(
+            "profile subject changed during admission".into(),
+        ));
+    }
+    let claim = row
+        .try_get::<Option<uuid::Uuid>, _>("current_claim_id")?
+        .ok_or_else(|| {
+            ProfileApplicationError::InvalidState("active profile has no claim".into())
+        })?;
+    let presentation: ProfilePresentation = identity::open_active_subject_claim_for_read(
+        tx,
+        principal_id,
+        subject_id,
+        ClaimId::from_uuid(claim),
+        "profile",
+        profile_id,
+        None,
+    )
+    .await?;
+    Ok(
+        matches!(presentation.visibility, social::ProfileVisibility::Public)
+            .then_some(ProfileId::from_uuid(profile_id)),
+    )
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -511,12 +567,15 @@ async fn load_profile_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     profile_id: ProfileId,
 ) -> Result<LoadedProfile, ProfileApplicationError> {
+    // Owner edits never change profile_id. Exclude other profile writers
+    // while allowing deferred forum author foreign keys to take KEY SHARE
+    // at commit; those readers may hold the principal gate this edit needs.
     let row = sqlx::query(
         r#"
         SELECT active_principal_id, subject_id, current_claim_id, lifecycle, revision, handle_hmac
         FROM member_profile
         WHERE profile_id = $1
-        FOR UPDATE
+        FOR NO KEY UPDATE
         "#,
     )
     .bind(profile_id.as_uuid())

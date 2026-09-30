@@ -1,9 +1,13 @@
 //! Report evidence is one immutable admitted revision, independent of later edits.
 use content_reference::PublicContentRef;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
+use projections::test_support::{
+    append_discussion_and_project, append_discussion_and_project_in_tx,
+};
 use projections::{
-    append_discussion_and_project, append_discussion_and_project_in_tx, moderation_case_by_id,
-    rebuild_discussion_stream, rebuild_moderation_stream, submit_moderation_report,
+    moderation_case_by_id, rebuild_discussion_stream, rebuild_moderation_stream,
+    submit_moderation_report,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,

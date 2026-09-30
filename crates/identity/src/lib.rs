@@ -30,7 +30,8 @@ pub use member_lifecycle::{
     MemberLifecycleSnapshot, PersonalExport,
 };
 pub use private_claims::{
-    ensure_active_subject, insert_subject_claim, open_active_subject_claim, PrivateClaimError,
+    ensure_active_subject, insert_subject_claim, lock_active_subject_for_read,
+    open_active_subject_claim, open_active_subject_claim_for_read, PrivateClaimError,
 };
 pub use session::{
     authorize_workos_session, issue_classic_password_session, issue_community_admission_session,

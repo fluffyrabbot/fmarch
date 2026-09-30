@@ -1140,6 +1140,89 @@ const migrationFixtures = [
   },
 ];
 
+// These writes are deterministic and repeatable because every fixture runs
+// immediately after its migration and again after the complete upgrade chain.
+migrationFixtures.push({
+  version: 18,
+  seed: String.raw`
+    INSERT INTO event_direct_key_sentinel
+      (kid, sentinel_version, sentinel_nonce, sentinel_ciphertext)
+    VALUES ('typed-journal-upgrade-proof', 1, decode(repeat('00', 24), 'hex'), decode(repeat('00', 56), 'hex'));
+    INSERT INTO event_stream_keys
+      (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek)
+    VALUES ('18000000-0000-4000-8000-000000000001', 1, 1, 'typed-journal-upgrade-proof',
+      decode(repeat('00', 24), 'hex'), decode(repeat('00', 48), 'hex'));
+    INSERT INTO events
+      (seq, stream_id, stream_seq, kind, version, occurred_at, sealed_version, stream_key_epoch, sealed_nonce, sealed_body)
+    VALUES (180000001, '18000000-0000-4000-8000-000000000001', 1, 'UpgradeSource', 1, 18, 3, 1,
+      decode(repeat('00', 24), 'hex'), decode(repeat('00', 16), 'hex'));
+  `,
+  assertions: [
+    {
+      sql: String.raw`DO $proof$
+        BEGIN
+          INSERT INTO event_integration_outbox
+            (source_seq, fact_index, context, kind, version, sealed_version, stream_key_epoch, sealed_nonce, sealed_body)
+          VALUES (180000001, 0, 'forum', 'Published', 1, 1, 1,
+            decode(repeat('00', 24), 'hex'), decode(repeat('00', 16), 'hex'))
+          ON CONFLICT DO NOTHING;
+          INSERT INTO forum_area_reservation (area_id, slug)
+          VALUES ('18000000-0000-4000-8000-000000000002', 'typed-journal-upgrade')
+          ON CONFLICT DO NOTHING;
+          IF (SELECT count(*) FROM event_integration_outbox
+            WHERE source_seq = 180000001 AND fact_index = 0 AND context = 'forum' AND kind = 'Published') <> 1 THEN
+            RAISE EXCEPTION '0018 lost the integration fact or its source identity';
+          END IF;
+          IF (SELECT slug FROM forum_area_reservation
+            WHERE area_id = '18000000-0000-4000-8000-000000000002') IS DISTINCT FROM 'typed-journal-upgrade' THEN
+            RAISE EXCEPTION '0018 lost the immutable area reservation';
+          END IF;
+        END
+        $proof$;`,
+      expected: "DO",
+      message: "0018 must admit a sealed fact for a pre-existing source and retain unique source reservations",
+    },
+    ...[
+      ["180000002, 1, 'forum', 'Published', 1, 1, 1, 24, 16", /event_integration_outbox_source_seq_fkey/iu, "orphan source"],
+      ["180000001, 0, 'forum', 'Published', 1, 1, 1, 24, 16", /event_integration_outbox_pkey/iu, "duplicate fact position"],
+      ["180000001, -1, 'forum', 'Published', 1, 1, 1, 24, 16", /event_integration_outbox_position_check/iu, "negative fact position"],
+      ["180000001, 1, '', 'Published', 1, 1, 1, 24, 16", /event_integration_outbox_header_check/iu, "empty context"],
+      ["180000001, 1, 'forum', '', 1, 1, 1, 24, 16", /event_integration_outbox_header_check/iu, "empty kind"],
+      ["180000001, 1, 'forum', 'Published', 0, 1, 1, 24, 16", /event_integration_outbox_header_check/iu, "nonpositive schema version"],
+      ["180000001, 1, 'forum', 'Published', 1, 2, 1, 24, 16", /event_integration_outbox_sealed_body_shape/iu, "unknown sealed version"],
+      ["180000001, 1, 'forum', 'Published', 1, 1, 0, 24, 16", /event_integration_outbox_sealed_body_shape/iu, "nonpositive key epoch"],
+      ["180000001, 1, 'forum', 'Published', 1, 1, 1, 23, 16", /event_integration_outbox_sealed_body_shape/iu, "short nonce"],
+      ["180000001, 1, 'forum', 'Published', 1, 1, 1, 24, 15", /event_integration_outbox_sealed_body_shape/iu, "short sealed body"],
+    ].map(([values, expectedError, reason]) => ({
+      rejectedSql: `INSERT INTO event_integration_outbox
+        (source_seq, fact_index, context, kind, version, sealed_version, stream_key_epoch, sealed_nonce, sealed_body)
+        SELECT source_seq, fact_index, context, kind, version, sealed_version, stream_key_epoch,
+          decode(repeat('00', nonce_length), 'hex'), decode(repeat('00', body_length), 'hex')
+        FROM (VALUES (${values})) AS proof(source_seq, fact_index, context, kind, version, sealed_version, stream_key_epoch, nonce_length, body_length)`,
+      expectedError,
+      message: `0018 must reject ${reason}`,
+    })),
+    ...[
+      ["18000000-0000-4000-8000-000000000002", "another-slug", /forum_area_reservation_pkey/iu, "duplicate area identity"],
+      ["18000000-0000-4000-8000-000000000003", "typed-journal-upgrade", /forum_area_reservation_slug_key/iu, "duplicate slug"],
+      ["18000000-0000-4000-8000-000000000003", "", /forum_area_reservation_slug_check/iu, "empty slug"],
+    ].map(([area, slug, expectedError, reason]) => ({
+      rejectedSql: `INSERT INTO forum_area_reservation (area_id, slug) VALUES ('${area}', '${slug}')`,
+      expectedError,
+      message: `0018 must reject ${reason}`,
+    })),
+    ...["event_integration_outbox", "forum_area_reservation"].flatMap((table) => [
+      `UPDATE ${table} SET ${table === "event_integration_outbox" ? "kind = kind" : "slug = slug"}`,
+      `DELETE FROM ${table}`,
+      `TRUNCATE TABLE ${table}`,
+    ].map((rejectedSql) => ({
+      rejectedSql,
+      expectedError: /events is append-only/iu,
+      message: `0018 must forbid source mutation: ${rejectedSql}`,
+    }))),
+  ],
+});
+
 const postMigrationAuthorityInvariantSql = String.raw`
 DO $proof$
 BEGIN

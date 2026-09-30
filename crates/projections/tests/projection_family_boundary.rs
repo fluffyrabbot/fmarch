@@ -5,13 +5,13 @@ fn forum_projection_consumes_owner_decoded_events_exhaustively() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
     let source = std::fs::read_to_string(root).unwrap();
     let fold = source
-        .split("async fn fold_discussion_event(")
+        .split("pub async fn project_discussion_event(")
         .nth(1)
         .unwrap()
         .split("/// Append profile events")
         .next()
         .unwrap();
-    assert!(fold.contains("forum::decode_event(&event.kind, event.version, &event.payload)?"));
+    assert!(fold.contains("eventstore::journal::decode::<forum_journal::ForumCodec>(event)?.event"));
     assert!(fold.contains("match decoded {"));
     for forbidden in [
         "match event.kind",
@@ -31,23 +31,23 @@ fn forum_projection_consumes_owner_decoded_events_exhaustively() {
             "forum fold bypasses typed owner: {forbidden}"
         );
     }
-    for adapter in [
+    for forbidden in [
+        "pub async fn append_discussion_and_project(",
         "pub async fn append_discussion_and_project_in_tx(",
         "pub async fn append_discussion_and_project_expected(",
         "pub async fn append_member_discussion_and_project_expected(",
     ] {
-        let body = source
-            .split(adapter)
-            .nth(1)
-            .unwrap()
-            .split("\npub async fn ")
-            .next()
-            .unwrap();
         assert!(
-            body.contains("validate_discussion_events(events)?"),
-            "missing complete-batch preflight: {adapter}"
+            !source.contains(forbidden),
+            "production projection owns a forum command: {forbidden}"
         );
     }
+    let adapter = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../forum_postgres/src/lib.rs"),
+    )
+    .unwrap();
+    assert!(adapter.contains("journal::append_expected_in_tx::<ForumCodec>"));
+    assert!(adapter.contains("batch.rollback().await?"));
 }
 
 #[test]

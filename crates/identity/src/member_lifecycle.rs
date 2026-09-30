@@ -1244,7 +1244,8 @@ pub(crate) async fn redact_community_membership_in_tx(
         decide_membership, InvitationId, MembershipCommand, MembershipEvent, MembershipId,
         MembershipOrigin, MembershipState, MembershipStatus,
     };
-    use eventstore::{ActorId, EventInput};
+    use event_actor::ActorId;
+    use eventstore::EventInput;
 
     let row = sqlx::query_as::<_, (Uuid, String, String, Option<Uuid>, Option<Uuid>, i64)>(
         "SELECT membership_id, status, origin_kind, admission_invitation_id, sponsoring_membership_id, revision FROM community_membership WHERE active_principal_id = $1 FOR UPDATE",

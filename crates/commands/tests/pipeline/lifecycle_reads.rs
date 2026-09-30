@@ -1,7 +1,8 @@
 //! Command cost follows projected control state, independently of old event bodies.
 use crate::common::*;
 use commands::{Command, Reject};
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use sqlx::PgPool;
 use std::time::{Duration, Instant};
 use uuid::Uuid;

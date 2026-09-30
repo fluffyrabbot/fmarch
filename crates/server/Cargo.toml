@@ -6,6 +6,8 @@ publish.workspace = true
 default-run = "server"
 
 [dependencies]
+forum_postgres = { path = "../forum_postgres", version = "0.1.0" }
+event_actor = { path = "../event_actor", version = "0.1.0" }
 api = { path = "../api", version = "0.1.0" }
 caps = { path = "../caps", version = "0.1.0" }
 database_schema = { path = "../database_schema", version = "0.1.0" }

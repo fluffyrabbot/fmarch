@@ -202,7 +202,7 @@ async fn append_inbox_cursor_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::Principal(principal_id),
+                event_actor::ActorId::Principal(principal_id),
                 occurred_at,
             )
         })
@@ -242,7 +242,7 @@ async fn append_subscription_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::Principal(principal_id),
+                event_actor::ActorId::Principal(principal_id),
                 occurred_at,
             )
         })
@@ -320,7 +320,7 @@ pub async fn review_private_item(
             attention::PRIVATE_ITEM_REVIEWED,
             1,
             serde_json::json!({ "game": game, "item_id": item_id }),
-            eventstore::ActorId::Principal(principal),
+            event_actor::ActorId::Principal(principal),
             occurred_at,
         );
         eventstore::append_expected_in_tx(&mut tx, stream, 0, &[input]).await?;

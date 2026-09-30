@@ -6,7 +6,8 @@
 //! references. A persona's public name and a principal identifier must never
 //! appear in the durable game event payload.
 
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use game_platform::GamePersonaId;
 use identity::{
     ensure_active_subject, insert_subject_claim, ClaimId, PrivateClaimError, SubjectId,
@@ -269,7 +270,7 @@ async fn load_subject_binding_for_update(
 #[cfg(test)]
 mod tests {
     use super::{canonical_persona_event, presentation_scope_key};
-    use eventstore::ActorId;
+    use event_actor::ActorId;
     use game_platform::GamePersonaId;
     use identity::{ClaimId, SubjectId};
     use uuid::Uuid;
@@ -289,7 +290,7 @@ mod tests {
         );
 
         assert_eq!(event.kind, "GamePersonaRegistered");
-        assert_eq!(event.actor, ActorId::Host);
+        assert_eq!(ActorId::decode(&event.actor).unwrap(), ActorId::Host);
         assert_eq!(
             event.payload["persona_id"],
             persona_id.as_uuid().to_string()

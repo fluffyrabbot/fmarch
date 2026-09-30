@@ -4,7 +4,8 @@
 //! stored-kid lookup at `load_stream`; this file proves the projection replay
 //! boundary can rebuild from old and new encrypted envelopes in the same stream.
 
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use projections::{
     append_and_project, audit_rebuild, rebuild, slot_state, thread_view_for_channel,
 };

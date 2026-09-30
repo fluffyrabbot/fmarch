@@ -67,10 +67,22 @@ WebSocket compatibility mode.
 
 Read `recommended_slice` and dependencies in the
 [completion registry](../ops/completion-registry.json) before starting work.
-The active slice is signup threads (`product.community.signup-threads`);
-forum post editing, retraction, and topic curation landed on 2026-09-16, and
-the resolver night-action extraction is queued behind signup threads as
-`remaining` text on `foundation.maintainable-core`.
+The active frontier is `foundation.executable-bounded-contexts`, the RFC 0006
+architecture migration. Signup threads, forum editing/curation, and posting
+budgets are complete within their declared proof boundaries. The typed journal
+and forum command cut advances steps 3 and 4: the journal stores opaque actor
+envelopes, typed codecs derive encrypted integration facts, and the pure forum
+application decides from authoritative replay through transactional ports.
+HTTP supplies intent and authenticated context; the Postgres adapter coordinates
+live session/profile admission, budgets, append, and synchronous projection.
+Corrupted topic/post/profile query rows cannot grant forum authority.
+
+Both steps remain partial. The next slice closes integration-fact archive
+export/restore and key-administration proof, then moves remaining raw consumers
+behind context codecs and extracts forum query/projector ownership with explicit
+schema/role grants. Preserve attention convergence and atomic failure behavior
+through those cuts. Resolver night-action extraction remains recorded under
+`foundation.maintainable-core` behind this active architecture frontier.
 [16-maintainable-core](16-maintainable-core.md) owns the module inventory. The
 resolver's action, outcome, and trace families are extracted; broad stage
 coordination, other projection families, physical command-test families, and
@@ -88,8 +100,7 @@ model has author post editing (bounded by `forum::FORUM_EDIT_WINDOW_SECONDS`,
 append-only revision history), author retraction (a read-time overlay that
 keeps cited excerpts), and GlobalMod rename/move/pin; the registry item
 `product.community.forum-editing-curation`, ruled 1.0-required on 2026-09-16,
-is complete, and signup threads are the recommended coding slice ahead of the
-remaining `foundation.maintainable-core` extractions. Editability is a policy
+is complete, as are signup threads. Editability is a policy
 each thread source owns: community forum threads are editable within a bounded
 window, game channel threads never are (posts are slot-authored evidence, and
 the absence of a game edit command is a proven contract asserted by

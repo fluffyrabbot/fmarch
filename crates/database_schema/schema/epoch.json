@@ -87,6 +87,11 @@
       "version": 17,
       "filename": "0017_posting_budget_window.sql",
       "sha256": "1e6a4a2104d559d0b415140eb6baa916dcc95e2e0835a2c47cffc783e67f6371"
+    },
+    {
+      "version": 18,
+      "filename": "0018_typed_forum_journal.sql",
+      "sha256": "b2d3caf5f31b985b696de1093fe580d910b8c6757cf78706fc0f629d0527a776"
     }
   ],
   "authority_fingerprint_sha256": "241aca40d8d0c5b1626fc0f0d326c5f6e4be67e12543095d478ebd4fbfb1eb53"

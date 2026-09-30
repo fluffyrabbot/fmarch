@@ -7,7 +7,8 @@
 //! the proofs apart keeps the universes apart.
 
 use content_reference::{MentionSpan, SlotMention};
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 use projections::{
     append_and_project, rebuild, slot_mention_notifications_for_slot, thread_view_for_channel,
 };

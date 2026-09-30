@@ -14,15 +14,17 @@ pub(super) struct ForumWatchDelivery {
 
 /// Only the forum source publishes ordinary member-watch deliveries. Game
 /// posts have slot authorship and keep their separate private attention rules.
-pub(super) fn forum_watch_delivery(event: &eventstore::StoredEvent) -> ForumWatchDelivery {
-    ForumWatchDelivery {
+pub(super) fn forum_watch_delivery(
+    event: &eventstore::StoredEvent,
+) -> Result<ForumWatchDelivery, ProjectionError> {
+    Ok(ForumWatchDelivery {
         source_seq: event.seq,
         occurred_at: event.occurred_at,
-        author: match &event.actor {
-            eventstore::ActorId::Principal(principal) => Some(*principal),
+        author: match &crate::decode_actor(&event.actor, &event.kind)? {
+            event_actor::ActorId::Principal(principal) => Some(*principal),
             _ => None,
         },
-    }
+    })
 }
 
 pub(super) async fn forum_watch_deliveries(
@@ -43,10 +45,10 @@ pub(super) async fn forum_watch_deliveries(
     let mut deliveries = Vec::new();
     for event in events {
         if matches!(
-            forum::decode_event(&event.kind, event.version, &event.payload)?,
+            eventstore::journal::decode::<forum_journal::ForumCodec>(&event)?.event,
             forum::DecodedForumEvent::PostSubmitted { .. }
         ) {
-            deliveries.push(forum_watch_delivery(&event));
+            deliveries.push(forum_watch_delivery(&event)?);
         }
     }
     Ok(deliveries)

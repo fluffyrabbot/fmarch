@@ -11,6 +11,8 @@ const PURE_CONTEXT_MANIFESTS = [
   "crates/content_reference/Cargo.toml",
   "crates/domain/Cargo.toml",
   "crates/forum/Cargo.toml",
+  "crates/event_actor/Cargo.toml",
+  "crates/forum_application/Cargo.toml",
   "crates/game_platform/Cargo.toml",
   "crates/principal/Cargo.toml",
   "crates/social/Cargo.toml",
@@ -18,6 +20,11 @@ const PURE_CONTEXT_MANIFESTS = [
 ];
 
 export const ACTIVE_HARD_BANS = [
+  {
+    id: "hard:event-journal-is-context-neutral",
+    manifests: ["crates/eventstore/Cargo.toml"],
+    dependencies: ["domain", "principal", "event_actor", "forum", "game_event_codec"],
+  },
   {
     id: "hard:pure-context-inward-only",
     manifests: PURE_CONTEXT_MANIFESTS,
@@ -28,6 +35,9 @@ export const ACTIVE_HARD_BANS = [
       "commands",
       "database_schema",
       "eventstore",
+      "forum_journal",
+      "forum_postgres",
+      "game_event_codec",
       "identity",
       "object_store",
       "operator_api",
@@ -44,6 +54,14 @@ export const ACTIVE_HARD_BANS = [
     manifests: ["crates/eventstore/Cargo.toml"],
     dependencies: [
       "api",
+      "domain",
+      "principal",
+      "event_actor",
+      "forum",
+      "forum_application",
+      "forum_journal",
+      "forum_postgres",
+      "game_event_codec",
       "caps",
       "commands",
       "operator_api",
@@ -97,6 +115,8 @@ export const DEPENDENCY_RATCHETS = [
       "profile_application",
       "profile_handle_index",
       "projections",
+      "event_actor",
+      "forum_postgres",
     ],
   },
   {
@@ -123,6 +143,9 @@ export const DEPENDENCY_RATCHETS = [
       "social",
       "trust_safety",
       "wire",
+      "event_actor",
+      "forum_application",
+      "forum_postgres",
     ],
   },
   {
@@ -142,6 +165,9 @@ export const DEPENDENCY_RATCHETS = [
       "profile_handle_index",
       "social",
       "trust_safety",
+      "event_actor",
+      "forum_journal",
+      "game_event_codec",
     ],
   },
   {
@@ -205,11 +231,7 @@ export const TARGET_BANS = [
       "projections",
     ],
   },
-  {
-    id: "target:event-journal-is-context-neutral",
-    manifest: "crates/eventstore/Cargo.toml",
-    dependencies: ["domain", "principal"],
-  },
+
   {
     id: "target:monolithic-projections-have-no-write-authority",
     manifest: "crates/projections/Cargo.toml",

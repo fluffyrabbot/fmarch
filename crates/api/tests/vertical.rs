@@ -1,9 +1,9 @@
+#[path = "vertical/posting_budget.rs"]
+mod posting_budget;
 #[path = "vertical/replacement_candidate.rs"]
 mod replacement_candidate;
 #[path = "vertical/signup_origin.rs"]
 mod signup_origin;
-#[path = "vertical/posting_budget.rs"]
-mod posting_budget;
 mod support;
 
 use api::{
@@ -7040,7 +7040,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
     assert_eq!(profile_response.status(), StatusCode::CREATED);
 
     let area = Uuid::new_v4();
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         &pool,
         area,
         &[eventstore::EventInput::new(
@@ -7051,7 +7051,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
                 "title": "Subscription API",
                 "description": "Watched updates"
             }),
-            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            event_actor::ActorId::Principal(PrincipalId::fixture("moderator")),
             1,
         )],
     )
@@ -7265,14 +7265,14 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                     "pack_ref": pack_artifact.pack_ref.clone(),
                     "pack_artifact": pack_artifact,
                 }),
-                eventstore::ActorId::Principal(PrincipalId::fixture("host")),
+                event_actor::ActorId::Principal(PrincipalId::fixture("host")),
                 1,
             ),
             eventstore::EventInput::new(
                 "GameStarted",
                 1,
                 serde_json::json!({ "phase_id": "D01" }),
-                eventstore::ActorId::Host,
+                event_actor::ActorId::Host,
                 2,
             ),
             eventstore::EventInput::new(
@@ -7289,7 +7289,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                         "variants": post_media_variants
                     }]
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 3,
             ),
             eventstore::EventInput::new(
@@ -7301,7 +7301,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                     "body": "private evidence is out of scope",
                     "phase_id": "D01"
                 }),
-                eventstore::ActorId::Slot("slot_1".into()),
+                event_actor::ActorId::Slot("slot_1".into()),
                 4,
             ),
         ],
@@ -15256,7 +15256,7 @@ async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: s
     }
 
     let area = Uuid::new_v4();
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         &pool,
         area,
         &[eventstore::EventInput::new(
@@ -15267,7 +15267,7 @@ async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: s
                 "title": "Mention Rejects",
                 "description": "reject matrix"
             }),
-            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            event_actor::ActorId::Principal(PrincipalId::fixture("moderator")),
             1,
         )],
     )
@@ -15411,7 +15411,7 @@ async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPo
     }
 
     let area = Uuid::new_v4();
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         &pool,
         area,
         &[eventstore::EventInput::new(
@@ -15422,7 +15422,7 @@ async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPo
                 "title": "Mention Delivery",
                 "description": "delivery proofs"
             }),
-            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            event_actor::ActorId::Principal(PrincipalId::fixture("moderator")),
             1,
         )],
     )
@@ -15567,7 +15567,7 @@ async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool
     assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
 
     let area = Uuid::new_v4();
-    projections::append_discussion_and_project(
+    projections::test_support::append_discussion_and_project(
         &pool,
         area,
         &[eventstore::EventInput::new(
@@ -15578,7 +15578,7 @@ async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool
                 "title": "Mention Read",
                 "description": "read proofs"
             }),
-            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            event_actor::ActorId::Principal(PrincipalId::fixture("moderator")),
             1,
         )],
     )
@@ -16049,7 +16049,10 @@ async fn private_attention_receipts_are_durable_idempotent_and_reader_owned(pool
         events[0].payload,
         serde_json::json!({"game":game,"item_id":id})
     );
-    assert_eq!(events[0].actor, eventstore::ActorId::Principal(reader));
+    assert_eq!(
+        event_actor::ActorId::decode(&events[0].actor).unwrap(),
+        event_actor::ActorId::Principal(reader)
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

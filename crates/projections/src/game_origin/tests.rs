@@ -2,7 +2,8 @@
 //! gate is deliberately after the owning source stream lock; reconciliation
 //! must use event order while remaining correct for either commit order.
 use super::*;
-use eventstore::{ActorId, EventInput};
+use event_actor::ActorId;
+use eventstore::EventInput;
 
 struct Fixture {
     host: PrincipalId,
@@ -38,7 +39,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
     let game = Uuid::new_v4();
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         pool,
         area,
         &[EventInput::new(
@@ -51,7 +52,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     )
     .await
     .unwrap();
-    crate::append_discussion_and_project(
+    crate::test_support::append_discussion_and_project(
         pool,
         topic,
         &[
