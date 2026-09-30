@@ -9,7 +9,11 @@
 
 use attention::WatchTarget;
 use event_actor::ActorId;
+use eventstore::journal::{
+    self, EventCodec, EventEncoding, EventToAppend, ExpectedVersion, IntegrationFact, StreamId,
+};
 use eventstore::EventInput;
+use forum_journal::ForumCodec;
 use projections::test_support::append_discussion_and_project;
 use projections::{
     discussion_post_write_state, discussion_posts, discussion_topic_by_id, public_inbox,
@@ -589,31 +593,122 @@ async fn unsupported_durable_forum_event_stops_rebuild_without_destroying_projec
     create_topic_with_opening_post(&pool, area, topic, author, profile, 2).await;
     let before = topic_snapshot(&pool, topic).await;
     // Deliberately forge a retained unknown encoding through the raw storage seam.
-    // Typed replay must fail before replacing any projection.
-    eventstore::append(
-        &pool,
-        topic,
-        &[EventInput::new(
-            "DiscussionTopicRenamed",
-            2,
-            serde_json::json!({ "title": "Do not interpret v2 as v1" }),
-            ActorId::Principal(author),
-            5,
-        )],
-    )
-    .await
-    .unwrap();
+    // Preserve the sealed context so replay reaches version admission before
+    // replacing any projection, rather than failing at the context gate.
+    let mut unsupported = EventInput::new(
+        forum::TOPIC_RENAMED,
+        2,
+        serde_json::json!({ "title": "Do not interpret v2 as v1" }),
+        ActorId::Principal(author),
+        5,
+    );
+    unsupported.meta = serde_json::json!({ "journal_context": "forum" });
+    eventstore::append(&pool, topic, &[unsupported])
+        .await
+        .unwrap();
     let stream_before = eventstore::load_stream(&pool, topic).await.unwrap();
     let result = rebuild_discussion_stream(&pool, topic).await;
-    assert!(matches!(
-        result,
-        Err(projections::ProjectionError::Journal(_))
-    ));
+    match result {
+        Err(projections::ProjectionError::Journal(journal::JournalError::Codec {
+            context,
+            message,
+        })) => {
+            assert_eq!(context, ForumCodec::CONTEXT);
+            assert_eq!(
+                message,
+                forum::ForumDecodeError::UnsupportedVersion {
+                    kind: forum::TOPIC_RENAMED.into(),
+                    version: 2,
+                }
+                .to_string()
+            );
+        }
+        other => panic!("expected the unsupported forum version error, got {other:?}"),
+    }
     assert_eq!(topic_snapshot(&pool, topic).await, before);
     assert_eq!(
         eventstore::load_stream(&pool, topic).await.unwrap(),
         stream_before
     );
+}
+
+/// Persist the retained null-list encoding without changing the production
+/// codec's decode, actor admission, or source-derived integration facts.
+struct RetainedNullForumCodec;
+
+impl EventCodec for RetainedNullForumCodec {
+    const CONTEXT: &'static str = ForumCodec::CONTEXT;
+    type Event = <ForumCodec as EventCodec>::Event;
+    type Actor = <ForumCodec as EventCodec>::Actor;
+    type Error = <ForumCodec as EventCodec>::Error;
+
+    fn encode(event: &Self::Event) -> Result<EventEncoding, Self::Error> {
+        let mut encoded = ForumCodec::encode(event)?;
+        if matches!(event, forum::DecodedForumEvent::PostSubmitted { quotations, mentions, .. }
+            if quotations.is_empty() && mentions.is_empty())
+        {
+            encoded.payload["quotations"] = serde_json::Value::Null;
+            encoded.payload["mentions"] = serde_json::Value::Null;
+        }
+        Ok(encoded)
+    }
+
+    fn decode(
+        kind: &str,
+        version: i16,
+        payload: &serde_json::Value,
+    ) -> Result<Self::Event, Self::Error> {
+        ForumCodec::decode(kind, version, payload)
+    }
+
+    fn integration_facts(event: &Self::Event) -> Result<Vec<IntegrationFact>, Self::Error> {
+        ForumCodec::integration_facts(event)
+    }
+}
+
+async fn append_retained_null_reference_topic(pool: &sqlx::PgPool, area: Uuid, topic: Uuid) {
+    let pending = [
+        EventToAppend::<RetainedNullForumCodec>::new(
+            forum::DecodedForumEvent::TopicCreated {
+                area_id: area,
+                title: "  Original title  ".into(),
+                author_profile_id: None,
+            },
+            ActorId::System,
+            2,
+        ),
+        EventToAppend::<RetainedNullForumCodec>::new(
+            forum::DecodedForumEvent::PostSubmitted {
+                body: "  Original body  ".into(),
+                author_profile_id: None,
+                quotations: Vec::new(),
+                mentions: Vec::new(),
+            },
+            ActorId::System,
+            3,
+        ),
+    ];
+    let mut tx = pool.begin().await.unwrap();
+    journal::lock_stream_in_tx(&mut tx, StreamId::new(topic))
+        .await
+        .unwrap();
+    journal::append_expected_in_tx::<RetainedNullForumCodec>(
+        &mut tx,
+        StreamId::new(topic),
+        ExpectedVersion::new(0).unwrap(),
+        &pending,
+    )
+    .await
+    .unwrap();
+    // Load the actual stored encoding; projection_record would re-encode its
+    // decoded value and conceal whether replay accepts the retained nulls.
+    let stored = eventstore::load_stream_in_tx(&mut tx, topic).await.unwrap();
+    for event in &stored {
+        projections::project_discussion_event(&mut tx, topic, event)
+            .await
+            .unwrap();
+    }
+    tx.commit().await.unwrap();
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -625,13 +720,22 @@ async fn historical_v1_forum_rows_rebuild_without_inventing_authors_or_reference
     append_discussion_and_project(&pool, area, &[EventInput::new(
         "DiscussionAreaCreated", 1, serde_json::json!({ "slug": "historical", "title": "Historical", "description": "History" }), ActorId::System, 1,
     )]).await.unwrap();
-    append_discussion_and_project(&pool, topic, &[
-        EventInput::new("DiscussionTopicCreated", 1, serde_json::json!({ "area_id": area, "title": "  Original title  " }), ActorId::System, 2),
-        EventInput::new("DiscussionPostSubmitted", 1, serde_json::json!({ "body": "  Original body  ", "quotations": null, "mentions": null }), ActorId::System, 3),
-    ]).await.unwrap();
+    append_retained_null_reference_topic(&pool, area, topic).await;
+    let stream_before = eventstore::load_stream(&pool, topic).await.unwrap();
+    let expected_topic = serde_json::json!({ "area_id": area, "title": "  Original title  " });
+    let expected_post = serde_json::json!({
+        "body": "  Original body  ", "quotations": null, "mentions": null
+    });
+    assert_eq!(stream_before.len(), 2);
+    assert_eq!(stream_before[0].payload, expected_topic);
+    assert_eq!(stream_before[1].payload, expected_post);
     let before = topic_snapshot(&pool, topic).await;
     rebuild_discussion_stream(&pool, area).await.unwrap();
     rebuild_discussion_stream(&pool, topic).await.unwrap();
+    let stream_after = eventstore::load_stream(&pool, topic).await.unwrap();
+    assert_eq!(stream_after[0].payload, expected_topic);
+    assert_eq!(stream_after[1].payload, expected_post);
+    assert_eq!(stream_after, stream_before);
     assert_eq!(topic_snapshot(&pool, topic).await, before);
     let page = discussion_posts(&pool, topic, None, 10, None)
         .await

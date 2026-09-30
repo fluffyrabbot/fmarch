@@ -254,7 +254,7 @@ async fn profile_mention_delivers_to_non_watcher_and_rebuilds_identically(pool: 
             event.kind == "DiscussionPostSubmitted" && event.payload["body"] == "Opening claim"
         })
         .unwrap();
-    assert!(opening_post.payload.get("mentions").is_none());
+    assert_eq!(opening_post.payload["mentions"], serde_json::json!([]));
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(mention_inbox_rows(&pool, mentioned).await, rows);

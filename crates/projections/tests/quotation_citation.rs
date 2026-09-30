@@ -155,7 +155,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
         .iter()
         .find(|event| event.kind == "DiscussionPostSubmitted")
         .unwrap();
-    assert!(first_post.payload.get("quotations").is_none());
+    assert_eq!(first_post.payload["quotations"], serde_json::json!([]));
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     let after_citations = public_citation_rows(&pool, topic).await;
