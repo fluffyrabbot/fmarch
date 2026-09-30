@@ -16,21 +16,21 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  readlinkSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { arch, platform, release } from 'node:os';
-import { dirname, join, matchesGlob, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import { expandHardDependencies } from './proof_lane_execution.mjs';
-import { declaredLaneCacheInputs, validateCacheInputContract } from './proof_lane_inputs.mjs';
+import { declaredLaneCacheInputs, executionInputMatches, resolveLaneCargoInputs, resolveLaneExecutionInputs, validateCacheInputContract } from './proof_lane_inputs.mjs';
+import { assertNoIgnoredProofInputs, assertProofInputPaths, proofSourceFiles, UnsafeProofInputError } from './proof_input_paths.mjs';
 
 // The receipt envelope is historical evidence. Changing the input contract
 // invalidates reuse without making those immutable receipts corrupt.
 export const PROOF_CACHE_SCHEMA = 1;
-export const PROOF_CACHE_INPUT_SCHEMA = 2;
+export const PROOF_CACHE_INPUT_SCHEMA = 3;
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -53,12 +53,6 @@ export function safeProofLaneSegment(laneId) {
 function inside(root, candidate) {
   const rel = relative(resolve(root), resolve(candidate));
   return rel !== '' && !rel.startsWith('..') && !rel.startsWith('/');
-}
-
-function pathMatches(file, selector) {
-  if (selector.kind === 'glob') return matchesGlob(file, selector.path);
-  if (selector.kind === 'prefix') return file.startsWith(selector.path);
-  return file === selector.path;
 }
 
 export function frozenLaneIds(manifest) {
@@ -85,14 +79,7 @@ export function reusableLaneIds(manifest) {
     .map(([id]) => id));
 }
 
-export function workspaceFiles(root) {
-  const output = execFileSync(
-    'git',
-    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-    { cwd: root },
-  );
-  return output.toString('utf8').split('\0').filter(Boolean).sort();
-}
+export const workspaceFiles = proofSourceFiles;
 
 export function workspaceMetadata(root, { execute = execFileSync } = {}) {
   return JSON.parse(execute(
@@ -126,64 +113,38 @@ export function proofToolchain() {
   };
 }
 
-function workspacePackages(metadata) {
-  const workspaceMemberIds = new Set(metadata.workspace_members ?? []);
-  return workspaceMemberIds.size === 0
-    ? metadata.packages
-    : metadata.packages.filter((pkg) => workspaceMemberIds.has(pkg.id));
-}
-
-function transitivePackages(laneIds, manifest, metadata, root) {
-  const packages = new Map(workspacePackages(metadata).map((pkg) => [pkg.name, pkg]));
-  const selectedLaneIds = new Set(laneIds);
-  // A test target's executable depends on its complete Cargo closure, including
-  // dev/build dependencies, even when behavioral ownership is a narrow source.
-  const selected = new Set(manifest.areas
-    .filter((area) => area.lanes.some((id) => selectedLaneIds.has(id)))
-    .map((area) => area.crate ?? area.closure_crate)
-    .filter((name) => packages.has(name)));
-  for (const id of laneIds) {
-    const lane = manifest.lanes[id];
-    const roots = new Set(manifest.areas.filter((area) => area.lanes.includes(id))
-      .map((area) => area.crate ?? area.closure_crate).filter((name) => packages.has(name)));
-    for (const target of lane.assertion_targets ?? []) {
-      const name = target.split('/')[0];
-      if (packages.has(name)) roots.add(name);
-    }
-    const argv = lane.execution?.argv ?? [];
-    for (let index = 0; index < argv.length - 1; index += 1) {
-      if (['-p', '--package'].includes(argv[index]) && packages.has(argv[index + 1])) roots.add(argv[index + 1]);
-    }
-    for (const name of roots) selected.add(name);
-    // Browser/live acceptance executes the site. Cargo commands without a
-    // known package root fail closed to the complete workspace input set.
-    if (lane.execution?.class === 'browser' || argv.includes('--workspace') ||
-        ['cargo', 'postgres'].includes(lane.execution?.class) && roots.size === 0) {
-      for (const name of packages.keys()) selected.add(name);
-    }
-  }
-  const queue = [...selected];
-  while (queue.length > 0) {
-    const pkg = packages.get(queue.shift());
-    for (const dependency of pkg?.dependencies ?? []) {
-      if (!packages.has(dependency.name) || selected.has(dependency.name)) continue;
-      selected.add(dependency.name);
-      queue.push(dependency.name);
-    }
-  }
-  return [...selected].sort().map((name) => ({
-    name,
-    path: `${relative(root, dirname(packages.get(name).manifest_path)).replaceAll('\\', '/')}/`,
-  }));
-}
-
 function fileFingerprint(root, path) {
   const absolute = join(root, path);
   const metadata = lstatSync(absolute);
-  if (metadata.isSymbolicLink()) {
-    return { path, mode: metadata.mode, kind: 'symlink', sha256: sha256(readlinkSync(absolute)) };
-  }
+  if (!metadata.isFile()) throw new UnsafeProofInputError(path, 'proof inputs must be regular files');
   return { path, mode: metadata.mode, kind: 'file', sha256: sha256(readFileSync(absolute)) };
+}
+
+export function laneProofInputs(laneIds, manifest, { root, metadata } = {}) {
+  validateCacheInputContract(manifest, { metadata });
+  const dependencies = expandHardDependencies(laneIds, manifest).sort();
+  const cargo = resolveLaneCargoInputs(dependencies, manifest, metadata, { root });
+  const edges = resolveLaneExecutionInputs(dependencies, manifest, metadata, { root });
+  const selectors = [...declaredLaneCacheInputs(dependencies, manifest),
+    ...cargo.selectors, ...edges.map(edge => edge.selector)];
+  const matchers = [...new Map(selectors.map(selector =>
+    [JSON.stringify(canonical(selector)), canonical(selector)])).entries()]
+    .sort(([left], [right]) => left.localeCompare(right)).map(([, selector]) => selector);
+  return { dependencyLaneIds: dependencies, cargo, edges, matchers };
+}
+
+export function validateLaneProofInputPaths(laneIds, manifest, {
+  root, files = workspaceFiles(root), metadata = workspaceMetadata(root),
+} = {}) {
+  const inputs = laneProofInputs(laneIds, manifest, { root, metadata });
+  assertProofInputPaths({ root, files, selectors: inputs.matchers });
+  // Broad cache context may contain generated dependency/build trees. Only
+  // actual source and fixture edges forbid ignored files that executors could
+  // otherwise consume without binding them to either Git or the proof key.
+  assertNoIgnoredProofInputs({ root, selectors: [
+    ...inputs.cargo.selectors, ...inputs.edges.map(edge => edge.selector),
+  ] });
+  return inputs;
 }
 
 export function computeLaneProofKey(laneId, manifest, {
@@ -194,19 +155,9 @@ export function computeLaneProofKey(laneId, manifest, {
   fingerprints = new Map(),
 } = {}) {
   if (!manifest.lanes[laneId]) throw new Error(`unknown proof lane ${laneId}`);
-  validateCacheInputContract(manifest, { packageNames: workspacePackages(metadata).map((pkg) => pkg.name) });
-  const dependencyLaneIds = expandHardDependencies([laneId], manifest).sort();
-  const packages = transitivePackages(dependencyLaneIds, manifest, metadata, root);
-  const selectors = [
-    ...declaredLaneCacheInputs(dependencyLaneIds, manifest, packages.map((pkg) => pkg.name)),
-    ...packages.map(({ path }) => ({ kind: 'prefix', path })),
-  ];
-  const matcherList = [...new Map(selectors.map((selector) =>
-    [JSON.stringify(canonical(selector)), canonical(selector)])).entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, selector]) => selector);
+  const { dependencyLaneIds, cargo, edges, matchers: matcherList } = validateLaneProofInputPaths([laneId], manifest, { root, files, metadata });
   const inputFiles = [...new Set(files)].sort()
-    .filter((file) => matcherList.some((entry) => pathMatches(file, entry)))
+    .filter((file) => matcherList.some((entry) => executionInputMatches(file, entry)))
     .filter((file) => existsSync(join(root, file)))
     .map((file) => {
       if (!fingerprints.has(file)) fingerprints.set(file, fileFingerprint(root, file));
@@ -219,6 +170,8 @@ export function computeLaneProofKey(laneId, manifest, {
     lanes: Object.fromEntries(dependencyLaneIds.map((id) => [id, manifest.lanes[id]])),
     runner: manifest.runner,
     matchers: matcherList,
+    execution_inputs: edges,
+    cargo_targets: cargo.targets,
     inputs: inputFiles,
     toolchain,
   });
@@ -263,7 +216,7 @@ export function readProofCacheEntry(root, laneId, proofKey, { allowHistoricalInp
   if (sha256(JSON.stringify(canonical(entry.inputs))) !== proofKey) {
     throw new Error('cache input fingerprint does not match its key');
   }
-  if (![1, PROOF_CACHE_INPUT_SCHEMA].includes(entry.inputs?.schema) || entry.inputs.lane_id !== laneId) {
+  if (![1, 2, PROOF_CACHE_INPUT_SCHEMA].includes(entry.inputs?.schema) || entry.inputs.lane_id !== laneId) {
     throw new Error('cache input contract schema or lane identity is invalid');
   }
   if (!allowHistoricalInputs && entry.inputs.schema !== PROOF_CACHE_INPUT_SCHEMA) {

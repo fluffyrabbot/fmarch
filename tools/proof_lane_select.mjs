@@ -75,6 +75,7 @@ import {
 } from './proof_lane_execution.mjs';
 import {
   computeLaneProofKey,
+  validateLaneProofInputPaths,
   reusableLaneIds,
   loadProofCacheHits,
   persistProofCacheEntries,
@@ -82,7 +83,7 @@ import {
   workspaceFiles,
   workspaceMetadata,
 } from './proof_lane_cache.mjs';
-import { validateCacheInputContract } from './proof_lane_inputs.mjs';
+import { executionInputMatches, resolveLaneCargoInputs, resolveLaneExecutionInputs, validateCacheInputContract } from './proof_lane_inputs.mjs';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
@@ -408,16 +409,16 @@ export function gitChangedFiles(
 ) {
   const files = new Set();
   const mergeBase = git('merge-base', baseRef, 'HEAD').trim();
-  for (const line of git('diff', '--name-only', `${mergeBase}..HEAD`).split('\n')) {
-    if (line.trim()) files.add(line.trim());
+  // Disabling rename detection exposes both the deleted origin and added
+  // destination. NUL framing preserves spaces, arrows, quotes and newlines.
+  for (const args of [
+    ['diff', '--no-renames', '--name-only', '-z', `${mergeBase}..HEAD`, '--'],
+    ['diff', '--no-renames', '--name-only', '-z', 'HEAD', '--'],
+    ['ls-files', '--others', '--exclude-standard', '-z'],
+  ]) {
+    for (const path of git(...args).split('\0')) if (path) files.add(path);
   }
-  for (const line of git('status', '--porcelain=v1').split('\n')) {
-    if (!line.trim()) continue;
-    const path = line.slice(3);
-    const renamed = path.includes(' -> ') ? path.split(' -> ').pop() : path;
-    files.add(renamed.replace(/^"|"$/g, ''));
-  }
-  return [...files];
+  return [...files].sort();
 }
 
 // Narrow proof cannot claim coverage for a path the manifest does not own.
@@ -427,11 +428,32 @@ export function assertMappedSelection(selection) {
   }
 }
 
+export function executionInputTriggers({ changed, manifest, metadata, root = REPO_ROOT }) {
+  if (!manifest.execution_inputs) return [];
+  const triggers = [];
+  for (const laneId of Object.keys(manifest.lanes).sort()) {
+    const dependencies = expandHardDependencies([laneId], manifest);
+    const edges = [
+      ...resolveLaneExecutionInputs(dependencies, manifest, metadata, { root }),
+      ...resolveLaneCargoInputs(dependencies, manifest, metadata, { root }).selectors
+        .map(selector => ({ scope: 'cargo', owner: laneId, selector })),
+    ];
+    for (const edge of edges) {
+      for (const file of [...new Set(changed)].sort()) {
+        if (executionInputMatches(file, edge.selector)) triggers.push({ laneId, ...edge, file });
+      }
+    }
+  }
+  return triggers;
+}
+
 // Core selection. Pure over its inputs so the contract test can drive it with
 // fixtures. crateGraph of null means "unknown": if a crate or specialized
 // closure area is touched we conservatively arm every crate area instead of
 // guessing the closure.
-export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
+export function selectLanes({ changed, manifest, crateGraph, metadata, root = REPO_ROOT, mode = 'inner' }) {
+  const executionTriggers = executionInputTriggers({ changed, manifest, metadata, root });
+  const executionMapped = new Set(executionTriggers.map(trigger => trigger.file));
   const areasById = new Map(manifest.areas.map((a) => [a.id, a]));
   const areasByCrate = new Map(manifest.areas.filter((a) => a.crate).map((a) => [a.crate, a]));
   const touched = new Map(); // area id -> [reasons]
@@ -451,7 +473,7 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
       }
     }
     if (best) touch(best.area.id, file);
-    else unmapped.push(file);
+    else if (!executionMapped.has(file)) unmapped.push(file);
   }
 
   const behavioral = new Set(touched.keys());
@@ -509,6 +531,9 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     for (const lane of Object.keys(manifest.lanes)) add(lane, 'mode:full');
   } else {
     for (const id of touched.keys()) addAreaLanes(areasById.get(id), !behavioral.has(id));
+    for (const { laneId, scope, owner, selector, file } of executionTriggers) {
+      add(laneId, `execution-input:${scope}:${owner}:${selector.kind}:${selector.path}:${file}`);
+    }
     for (const { laneId, reasons } of artifactTriggers) {
       for (const reason of reasons) add(laneId, `generated-artifact:${reason}`);
     }
@@ -520,7 +545,9 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     }
   }
 
+  const selectedWithDependencies = new Set(expandHardDependencies([...laneIds], manifest));
   const frozenSkipped = manifest.areas
+    .filter((area) => !area.lanes.some(id => selectedWithDependencies.has(id)))
     .filter((a) => a.tier === 'frozen' && !touched.has(a.id))
     .map((a) => a.id);
 
@@ -528,6 +555,7 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
     mode,
     touched: [...touched.entries()].map(([id, reasons]) => ({ id, reasons })),
     artifactTriggers,
+    executionTriggers,
     laneReasons,
     behavioralAreas: [...behavioral],
     unmapped,
@@ -930,12 +958,13 @@ async function main(argv) {
     throw new Error('--regenerate must be used without selection or recording options');
   }
 
-  const admissionMetadata = proofAdmissionMetadata(argv);
+  const admissionMetadata = proofAdmissionMetadata(argv) ?? lockedCargoMetadata();
   const manifest = loadManifest();
   validateExecutionManifest(manifest);
-  validateCacheInputContract(manifest, admissionMetadata ? {
-    packageNames: workspacePackagesFromMetadata(admissionMetadata).map((pkg) => pkg.name),
-  } : {});
+  validateCacheInputContract(manifest, { metadata: admissionMetadata });
+  const admitInputs = laneIds => validateLaneProofInputPaths(laneIds, manifest, {
+    root: REPO_ROOT, metadata: admissionMetadata,
+  });
   if (measuring) {
     // Cheapest first, so a long sweep banks its easy lanes before the slow ones.
     const laneIds = args.measureAll
@@ -944,6 +973,7 @@ async function main(argv) {
     for (const laneId of laneIds) {
       if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
     }
+    admitInputs(laneIds);
     const baseline = loadTimings();
     const results = await measureLanes(laneIds, manifest, {
       timings: baseline,
@@ -962,8 +992,8 @@ async function main(argv) {
     }
     return;
   }
-  if (args.record) return await recordLane(args.record, manifest);
-  if (args.regenerate) return regenerateArtifact(args.regenerate, manifest);
+  if (args.record) { admitInputs([args.record]); return await recordLane(args.record, manifest); }
+  if (args.regenerate) { admitInputs([args.regenerate]); return regenerateArtifact(args.regenerate, manifest); }
   const baselineTimings = loadTimings();
   // Pruned here, not only inside the estimate, so the --run write-back below
   // persists the pruned file rather than carrying deleted lanes forward.
@@ -996,18 +1026,7 @@ async function main(argv) {
     ? []
     : args.changed.length > 0 ? args.changed : gitChangedFiles(args.base ?? manifest.base_ref);
   const touchesCrates = changed.some((f) => f.startsWith('crates/'));
-  let crateGraph = null;
-  if (touchesCrates) {
-    if (admissionMetadata) {
-      crateGraph = workspaceCrateGraph(admissionMetadata);
-    } else {
-      try {
-        crateGraph = workspaceCrateGraph();
-      } catch {
-        console.error('warning: locked Cargo metadata unavailable; arming all crate lanes conservatively');
-      }
-    }
-  }
+  const crateGraph = touchesCrates ? workspaceCrateGraph(admissionMetadata) : null;
 
   const selection = args.resume
     ? {
@@ -1023,7 +1042,7 @@ async function main(argv) {
           touched: [], artifactTriggers: [], unmapped: [], crateFallback: false,
           laneIds: [args.only], frozenSkipped: [],
         }
-      : selectLanes({ changed, manifest, crateGraph, mode: args.mode });
+      : selectLanes({ changed, manifest, crateGraph, metadata: admissionMetadata, mode: args.mode });
   assertMappedSelection(selection);
   for (const laneId of selection.laneIds) {
     if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
@@ -1033,6 +1052,7 @@ async function main(argv) {
     ? resume.selected
     : orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
 
+  if (args.run) admitInputs(ordered);
   const explained = explainSelection(selection, manifest, timings);
   let cachePlan = null;
   if (args.run && ['inner', 'push', 'sprint', 'full'].includes(selection.mode) && !resume) {
@@ -1060,6 +1080,7 @@ async function main(argv) {
         ),
       };
     } catch (error) {
+      if (error.code === 'UNSAFE_PROOF_INPUT') throw error;
       cachePlan = {
         eligible,
         laneKeys: new Map(),

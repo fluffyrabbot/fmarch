@@ -2,7 +2,7 @@
   "schema": 1,
   "cases": [
     {
-      "name": "scheduler execution f64bed5b",
+      "name": "scheduler source execution scope f64bed5b",
       "commit": "f64bed5bbf2f33c96a13e17150aa8e1f9e8a1bb0",
       "changed": [
         "crates/api/src/mash_scale.rs",
@@ -22,13 +22,26 @@
         "cargo:api",
         "cargo:wire",
         "cargo:clippy-workspace",
-        "test:host-console-day-event-room-live-stack"
-      ],
-      "excludes": [
+        "test:host-console-day-event-room-live-stack",
         "test:frontend-cross-browser",
         "test:frontend-visual-regression",
         "test:auth-invite-role-proof",
         "test:frontend-csp-browser"
+      ],
+      "excludes": [
+        "test:identity-delivery-provider-conformance"
+      ],
+      "scope": "Production Cargo sources are consumed by conservative workspace browser builds. They select those execution lanes without making wire or frontend presentation areas behavioral owners.",
+      "execution_dependency_lanes": [
+        "test:frontend-cross-browser",
+        "test:frontend-visual-regression",
+        "test:auth-invite-role-proof",
+        "test:frontend-csp-browser"
+      ],
+      "excludes_behavioral_areas": [
+        "crate:wire",
+        "frontend:game",
+        "frontend:identity"
       ]
     },
     {
@@ -73,11 +86,44 @@
       "requires": [
         "cargo:api",
         "test:auth-invite-role-proof",
-        "test:frontend-contract"
-      ],
-      "excludes": [
+        "test:frontend-contract",
         "test:frontend-visual-regression",
         "test:frontend-cross-browser"
+      ],
+      "excludes": [
+        "test:identity-delivery-provider-conformance"
+      ],
+      "scope": "Authentication behavior retains its explicit contract gates; runtime browser lanes also consume API sources through their declared workspace build scope.",
+      "execution_dependency_lanes": [
+        "test:frontend-visual-regression",
+        "test:frontend-cross-browser"
+      ],
+      "excludes_behavioral_areas": [
+        "crate:wire",
+        "frontend:game"
+      ]
+    },
+    {
+      "name": "operator proof dev dependency feeds semantic audit",
+      "scope": "commands uses operator_proof as a dev dependency. Execution-input closure must include that production source without treating commands as a behavioral owner.",
+      "changed": [
+        "crates/operator_proof/src/lib.rs"
+      ],
+      "requires": [
+        "cargo:operator-proof",
+        "cargo:commands-audit",
+        "cargo:operator_api"
+      ],
+      "excludes": [
+        "cargo:identity"
+      ],
+      "execution_dependency_lanes": [
+        "cargo:commands-audit"
+      ],
+      "excludes_behavioral_areas": [
+        "crate:commands",
+        "commands:semantic-audit",
+        "frontend:game"
       ]
     }
   ]

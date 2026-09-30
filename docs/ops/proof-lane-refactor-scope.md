@@ -10,31 +10,47 @@ reuse delivered 2026-08-23.
 
 ### Explicit cache input contracts — 2026-09-30
 
-The manifest's `cache_inputs` catalog separates execution dependencies from
-behavioral ownership. Every lane names shared groups and direct inputs; package
-supplements follow the complete Cargo dependency closure, including dev/build
-dependencies. Hard prerequisite lanes contribute their declarations and Cargo
-closures too. File, prefix, and glob selectors have explicit kinds: a literal
-route containing `[game]`, `[slug]`, or `[...path]` never becomes a glob. The
-fingerprint includes the sorted set of matching paths and their bytes, so additions
-and deletions invalidate collection inputs as well as edits.
+The manifest separates broad `cache_inputs` context from narrow typed
+`execution_inputs`. Lane inputs select their direct consumers; package inputs
+follow the complete Cargo dependency closure, including dev/build dependencies;
+target inputs belong only to directly selected tests or compiled binaries.
+Selection and cache keys use the same resolved Cargo source selectors and
+execution edges. Dependency-only matches never forward behavioral
+`also_triggers`. Broad cache groups change evidence identity without turning
+all context edits into direct selection edges.
 
-Pure Rust lanes no longer hash every frontend and tool file. Shared locks,
-toolchains, runner implementation and policy, Cargo configuration, and migrations
-remain universal inputs. Package supplements retain packs, programs, imported
-proof sources and fixtures. Repository-scanning tests declare their wider inputs
-explicitly, including eventstore's Rust source audit and identity's crate-manifest
-audit. Node application harnesses and repository contracts retain deliberate broad
-groups until narrower dependency boundaries are proved. New external file reads
-must update the owning lane or package declaration; unknown groups, selector
-kinds and package names fail admission.
+Cargo metadata must resolve against the committed lockfile before planning or
+execution. Runtime and transitive consumers retain package manifests, build
+scripts and production source trees, but omit dependency integration-test trees
+and unit-harness fixture supplements. Direct test targets retain their package's
+integration helper tree. Co-located unit tests and binary source within `src/`
+remain conservatively hashed. Browser and opaque Cargo harnesses retain broad
+workspace roots until explicit compile-target ownership can narrow them safely.
 
-Input payload schema 2 requires fresh execution instead of reusing the unsafe
-schema-1 input contract. The cache receipt envelope and maintenance receipt
-schemas remain unchanged. Historical entries still undergo full integrity checks,
-remain available for comparisons, and keep their receipt-based GC protections.
-`proof:cache explain` reports `input-contract-changed` for obsolete evidence;
-an obsolete input contract is not artifact corruption. No cache deletion is part
+File, prefix and glob selectors have explicit kinds; literal route brackets stay
+literal. Sorted paths and bytes cover edits, additions, deletions and renames.
+Git change discovery preserves both sides of renames and uses NUL-delimited
+paths. Selected source and fixture symlinks, including missing-file ancestors and
+directory links hiding glob matches, fail admission before any execution or cache
+fallback. This applies to forced, execution-only, resumed and measured proof.
+Ignored files within declared source or fixture inputs also fail admission: an
+executor must not read data omitted from its key. Ignored dependency and build
+trees outside those narrow selectors remain outside this check. The external
+build target remains outside source selection.
+
+The event-body SQL source audit is now the hermetic `test:event-body-authority`
+lane. It scans Git-visible Rust production source under `crates/*/src/`, with
+`eventstore` as the owning exception, and rejects selected links before reads.
+It no longer causes eventstore database tests to hash every crate source file.
+Identity's manifest scan and other test-only audits remain target inputs. New
+external file reads must update the owning lane, target or package declaration;
+unknown groups, selectors, packages and targets fail admission.
+
+Input payload schema 3 requires fresh evidence for this execution-input model.
+Historical schema-1 and schema-2 entries remain integrity-checked, available for
+comparison and protected by receipt-based retention, but cannot be reused. Cache
+envelope and maintenance receipt schemas are unchanged; obsolete contracts are
+reported as `input-contract-changed`, not corruption. No cache deletion is part
 of this transition.
 
 Hosted lanes and lanes claiming the network lock always execute. In particular,

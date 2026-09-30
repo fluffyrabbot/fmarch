@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import test from 'node:test';
 import {
   PROOF_CACHE_INPUT_SCHEMA,
   computeLaneProofKey,
+  loadProofCacheHits,
   persistProofCacheEntries,
   proofCacheArtifactDigest,
   proofCachePaths,
@@ -53,12 +54,14 @@ function receiptSha256(value) {
 
 function fixtureManifest() {
   return {
-    cache_inputs: { version: 1, global: [], groups: {}, packages: {} },
+    cache_inputs: { version: 2, global: [], groups: {} },
+    execution_inputs: { version: 1, packages: {}, targets: {} },
     lanes: {
       audit: {
         kind: 'shell', command: 'cargo test -p commands --test semantic_audit', assertion_targets: ['commands/test/semantic_audit'],
         execution: { class: 'cargo', timeout_seconds: 10, argv: ['cargo', 'test', '-p', 'commands'], resources: [] },
         cache_inputs: { groups: [], paths: [] },
+        execution_inputs: [],
       },
     },
     areas: [{ id: 'audit', tier: 'frozen', paths: ['crates/commands/'], lanes: ['audit'] }],
@@ -66,11 +69,18 @@ function fixtureManifest() {
 }
 
 function fixtureMetadata(root) {
-  return { packages: [{ name: 'commands', manifest_path: join(root, 'crates/commands/Cargo.toml'), dependencies: [] }] };
+  return { packages: [{
+    name: 'commands', manifest_path: join(root, 'crates/commands/Cargo.toml'), dependencies: [],
+    targets: [
+      { name: 'commands', kind: ['lib'], src_path: join(root, 'crates/commands/src/lib.rs') },
+      { name: 'semantic_audit', kind: ['test'], src_path: join(root, 'crates/commands/tests/semantic_audit/main.rs') },
+    ],
+  }] };
 }
 
 function fixtureRoot(t) {
   const root = mkdtempSync(join(tmpdir(), 'fmarch-proof-cache-admin-'));
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const contents = {
     'Cargo.lock': 'lock-v1',
@@ -118,15 +128,15 @@ function store(fixture, id) {
 
 // Write the prior envelope and payload directly: the current writer must never
 // be able to publish new evidence under this unsafe input contract.
-function storeHistorical(fixture, id) {
+function storeHistorical(fixture, id, inputSchema = 1) {
   const current = computed(fixture).payload;
   const payload = {
-    schema: 1,
+    schema: inputSchema,
     lane_id: 'audit',
     dependency_lane_ids: current.dependency_lane_ids,
     lanes: current.lanes,
-    areas: fixture.manifest.areas,
-    matchers: fixture.files,
+    ...(inputSchema === 1 ? { areas: fixture.manifest.areas } : { runner: current.runner }),
+    matchers: inputSchema === 1 ? fixture.files : current.matchers,
     inputs: current.inputs,
     toolchain: current.toolchain,
   };
@@ -181,9 +191,9 @@ test('cache explanation deterministically identifies every changed input fingerp
   assert.equal(explanation.changes.contract.length, 0);
 });
 
-test('historical input contracts remain inspectable custody but cannot explain as a cache hit', (t) => {
+for (const inputSchema of [1, 2]) test(`historical schema ${inputSchema} remains inspectable custody but cannot qualify current reuse`, (t) => {
   const fixture = fixtureRoot(t);
-  const old = storeHistorical(fixture, 'historical');
+  const old = storeHistorical(fixture, 'historical', inputSchema);
   const paths = proofCachePaths(fixture.root, 'audit', old.proofKey);
   const originalBytes = readFileSync(paths.receipt);
   const options = {
@@ -192,11 +202,11 @@ test('historical input contracts remain inspectable custody but cannot explain a
 
   assert.throws(
     () => readProofCacheEntry(fixture.root, 'audit', old.proofKey),
-    /cache input contract schema 1 is obsolete; expected 2/,
+    new RegExp(`cache input contract schema ${inputSchema} is obsolete; expected 3`),
   );
   const inspected = scanProofCache({ root: fixture.root });
   assert.equal(inspected[0].valid, true);
-  assert.equal(inspected[0].inputSchema, 1);
+  assert.equal(inspected[0].inputSchema, inputSchema);
   assert.equal(inspected[0].inputContractCompatible, false);
   assert.equal(inspected[0].reason, undefined, 'obsolete evidence is not corrupt');
 
@@ -206,8 +216,8 @@ test('historical input contracts remain inspectable custody but cannot explain a
   assert.equal(explanation.compared_to.proof_key, old.proofKey);
   assert.equal(explanation.compared_to.input_contract_compatible, false);
   assert.deepEqual(explanation.changes.contract.find(({ field }) => field === 'schema'), {
-    field: 'schema', before: 1, after: PROOF_CACHE_INPUT_SCHEMA,
-    before_sha256: receiptSha256(1), after_sha256: receiptSha256(PROOF_CACHE_INPUT_SCHEMA),
+    field: 'schema', before: inputSchema, after: PROOF_CACHE_INPUT_SCHEMA,
+    before_sha256: receiptSha256(inputSchema), after_sha256: receiptSha256(PROOF_CACHE_INPUT_SCHEMA),
   });
   assert.equal(explanation.candidates[0].reuse_rejection, 'input-contract-changed');
 
@@ -218,6 +228,10 @@ test('historical input contracts remain inspectable custody but cannot explain a
   assert.equal(syntheticExact.reason, 'input-contract-changed');
   assert.equal(syntheticExact.exact_entry.valid, true);
   assert.equal(syntheticExact.exact_entry.input_contract_compatible, false);
+  const reuse = loadProofCacheHits(['audit'], fixture.manifest, { ...options, computedKeys: new Map([['audit', old]]) });
+  assert.equal(reuse.hits.size, 0);
+  assert.match(reuse.misses.get('audit').reason, new RegExp(`schema ${inputSchema} is obsolete; expected 3`));
+  assert.equal(readProofCacheEntry(fixture.root, 'audit', old.proofKey, { allowHistoricalInputs: true }).entry.inputs.schema, inputSchema);
   assert.deepEqual(readFileSync(paths.receipt), originalBytes, 'inspection preserves immutable evidence');
 });
 

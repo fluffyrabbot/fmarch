@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { loadManifest, MANIFEST_PATH, selectLanes } from './proof_lane_select.mjs';
+import { loadManifest, MANIFEST_PATH, lockedCargoMetadata, selectLanes as selectWithoutMetadata } from './proof_lane_select.mjs';
 
-// Keep source-ownership counterexamples runnable without resolving Cargo metadata.
+// Use the same complete metadata as execution-input selection.
 // The main selector suite imports this module for canonical contract coverage.
 const manifest = loadManifest(MANIFEST_PATH);
+const metadata = lockedCargoMetadata();
+const selectLanes = (options) => selectWithoutMetadata({ metadata, ...options });
 const liveOwner = manifest.areas.find((area) => area.id === 'frontend:live-projection');
 const gameOwner = manifest.areas.find((area) => area.id === 'frontend:game');
 const hostOwner = manifest.areas.find((area) => area.id === 'proof:host-console-live-stack');

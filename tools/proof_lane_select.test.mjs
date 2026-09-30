@@ -38,7 +38,7 @@ import {
   shouldAutoResumeAfterPreemption,
   requiresHostHeavyBuildLock,
   runLanes,
-  selectLanes,
+  selectLanes as selectLanesWithoutMetadata,
   usesRunnerOwnedPostgres,
   warmupCommand,
   workspaceCrateGraph,
@@ -59,9 +59,13 @@ const cargoMetadata = {
   packages: workspacePackagesFromMetadata(resolvedCargoMetadata),
 };
 
+function selectLanes(options) {
+  return selectLanesWithoutMetadata({ metadata: cargoMetadata, root: REPO_ROOT, ...options });
+}
+
 test('cache input package declarations match the complete locked workspace metadata', () => {
   assert.equal(validateCacheInputContract(manifest, {
-    packageNames: cargoMetadata.packages.map((pkg) => pkg.name),
+    metadata: cargoMetadata,
   }), true);
 });
 
@@ -446,11 +450,12 @@ test('remote trunk avoids false history when a worktree-local main ref is stale'
     const command = args.join(' ');
     if (command === 'merge-base main HEAD') return 'stale-main\n';
     if (command === 'merge-base origin/main HEAD') return 'current-head\n';
-    if (command === 'diff --name-only stale-main..HEAD') {
-      return 'crates/commands/src/lib.rs\n';
+    if (command === 'diff --no-renames --name-only -z stale-main..HEAD --') {
+      return 'crates/commands/src/lib.rs\0';
     }
-    if (command === 'diff --name-only current-head..HEAD') return '';
-    if (command === 'status --porcelain=v1') return ' M tools/proof_lane_select.mjs\n';
+    if (command === 'diff --no-renames --name-only -z current-head..HEAD --') return '';
+    if (command === 'diff --no-renames --name-only -z HEAD --') return 'tools/proof_lane_select.mjs\0';
+    if (command === 'ls-files --others --exclude-standard -z') return '';
     throw new Error(`unexpected git command: ${command}`);
   };
 
@@ -490,7 +495,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
 });
 
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
-  assert.equal(manifest.version, 9);
+  assert.equal(manifest.version, 10);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
     ([, lane]) => lane.inputs || lane.outputs || lane.write_command,
@@ -1029,7 +1034,7 @@ test('lane execution emits automatic timing observations for every attempted lan
   );
 });
 
-test('aggregate coverage expands to atomic Postgres and frontend leaves', () => {
+test('atomic lane selection covers production sources and declared integration helper scopes', () => {
   const workspace = selectLanes({
     changed: ['package.json'],
     manifest,
@@ -1055,7 +1060,9 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
     mode: 'inner',
   });
   assert.ok(commandSource.laneIds.includes('cargo:commands-pg'));
-  assert.ok(!commandSource.laneIds.includes('cargo:commands-audit'));
+  assert.ok(commandSource.laneIds.includes('cargo:commands-audit'), 'the audit compiles the changed commands source');
+  assert.ok(commandSource.laneReasons['cargo:commands-audit'].some(reason => reason.startsWith('execution-input:cargo:')));
+  assert.ok(!commandSource.behavioralAreas.includes('commands:semantic-audit'), 'execution dependencies do not create behavioral owners');
 
   const ordinaryPipeline = selectLanes({
     changed: ['crates/commands/tests/pipeline/residual_cases.rs'],
@@ -1064,7 +1071,8 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
     mode: 'inner',
   });
   assert.ok(ordinaryPipeline.laneIds.includes('cargo:commands-pg'));
-  assert.ok(!ordinaryPipeline.laneIds.includes('cargo:commands-audit'));
+  assert.ok(ordinaryPipeline.laneIds.includes('cargo:commands-audit'), 'direct commands integration targets conservatively retain the full tests/ helper tree');
+  assert.ok(!ordinaryPipeline.laneIds.includes('cargo:api'), 'transitive consumers do not inherit commands integration-test trees');
 
   const sharedPipelineSupport = selectLanes({
     changed: ['crates/commands/tests/pipeline/residual_support.rs'],
@@ -1091,7 +1099,8 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
     mode: 'inner',
   });
   assert.ok(semanticAudit.laneIds.includes('cargo:commands-audit'));
-  assert.ok(!semanticAudit.laneIds.includes('cargo:commands-pg'));
+  assert.ok(semanticAudit.laneIds.includes('cargo:commands-pg'), 'direct integration suites share the declared tests/ source scope');
+  assert.ok(!semanticAudit.behavioralAreas.includes('commands:pipeline'), 'source dependency matching does not promote behavioral ownership');
 
   const goldenWitness = selectLanes({
     changed: ['crates/commands/tests/semantic_audit/golden_witness.rs'],
@@ -1100,7 +1109,8 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
     mode: 'inner',
   });
   assert.ok(goldenWitness.laneIds.includes('cargo:commands-audit'));
-  assert.ok(!goldenWitness.laneIds.includes('cargo:commands-pg'));
+  assert.ok(goldenWitness.laneIds.includes('cargo:commands-pg'));
+  assert.ok(!goldenWitness.laneIds.includes('cargo:operator_api'), 'unimported integration helpers do not propagate through package dependencies');
 
   const minimizer = selectLanes({
     changed: ['crates/operator_proof/src/minimizer.rs'],
@@ -1111,7 +1121,9 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   assert.deepEqual(minimizer.touched.map((area) => area.id), ['operator-proof:minimizer']);
   assert.ok(minimizer.laneIds.includes('cargo:operator-proof'));
   assert.ok(minimizer.laneIds.includes('cargo:commands-audit'));
-  assert.ok(!minimizer.laneIds.includes('cargo:operator_api'));
+  assert.ok(minimizer.laneIds.includes('cargo:operator_api'), 'operator API compiles operator_proof production sources');
+  assert.ok(minimizer.laneReasons['cargo:operator_api'].some(reason => reason.startsWith('execution-input:cargo:')));
+  assert.ok(!minimizer.behavioralAreas.includes('crate:operator_api'));
 
   const frontend = selectLanes({
     changed: ['frontend/src/routes/g/demo/+page.svelte'],
@@ -1303,7 +1315,7 @@ test('crate closure arms dependent crate areas', () => {
   assert.ok(!touchedIds.has('crate:domain'), 'dependencies (not dependents) must stay untouched');
 });
 
-test('test-target edits stay out of reverse crate closure while retaining target precision', () => {
+test('integration target source scopes retain helpers without propagating transitive test trees', () => {
   const cases = [
     {
       source: 'crates/domain/tests/determinism_guard.rs',
@@ -1359,18 +1371,18 @@ test('test-target edits stay out of reverse crate closure while retaining target
     },
     {
       source: 'crates/commands/tests/pipeline/residual_cases.rs',
-      includes: ['cargo:commands-pg', 'cargo:operator-proof', 'cargo:operator_api'],
-      excludes: ['cargo:commands-audit'],
+      includes: ['cargo:commands-pg', 'cargo:commands-audit', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:api'],
     },
     {
       source: 'crates/commands/tests/semantic_audit/cases.rs',
-      includes: ['cargo:commands-audit', 'cargo:operator-proof', 'cargo:operator_api'],
-      excludes: ['cargo:commands-pg'],
+      includes: ['cargo:commands-audit', 'cargo:commands-pg', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:api'],
     },
     {
       source: 'crates/commands/tests/pipeline/day_events.rs',
-      includes: ['cargo:commands-pg', 'cargo:operator-proof', 'cargo:operator_api'],
-      excludes: ['cargo:commands-audit'],
+      includes: ['cargo:commands-pg', 'cargo:commands-audit', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:api'],
     },
     {
       source: 'crates/commands/tests/pipeline/residual_support.rs',
@@ -1409,7 +1421,27 @@ test('test-target edits stay out of reverse crate closure while retaining target
     for (const lane of excludes) {
       assert.ok(!selection.laneIds.includes(lane), `${source} must not arm ${lane}`);
     }
+    if (source.includes('/tests/')) {
+      for (const lane of ['test:frontend-cross-browser', 'test:host-console-live-stack-smoke']) {
+        assert.ok(!selection.laneIds.includes(lane), `${source} must not enter runtime-only ${lane} through a package test tree`);
+      }
+    }
   }
+});
+
+test('dev-only Cargo source inputs select consumers without forwarding behavioral ownership', () => {
+  const commands = cargoMetadata.packages.find(pkg => pkg.name === 'commands');
+  assert.ok(commands.dependencies.some(dependency => dependency.name === 'operator_proof' && dependency.kind === 'dev'));
+  const graph = crateGraphFromMetadata(cargoMetadata);
+  assert.ok(!graph.commands.includes('operator_proof'), 'behavioral reverse closure excludes dev-only edges');
+  const source = 'crates/operator_proof/src/lib.rs';
+  const selection = selectLanes({ changed: [source], manifest, crateGraph: graph });
+  assert.ok(selection.laneIds.includes('cargo:commands-audit'), 'semantic audit compiles its operator_proof dev dependency');
+  assert.ok(selection.laneReasons['cargo:commands-audit'].some(reason => reason.startsWith('execution-input:cargo:') && reason.endsWith(source)));
+  for (const area of ['crate:commands', 'commands:semantic-audit', 'frontend:game']) {
+    assert.ok(!selection.behavioralAreas.includes(area), `execution input must not forward ${area} behavior`);
+  }
+  assert.ok(!selection.laneIds.includes('cargo:identity'), 'unrelated Cargo consumers remain outside selection');
 });
 
 test('specialized Cargo inputs retain their crate closure', () => {
@@ -1676,7 +1708,7 @@ test('inner, push, sprint, and full modes escalate coverage deliberately', () =>
   const changed = ['frontend/src/routes/auth/login/+page.svelte'];
   const inner = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
   assert.ok(!inner.laneIds.includes('test:frontend-role-smoke'), 'frozen game lanes stay out of inner loop');
-  assert.ok(inner.frozenSkipped.includes('frontend:game'));
+  assert.ok(!inner.frozenSkipped.includes('frontend:game'), 'shared selected lanes keep an area out of the fully skipped report');
 
   const push = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'push' });
   assert.ok(push.laneIds.includes('test:completeness-scorecard'), 'push sentinels apply');
@@ -2060,7 +2092,7 @@ test('documentation changes select their bounded contract gate', () => {
   assert.throws(() => execFileSync(process.execPath, ['tools/proof_lane_select.mjs', '--mode', 'push', '--changed', 'unknown/file.rs', '--json'], {cwd: REPO_ROOT, stdio: 'pipe'}), error => error.status === 1 && /Unmapped changes block/.test(error.stderr));
  });
 
-test('historical selection regressions retain transport coverage without scheduler presentation triggers', () => {
+test('historical regressions retain declared execution coverage without forwarding dependency behavior', () => {
   const cases = JSON.parse(readFileSync(join(REPO_ROOT, 'docs/ops/proof-selection-regressions.json'), 'utf8')).cases;
   for (const example of cases) {
     const selection = selectLanes({ changed: example.changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'push' });
@@ -2069,6 +2101,12 @@ test('historical selection regressions retain transport coverage without schedul
     const ids = new Set(explained.map((lane) => lane.id));
     for (const id of example.requires) assert.ok(ids.has(id), `${example.name} must select ${id}`);
     for (const id of example.excludes) assert.ok(!ids.has(id), `${example.name} must not select ${id}`);
+    for (const id of example.execution_dependency_lanes ?? []) {
+      assert.ok(selection.laneReasons[id]?.some(reason => reason.startsWith('execution-input:')), `${example.name}: ${id} needs a declared execution-input reason`);
+    }
+    for (const id of example.excludes_behavioral_areas ?? []) {
+      assert.ok(!selection.behavioralAreas.includes(id), `${example.name} must not forward ${id} behavior`);
+    }
     for (const lane of explained) assert.ok(lane.reasons.length, `${lane.id} needs a selection reason`);
   }
 });
