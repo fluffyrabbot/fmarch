@@ -1079,6 +1079,20 @@
       "namespace": "public"
     },
     {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
+      "kind": "relation",
+      "name": "event_integration_outbox",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "event_integration_outbox_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner,$schema_owner_key_admin=r/$schema_owner}",
       "kind": "relation",
       "name": "event_stream_key_state",
@@ -1173,6 +1187,27 @@
       "acl": "",
       "kind": "relation",
       "name": "external_identity_principal_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
+      "kind": "relation",
+      "name": "forum_area_reservation",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "forum_area_reservation_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "forum_area_reservation_slug_key",
       "owner": "$schema_owner",
       "namespace": "public"
     },
