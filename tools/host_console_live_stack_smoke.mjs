@@ -38,6 +38,7 @@ import { assertHostDeadlineApiPhase, waitForHostDeadlineDelivery } from "./live_
 import { assertHostSeatScope, observeHostSeatReads } from "./live_stack/host_seat_scope_scenario.mjs";
 import { assertHostReplacementCandidate, assertHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
+import { proveHostInviteRetryAfterRefresh } from "./live_stack/host_invite_retry_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
   assertDuplicatePlayerSubmitOutcome,
@@ -5600,14 +5601,9 @@ async function rejectStalePlayerInviteFromBrowser(page) {
       `stale player invite retry did not target current occupant: ${JSON.stringify(retryTarget)}`,
     );
   }
-  await page.getByTestId("host-player-invite-retry-account").fill(invitedAccountId);
-  await retry.click();
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[data-testid="host-player-invite-status"]')
-        ?.getAttribute("data-state") === "ack",
-  );
+  const admissionRecovery = await proveHostInviteRetryAfterRefresh({
+    page, game, invitedAccountId, expectedTarget: retryTarget,
+  });
   const retryMessage = await status.innerText();
   const retryLoginUrl = await page.getByTestId("host-player-invite-url").innerText();
   if (!retryLoginUrl.includes("player-")) {
@@ -5630,6 +5626,7 @@ async function rejectStalePlayerInviteFromBrowser(page) {
       target: retryTarget,
       message: retryMessage,
       loginUrl: retryLoginUrl,
+      admissionRecovery,
     },
   };
 }

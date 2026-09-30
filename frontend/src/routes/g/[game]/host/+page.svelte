@@ -768,7 +768,7 @@
                 >
                   {inviteResult.loginUrl}
                 </a>
-              {:else if projectionCommandsReady && inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
+              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
                 <form
                   class="host-console-critical-path__invite-retry"
                   method="POST"
@@ -782,6 +782,7 @@
                       type="text"
                       autocomplete="username"
                       required
+                      disabled={!projectionCommandsReady}
                       data-testid="host-player-invite-retry-account"
                     />
                   </label>
@@ -803,6 +804,7 @@
                   <button
                     class="touch-control"
                     type="submit"
+                    disabled={!projectionCommandsReady}
                     data-testid="host-player-invite-retry-submit"
                   >
                     Issue current player invite

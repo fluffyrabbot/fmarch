@@ -5,6 +5,7 @@ import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 import { invalidTargetRequestFixture, legalActionAfterInvalidTargetFixture } from "./live_stack/invalid_target_request_fixture.mjs";
 import { explicitHostReconnectFixture } from "./live_stack/host_reconnect_fixture.mjs";
 import { hostReplacementFixture } from "./live_stack/host_replacement_fixture.mjs";
+import { hasHostInviteRetryRecovery } from "./live_stack/host_invite_retry_scenario.mjs";
 import { buildLiveStackProofSummary } from "./live_stack_proof_summary.mjs";
 
 test("host summary retains selected member and confirmed replacement command identity", () => {
@@ -71,6 +72,56 @@ test("host ops requires the canonical replacement principal in captured browser 
         `${field} must reject ${invalid}`,
       );
     }
+  }
+});
+
+test("host readiness requires complete invite retry recovery evidence", () => {
+  for (const mutate of [
+    (retry) => { delete retry.admissionRecovery; },
+    (retry) => { retry.admissionRecovery.blocked.sameInput = false; },
+    (retry) => { retry.admissionRecovery.blocked.submitDisabled = false; },
+    (retry) => { retry.admissionRecovery.after.accountMatches = false; },
+    (retry) => { retry.admissionRecovery.reconnect.socketObserved = false; },
+    (retry) => { retry.admissionRecovery.submission.bodyMatches = false; },
+  ]) {
+    const evidence = liveStackReadinessFixture();
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"), "passed");
+    mutate(evidence.browser.moderator.stalePlayerInviteReject.retry);
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"), "failed");
+  }
+});
+
+test("host invite retry recovery must belong to the outer game and exact current occupant", () => {
+  for (const mutate of [
+    (retry) => {
+      retry.admissionRecovery.game = "other-game";
+      retry.admissionRecovery.refresh.pathname = "/api/gameplay/games/other-game/host-console-state";
+      retry.admissionRecovery.submission.pathname = "/g/other-game/host";
+    },
+    (retry) => {
+      for (const state of ["before", "blocked", "after"]) {
+        retry.admissionRecovery[state].target.principalId = fixturePrincipalAuthorityId("player-mira");
+      }
+    },
+    (retry) => {
+      retry.target.slotId = "slot_1";
+      for (const state of ["before", "blocked", "after"]) {
+        retry.admissionRecovery[state].target.slotId = "slot_1";
+      }
+    },
+    (retry) => {
+      retry.target.expectedOccupantPrincipalId = fixturePrincipalAuthorityId("player-mira");
+      for (const state of ["before", "blocked", "after"]) {
+        retry.admissionRecovery[state].target.expectedOccupantPrincipalId = fixturePrincipalAuthorityId("player-mira");
+      }
+    },
+  ]) {
+    const evidence = liveStackReadinessFixture();
+    const retry = evidence.browser.moderator.stalePlayerInviteReject.retry;
+    mutate(retry);
+    assert.equal(hasHostInviteRetryRecovery(retry.admissionRecovery), true,
+      "internally consistent evidence still needs its outer authority binding");
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-ops-workflow"), "failed");
   }
 });
 
@@ -379,7 +430,8 @@ function liveStackReadinessFixture() {
           reject: { message: "Invite target is stale" },
           retry: {
             state: "ack",
-            target: { principalId: fixturePrincipalAuthorityId("player-rowan") },
+            target: hostInviteRetryTargetFixture(),
+            admissionRecovery: hostInviteRetryRecoveryFixture(),
           },
         },
         rolePmReplacement: {
@@ -406,6 +458,31 @@ function liveStackReadinessFixture() {
     slotLifecycleApiState: {
       slots: [{ slot_id: "slot-7", alive: false }],
     },
+  };
+}
+
+function hostInviteRetryTargetFixture() {
+  return {
+    principalId: fixturePrincipalAuthorityId("player-rowan"),
+    slotId: "slot-7",
+    expectedOccupantPrincipalId: fixturePrincipalAuthorityId("player-rowan"),
+  };
+}
+
+function hostInviteRetryRecoveryFixture() {
+  const game = hostReplacementFixture().expected.game;
+  const state = (disabled) => ({
+    sameInput: true, accountMatches: true, accountLength: 24,
+    accountDisabled: disabled, submitDisabled: disabled, valueMissing: false,
+    target: hostInviteRetryTargetFixture(),
+  });
+  return {
+    status: "passed", game,
+    before: state(false), blocked: state(true), after: state(false),
+    refresh: { pathname: `/api/gameplay/games/${game}/host-console-state`, method: "GET", status: 200 },
+    reconnect: { recovered: true, socketObserved: true },
+    submission: { method: "POST", pathname: `/g/${game}/host`, action: "issuePlayerInvite", bodyMatches: true, status: 200 },
+    outcome: { state: "ack", urlRendered: true },
   };
 }
 

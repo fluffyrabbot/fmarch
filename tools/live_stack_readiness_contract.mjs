@@ -6,6 +6,7 @@ import { hasContendedVoteRaceEvidence } from "./live_stack/vote_race_scenario.mj
 import { hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
 import { hasExplicitHostReconnect } from "./live_stack/host_reconnect_scenario.mjs";
 import { hasHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
+import { hasHostInviteRetryRecovery } from "./live_stack/host_invite_retry_scenario.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 export const LIVE_STACK_READINESS_VERSION = 1;
@@ -227,11 +228,24 @@ const CHECKS = Object.freeze([
         "ack" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.target
         ?.principalId === PLAYER_ROWAN_PRINCIPAL_ID &&
+      hostInviteRetryRecoveryPassed(evidence) &&
       evidence?.slotLifecycleApiState?.slots?.some(
         (slot) => slot.slot_id === "slot-7" && slot.alive === false,
       ),
   },
 ]);
+
+function hostInviteRetryRecoveryPassed(evidence) {
+  const retry = evidence?.browser?.moderator?.stalePlayerInviteReject?.retry;
+  const recovery = retry?.admissionRecovery;
+  return hasHostInviteRetryRecovery(recovery) &&
+    recovery.game === evidence?.game &&
+    retry.target?.slotId === "slot-7" &&
+    retry.target?.expectedOccupantPrincipalId === PLAYER_ROWAN_PRINCIPAL_ID &&
+    ["principalId", "slotId", "expectedOccupantPrincipalId"].every(
+      (field) => recovery.before.target[field] === retry.target?.[field],
+    );
+}
 
 function additionalRoomLifecyclePassed(room, kind) {
   return (
