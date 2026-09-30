@@ -6312,6 +6312,104 @@ fn trace_records_protected_trigger_generated_kill() {
 }
 
 #[test]
+fn golden_redirect_pgo_bodyguard_intercept() {
+    let golden = load_golden("redirect_pgo_bodyguard_intercept.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "redirect_pgo_bodyguard_intercept",
+    );
+
+    let output = run_output(&golden["input"], load_pack(), "redirect-pgo-bodyguard-run");
+    let redirects: Vec<_> = output
+        .trace
+        .edges
+        .iter()
+        .filter(|edge| edge.kind == "redirect")
+        .collect();
+    assert_eq!(redirects.len(), 1, "only the tracker's target moves");
+    let edge = redirects[0];
+    assert_eq!(edge.from, "track_001:target:0:slot_4");
+    assert_eq!(edge.to, "track_001:target:0:slot_2");
+    assert_eq!(edge.detail.at("original_target"), "slot_4");
+    assert_eq!(edge.detail.at("final_target"), "slot_2");
+    assert_eq!(
+        edge.detail.at("steps").nth(0).at("redirect_action_id"),
+        "swap_001"
+    );
+    assert_eq!(edge.detail.at("steps").nth(0).at("redirect_kind"), "Swap");
+
+    let generated: Vec<_> = output
+        .trace
+        .generated
+        .iter()
+        .filter(|row| row.source == "Trigger" && row.action_id == "pgo_shoots_visitor")
+        .collect();
+    assert_eq!(
+        generated.len(),
+        2,
+        "tracker and bus driver both visit the PGO"
+    );
+    for (row, visitor, action) in [
+        (generated[0], "slot_1", "track"),
+        (generated[1], "slot_7", "bus_driver_swap"),
+    ] {
+        assert_eq!(row.actor, "slot_2");
+        assert_eq!(row.targets, vec![visitor.to_string()]);
+        assert_eq!(row.detail.at("source_target"), "slot_2");
+        assert_eq!(row.detail.at("source_actor"), visitor);
+        assert_eq!(row.detail.at("source_cause"), action);
+    }
+
+    let saved = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "kill_prevented_by_protection")
+        .expect("bodyguard protects the redirected visitor from the generated kill");
+    assert_eq!(saved.source, "cause:pgo_shoots_visitor");
+    assert_eq!(saved.detail.at("target"), "slot_1");
+    assert_eq!(saved.detail.at("attacker"), "slot_2");
+    assert_eq!(
+        saved.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        saved.detail.at("protectors").nth(0).at("action_id"),
+        "bodyguard_001"
+    );
+
+    let stacked = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "kill_stacked_on_existing_death")
+        .expect("interception merges into the bodyguard's existing death");
+    assert_eq!(stacked.source, "cause:bodyguard_intercept");
+    assert_eq!(stacked.detail.at("target"), "slot_3");
+    assert_eq!(stacked.detail.at("attacker"), "slot_2");
+    assert_eq!(stacked.detail.at("existing_cause"), "factional_kill");
+    assert_eq!(stacked.detail.at("merged_attackers").nth(0), "slot_5");
+    assert_eq!(stacked.detail.at("merged_attackers").nth(1), "slot_2");
+
+    assert_eq!(output.post_state.slots.len(), 7);
+    for slot in &output.post_state.slots {
+        let expected = if matches!(slot.slot_id.as_str(), "slot_3" | "slot_7") {
+            domain::SlotLifecycle::Dead
+        } else {
+            domain::SlotLifecycle::Alive
+        };
+        assert_eq!(
+            slot.status, expected,
+            "folded lifecycle for {}",
+            slot.slot_id
+        );
+    }
+    assert_eq!(output.post_state.phase_id.to_string(), "N01");
+}
+
+#[test]
 fn golden_pgo_bodyguard_intercept() {
     let golden = load_golden("pgo_bodyguard_intercept.json");
     let got = run(&golden["input"], load_pack());

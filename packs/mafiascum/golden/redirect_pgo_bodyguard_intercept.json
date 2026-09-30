@@ -1,0 +1,230 @@
+{
+  "description": "Bus Driver swaps slots 4 and 2, redirecting Tracker 1 onto PGO 2. Bodyguard 3 protects Tracker 1 while Mafia 5 kills Bodyguard 3. The generated PGO attack on Tracker 1 is intercepted and stacks attribution onto Bodyguard 3; the Bus Driver also visits the PGO and dies. Final events preserve one death per slot and the redirected investigation target.",
+  "input": {
+    "game_id": "game_demo_redirect_pgo_bodyguard_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "tracker",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "paranoid_gun_owner",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "pgo"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "bodyguard",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "bus_driver",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "track_001",
+        "actor": "slot_1",
+        "template_id": "track",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "bodyguard_001",
+        "actor": "slot_3",
+        "template_id": "bodyguard",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "factional_kill_bodyguard_001",
+        "actor": "slot_5",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "swap_001",
+        "actor": "slot_7",
+        "template_id": "bus_driver_swap",
+        "targets": [
+          "slot_4",
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 414141
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_5",
+          "slot_2"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Track",
+        "investigator": "slot_1",
+        "target": "slot_2",
+        "result": {
+          "visited": []
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "pgo_shoots_visitor",
+        "payload": {
+          "on": "Visit",
+          "source_target": "slot_2",
+          "source_actor": "slot_1",
+          "source_cause": "track",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_1"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_1",
+        "reasons": [
+          "protected"
+        ],
+        "sources": [
+          "slot_3"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "pgo_shoots_visitor",
+        "payload": {
+          "on": "Visit",
+          "source_target": "slot_2",
+          "source_actor": "slot_7",
+          "source_cause": "bus_driver_swap",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_7"
+        }
+      }
+    },
+    {
+      "index": 5,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_7",
+        "cause": "pgo_shoots_visitor",
+        "attackers": [
+          "slot_2"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 6,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_7",
+            "cause": "pgo_shoots_visitor"
+          }
+        ]
+      }
+    }
+  ]
+}
