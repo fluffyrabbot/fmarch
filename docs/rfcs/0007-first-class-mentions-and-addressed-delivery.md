@@ -157,7 +157,12 @@ rejected for the reasons RFC 0002 already recorded against `[quote=12]`.
 
 Community mention resolution reads `public_profile.handle` inside the same
 transaction that appends the post. It does **not** read the blinded handle
-index.
+index. The public row supplies a candidate only: `profile_application` verifies
+that the candidate's current sealed claim is public and its handle exactly
+matches the requested handle. Missing, private, or mismatched candidates share
+the same non-disclosing rejection. Target identity and subject gates use
+nonblocking shared locks because the command already holds its author's
+authority; contention aborts the whole command with a retryable service failure.
 
 RFC 0004 invariant 9 already states that a private or redacted profile "cannot
 supply current attribution to public discussion, search, or mute reads." A
