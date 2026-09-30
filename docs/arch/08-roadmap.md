@@ -113,15 +113,16 @@ neither watches the game for anyone nor locks its topic.
 The reverse edge and launch delivery replay from the game source; forum replay
 preserves game-owned delivery, and subscription replay uses start-time watch
 periods. The game rebuild audit includes scoped launch-delivery corruption.
-Launch delivery and watch-period folds share a per-origin attention gate after
+Launch delivery, forum publication, and watch-period folds share a per-surface attention gate after
 their own source-stream lock. Each fold reconciles both missing and obsolete
 launch recipients, so lower-sequence subscribe/unsubscribe events that commit
 after a start still converge to event-time membership. Game replay and audit
 acquire this gate from the canonical creation event before clearing projections
 or taking audit snapshots, even if the reverse projection is missing. Nothing
-behind this gate acquires another event stream. This gate covers the origin
-adapter only; ordinary post-watch fanout still needs its own commit-order
-convergence followup.
+behind this gate acquires another event stream. Ordinary forum watch delivery
+also reconciles missing and obsolete recipients from immutable submission events;
+topic and subscription rebuilds take the same gate before replacing derived rows.
+Game-post watches do not create ordinary inbox deliveries during live execution or replay.
 Origin admission takes the new game stream lock first, then an existing topic's
 source lock before HTTP identity locks. It skips occupied streams for idempotent
 receipt replay and never waits on an empty origin candidate; the command rejects

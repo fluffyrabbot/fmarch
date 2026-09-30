@@ -1,6 +1,6 @@
 //! Game-owned origin edges and their public attention adapter. Forum writes do
 //! not depend on games; replay of either source preserves the other source's facts.
-use crate::{DiscussionTopicRow, GameIndexRow, ProjectionError};
+use crate::{attention_projection, DiscussionTopicRow, GameIndexRow, ProjectionError};
 use principal::PrincipalId;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -169,20 +169,6 @@ pub(super) async fn record_origin(
     Ok(())
 }
 
-/// Every source owns its stream lock before this adapter gate. Nothing behind
-/// the gate acquires another event stream, so opposite publication/watch commit
-/// orders can converge without a cross-stream lock cycle.
-pub(super) async fn lock_attention(
-    tx: &mut Transaction<'_, Postgres>,
-    topic: Uuid,
-) -> Result<(), ProjectionError> {
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("game-origin-attention:{topic}"))
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
 pub(super) fn creation_origin(
     event: &eventstore::StoredEvent,
     game: Uuid,
@@ -214,7 +200,7 @@ pub(super) async fn fence_rebuild(
 ) -> Result<(), ProjectionError> {
     if let Some(created) = events.iter().find(|event| event.kind == "GameCreated") {
         if let Some(origin) = creation_origin(created, game)? {
-            lock_attention(tx, origin.surface_id).await?;
+            attention_projection::lock_surface(tx, origin.surface_id).await?;
         }
     }
     Ok(())
@@ -249,7 +235,7 @@ pub(super) async fn publish_origin(
     let Some(topic) = topic else {
         return Ok(());
     };
-    lock_attention(tx, topic).await?;
+    attention_projection::lock_surface(tx, topic).await?;
     sqlx::query("UPDATE discussion_topic_spawned_game SET started_seq = COALESCE(started_seq, $2), started_at = COALESCE(started_at, $3) WHERE game_id = $1")
         .bind(game).bind(started_seq).bind(at).execute(&mut **tx).await?;
     reconcile_attention(tx, topic, None).await
@@ -282,19 +268,6 @@ pub(super) async fn reconcile_attention(
         ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
     "#).bind(topic).bind(subscription).execute(&mut **tx).await?;
     Ok(())
-}
-
-pub(super) async fn reconcile_subscription(
-    tx: &mut Transaction<'_, Postgres>,
-    subscription: Uuid,
-) -> Result<(), ProjectionError> {
-    let topic: Uuid =
-        sqlx::query_scalar("SELECT surface_id FROM public_watch WHERE subscription_id = $1")
-            .bind(subscription)
-            .fetch_one(&mut **tx)
-            .await?;
-    lock_attention(tx, topic).await?;
-    reconcile_attention(tx, topic, Some(subscription)).await
 }
 
 #[cfg(test)]

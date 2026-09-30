@@ -6,6 +6,52 @@ use uuid::Uuid;
 
 use crate::{ProjectionError, PublicSearchDocumentType};
 
+pub(super) struct ForumWatchDelivery {
+    pub source_seq: i64,
+    pub occurred_at: i64,
+    pub author: Option<principal::PrincipalId>,
+}
+
+/// Only the forum source publishes ordinary member-watch deliveries. Game
+/// posts have slot authorship and keep their separate private attention rules.
+pub(super) fn forum_watch_delivery(event: &eventstore::StoredEvent) -> ForumWatchDelivery {
+    ForumWatchDelivery {
+        source_seq: event.seq,
+        occurred_at: event.occurred_at,
+        author: match &event.actor {
+            eventstore::ActorId::Principal(principal) => Some(*principal),
+            _ => None,
+        },
+    }
+}
+
+pub(super) async fn forum_watch_deliveries(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface: Uuid,
+) -> Result<Vec<ForumWatchDelivery>, ProjectionError> {
+    let is_forum: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM discussion_topic WHERE topic_id = $1)")
+            .bind(surface)
+            .fetch_one(&mut **tx)
+            .await?;
+    if !is_forum {
+        return Ok(Vec::new());
+    }
+    // Original event authorship also covers v1 posts without profile
+    // attribution, and is not changed by a profile's later lifecycle.
+    let events = eventstore::load_stream_in_tx(tx, surface).await?;
+    let mut deliveries = Vec::new();
+    for event in events {
+        if matches!(
+            forum::decode_event(&event.kind, event.version, &event.payload)?,
+            forum::DecodedForumEvent::PostSubmitted { .. }
+        ) {
+            deliveries.push(forum_watch_delivery(&event));
+        }
+    }
+    Ok(deliveries)
+}
+
 pub(super) struct PublicPostDocument<'a> {
     pub document_type: PublicSearchDocumentType,
     pub surface_id: Uuid,

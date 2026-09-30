@@ -1973,7 +1973,7 @@
       "title": "Public watches and unread inbox",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream (crates/attention) and advance a monotonic per-watch read cursor. Since RFC 0007 the inbox is reason-derived: member_inbox_item rows are fanned out synchronously for watch and mention reasons, author-self updates are excluded, unread clears from either end, and moderation hide/restore suppresses and restores entries without mutating history.",
+      "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream (crates/attention) and advance a monotonic per-watch read cursor. Since RFC 0007 the inbox is reason-derived: member_inbox_item rows are fanned out synchronously for watch and mention reasons, author-self updates are excluded, unread clears from either end, and moderation hide/restore suppresses and restores entries without mutating history. Forum posts and subscription changes share a per-surface attention gate and reconcile recipients from historical watch periods and immutable event authorship, so commit order and independent source rebuilds converge. Game-post watches retain reading cursors but never generate ordinary member-inbox post deliveries; spawned-game announcements remain a separate reason.",
       "complete_when": [
         "Authenticated members can subscribe and unsubscribe to public topics and public game threads, receive a durable privacy-safe in-app update inbox, and advance a per-subscription read cursor without polling private audiences or exposing credential principals."
       ],
@@ -1984,6 +1984,14 @@
         "product.identity.session-lifecycle"
       ],
       "evidence": [
+        {
+          "kind": "source",
+          "value": "crates/projections/src/attention_projection.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/attention_projection/tests.rs"
+        },
         {
           "kind": "source",
           "value": "crates/database_schema/migrations/0001_current_schema.sql"

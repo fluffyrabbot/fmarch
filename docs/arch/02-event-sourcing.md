@@ -285,7 +285,18 @@ move beyond the target's current public sequence.
 
 Public discussion post folds synchronously fan out a `watch` reference into
 `member_inbox_item` for every subscription period active at that global event sequence. Authors
-do not receive their own update. A row is unread while it is beyond the principal inbox cursor
+do not receive their own update. Forum publication, membership folds, and source rebuilds
+share a per-surface attention gate after their source-stream locks. Membership changes
+reconcile missing and obsolete watch references against immutable forum submission events,
+so event order determines recipients even when transactions commit in the opposite order.
+Reconciliation uses the original event actor, including historical posts without profile
+attribution; current profile state never changes self-suppression. It reads forum history
+without taking another source lock and batches the resulting deliveries into one insert.
+Subscription replay rebuilds all membership periods before reconciling once. This currently
+costs one forum-history decode per membership change; optimize only after measuring that cost.
+Game-post watches retain reading cursors but do not emit ordinary member-inbox post updates,
+whether projected live or rebuilt. Spawned-game announcements and mentions keep their own
+delivery reasons. A row is unread while it is beyond the principal inbox cursor
 and, where a watch exists for that surface, beyond that watch's cursor, so a row can be cleared
 from either end. Both cursors now have a write path: reading the thread advances the per-target
 watch cursor, and "mark all read" advances the per-principal cursor, which is the only cursor a

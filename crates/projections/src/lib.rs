@@ -89,6 +89,7 @@ use trust_safety::{
 };
 use uuid::Uuid;
 
+mod attention_projection;
 mod attention_writes;
 mod reading_checkpoints;
 pub use reading_checkpoints::{reading_checkpoint, set_reading_checkpoint};
@@ -3265,8 +3266,8 @@ pub async fn append_discussion_and_project_expected(
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
     validate_discussion_events(events)?;
     let mut tx = pool.begin().await?;
-    let stored = append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events)
-        .await?;
+    let stored =
+        append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
     tx.commit().await?;
     Ok(stored)
 }
@@ -3286,8 +3287,8 @@ pub async fn append_member_discussion_and_project_expected(
     validate_discussion_events(events)?;
     let mut tx = pool.begin().await?;
     charge_posting_budget_in_tx(&mut tx, admission, charge, now).await?;
-    let stored = append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events)
-        .await?;
+    let stored =
+        append_discussion_expected_in_tx(&mut tx, stream_id, expected_stream_seq, events).await?;
     tx.commit().await?;
     Ok(stored)
 }
@@ -3488,6 +3489,21 @@ async fn fold_subscription_event(
     subscription_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
+    fold_subscription_state(tx, subscription_id, event).await?;
+    if matches!(
+        event.kind.as_str(),
+        attention::SUBSCRIPTION_ENABLED | attention::SUBSCRIPTION_DISABLED
+    ) {
+        attention_projection::reconcile_subscription(tx, subscription_id).await?;
+    }
+    Ok(())
+}
+
+async fn fold_subscription_state(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription_id: Uuid,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
     let principal_id = match &event.actor {
         eventstore::ActorId::Principal(principal) => principal,
         _ => {
@@ -3511,7 +3527,7 @@ async fn fold_subscription_event(
                         source,
                     }
                 })?;
-            game_origin::lock_attention(tx, payload.target.surface_id).await?;
+            attention_projection::lock_surface(tx, payload.target.surface_id).await?;
             sqlx::query(
                 r#"
                 INSERT INTO public_watch (
@@ -3551,7 +3567,7 @@ async fn fold_subscription_event(
             .bind(subscription_id)
             .fetch_one(&mut **tx)
             .await?;
-            game_origin::lock_attention(tx, topic).await?;
+            attention_projection::lock_surface(tx, topic).await?;
             sqlx::query(
                 "UPDATE public_watch SET active = FALSE, updated_seq = $2, version = $3 WHERE subscription_id = $1",
             )
@@ -3590,12 +3606,6 @@ async fn fold_subscription_event(
             .await?;
         }
         _ => {}
-    }
-    if matches!(
-        event.kind.as_str(),
-        attention::SUBSCRIPTION_ENABLED | attention::SUBSCRIPTION_DISABLED
-    ) {
-        game_origin::reconcile_subscription(tx, subscription_id).await?;
     }
     Ok(())
 }
@@ -3673,38 +3683,6 @@ async fn fold_member_mute_event(
         }
         _ => {}
     }
-    Ok(())
-}
-
-async fn fan_out_member_inbox_update(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    surface_id: Uuid,
-    source_seq: i64,
-    occurred_at: i64,
-    author_principal_id: Option<PrincipalId>,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        r#"
-        INSERT INTO member_inbox_item (
-            principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at
-        )
-        SELECT subscription.principal_id, $1, $2, $2, 'watch', $3
-        FROM public_watch AS subscription
-        JOIN public_watch_period AS period
-          ON period.subscription_id = subscription.subscription_id
-         AND period.started_seq < $2
-         AND (period.ended_seq IS NULL OR period.ended_seq > $2)
-        WHERE subscription.surface_id = $1
-          AND ($4::uuid IS NULL OR subscription.principal_id <> $4)
-        ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
-        "#,
-    )
-    .bind(surface_id)
-    .bind(source_seq)
-    .bind(occurred_at)
-    .bind(author_principal_id.map(PrincipalId::as_uuid))
-    .execute(&mut **tx)
-    .await?;
     Ok(())
 }
 
@@ -4011,6 +3989,7 @@ pub async fn rebuild_discussion_stream(
         forum::decode_event(&event.kind, event.version, &event.payload)?;
     }
     if is_topic_stream {
+        attention_projection::lock_surface(&mut tx, stream_id).await?;
         sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1 AND reason IN ('watch', 'mention')")
             .bind(stream_id)
             .execute(&mut *tx)
@@ -4111,29 +4090,15 @@ pub async fn rebuild_subscription_stream(
         kind: enabled.kind.clone(),
         source,
     })?;
-    game_origin::lock_attention(&mut tx, target.surface_id).await?;
+    attention_projection::lock_surface(&mut tx, target.surface_id).await?;
     sqlx::query("DELETE FROM public_watch WHERE subscription_id = $1")
         .bind(subscription_id)
         .execute(&mut *tx)
         .await?;
     for event in &events {
-        fold_subscription_event(&mut tx, subscription_id, event).await?;
+        fold_subscription_state(&mut tx, subscription_id, event).await?;
     }
-    sqlx::query(
-        r#"
-        DELETE FROM member_inbox_item AS item
-        USING public_watch AS subscription
-        WHERE subscription.subscription_id = $1
-          AND item.principal_id = subscription.principal_id
-          AND item.surface_id = subscription.surface_id
-          AND item.reason IN ('watch', 'game_spawned_from_watched_topic')
-        "#,
-    )
-    .bind(subscription_id)
-    .execute(&mut *tx)
-    .await?;
-    backfill_subscription_inbox(&mut tx, subscription_id).await?;
-    game_origin::reconcile_subscription(&mut tx, subscription_id).await?;
+    attention_projection::reconcile_subscription(&mut tx, subscription_id).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -4158,39 +4123,6 @@ pub async fn rebuild_member_mute_stream(
         fold_member_mute_event(&mut tx, relationship_id, event).await?;
     }
     tx.commit().await?;
-    Ok(())
-}
-
-async fn backfill_subscription_inbox(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    subscription_id: Uuid,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        r#"
-        INSERT INTO member_inbox_item (
-            principal_id, surface_id, source_seq, delivery_seq, reason, occurred_at
-        )
-        SELECT subscription.principal_id, publication.surface_id,
-               publication.source_seq, publication.source_seq, 'watch', publication.occurred_at
-        FROM public_watch AS subscription
-        JOIN public_watch_period AS period
-          ON period.subscription_id = subscription.subscription_id
-        JOIN public_publication AS publication
-          ON publication.surface_id = subscription.surface_id
-         AND period.started_seq < publication.source_seq
-         AND (period.ended_seq IS NULL OR period.ended_seq > publication.source_seq)
-        WHERE subscription.subscription_id = $1
-          AND NOT EXISTS (
-              SELECT 1 FROM member_profile AS author
-              WHERE author.profile_id = publication.author_profile_id
-                AND author.active_principal_id = subscription.principal_id
-          )
-        ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
-        "#,
-    )
-    .bind(subscription_id)
-    .execute(&mut **tx)
-    .await?;
     Ok(())
 }
 
@@ -4288,6 +4220,9 @@ async fn fold_discussion_event(
     use forum::DecodedForumEvent;
 
     let decoded = forum::decode_event(&event.kind, event.version, &event.payload)?;
+    // The source stream is already locked. Fence publication/attention rows
+    // before touching them, including during replay, to avoid row/gate cycles.
+    attention_projection::lock_surface(tx, stream_id).await?;
     // Edits and retractions are post-level overlays: they bump the stream
     // version but do not refresh the topic surface or reorder the area index.
     let (refresh_surface, rehome_publications) = match &decoded {
@@ -4416,12 +4351,10 @@ async fn fold_discussion_event(
                 event.occurred_at,
             )
             .await?;
-            fan_out_member_inbox_update(
+            attention_projection::publish_forum_post(
                 tx,
                 stream_id,
-                event.seq,
-                event.occurred_at,
-                author_principal_id,
+                publications::forum_watch_delivery(event),
             )
             .await?;
             fan_out_profile_mentions(
