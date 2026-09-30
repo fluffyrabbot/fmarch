@@ -14,6 +14,7 @@ import {
   requestSummary,
 } from "./capacity_overload_contract.mjs";
 import { createCapacityAuthSourceAuthority } from "./capacity_auth_source_authority.mjs";
+import { mapConcurrent, timedFetchWithRetryableAdmission } from "./capacity_http_retry.mjs";
 import {
   seededSetupRoster,
   seedSetupCommandPlanForGame,
@@ -1185,43 +1186,10 @@ async function timedFetch(url, options = {}) {
   };
 }
 
-async function timedFetchWithRetryableAdmission(url, options = {}) {
-  const started = performance.now();
-  let retryable503s = 0;
-  for (let attempt = 1; attempt <= 6; attempt += 1) {
-    const record = await timedFetch(url, options);
-    if (record.status !== 503 || attempt === 6) {
-      return {
-        ...record,
-        elapsedMs: performance.now() - started,
-        retryable503s,
-      };
-    }
-    retryable503s += 1;
-    await delay(25 * attempt);
-  }
-  throw new Error("unreachable admission retry state");
-}
-
 async function fetchJson(url, options = {}) {
   const record = await timedFetch(url, options);
   assert(record.status >= 200 && record.status < 300, `${url} returned ${record.status}`);
   return record.body;
-}
-
-async function mapConcurrent(items, concurrency, mapper) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (cursor < items.length) {
-        const index = cursor;
-        cursor += 1;
-        results[index] = await mapper(items[index], index);
-      }
-    }),
-  );
-  return results;
 }
 
 async function rawWebsocketHandshake(baseUrl, ticket) {

@@ -238,8 +238,11 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
    response size, local p95 budget, and an `EXPLAIN ANALYZE` assertion on the paging index and
    rows examined.
 2. **Anonymous crawler pressure:** 1,000 board rows, 100,000 typed search documents split across
-   discussions, profiles, and games, and 80 concurrent board/search requests with bounded response
-   sizes and no non-200 responses. Search latency is recorded both in aggregate and per filter.
+   discussions, profiles, and games, and 80 board/search requests at concurrency 16 with bounded
+   response sizes and successful final responses. Explicitly retryable admission `503` responses
+   honor the server's `Retry-After` within six attempts and an overall deadline. Latency includes
+   every attempt and wait; retry exhaustion retains bounded attempt diagnostics. Search latency
+   is recorded both in aggregate and per filter, with the existing budgets unchanged.
    `EXPLAIN ANALYZE` captures the planner's chosen access path, matched/examined rows, and bounded
    returned page for 100%, 10%, and 1% term selectivity plus every typed filter at 1%. This makes
    the sequential-scan/GIN crossover explicit; the structural plan contract separately proves that
