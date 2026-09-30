@@ -8,6 +8,8 @@ import {
   assertCapacityOverloadReport,
   assertPublicSearchCharacterizationReport,
   capacityOverloadBudgets,
+  capacityOverloadProfiles,
+  capacityProfileEnvironment,
   percentile,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
@@ -181,16 +183,20 @@ test("percentile and request summaries are deterministic", () => {
   );
 });
 
-test("capacity report contract requires bounded reads, recovery, 429, and 503", () => {
-  const report = {
+function validCapacityReport() {
+  return {
     proof: "fmarch-capacity-overload",
-    version: 1,
+    version: 2,
     status: "passed",
-    configuration: { authSourceProvenance: "hmac-sha256" },
+    configuration: {
+      profiles: structuredClone(capacityOverloadProfiles),
+      profileSequence: ["throughput", "saturation"],
+    },
     budgets: capacityOverloadBudgets,
     scenarios: {
       largeThreadFirstRead: {
         status: "passed",
+        profile: "throughput",
         fixtureRows: capacityOverloadBudgets.largeThreadRows,
         responseMaxRows: 100,
         p95Ms: 10,
@@ -199,7 +205,10 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
       },
       anonymousCrawler: {
         status: "passed",
+        profile: "throughput",
         fixtureDocuments: capacityOverloadBudgets.crawlerDocuments,
+        fixtureGames: capacityOverloadBudgets.crawlerGames,
+        concurrency: capacityOverloadBudgets.crawlerConcurrency,
         requests: capacityOverloadBudgets.crawlerRequests,
         statuses: { 200: capacityOverloadBudgets.crawlerRequests },
         p95Ms: 20,
@@ -249,6 +258,7 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
       },
       adversarialPublicSearch: {
         status: "passed",
+        profile: "throughput",
         staticPagination: {
           repeatedFirstPageEqual: true,
           firstSecondPagesDisjoint: true,
@@ -258,27 +268,36 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
         },
         projectionWriteRace: {
           attemptedWrites: capacityOverloadBudgets.searchWritePosts,
+          writeConcurrency: capacityOverloadBudgets.searchWriteConcurrency,
           acked: capacityOverloadBudgets.searchWritePosts,
           readRequests: capacityOverloadBudgets.searchReadRequests,
+          readConcurrency: capacityOverloadBudgets.searchReadConcurrency,
           readStatuses: { 200: capacityOverloadBudgets.searchReadRequests },
           finalResultCount: capacityOverloadBudgets.searchWritePosts,
         },
         selectivePlanIndexCoverage: 4,
-        searchAdmission: {
-          recoveredRequests: 8,
-          rejectedStatus: 503,
-          retryAfter: "1",
-          healthStatus: 200,
-        },
+      },
+      searchAdmission: {
+        status: "passed",
+        profile: "saturation",
+        occupiedRequests: 8,
+        recoveredRequests: 8,
+        rejectedStatus: 503,
+        retryAfter: "1",
+        healthStatus: 200,
       },
       singleGamePostBurst: {
         status: "passed",
+        profile: "throughput",
+        attempted: capacityOverloadBudgets.postBurstRequests,
+        concurrency: capacityOverloadBudgets.postBurstConcurrency,
         acked: capacityOverloadBudgets.postBurstRequests,
         projectedPosts: capacityOverloadBudgets.postBurstRequests,
         p95Ms: 30,
       },
       slowWebsocketConsumers: {
         status: "passed",
+        profile: "saturation",
         connected: capacityOverloadBudgets.websocketConnections,
         resyncConnections: capacityOverloadBudgets.websocketConnections,
         resyncFrames: capacityOverloadBudgets.websocketConnections,
@@ -289,18 +308,26 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
       },
       httpAdmission: {
         status: "passed",
+        profile: "saturation",
+        occupiedRequests: 8,
+        recoveredRequests: 8,
         rejectedStatus: 503,
         retryAfter: "1",
         healthStatus: 200,
       },
       callerRateLimit: {
         status: "passed",
+        profile: "throughput",
         statusCode: 429,
         retryAfter: "60",
         isolatedSourceStatus: 401,
       },
     },
   };
+}
+
+test("capacity report contract requires bounded reads, recovery, 429, and 503", () => {
+  const report = validCapacityReport();
 
   assert.equal(assertCapacityOverloadReport(report), report);
   for (const field of ["resyncFrames", "closedConnections", "recoveredConnections"]) {
@@ -340,4 +367,102 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
     () => assertCapacityOverloadReport(collapsedAuthSources),
     /independent signed caller inherited another caller's rate limit/,
   );
+});
+
+test("capacity server profiles use production HTTP admission only for throughput", async () => {
+  const throughput = capacityProfileEnvironment("throughput");
+  assert.deepEqual(throughput, {
+    FMARCH_DB_MAX_CONNECTIONS: "10",
+    FMARCH_DB_ACQUIRE_TIMEOUT_MS: "250",
+    FMARCH_DB_STATEMENT_TIMEOUT_MS: "4000",
+    FMARCH_DB_LOCK_TIMEOUT_MS: "2000",
+    FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "10000",
+    FMARCH_HTTP_MAX_IN_FLIGHT: "128",
+    FMARCH_HTTP_QUEUE_TIMEOUT_MS: "50",
+    FMARCH_HTTP_REQUEST_TIMEOUT_MS: "40000",
+    FMARCH_HTTP_RETRY_AFTER_SECONDS: "1",
+    FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "45000",
+    FMARCH_WS_MAX_CONNECTIONS: "4",
+    FMARCH_LIVE_PROJECTION_CAPACITY: "2",
+    FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS: "100",
+    FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
+    FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
+  });
+  assert.deepEqual(capacityProfileEnvironment("saturation"), {
+    ...throughput,
+    FMARCH_HTTP_MAX_IN_FLIGHT: "8",
+    FMARCH_HTTP_QUEUE_TIMEOUT_MS: "75",
+  });
+  assert.throws(() => capacityProfileEnvironment("missing"), /unknown capacity profile/);
+  const serverSource = await readFile(new URL("../crates/server/src/main.rs", import.meta.url), "utf8");
+  for (const name of ["FMARCH_HTTP_MAX_IN_FLIGHT", "FMARCH_HTTP_QUEUE_TIMEOUT_MS", "FMARCH_HTTP_RETRY_AFTER_SECONDS"]) {
+    assert.match(serverSource, new RegExp(`bounded_env\\("${name}",\\s*${throughput[name]},`), `${name} default drifted from the throughput profile`);
+  }
+});
+
+test("capacity report rejects missing or changed applied profiles and scenario assignments", () => {
+  const mutations = [
+    (report) => { report.version = 1; },
+    (report) => { delete report.configuration.profiles; },
+    (report) => { delete report.configuration.profiles.saturation; },
+    (report) => { report.configuration.profiles.extra = {}; },
+    (report) => { report.configuration.profiles.throughput.httpMaxInFlight = 8; },
+    (report) => { report.configuration.profiles.throughput.httpQueueTimeoutMs = 75; },
+    (report) => { report.configuration.profiles.saturation.httpMaxInFlight = 128; },
+    (report) => { report.configuration.profiles.throughput.databaseMaxConnections = 16; },
+    (report) => { report.configuration.profiles.saturation.authSourceProvenance = "unsigned"; },
+    (report) => { delete report.configuration.profileSequence; },
+    (report) => { report.configuration.profileSequence.reverse(); },
+    (report) => { delete report.scenarios.searchAdmission; },
+    (report) => { report.scenarios.extra = { status: "passed", profile: "throughput" }; },
+  ];
+  for (const mutate of mutations) {
+    const report = validCapacityReport();
+    mutate(report);
+    assert.throws(() => assertCapacityOverloadReport(report), /version|profiles|sequence|scenario set/);
+  }
+  for (const name of Object.keys(validCapacityReport().scenarios)) {
+    const otherProfile = validCapacityReport().scenarios[name].profile === "throughput" ? "saturation" : "throughput";
+    for (const replacement of [undefined, "unknown", otherProfile]) {
+      const report = validCapacityReport();
+      report.scenarios[name].profile = replacement;
+      assert.throws(() => assertCapacityOverloadReport(report), /profile assignment drifted/);
+    }
+  }
+});
+
+test("capacity report cannot redefine workload or latency budgets to pass", () => {
+  for (const name of Object.keys(capacityOverloadBudgets)) {
+    for (const value of [undefined, capacityOverloadBudgets[name] - 1, capacityOverloadBudgets[name] + 1]) {
+      const report = validCapacityReport();
+      report.budgets = { ...report.budgets, [name]: value };
+      assert.throws(() => assertCapacityOverloadReport(report), /workload or latency budgets drifted/);
+    }
+  }
+  for (const [scenario, field] of [
+    ["anonymousCrawler", "fixtureDocuments"],
+    ["anonymousCrawler", "fixtureGames"],
+    ["anonymousCrawler", "concurrency"],
+    ["singleGamePostBurst", "attempted"],
+    ["singleGamePostBurst", "concurrency"],
+  ]) {
+    const report = validCapacityReport();
+    report.scenarios[scenario][field] -= 1;
+    assert.throws(() => assertCapacityOverloadReport(report), /fixture|workload|concurrency/);
+  }
+  for (const field of ["writeConcurrency", "readConcurrency"]) {
+    const report = validCapacityReport();
+    report.scenarios.adversarialPublicSearch.projectionWriteRace[field] -= 1;
+    assert.throws(() => assertCapacityOverloadReport(report), /projection-write evidence drifted/);
+  }
+});
+
+test("both saturation scenarios require all eight admitted requests to recover", () => {
+  for (const scenario of ["searchAdmission", "httpAdmission"]) {
+    for (const field of ["occupiedRequests", "recoveredRequests"]) {
+      const report = validCapacityReport();
+      report.scenarios[scenario][field] = 7;
+      assert.throws(() => assertCapacityOverloadReport(report), /saturation/);
+    }
+  }
 });

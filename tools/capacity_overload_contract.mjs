@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 export const capacityOverloadBudgets = Object.freeze({
   largeThreadRows: 10_000,
   largeThreadPageLimit: 100,
@@ -22,6 +24,62 @@ export const capacityOverloadBudgets = Object.freeze({
   websocketConnections: 4,
   websocketBurstPosts: 12,
 });
+
+const sharedCapacity = Object.freeze({
+  databaseMaxConnections: 10,
+  databaseAcquireTimeoutMs: 250,
+  databaseStatementTimeoutMs: 4_000,
+  databaseLockTimeoutMs: 2_000,
+  databaseIdleTransactionTimeoutMs: 10_000,
+  httpRequestTimeoutMs: 40_000,
+  httpRetryAfterSeconds: 1,
+  shutdownDrainTimeoutMs: 45_000,
+  websocketMaxConnections: capacityOverloadBudgets.websocketConnections,
+  liveProjectionCapacity: 2,
+  liveProjectionDeliveryDelayMs: 100,
+  authSourceRateLimitMaxFailures: 3,
+  authRateLimitLockoutSeconds: 60,
+  authSourceProvenance: "hmac-sha256",
+});
+
+export const capacityOverloadProfiles = Object.freeze({
+  throughput: Object.freeze({ ...sharedCapacity, httpMaxInFlight: 128, httpQueueTimeoutMs: 50 }),
+  saturation: Object.freeze({ ...sharedCapacity, httpMaxInFlight: 8, httpQueueTimeoutMs: 75 }),
+});
+
+export const capacityScenarioProfiles = Object.freeze({
+  largeThreadFirstRead: "throughput",
+  anonymousCrawler: "throughput",
+  adversarialPublicSearch: "throughput",
+  singleGamePostBurst: "throughput",
+  callerRateLimit: "throughput",
+  slowWebsocketConsumers: "saturation",
+  searchAdmission: "saturation",
+  httpAdmission: "saturation",
+});
+
+export function capacityProfileEnvironment(name) {
+  assert(Object.hasOwn(capacityOverloadProfiles, name), `unknown capacity profile: ${name}`);
+  const profile = capacityOverloadProfiles[name];
+  const fields = {
+    FMARCH_DB_MAX_CONNECTIONS: "databaseMaxConnections",
+    FMARCH_DB_ACQUIRE_TIMEOUT_MS: "databaseAcquireTimeoutMs",
+    FMARCH_DB_STATEMENT_TIMEOUT_MS: "databaseStatementTimeoutMs",
+    FMARCH_DB_LOCK_TIMEOUT_MS: "databaseLockTimeoutMs",
+    FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "databaseIdleTransactionTimeoutMs",
+    FMARCH_HTTP_MAX_IN_FLIGHT: "httpMaxInFlight",
+    FMARCH_HTTP_QUEUE_TIMEOUT_MS: "httpQueueTimeoutMs",
+    FMARCH_HTTP_REQUEST_TIMEOUT_MS: "httpRequestTimeoutMs",
+    FMARCH_HTTP_RETRY_AFTER_SECONDS: "httpRetryAfterSeconds",
+    FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "shutdownDrainTimeoutMs",
+    FMARCH_WS_MAX_CONNECTIONS: "websocketMaxConnections",
+    FMARCH_LIVE_PROJECTION_CAPACITY: "liveProjectionCapacity",
+    FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS: "liveProjectionDeliveryDelayMs",
+    FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "authSourceRateLimitMaxFailures",
+    FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "authRateLimitLockoutSeconds",
+  };
+  return Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, String(profile[field])]));
+}
 
 export function percentile(values, percentileValue) {
   if (!Array.isArray(values) || values.length === 0) {
@@ -97,24 +155,29 @@ export function assertPublicSearchCharacterizationReport(report) {
 
 export function assertCapacityOverloadReport(report) {
   assert(report?.proof === "fmarch-capacity-overload", "proof id drifted");
-  assert(report?.version === 1, "proof version drifted");
+  assert(report?.version === 2, "proof version drifted");
   assert(report?.status === "passed", "capacity proof did not pass");
   assert(
-    report.configuration?.authSourceProvenance === "hmac-sha256",
-    "caller rate-limit proof did not use signed source provenance",
+    isDeepStrictEqual(report.budgets, capacityOverloadBudgets),
+    "capacity proof workload or latency budgets drifted",
+  );
+  assert(
+    isDeepStrictEqual(report.configuration?.profiles, capacityOverloadProfiles),
+    "capacity proof applied profiles drifted",
+  );
+  assert(
+    isDeepStrictEqual(report.configuration?.profileSequence, ["throughput", "saturation"]),
+    "capacity proof profile sequence drifted",
   );
 
   const scenarios = report.scenarios ?? {};
-  for (const name of [
-    "largeThreadFirstRead",
-    "anonymousCrawler",
-    "adversarialPublicSearch",
-    "singleGamePostBurst",
-    "slowWebsocketConsumers",
-    "httpAdmission",
-    "callerRateLimit",
-  ]) {
+  assert(
+    isDeepStrictEqual(Object.keys(scenarios).sort(), Object.keys(capacityScenarioProfiles).sort()),
+    "capacity proof scenario set drifted",
+  );
+  for (const [name, profile] of Object.entries(capacityScenarioProfiles)) {
     assert(scenarios[name]?.status === "passed", `${name} did not pass`);
+    assert(scenarios[name]?.profile === profile, `${name} profile assignment drifted`);
   }
 
   assert(
@@ -143,6 +206,12 @@ export function assertCapacityOverloadReport(report) {
   assert(
     scenarios.anonymousCrawler.requests === report.budgets.crawlerRequests,
     "crawler request count drifted",
+  );
+  assert(
+    scenarios.anonymousCrawler.fixtureDocuments === report.budgets.crawlerDocuments &&
+      scenarios.anonymousCrawler.fixtureGames === report.budgets.crawlerGames &&
+      scenarios.anonymousCrawler.concurrency === report.budgets.crawlerConcurrency,
+    "crawler fixture or concurrency drifted",
   );
   assert(
     scenarios.anonymousCrawler.p95Ms <= report.budgets.crawlerP95Ms,
@@ -205,6 +274,10 @@ export function assertCapacityOverloadReport(report) {
         report.budgets.searchWritePosts &&
       scenarios.adversarialPublicSearch.projectionWriteRace.readRequests ===
         report.budgets.searchReadRequests &&
+      scenarios.adversarialPublicSearch.projectionWriteRace.writeConcurrency ===
+        report.budgets.searchWriteConcurrency &&
+      scenarios.adversarialPublicSearch.projectionWriteRace.readConcurrency ===
+        report.budgets.searchReadConcurrency &&
       scenarios.adversarialPublicSearch.projectionWriteRace.finalResultCount ===
         report.budgets.searchWritePosts,
     "concurrent search/projection-write evidence drifted",
@@ -220,16 +293,22 @@ export function assertCapacityOverloadReport(report) {
     "the selective search/filter matrix did not retain the GIN path",
   );
   assert(
-    scenarios.adversarialPublicSearch.searchAdmission.rejectedStatus === 503 &&
-      scenarios.adversarialPublicSearch.searchAdmission.retryAfter === "1" &&
-      scenarios.adversarialPublicSearch.searchAdmission.healthStatus === 200 &&
-      scenarios.adversarialPublicSearch.searchAdmission.recoveredRequests === 8,
+    scenarios.searchAdmission.rejectedStatus === 503 &&
+      scenarios.searchAdmission.retryAfter === "1" &&
+      scenarios.searchAdmission.healthStatus === 200 &&
+      scenarios.searchAdmission.occupiedRequests === 8 &&
+      scenarios.searchAdmission.recoveredRequests === 8,
     "search-specific database saturation did not remain bounded and recoverable",
   );
 
   assert(
     scenarios.singleGamePostBurst.acked === report.budgets.postBurstRequests,
     "post burst did not commit every requested post",
+  );
+  assert(
+    scenarios.singleGamePostBurst.attempted === report.budgets.postBurstRequests &&
+      scenarios.singleGamePostBurst.concurrency === report.budgets.postBurstConcurrency,
+    "post burst workload or concurrency drifted",
   );
   assert(
     scenarios.singleGamePostBurst.projectedPosts ===
@@ -272,6 +351,11 @@ export function assertCapacityOverloadReport(report) {
   assert(
     scenarios.httpAdmission.healthStatus === 200,
     "health check did not survive HTTP saturation",
+  );
+  assert(
+    scenarios.httpAdmission.occupiedRequests === 8 &&
+      scenarios.httpAdmission.recoveredRequests === 8,
+    "HTTP saturation did not recover every occupied request",
   );
   assert(
     scenarios.callerRateLimit.statusCode === 429 &&
