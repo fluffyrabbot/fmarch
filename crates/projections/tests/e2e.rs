@@ -7,6 +7,8 @@
 
 #[path = "e2e/game_origin.rs"]
 mod game_origin;
+#[path = "e2e/pack_artifact_concurrency.rs"]
+mod pack_artifact_concurrency;
 #[path = "e2e/public_search_model.rs"]
 mod public_search_model;
 #[path = "e2e/publication_replay_contract.rs"]

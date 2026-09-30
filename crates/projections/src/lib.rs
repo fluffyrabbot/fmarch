@@ -7503,7 +7503,7 @@ pub async fn install_pack_artifact_in_tx(
         INSERT INTO pack_artifact
             (content_hash, pack_key, pack_version, artifact_schema_version, canonical_json)
         VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (content_hash) DO NOTHING
+        ON CONFLICT DO NOTHING
         "#,
     )
     .bind(artifact.pack_ref.content_hash.as_str())
