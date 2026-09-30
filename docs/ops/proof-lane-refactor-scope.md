@@ -37,6 +37,14 @@ remain available for comparisons, and keep their receipt-based GC protections.
 an obsolete input contract is not artifact corruption. No cache deletion is part
 of this transition.
 
+Hosted lanes and lanes claiming the network lock always execute. In particular,
+the live dependency advisory audit cannot reuse a result based only on unchanged
+repository files: its external advisory database can change independently.
+The Rust dependency policy lane also executes because exception review dates and
+its advisory database are live inputs. Build posture, current-date proof contract
+checks and cache maintenance are execution-only: ignored mount/symlink state,
+quarantine expiry, and maintenance receipts are not source fingerprints.
+
 Cache validity and diff selection remain separate contracts. The catalog does
 not turn broad runtime groups into behavioral ownership edges. A future selection
 audit should reconcile direct runtime consumers such as eventstore's source scan

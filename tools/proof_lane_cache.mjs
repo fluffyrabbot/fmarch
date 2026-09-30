@@ -78,9 +78,10 @@ export function frozenLaneIds(manifest) {
 export function reusableLaneIds(manifest) {
   return new Set(Object.entries(manifest.lanes)
     .filter(([, lane]) => lane.cache !== false &&
-      lane.execution?.class !== 'network' &&
+      lane.execution?.class !== 'hosted' &&
       !(lane.execution?.resources ?? []).some((resource) =>
-        resource.kind === 'network' || (resource.kind === 'postgres' && resource.mode !== 'lane-isolated')))
+        (resource.kind === 'lock' && resource.name === 'network') ||
+        (resource.kind === 'postgres' && resource.mode !== 'lane-isolated')))
     .map(([id]) => id));
 }
 

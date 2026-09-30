@@ -239,11 +239,12 @@ test('cache entries are immutable successful receipts and artifact corruption is
 
 test('reuse eligibility is independent of tier but excludes changing external state', () => {
   const example = manifest();
-  example.lanes.network = { execution: { class: 'network', resources: [] } };
+  example.lanes.hosted = { execution: { class: 'hosted', resources: [] } };
+  example.lanes.networkLock = { execution: { class: 'hermetic', resources: [{ kind: 'lock', name: 'network' }] } };
   example.lanes.sharedDb = { execution: { class: 'postgres', resources: [{ kind: 'postgres', mode: 'shared-serial' }] } };
   example.lanes.auditCache = { cache: false, execution: { class: 'hermetic', resources: [] } };
   assert.ok(reusableLaneIds(example).has('membership'), 'active ownership must not defeat matching fingerprints');
-  for (const id of ['network', 'sharedDb', 'auditCache']) assert.ok(!reusableLaneIds(example).has(id));
+  for (const id of ['hosted', 'networkLock', 'sharedDb', 'auditCache']) assert.ok(!reusableLaneIds(example).has(id));
 });
 
 test('passing lane in a failed checkpoint can qualify a later checkpoint only with identical inputs', (t) => {
@@ -354,6 +355,22 @@ test('key computation rejects misspelled supplemental packages and binds runner 
 });
 
 const repositoryManifest = JSON.parse(readFileSync(new URL('../docs/ops/proof-lane-manifest.json', import.meta.url), 'utf8'));
+
+test('live advisory audit always executes even when repository and toolchain inputs are unchanged', () => {
+  assert.equal(repositoryManifest.lanes['test:dependency-policy:audit'].execution.class, 'hosted');
+  assert.ok(repositoryManifest.lanes['test:dependency-policy:audit'].execution.resources.some(
+    (resource) => resource.kind === 'lock' && resource.name === 'network'));
+  assert.ok(!reusableLaneIds(repositoryManifest).has('test:dependency-policy:audit'));
+});
+
+test('live local posture, dated policy and maintenance checks always execute', () => {
+  const reusable = reusableLaneIds(repositoryManifest);
+  for (const laneId of ['test:dependency-policy:offline', 'check:build-posture',
+    'test:proof-lane-contract', 'test:proof-cache-maintenance']) {
+    assert.equal(repositoryManifest.lanes[laneId].cache, false, laneId);
+    assert.ok(!reusable.has(laneId), laneId);
+  }
+});
 
 function repositoryFixture(t) {
   const fixture = fixtureRoot(t);
