@@ -84,7 +84,7 @@ async fn member(pool: &PgPool, handle: &str, moderator: bool, now: i64) -> Membe
     let presentation = ProfilePresentation::new(
         ProfileHandle::new(handle).unwrap(),
         ProfileDisplayName::new(handle).unwrap(),
-        ProfileBio::new("").unwrap(),
+        ProfileBio::new("Forum proof profile.").unwrap(),
         ProfileVisibility::Public,
     );
     let profile = profile_application::create_profile(pool, principal, presentation, now - 20)
@@ -219,7 +219,7 @@ async fn canonical_mentions_reject_forged_private_profile_and_handle(pool: PgPoo
         ProfileRevision::new(1),
         ProfileEdit::new(
             ProfileDisplayName::new("mention_target").unwrap(),
-            ProfileBio::new("").unwrap(),
+            ProfileBio::new("Forum proof profile.").unwrap(),
             ProfileVisibility::Private,
         ),
         f.now,

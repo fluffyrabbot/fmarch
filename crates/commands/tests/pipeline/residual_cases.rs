@@ -3418,7 +3418,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         .find(|event| event.kind == "DeadlineExtended" && event.payload["at"] == 1000)
         .expect("cohost deadline event");
     assert_eq!(event.causation_id, Some(cohost_command_id));
-    assert_eq!(event.actor, ActorId::Host);
+    assert_eq!(ActorId::decode(&event.actor).unwrap(), ActorId::Host);
     assert_eq!(event.meta["command_id"], cohost_command_id.to_string());
     assert_eq!(
         event.meta["initiator"],
@@ -3461,7 +3461,7 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
         .into_iter()
         .find(|event| event.kind == "ResolutionApplied")
         .expect("cohost resolution event");
-    assert_eq!(resolved.actor, ActorId::System);
+    assert_eq!(ActorId::decode(&resolved.actor).unwrap(), ActorId::System);
     assert_eq!(
         resolved.meta["initiator"],
         serde_json::json!({
@@ -3547,7 +3547,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         .collect::<Vec<_>>();
     assert_eq!(planned.len(), 2);
     for (index, event) in planned.iter().enumerate() {
-        assert_eq!(event.actor, ActorId::Host);
+        assert_eq!(ActorId::decode(&event.actor).unwrap(), ActorId::Host);
         assert_eq!(event.meta["source"], "host_fiat");
         assert_eq!(
             event.meta["initiator"],
@@ -3792,7 +3792,7 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
     );
     for (effect_index, event_pair) in planned.as_chunks::<2>().0.iter().enumerate() {
         let grant = &event_pair[0];
-        assert_eq!(grant.actor, ActorId::Host);
+        assert_eq!(ActorId::decode(&grant.actor).unwrap(), ActorId::Host);
         assert_eq!(grant.payload["actor"], "external");
         assert_eq!(grant.payload["target"], "slot_1");
         assert_eq!(grant.payload["phase_id"], "D01");
@@ -6556,14 +6556,14 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     assert_eq!(rows[1].payload["deadline_at"], 100);
     assert_eq!(rows[1].payload["observed_at"], 101);
     assert_eq!(rows[1].payload["source"], "scheduler");
-    assert_eq!(rows[1].actor, ActorId::System);
+    assert_eq!(ActorId::decode(&rows[1].actor).unwrap(), ActorId::System);
     assert_eq!(rows[0].kind, "PhaseAdvanced");
     assert_eq!(rows[0].payload["phase_id"], "N01");
     assert_eq!(rows[0].payload["source_phase_id"], "D01");
     assert_eq!(rows[0].payload["reason"], "deadline_elapsed");
     assert_eq!(rows[0].payload["source_event_kind"], "PhaseDeadlineElapsed");
     assert_eq!(rows[0].payload["source_deadline_at"], 100);
-    assert_eq!(rows[0].actor, ActorId::System);
+    assert_eq!(ActorId::decode(&rows[0].actor).unwrap(), ActorId::System);
 
     let phase_before_rebuild =
         serde_json::to_string(&phase_state(&pool, game).await.unwrap().unwrap()).unwrap();

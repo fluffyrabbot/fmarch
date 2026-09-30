@@ -2,9 +2,11 @@
 //! transaction commit order and the source chosen for a later rebuild.
 use attention::WatchTarget;
 use event_actor::ActorId;
-use eventstore::EventInput;
+use eventstore::journal::{self, EventToAppend, ExpectedVersion, StreamId};
+use eventstore::{EventInput, StoredEvent};
+use forum_journal::ForumCodec;
 use principal::PrincipalId;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -129,14 +131,38 @@ fn watch_event(fixture: &Fixture, enable: bool) -> EventInput {
     )
 }
 
-fn post_event(fixture: &Fixture) -> EventInput {
-    EventInput::new(
-        forum::POST_SUBMITTED,
-        1,
-        serde_json::json!({"body":"Concurrent reply","author_profile_id":fixture.author_profile}),
+fn post_event(fixture: &Fixture) -> EventToAppend<ForumCodec> {
+    EventToAppend::new(
+        forum::TopicEvent::PostSubmitted {
+            body: "Concurrent reply".into(),
+            author_profile_id: fixture.author_profile,
+            quotations: vec![],
+            mentions: vec![],
+        }
+        .into(),
         ActorId::Principal(fixture.author),
         7,
     )
+}
+
+/// Reserve the event position through the real typed journal, including its
+/// sealed context and integration outbox, while leaving projection ordering
+/// under the race test's control.
+async fn append_post_without_projecting(
+    tx: &mut Transaction<'_, Postgres>,
+    topic: Uuid,
+    post: EventToAppend<ForumCodec>,
+) -> StoredEvent {
+    let stream = StreamId::new(topic);
+    journal::lock_stream_in_tx(tx, stream).await.unwrap();
+    let current = journal::load_in_tx::<ForumCodec>(tx, stream).await.unwrap();
+    let expected =
+        ExpectedVersion::new(current.last().map_or(0, |event| event.stream_seq.get())).unwrap();
+    let appended = journal::append_expected_in_tx::<ForumCodec>(tx, stream, expected, &[post])
+        .await
+        .unwrap();
+    assert_eq!(appended.len(), 1);
+    forum_journal::projection_record(&appended[0])
 }
 
 async fn wait_for_blocker(pool: &PgPool, waiter: i32, blocker: i32) {
@@ -227,16 +253,14 @@ async fn watch_and_post_converge_in_every_event_and_commit_order(pool: PgPool) {
                             .await
                             .unwrap()
                             .remove(0);
-                    let post = eventstore::append_in_tx(&mut post_tx, fixture.topic, &[post_input])
-                        .await
-                        .unwrap()
-                        .remove(0);
+                    let post =
+                        append_post_without_projecting(&mut post_tx, fixture.topic, post_input)
+                            .await;
                     (watch, post)
                 } else {
-                    let post = eventstore::append_in_tx(&mut post_tx, fixture.topic, &[post_input])
-                        .await
-                        .unwrap()
-                        .remove(0);
+                    let post =
+                        append_post_without_projecting(&mut post_tx, fixture.topic, post_input)
+                            .await;
                     let watch =
                         eventstore::append_in_tx(&mut watch_tx, subscription, &[watch_input])
                             .await
@@ -252,7 +276,7 @@ async fn watch_and_post_converge_in_every_event_and_commit_order(pool: PgPool) {
                         .await
                         .unwrap();
                     let posting = tokio::spawn(async move {
-                        crate::fold_discussion_event(&mut post_tx, topic, &post)
+                        crate::project_discussion_event(&mut post_tx, topic, &post)
                             .await
                             .unwrap();
                         post_tx.commit().await.unwrap();
@@ -264,7 +288,7 @@ async fn watch_and_post_converge_in_every_event_and_commit_order(pool: PgPool) {
                         .expect("post fold completes after the gate is released")
                         .unwrap();
                 } else {
-                    crate::fold_discussion_event(&mut post_tx, topic, &post)
+                    crate::project_discussion_event(&mut post_tx, topic, &post)
                         .await
                         .unwrap();
                     let watching = tokio::spawn(async move {
@@ -459,13 +483,13 @@ async fn watch_reconciliation_preserves_mentions_and_origin_delivery(pool: PgPoo
 async fn topic_rebuild_waits_for_attention_before_destructive_projection_writes(pool: PgPool) {
     let fixture = fixture(&pool).await;
     let subscription = subscribe(&pool, fixture.watcher, fixture.topic).await;
-    crate::test_support::append_discussion_and_project(
-        &pool,
-        fixture.topic,
-        &[post_event(&fixture)],
-    )
-    .await
-    .unwrap();
+    let mut post_tx = pool.begin().await.unwrap();
+    let post =
+        append_post_without_projecting(&mut post_tx, fixture.topic, post_event(&fixture)).await;
+    crate::project_discussion_event(&mut post_tx, fixture.topic, &post)
+        .await
+        .unwrap();
+    post_tx.commit().await.unwrap();
     let mut watch_tx = pool.begin().await.unwrap();
     let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *watch_tx)

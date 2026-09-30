@@ -91,7 +91,7 @@ async fn member(pool: &PgPool, handle: &str, moderator: bool, now: i64) -> Membe
     let presentation = ProfilePresentation::new(
         ProfileHandle::new(handle).unwrap(),
         ProfileDisplayName::new(handle).unwrap(),
-        ProfileBio::new("").unwrap(),
+        ProfileBio::new("Forum proof profile.").unwrap(),
         ProfileVisibility::Public,
     );
     let profile = profile_application::create_profile(pool, principal, presentation, now - 20)
@@ -441,7 +441,7 @@ async fn forged_public_profile_cannot_admit_a_canonically_private_author(pool: P
         ProfileRevision::new(1),
         ProfileEdit::new(
             ProfileDisplayName::new("forum_author").unwrap(),
-            ProfileBio::new("").unwrap(),
+            ProfileBio::new("Forum proof profile.").unwrap(),
             ProfileVisibility::Private,
         ),
         f.now,
@@ -510,7 +510,7 @@ async fn profile_admission_shares_identity_locks_without_waiting_on_profile_rows
     let private = ProfilePresentation::new(
         ProfileHandle::new("forum_author").unwrap(),
         ProfileDisplayName::new("forum_author").unwrap(),
-        ProfileBio::new("").unwrap(),
+        ProfileBio::new("Forum proof profile.").unwrap(),
         ProfileVisibility::Private,
     );
     let error = identity::insert_subject_claim(
@@ -625,7 +625,7 @@ async fn forum_commit_completes_while_profile_writer_waits_on_shared_authority(p
             ProfileRevision::new(1),
             ProfileEdit::new(
                 ProfileDisplayName::new("forum_author").unwrap(),
-                ProfileBio::new("").unwrap(),
+                ProfileBio::new("Forum proof profile.").unwrap(),
                 ProfileVisibility::Private,
             ),
             now,

@@ -380,7 +380,9 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert_eq!(evidence[0].kind, "DayEventOpenDue");
     assert_eq!(evidence[0].payload["source"], "absolute");
     assert_eq!(evidence[1].kind, "DayEventLockDue");
-    assert!(evidence.iter().all(|event| event.actor == ActorId::System));
+    assert!(evidence
+        .iter()
+        .all(|event| ActorId::decode(&event.actor).unwrap() == ActorId::System));
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
@@ -521,7 +523,7 @@ async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_autho
         .into_iter()
         .find(|event| event.kind == "DayEventOpenDue")
         .expect("DayEventOpenDue event");
-    assert_eq!(event.actor, ActorId::System);
+    assert_eq!(ActorId::decode(&event.actor).unwrap(), ActorId::System);
     let meta = &event.meta;
     assert_service_audit_initiator(meta, "day-event-automation");
     assert_eq!(
@@ -803,7 +805,7 @@ async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: 
     for event in narrative_posts {
         // A narrative is authored by the in-game host narrator, while the
         // scheduler service remains its initiating authority.
-        assert_eq!(event.actor, ActorId::Host);
+        assert_eq!(ActorId::decode(&event.actor).unwrap(), ActorId::Host);
         assert_service_audit_initiator(&event.meta, "day-event-narrative");
         assert_eq!(
             event.meta["authority_used"],
@@ -1253,7 +1255,7 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
         .into_iter()
         .find(|event| event.kind == "DayEventResolved")
         .expect("automatic resolution fact");
-    assert_eq!(resolution.actor, event_actor::ActorId::System);
+    assert_eq!(ActorId::decode(&resolution.actor).unwrap(), ActorId::System);
     assert_service_audit_initiator(&resolution.meta, "day-event-automation");
     assert_eq!(
         resolution.meta["authority_used"],
@@ -1622,7 +1624,10 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
         "day_event:event-cookie:cookie:mark"
     );
     assert_eq!(resolved_batch[1].kind, "DayEventResolved");
-    assert_eq!(resolved_batch[1].actor, ActorId::Host);
+    assert_eq!(
+        ActorId::decode(&resolved_batch[1].actor).unwrap(),
+        ActorId::Host
+    );
     assert_eq!(resolved_batch[1].causation_id, Some(resolution_command_id));
     assert_eq!(resolved_batch[1].meta["source"], "day_event");
     assert_eq!(resolved_batch[1].meta["day_event_id"], "event-cookie");

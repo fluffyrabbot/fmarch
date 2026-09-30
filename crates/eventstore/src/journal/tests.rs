@@ -303,10 +303,12 @@ async fn integration_audit_rejects_unknown_encodings_and_authenticated_header_ta
         .execute(&mut *tx)
         .await
         .unwrap();
-    for (column, value) in [("context", "other"), ("kind", "Unknown")] {
+    for (statement, value) in [
+        ("UPDATE event_integration_outbox SET context=$1 WHERE source_seq IN (SELECT seq FROM events WHERE stream_id=$2)", "other"),
+        ("UPDATE event_integration_outbox SET kind=$1 WHERE source_seq IN (SELECT seq FROM events WHERE stream_id=$2)", "Unknown"),
+    ] {
         let mut corrupt = sqlx::Acquire::begin(&mut tx).await.unwrap();
-        let statement = format!("UPDATE event_integration_outbox SET {column}=$1 WHERE source_seq IN (SELECT seq FROM events WHERE stream_id=$2)");
-        sqlx::query(&statement)
+        sqlx::query(statement)
             .bind(value)
             .bind(stream.as_uuid())
             .execute(&mut *corrupt)

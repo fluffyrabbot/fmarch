@@ -671,7 +671,7 @@ mod tests {
             kind: "PhaseAdvanced".to_string(),
             version: 1,
             payload: serde_json::json!({ "phase_id": phase_id }),
-            actor: ActorId::Host,
+            actor: ActorId::Host.into(),
             occurred_at: 0,
             causation_id: None,
             meta: serde_json::json!({}),
