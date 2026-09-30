@@ -11,6 +11,9 @@ import {
   assertCapacityOverloadReport,
   assertPublicSearchCharacterizationReport,
   capacityOverloadBudgets as budgets,
+  capacityOverloadProfiles,
+  capacityProfileEnvironment,
+  capacityScenarioProfiles,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
 import { createCapacityAuthSourceAuthority } from "./capacity_auth_source_authority.mjs";
@@ -95,8 +98,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const baseUrl = `http://127.0.0.1:${port}`;
   const authority = await runFmarchMigrations({ cwd: repoRoot, migrationUrl, env });
   const databaseUrl = authority.applicationUrl;
+  const profiles = {};
+  const profileSequence = [];
+  let activeProfile;
+  const startProfile = async (name) => {
+    await startServer({ baseUrl, port, databaseUrl, env, profile: name });
+    activeProfile = name;
+    profiles[name] = capacityOverloadProfiles[name];
+    profileSequence.push(name);
+  };
   try {
-    await startServer({ baseUrl, port, databaseUrl, env });
+    await startProfile("throughput");
     await seedPostBurstGame(baseUrl);
     await seedReadFixtures({ psql, databaseUrl, searchDocuments });
 
@@ -117,51 +129,49 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     }
 
     const scenarios = {};
-    scenarios.largeThreadFirstRead = await proveLargeThreadFirstRead({
+    const recordScenario = async (name, prove) => {
+      assert(activeProfile === capacityScenarioProfiles[name], `${name} started under the wrong capacity profile`);
+      scenarios[name] = { ...(await prove()), profile: activeProfile };
+    };
+    await recordScenario("largeThreadFirstRead", () => proveLargeThreadFirstRead({
       baseUrl,
       psql,
       databaseUrl,
-    });
-    scenarios.anonymousCrawler = await proveAnonymousCrawler({ baseUrl, psql, databaseUrl });
-    scenarios.adversarialPublicSearch = await proveAdversarialPublicSearch({
+    }));
+    await recordScenario("anonymousCrawler", () => proveAnonymousCrawler({ baseUrl, psql, databaseUrl }));
+    await recordScenario("adversarialPublicSearch", () => proveAdversarialPublicSearch({
       baseUrl,
       psql,
       databaseUrl,
-    });
-    scenarios.singleGamePostBurst = await proveSingleGamePostBurst({ baseUrl });
-    scenarios.slowWebsocketConsumers = await proveSlowWebsocketConsumers({
-      baseUrl,
-    });
-    scenarios.httpAdmission = await proveHttpAdmission({
+    }));
+    await recordScenario("singleGamePostBurst", () => proveSingleGamePostBurst({ baseUrl }));
+    await recordScenario("callerRateLimit", () => proveCallerRateLimit({ baseUrl }));
+
+    await stopServer();
+    activeProfile = undefined;
+    await startProfile("saturation");
+    await recordScenario("searchAdmission", () => proveSearchAdmission({
       baseUrl,
       psql,
       databaseUrl,
-    });
-    scenarios.callerRateLimit = await proveCallerRateLimit({ baseUrl });
+    }));
+    await recordScenario("httpAdmission", () => proveHttpAdmission({
+      baseUrl,
+      psql,
+      databaseUrl,
+    }));
+    await recordScenario("slowWebsocketConsumers", () => proveSlowWebsocketConsumers({ baseUrl }));
 
     const report = {
       proof: "fmarch-capacity-overload",
-      version: 1,
+      version: 2,
       status: "passed",
       generatedAt: new Date().toISOString(),
       budgets,
-      configuration: {
-        databaseMaxConnections: 10,
-        databaseAcquireTimeoutMs: 250,
-        databaseStatementTimeoutMs: 4_000,
-        databaseLockTimeoutMs: 2_000,
-        httpMaxInFlight: 8,
-        httpQueueTimeoutMs: 75,
-        httpRequestTimeoutMs: 40_000,
-        shutdownDrainTimeoutMs: 45_000,
-        websocketMaxConnections: budgets.websocketConnections,
-        liveProjectionCapacity: 2,
-        liveProjectionDeliveryDelayMs: 100,
-        authSourceProvenance: "hmac-sha256",
-      },
+      configuration: { profiles, profileSequence },
       scenarios,
       proofBoundary:
-        "Repo-local Postgres and one debug server process. Exercises indexed large-thread first reads, 100k-document anonymous search pressure, deterministic cursor pagination across a production projection write, concurrent search plus command-driven writes, selective GIN plans, search-specific database saturation and recovery, concurrent writes to one real game stream, bounded slow-live-consumer recovery, HTTP/WS 503 admission, and caller-scoped auth 429 behavior. Local latency budgets detect gross regressions; they are not hosted production SLO evidence or capacity planning for a specific machine size.",
+        "Repo-local Postgres with sequential debug server profiles sharing the seeded database. The throughput profile uses production HTTP admission defaults for unchanged indexed large-thread, 100k-document crawler, cursor/projection-write, one-game post-burst, and caller-rate-limit workloads. The saturation profile uses eight HTTP permits for deterministic search/HTTP rejection and recovery plus bounded slow-live-consumer and WebSocket admission proof. Local latency includes retries and detects gross regressions; it is not hosted production SLO evidence or capacity planning for a specific machine size.",
     };
     try {
       assertCapacityOverloadReport(report);
@@ -208,7 +218,9 @@ function parseArgs(argv) {
   return args;
 }
 
-async function startServer({ baseUrl, port, databaseUrl, env }) {
+async function startServer({ baseUrl, port, databaseUrl, env, profile }) {
+  // Local-proof sessions are bound to a server instance and are revoked at startup.
+  seedSessionTokens.clear();
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment(
@@ -216,21 +228,7 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
         ...serverRuntimeEnvironment({ applicationUrl: databaseUrl, env }),
         FMARCH_BIND: `127.0.0.1:${port}`,
         FMARCH_MEDIA_ROOT: mediaRoot,
-        FMARCH_DB_MAX_CONNECTIONS: "10",
-        FMARCH_DB_ACQUIRE_TIMEOUT_MS: "250",
-        FMARCH_DB_STATEMENT_TIMEOUT_MS: "4000",
-        FMARCH_DB_LOCK_TIMEOUT_MS: "2000",
-        FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "10000",
-        FMARCH_HTTP_MAX_IN_FLIGHT: "8",
-        FMARCH_HTTP_QUEUE_TIMEOUT_MS: "75",
-        FMARCH_HTTP_REQUEST_TIMEOUT_MS: "40000",
-        FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS: "45000",
-        FMARCH_HTTP_RETRY_AFTER_SECONDS: "1",
-        FMARCH_WS_MAX_CONNECTIONS: String(budgets.websocketConnections),
-        FMARCH_LIVE_PROJECTION_CAPACITY: "2",
-        FMARCH_LIVE_PROJECTION_DELIVERY_DELAY_MS: "100",
-        FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
-        FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
+        ...capacityProfileEnvironment(profile),
         RUST_LOG: env.RUST_LOG ?? "warn",
       }),
     ),
@@ -686,11 +684,6 @@ async function proveAdversarialPublicSearch({ baseUrl, psql, databaseUrl }) {
     `selective search/filter plan lost the partial GIN index: ${JSON.stringify(selectivePlans)}`,
   );
 
-  const searchAdmission = await proveSearchAdmission({
-    baseUrl,
-    psql,
-    databaseUrl,
-  });
   return {
     status: "passed",
     staticPagination: {
@@ -722,7 +715,6 @@ async function proveAdversarialPublicSearch({ baseUrl, psql, databaseUrl }) {
       finalResultCount: finalPage.results.length,
     },
     selectivePlanIndexCoverage,
-    searchAdmission,
   };
 }
 
@@ -754,6 +746,7 @@ async function proveSearchAdmission({ baseUrl, psql, databaseUrl }) {
   assert(rejected.status === 503, `saturated search returned ${rejected.status}`);
   assert(health.status === 200, `search saturation health check returned ${health.status}`);
   return {
+    status: "passed",
     occupiedRequests: blocked.length,
     recoveredRequests: released.length,
     rejectedStatus: rejected.status,
@@ -1392,12 +1385,17 @@ function closeWebsockets() {
 }
 
 async function stopServer() {
-  if (!server || server.exitCode !== null) return;
-  server.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => server.once("exit", resolve)),
-    delay(3_000).then(() => server.kill("SIGKILL")),
-  ]);
+  const child = server;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  const escalation = setTimeout(() => child.kill("SIGKILL"), 3_000);
+  try {
+    child.kill("SIGTERM");
+    await exited;
+  } finally {
+    clearTimeout(escalation);
+    if (server === child) server = undefined;
+  }
 }
 
 async function freePort() {

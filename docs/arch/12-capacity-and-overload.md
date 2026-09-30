@@ -232,7 +232,21 @@ the host page cache are not flushed, so this is not storage-device cold-start ev
 database characterization requires an isolated PostgreSQL process that can be restarted without
 sharing the proof runner's database authority.
 
-The lane writes `target/capacity-overload/report.json` and proves seven related cases:
+Capacity and mash-scale acceptance reserve both the Cargo target and browser
+resource locks, in addition to their isolated database. Their elapsed-time
+ceilings must not depend on whether cached Rust lanes let unrelated browser
+proof overlap the measurement. This isolates competing proof work without
+changing the application workload or latency budgets.
+
+The capacity proof uses two named HTTP admission profiles against the same
+seeded database, with one server running at a time. Throughput measurements use
+the production HTTP defaults of 128 in-flight requests and a 50 ms queue. The
+forced admission checks use eight permits and a 75 ms queue, so they can occupy
+every permit and observe the ninth request being rejected. The report binds each
+scenario to its applied profile. Other proof limits, including the ten-connection
+database pool, stay explicit; this is not a claim to reproduce a production host.
+
+The lane writes `target/capacity-overload/report.json` and proves eight related cases:
 
 1. **Large-thread first read:** 10,000 projected posts, latest and older keyset pages, bounded
    response size, local p95 budget, and an `EXPLAIN ANALYZE` assertion on the paging index and
@@ -251,8 +265,7 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
    an old cursor remains duplicate-free across a command-driven projection write; a fresh first
    page observes that write; 24 searches run while 12 real `SubmitPost` commands update the search
    projection; the final page contains all 12 facts; every typed selective plan retains the partial
-   GIN index; and eight searches blocked on the search table recover while the ninth receives a
-   retryable `503` and `/healthz` remains available. The Postgres projection lane separately runs a
+   GIN index. The Postgres projection lane separately runs a
    deterministic stateful model: 42 shuffled post, surface-visibility, profile-privacy, member-mute,
    post-moderation, and source-replay mutations are checked after every step against an event-side
    ordering oracle across every filter and anonymous plus two personalized viewers. Mute and
@@ -271,7 +284,9 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
    WebSocket handshake receives retryable `503`.
 6. **Global HTTP saturation:** eight admitted requests are held on a database lock; the ninth gets
    retryable `503`, `/healthz` remains `200`, and admitted requests recover after lock release.
-7. **Caller rate limiting:** two failed credential attempts are followed by `429` with
+7. **Search admission saturation:** eight searches blocked on the search table recover after
+   lock release, while the ninth receives a retryable `503` and `/healthz` remains available.
+8. **Caller rate limiting:** two failed credential attempts are followed by `429` with
    `Retry-After`, demonstrating that caller pressure remains distinct from global saturation.
 
 The latency thresholds are intentionally generous regression tripwires for a developer machine.

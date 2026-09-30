@@ -45,6 +45,12 @@ its advisory database are live inputs. Build posture, current-date proof contrac
 checks and cache maintenance are execution-only: ignored mount/symlink state,
 quarantine expiry, and maintenance receipts are not source fingerprints.
 
+Cache hits also change which remaining lanes can overlap. Capacity and mash-scale
+timing checks claim both Cargo and browser resources: incidental compile time is
+not an isolation boundary. A real-manifest scheduling regression covers both
+queue orders after Cargo and browser prerequisites are reused, without changing
+the workload or timing ceilings.
+
 Cache validity and diff selection remain separate contracts. The catalog does
 not turn broad runtime groups into behavioral ownership edges. A future selection
 audit should reconcile direct runtime consumers such as eventstore's source scan

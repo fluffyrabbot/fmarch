@@ -251,6 +251,60 @@ test('Postgres provisioning claims the administrative capacity for the whole con
   assert.equal(maximum, 1);
 });
 
+test('real timing lanes exclude browser work even when Cargo and browser prerequisites are reused', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const actual = loadManifest();
+  const cargo = 'cargo:event-actor';
+  const themes = 'test:frontend-themes';
+  const browser = 'test:frontend-role-smoke';
+  const reusedLanes = new Map([cargo, themes].map((id) => [id, {
+    receipt_id: 'prior-passing-run',
+    proof_key: 'a'.repeat(64),
+  }]));
+  const databaseProvider = {
+    async acquire() {
+      return {
+        database: 'fmarch_proof_timing_isolation',
+        url: 'postgres://local/fmarch_proof_timing_isolation',
+        async release() {},
+      };
+    },
+  };
+
+  for (const timing of ['test:capacity-overload', 'test:mash-scale-acceptance']) {
+    for (const first of [browser, timing]) {
+      const second = first === browser ? timing : browser;
+      const active = new Set();
+      const started = [];
+      let maximum = 0;
+      const result = await runExecutionPlan([cargo, first, second], actual, {
+        root,
+        runId: `${timing.replaceAll(':', '_')}-${first === browser ? 'browser-first' : 'timing-first'}`,
+        jobs: 2,
+        reusedLanes,
+        databaseProvider,
+        onStart(id) {
+          active.add(id);
+          maximum = Math.max(maximum, active.size);
+        },
+        onResult(id) { active.delete(id); },
+        spawn(_file, _args, options) {
+          started.push(options.env.FMARCH_PROOF_LANE_ID);
+          return childThatCloses(0, 25);
+        },
+        log() {},
+      });
+      assert.equal(result.success, true);
+      assert.deepEqual(started, [first, second]);
+      assert.equal(maximum, 1, `${timing} must not overlap ${browser} in either queue order`);
+      for (const id of [cargo, themes]) {
+        assert.equal(result.receipt.lanes[id].reused_from_receipt, 'prior-passing-run');
+      }
+    }
+  }
+});
+
 test('cross-run locks serialize the same mutable resource across runner processes', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
