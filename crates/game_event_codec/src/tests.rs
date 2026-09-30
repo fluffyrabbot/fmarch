@@ -4,7 +4,11 @@ use serde_json::json;
 fn applied_payload(version: u16) -> Value {
     json!({
         "phase_id":"D01", "run_id":"resolution:test:D01:1", "result_version":version,
-        "seed":7, "counts":{"events":0,"kills":0,"saves":0}, "events":[],
+        "seed":7, "counts":{"events":1,"kills":0,"saves":0},
+        "events":[{
+            "index":0, "kind":"PhaseAnnouncement",
+            "payload":{"phase_id":"D01","deaths":[]}
+        }],
         "started_at":1,"finished_at":1
     })
 }

@@ -228,7 +228,7 @@ fn area_authority_contains_only_its_one_creation_fact() {
         },
     );
     assert_eq!(
-        AreaAggregate::replay(area, &[record.clone()])
+        AreaAggregate::replay(area, std::slice::from_ref(&record))
             .unwrap()
             .state()
             .unwrap()
