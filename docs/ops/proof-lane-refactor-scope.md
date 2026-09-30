@@ -8,6 +8,40 @@ local proof databases, and the role-smoke/visual artifact handoff delivered
 2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
 reuse delivered 2026-08-23.
 
+### Explicit cache input contracts — 2026-09-30
+
+The manifest's `cache_inputs` catalog separates execution dependencies from
+behavioral ownership. Every lane names shared groups and direct inputs; package
+supplements follow the complete Cargo dependency closure, including dev/build
+dependencies. Hard prerequisite lanes contribute their declarations and Cargo
+closures too. File, prefix, and glob selectors have explicit kinds: a literal
+route containing `[game]`, `[slug]`, or `[...path]` never becomes a glob. The
+fingerprint includes the sorted set of matching paths and their bytes, so additions
+and deletions invalidate collection inputs as well as edits.
+
+Pure Rust lanes no longer hash every frontend and tool file. Shared locks,
+toolchains, runner implementation and policy, Cargo configuration, and migrations
+remain universal inputs. Package supplements retain packs, programs, imported
+proof sources and fixtures. Repository-scanning tests declare their wider inputs
+explicitly, including eventstore's Rust source audit and identity's crate-manifest
+audit. Node application harnesses and repository contracts retain deliberate broad
+groups until narrower dependency boundaries are proved. New external file reads
+must update the owning lane or package declaration; unknown groups, selector
+kinds and package names fail admission.
+
+Input payload schema 2 requires fresh execution instead of reusing the unsafe
+schema-1 input contract. The cache receipt envelope and maintenance receipt
+schemas remain unchanged. Historical entries still undergo full integrity checks,
+remain available for comparisons, and keep their receipt-based GC protections.
+`proof:cache explain` reports `input-contract-changed` for obsolete evidence;
+an obsolete input contract is not artifact corruption. No cache deletion is part
+of this transition.
+
+Cache validity and diff selection remain separate contracts. The catalog does
+not turn broad runtime groups into behavioral ownership edges. A future selection
+audit should reconcile direct runtime consumers such as eventstore's source scan
+and domain's day-vote fixture without making every tool edit select every lane.
+
 ### Content-addressed cache operations — 2026-08-30
 
 Frozen-lane reuse now has an operator surface separate from proof execution.

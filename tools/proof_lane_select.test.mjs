@@ -4,6 +4,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 import './proof_lane_select_live_ownership.test.mjs';
+import { validateCacheInputContract } from './proof_lane_inputs.mjs';
 
 import {
   assertMappedSelection,
@@ -57,6 +58,12 @@ const cargoMetadata = {
   ...resolvedCargoMetadata,
   packages: workspacePackagesFromMetadata(resolvedCargoMetadata),
 };
+
+test('cache input package declarations match the complete locked workspace metadata', () => {
+  assert.equal(validateCacheInputContract(manifest, {
+    packageNames: cargoMetadata.packages.map((pkg) => pkg.name),
+  }), true);
+});
 
 function cargoTestArguments(lane) {
   const argv = lane.execution.argv;
