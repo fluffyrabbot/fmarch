@@ -72,8 +72,13 @@ For focused diagnosis, the fleet `themes` verification mode runs only the theme
 lane through the normal Linux wrapper and shared admission lock. The
 `cross-browser` mode also includes its theme prerequisite. Focused receipts do
 not replace normal diff-selected push proof for landing. The browser harness
-reapplies native system-appearance emulation after document navigation and
-verifies the media query before asserting application state.
+reapplies native system-appearance emulation after document navigation. It
+observes an explicit opposite appearance before applying and observing the
+requested appearance, under one bounded setup deadline. Clearing a page override
+can fall back to the same context preference and does not establish that native
+transition. Application palette and persistence assertions still run after this
+setup; a native setup failure records its preference step and native media state
+alongside a screenshot when the page remains available.
 
 Use `npm run proof:lanes -- --mode push` to plan the required closure, push the
 clean task checkpoint, then use `npm run proof:remote -- --mode push`. Inspect the

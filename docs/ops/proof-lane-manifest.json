@@ -1441,6 +1441,7 @@
       "tier": "frozen",
       "paths": [
         "tools/frontend_theme_proof.mjs",
+        "tools/frontend_theme_proof.test.mjs",
         "tools/frontend_theme_browser.mjs",
         "tools/frontend_themes.mjs",
         "tools/frontend_theme_evidence.mjs"
