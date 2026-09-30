@@ -3,6 +3,9 @@
 # existing lane DAG and receipts. Never falls back to the editing machine.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [[ ${FMARCH_PROOF_NODE_ACTIVE:-0} != 1 ]]; then
+  exec bash scripts/with-proof-node.sh bash scripts/linux-proof.sh "$@"
+fi
 if [[ ${HOST_HEAVY_BUILD_LOCK_HELD:-0} != 1 ]]; then
   exec python3 scripts/with-heavy-build-lock.py -- bash scripts/linux-proof.sh "$@"
 fi

@@ -18,17 +18,17 @@
         "${FLEET_CACHE_ROOT}/fmarch-toolchain"
       ],
       "fingerprint": [
-        "node --version",
-        "npm --version",
+        "bash scripts/with-proof-node.sh node --version",
+        "bash scripts/with-proof-node.sh npm --version",
         "python3 --version"
       ],
       "setup": [
         "bash scripts/check-build-posture.sh --apply",
         "bash scripts/provision-linux-proof.sh",
-        "npm ci --no-audit --no-fund",
-        "npm ci --prefix frontend --no-audit --no-fund",
-        "npm exec -- playwright install chromium",
-        "node tools/frontend_cross_browser.mjs --provision"
+        "bash scripts/with-proof-node.sh npm ci --no-audit --no-fund",
+        "bash scripts/with-proof-node.sh npm ci --prefix frontend --no-audit --no-fund",
+        "bash scripts/with-proof-node.sh npm exec -- playwright install chromium",
+        "bash scripts/with-proof-node.sh node tools/frontend_cross_browser.mjs --provision"
       ],
       "verify": [
         "bash scripts/linux-proof.sh --mode full --jobs 2 --keep-going"
@@ -50,7 +50,7 @@
         ],
         "audit": [
           "bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going",
-          "node tools/source_content_report.mjs"
+          "bash scripts/with-proof-node.sh node tools/source_content_report.mjs"
         ]
       }
     }

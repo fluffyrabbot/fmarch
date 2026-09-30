@@ -32,8 +32,9 @@ contracts; operating runbooks own procedures; the
 
 ## Fleet verification
 
-The Linux fleet profile is a bounded contract gate: proof-harness, architecture, frontend, and static database-schema checks. It does not run Cargo, live databases, browser screenshots, or the canonical full proof sweep. Canonical proof remains governed by AGENTS.md pending a separately validated host migration.
-
-## Fleet verification
-
-The Linux fleet profile is a bounded contract gate: proof-harness, architecture, frontend, and static database-schema checks. It does not run Cargo, live databases, browser screenshots, or the canonical full proof sweep. Canonical proof remains governed by AGENTS.md pending a separately validated host migration.
+Cachy runs the canonical Linux proof graph, including Rust, isolated Postgres,
+Chromium, and live-stack acceptance. Push a clean task checkpoint and submit
+`npm run proof:remote -- --mode push`; inspect its signed receipt before landing.
+See [canonical verification](docs/ops/cachy-canonical-verification.md) for the
+pinned environment and full-sweep procedure. Native macOS/Safari proof remains
+separate.

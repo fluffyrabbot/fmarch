@@ -57,7 +57,7 @@ macOS behavior.
 
 ## Ownership and admission
 
-The Linux workflow is `heavy` and runs the existing 66-lane repository DAG with
+The Linux workflow is `heavy` and runs the declared repository DAG with
 two compatible lanes, while Cargo, database administration and browser resource
 claims retain their individual capacity-one constraints. It acquires the same
 `/tmp/closure-heavy-rust-build.lock` as MeSH. The fleet admits one heavy job; a
@@ -76,11 +76,20 @@ build root. Failed worktrees and logs are retained for diagnosis.
 
 ## Environment identity
 
-The provisioning script requires Rust 1.95.0, Node 26.9.0 and npm 12.0.2. It builds
+The provisioning script requires Rust 1.98.1, Node 26.9.0 and npm 12.0.2. It builds
 PostgreSQL 16.15 with OpenSSL from the SHA-256-pinned upstream source archive,
 inside an fmarch-only toolchain root. `FMARCH_DEV_POSTGRES_BIN` selects this
 installation without introducing ambient `PG*` authority into admin commands.
 The Playwright dependency pins Chromium.
+
+`scripts/with-proof-node.sh` selects Node/npm inside each fleet login-shell
+command. If the system versions have drifted, it restores the pinned Cachy
+packages into the fmarch-owned toolchain root, checking their archive digests
+and package signatures. The original package-cache archives must be available;
+missing or invalid packages fail closed. This does not downgrade the system or
+change another workspace's runtime. Cachy's separately packaged npm dependencies
+remain OS-owned and are recorded in the environment snapshot. The wrapper's
+bounded shell tests are part of `test:proof-lane-contract`.
 
 `tools/linux_proof_environment.mjs` records the OS/kernel, package versions,
 compiler version, PostgreSQL version/configuration/binary hash, Chromium
@@ -98,7 +107,7 @@ a different required Node, npm, Rust or PostgreSQL version.
 
 Requalification after a material environment or proof-contract change requires:
 
-1. Pass all 66 lanes in a fresh Linux build/evidence root.
+1. Pass every declared lane in a fresh Linux build/evidence root.
 2. Pass a normal warm full sweep at the same immutable source commit.
 3. Record source/environment identities, cache decisions, durations, peak memory
    and disk usage, and signed terminal receipts.

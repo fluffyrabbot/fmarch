@@ -87,6 +87,7 @@ function fixtureRoot(t) {
     'frontend/package.json': '{}',
     'frontend/package-lock.json': '{}',
     'rust-toolchain.toml': 'channel = "test"',
+    'scripts/with-proof-node.sh': 'runtime-selector-v1',
     'tools/proof_lane_cache.mjs': 'cache-runner-v1',
     'tools/proof_lane_execution.mjs': 'execution-runner-v1',
     'tools/proof_lane_select.mjs': 'selector-v1',
@@ -116,6 +117,17 @@ test('frozen eligibility requires every owning area to be frozen', () => {
   const fixture = manifest();
   fixture.areas.push({ id: 'active-audit-owner', tier: 'active', paths: ['active/'], lanes: ['audit'] });
   assert.deepEqual([...frozenLaneIds(fixture)].sort(), ['canonical', 'shared']);
+});
+
+test('every Cargo lane key binds the selected proof runtime wrapper', (t) => {
+  const { root, files } = fixtureRoot(t);
+  const options = { root, files, metadata: metadata(root), toolchain };
+  const before = Object.keys(manifest().lanes).map((id) =>
+    computeLaneProofKey(id, manifest(), options).proofKey);
+  writeFileSync(join(root, 'scripts/with-proof-node.sh'), 'runtime-selector-v2');
+  for (const [index, id] of Object.keys(manifest().lanes).entries()) {
+    assert.notEqual(computeLaneProofKey(id, manifest(), options).proofKey, before[index], id);
+  }
 });
 
 test('specialized executable keys include transitive Cargo inputs and exclude unrelated crates', (t) => {

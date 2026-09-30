@@ -37,6 +37,7 @@ const GLOBAL_INPUTS = [
   'frontend/package.json',
   'rust-toolchain.toml',
   'rust-toolchain',
+  'scripts/with-proof-node.sh',
   'tools/proof_lane_cache.mjs',
   'tools/proof_lane_execution.mjs',
   'tools/proof_lane_select.mjs',

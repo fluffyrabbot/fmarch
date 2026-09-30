@@ -2,6 +2,9 @@
 set -euo pipefail
 : "${FMARCH_PROOF_TOOLCHAIN_ROOT:?set an external fmarch toolchain root}"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]]
+if [[ ${FMARCH_PROOF_NODE_ACTIVE:-0} != 1 ]]; then
+  exec bash "$(dirname "$0")/with-proof-node.sh" bash "$0" "$@"
+fi
 [[ $(node --version) == v26.9.0 && $(npm --version) == 12.0.2 ]]
 [[ $(rustc --version) == 'rustc 1.98.1 '* ]]
 pgroot="$FMARCH_PROOF_TOOLCHAIN_ROOT/postgresql-16.15-openssl"
