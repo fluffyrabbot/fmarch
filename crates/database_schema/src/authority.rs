@@ -419,6 +419,14 @@ const EXPECTED_GUARD_FUNCTIONS: &[&str] = &[
 ];
 const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
     (
+        "event_integration_outbox_no_mutation",
+        "c08d9307420f3f3b24ba048a5de0cd995b41d3cb5e698cc4612b11dca32ce526",
+    ),
+    (
+        "forum_area_reservation_no_mutation",
+        "5a01bd85a165a47547965e6ea317af1f58a573e5ab12d1b06b0cdb85f346ebf8",
+    ),
+    (
         "auth_delivery_intent_attempt_fence_insert",
         "de8fd1b2761c1d024a913186c9a57d007c0b3c9ec3a278932505a6d5b9cf05b4",
     ),

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "dff8b5aa9307bee19057500d0fdeff70823be92260867af2044690ff939194fa",
+  "current_schema_sha256": "c79e83a3de7eed18d8bd41802989f07585f90cac87939c44f623aac1718c6ec2",
   "migrations": [
     {
       "version": 1,

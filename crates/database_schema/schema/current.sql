@@ -1483,6 +1483,26 @@ COMMENT ON COLUMN public.event_direct_key_sentinel.rehearsal_token IS 'Durable e
 
 
 --
+-- Name: event_integration_outbox; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.event_integration_outbox (
+    source_seq bigint NOT NULL,
+    fact_index integer NOT NULL,
+    context text NOT NULL,
+    kind text NOT NULL,
+    version smallint NOT NULL,
+    sealed_version smallint NOT NULL,
+    stream_key_epoch bigint NOT NULL,
+    sealed_nonce bytea NOT NULL,
+    sealed_body bytea NOT NULL,
+    CONSTRAINT event_integration_outbox_header_check CHECK (((context <> ''::text) AND (kind <> ''::text) AND (version > 0))),
+    CONSTRAINT event_integration_outbox_position_check CHECK (((source_seq > 0) AND (fact_index >= 0))),
+    CONSTRAINT event_integration_outbox_sealed_body_shape CHECK (((sealed_version = 1) AND (stream_key_epoch > 0) AND (octet_length(sealed_nonce) = 24) AND (octet_length(sealed_body) >= 16)))
+);
+
+
+--
 -- Name: event_stream_key_state; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1566,6 +1586,17 @@ CREATE TABLE public.external_identity (
     CONSTRAINT external_identity_provider_check CHECK ((length(TRIM(BOTH FROM provider)) > 0)),
     CONSTRAINT external_identity_seen_check CHECK ((last_seen_at >= created_at)),
     CONSTRAINT external_identity_subject_check CHECK ((length(TRIM(BOTH FROM subject)) > 0))
+);
+
+
+--
+-- Name: forum_area_reservation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.forum_area_reservation (
+    area_id uuid NOT NULL,
+    slug text NOT NULL,
+    CONSTRAINT forum_area_reservation_slug_check CHECK ((slug <> ''::text))
 );
 
 
@@ -2885,6 +2916,14 @@ ALTER TABLE ONLY public.event_direct_key_sentinel
 
 
 --
+-- Name: event_integration_outbox event_integration_outbox_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_integration_outbox
+    ADD CONSTRAINT event_integration_outbox_pkey PRIMARY KEY (source_seq, fact_index);
+
+
+--
 -- Name: event_stream_key_state event_stream_key_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2938,6 +2977,22 @@ ALTER TABLE ONLY public.external_identity
 
 ALTER TABLE ONLY public.external_identity
     ADD CONSTRAINT external_identity_pkey PRIMARY KEY (provider, subject);
+
+
+--
+-- Name: forum_area_reservation forum_area_reservation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.forum_area_reservation
+    ADD CONSTRAINT forum_area_reservation_pkey PRIMARY KEY (area_id);
+
+
+--
+-- Name: forum_area_reservation forum_area_reservation_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.forum_area_reservation
+    ADD CONSTRAINT forum_area_reservation_slug_key UNIQUE (slug);
 
 
 --
@@ -4597,6 +4652,13 @@ CREATE TRIGGER event_direct_key_sentinel_truncate_guard BEFORE TRUNCATE ON publi
 
 
 --
+-- Name: event_integration_outbox event_integration_outbox_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER event_integration_outbox_no_mutation BEFORE DELETE OR UPDATE OR TRUNCATE ON public.event_integration_outbox FOR EACH STATEMENT EXECUTE FUNCTION public.events_forbid_mutation();
+
+
+--
 -- Name: event_stream_key_state event_stream_key_state_guard; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4636,6 +4698,13 @@ CREATE TRIGGER event_stream_keys_truncate_guard BEFORE TRUNCATE ON public.event_
 --
 
 CREATE TRIGGER events_no_update BEFORE DELETE OR UPDATE OR TRUNCATE ON public.events FOR EACH STATEMENT EXECUTE FUNCTION public.events_forbid_mutation();
+
+
+--
+-- Name: forum_area_reservation forum_area_reservation_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER forum_area_reservation_no_mutation BEFORE DELETE OR UPDATE OR TRUNCATE ON public.forum_area_reservation FOR EACH STATEMENT EXECUTE FUNCTION public.events_forbid_mutation();
 
 
 --
@@ -5007,6 +5076,14 @@ ALTER TABLE ONLY public.discussion_topic_spawned_game
 
 ALTER TABLE ONLY public.event_direct_key_sentinel
     ADD CONSTRAINT event_direct_key_sentinel_retirement_target_fk FOREIGN KEY (retirement_target_kid) REFERENCES public.event_direct_key_sentinel(kid);
+
+
+--
+-- Name: event_integration_outbox event_integration_outbox_source_seq_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_integration_outbox
+    ADD CONSTRAINT event_integration_outbox_source_seq_fkey FOREIGN KEY (source_seq) REFERENCES public.events(seq);
 
 
 --
