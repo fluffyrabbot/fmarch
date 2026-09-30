@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import "./capacity_http_retry.test.mjs";
 
 import {
   assertCapacityOverloadReport,

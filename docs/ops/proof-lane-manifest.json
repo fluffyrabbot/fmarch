@@ -1673,6 +1673,8 @@
       "tier": "active",
       "paths": [
         "tools/capacity_auth_source_authority.mjs",
+        "tools/capacity_http_retry.mjs",
+        "tools/capacity_http_retry.test.mjs",
         "tools/capacity_overload_contract.mjs",
         "tools/capacity_overload_contract.test.mjs",
         "tools/capacity_overload_proof.mjs",
