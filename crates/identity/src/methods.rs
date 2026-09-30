@@ -399,6 +399,39 @@ pub async fn lock_identity_delivery_gate(
     Ok(())
 }
 
+/// Join another principal's read boundary without waiting while the caller
+/// holds its own authority locks. A false result means the cutoff is busy;
+/// row contention returns PostgreSQL's lock-unavailable error. In either case
+/// the caller must reject and roll back its command, never continue unlocked.
+pub async fn try_lock_identity_delivery_gate(
+    conn: &mut PgConnection,
+    principal_id: &PrincipalId,
+) -> Result<bool, IdentityFlowError> {
+    let acquired: bool = sqlx::query_scalar(
+        r#"
+        SELECT pg_catalog.pg_try_advisory_xact_lock_shared(
+            pg_catalog.hashtextextended(
+                'fmarch.identity-cutoff:' || $1::text, 0
+            )
+        )
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_one(&mut *conn)
+    .await?;
+    if !acquired {
+        return Ok(false);
+    }
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR SHARE NOWAIT",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    Ok(true)
+}
+
 /// Serialize every identity mutation on its owner before taking subordinate
 /// locks. The order is deliberately centralized here:
 ///

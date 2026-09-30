@@ -30,6 +30,8 @@ pub enum PrivateClaimError {
     SubjectUnavailable,
     #[error("canonical event references an invalid private claim")]
     ClaimUnavailable,
+    #[error("private claim read authority is busy; retry the command")]
+    ReadContended,
 }
 
 /// The stable authenticated principal that owns this live subject.  This takes
@@ -95,6 +97,30 @@ pub async fn lock_active_subject_for_read(
     subject_id: SubjectId,
 ) -> Result<(), PrivateClaimError> {
     crate::methods::lock_identity_delivery_gate(tx, &principal_id).await?;
+    validate_active_subject_read(tx, principal_id, subject_id, false).await
+}
+
+/// Nonblocking counterpart for a read of another principal while the caller
+/// already holds its own authority. Every target lock is acquired with try-lock
+/// or NOWAIT semantics, so differently ordered multi-target reads cannot form
+/// a wait cycle with queued identity/profile mutations.
+pub async fn try_lock_active_subject_for_read(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+    subject_id: SubjectId,
+) -> Result<(), PrivateClaimError> {
+    if !crate::methods::try_lock_identity_delivery_gate(tx, &principal_id).await? {
+        return Err(PrivateClaimError::ReadContended);
+    }
+    validate_active_subject_read(tx, principal_id, subject_id, true).await
+}
+
+async fn validate_active_subject_read(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+    subject_id: SubjectId,
+    no_wait: bool,
+) -> Result<(), PrivateClaimError> {
     let principal_status: String =
         sqlx::query_scalar("SELECT status FROM platform_principal WHERE principal_id = $1")
             .bind(principal_id.as_uuid())
@@ -103,7 +129,18 @@ pub async fn lock_active_subject_for_read(
     if principal_status != "active" {
         return Err(PrivateClaimError::PrincipalUnavailable);
     }
-    let row = sqlx::query(
+    let query = if no_wait {
+        r#"
+        SELECT subject.principal_id, subject.lifecycle_state,
+               EXISTS (
+                   SELECT 1 FROM subject_tombstone AS tombstone
+                   WHERE tombstone.subject_id = subject.subject_id
+               ) AS tombstoned
+        FROM privacy_subject AS subject
+        WHERE subject.subject_id = $1
+        FOR SHARE OF subject NOWAIT
+        "#
+    } else {
         r#"
         SELECT subject.principal_id, subject.lifecycle_state,
                EXISTS (
@@ -113,12 +150,13 @@ pub async fn lock_active_subject_for_read(
         FROM privacy_subject AS subject
         WHERE subject.subject_id = $1
         FOR SHARE OF subject
-        "#,
-    )
-    .bind(subject_id.as_uuid())
-    .fetch_optional(&mut **tx)
-    .await?
-    .ok_or(PrivateClaimError::SubjectUnavailable)?;
+        "#
+    };
+    let row = sqlx::query(query)
+        .bind(subject_id.as_uuid())
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or(PrivateClaimError::SubjectUnavailable)?;
     if row.try_get::<Option<Uuid>, _>("principal_id")? != Some(principal_id.as_uuid())
         || row.try_get::<String, _>("lifecycle_state")? != "active"
         || row.try_get::<bool, _>("tombstoned")?
@@ -259,6 +297,21 @@ pub async fn open_active_subject_claim_for_read<T: for<'de> Deserialize<'de>>(
     scope_key: Option<&str>,
 ) -> Result<T, PrivateClaimError> {
     lock_active_subject_for_read(tx, principal_id, subject_id).await?;
+    open_locked_subject_claim(tx, subject_id, claim_id, claim_kind, scope_id, scope_key).await
+}
+
+/// Revalidate and open a target claim without waiting for target mutation
+/// authority. This never opens a claim when any target read gate is unavailable.
+pub async fn try_open_active_subject_claim_for_read<T: for<'de> Deserialize<'de>>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    claim_kind: &str,
+    scope_id: Uuid,
+    scope_key: Option<&str>,
+) -> Result<T, PrivateClaimError> {
+    try_lock_active_subject_for_read(tx, principal_id, subject_id).await?;
     open_locked_subject_claim(tx, subject_id, claim_id, claim_kind, scope_id, scope_key).await
 }
 

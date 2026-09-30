@@ -371,15 +371,16 @@ Ported discipline from im-human's `V4_RESULT_CONTRACT.md`:
 2. **Per-kind versioning.** Each kind has its own `version` / the resolver has
    `result_version`. Evolution is additive ([02](02-event-sourcing.md),
    [04](04-wire-protocol.md)); upcasters handle old versions on replay.
-   The live registry is `eventstore::upcast` (`crates/eventstore/src/upcaster.rs`):
-   every loaded row passes through it. Superseded `(kind, version)` pairs branch
-   there and rewrite payload/version to the current shape; everything else is
-   identity. `ResolutionApplied` stamps `events.version` from `RESULT_VERSION`
-   (legacy header `1` is interpreted via payload `result_version`). Register the
-   next `N → N+1` rewrite in `domain::upcast_resolution_applied` before bumping
-   the constant. The synthetic kind `UpcastExample` still documents the registry
-   shape (version 1 → 2: ensure object payload has `"note"`, defaulting missing
-   to `""`).
+   Raw `eventstore` reads preserve the stored payload and version. The owning
+   `game_event_codec::ResolverCodec` validates resolver headers, actors, and
+   payloads and delegates retained result-version upgrades to
+   `domain::upcast_resolution_applied`. `ResolutionApplied` stamps
+   `events.version` from `RESULT_VERSION`; retained legacy header `1` uses the
+   payload `result_version`. Unsupported or inconsistent encodings fail closed.
+   Register the next version rewrite in the domain and add a retained fixture
+   before changing the current version. Forum uses `forum_journal::ForumCodec`
+   and sealed context admission; other game families remain explicitly outside
+   the resolver codec's coverage.
 3. **Validation at the boundary.** A resolver result and its trace are validated before they
    are appended; failure aborts the append with a typed, path-pointing error — never a
    silent partial write.

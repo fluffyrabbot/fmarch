@@ -1165,7 +1165,7 @@ pub async fn audit_engine_snapshot_identity_boundary(
         .state;
     let snapshot_json = serde_json::to_string(&snapshot)
         .map_err(|e| Reject::Internal(format!("serialize engine snapshot: {e}")))?;
-    let stream_principal_ids = stream_platform_principal_ids(&stream);
+    let stream_principal_ids = stream_platform_principal_ids(&stream)?;
     let leaked_principal_ids = stream_principal_ids
         .iter()
         .filter(|principal_id| snapshot_json.contains(&principal_id.to_string()))
@@ -1187,16 +1187,20 @@ pub async fn audit_engine_snapshot_identity_boundary(
     })
 }
 
-fn stream_platform_principal_ids(stream: &[eventstore::StoredEvent]) -> Vec<PrincipalId> {
+fn stream_platform_principal_ids(
+    stream: &[eventstore::StoredEvent],
+) -> Result<Vec<PrincipalId>, Reject> {
     let mut principal_ids = BTreeSet::new();
     for ev in stream {
-        if let ActorId::Principal(principal_id) = &ev.actor {
-            principal_ids.insert(*principal_id);
+        if let ActorId::Principal(principal_id) = ActorId::decode(&ev.actor)
+            .map_err(|error| Reject::Internal(format!("invalid stored actor: {error}")))?
+        {
+            principal_ids.insert(principal_id);
         }
         collect_platform_principal_ids(&ev.payload, &mut principal_ids);
         collect_platform_principal_ids(&ev.meta, &mut principal_ids);
     }
-    principal_ids.into_iter().collect()
+    Ok(principal_ids.into_iter().collect())
 }
 
 fn collect_platform_principal_ids(

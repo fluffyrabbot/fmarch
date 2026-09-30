@@ -151,8 +151,11 @@ event like a wire-protocol author would (cf. [04](04-wire-protocol.md)):
 4. **No "fix it in the database."** A wrong event is corrected by a compensating event,
    never by editing history.
 
-A small **upcaster pipeline** sits between the store and the domain: raw row → version
-upcast → current typed event. Domain logic only ever sees the current shape.
+Context-owned codecs sit between raw storage and domain replay: retained envelope →
+validated version upgrade → current typed event. The journal preserves original
+payloads and versions for archival export. Game resolver decoding lives in
+`game_event_codec`; forum decoding lives in `forum_journal`. Unknown or malformed
+encodings fail closed instead of passing through a storage-wide upcaster.
 
 ## Projections (read models)
 

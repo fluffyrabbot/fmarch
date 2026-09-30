@@ -31,7 +31,8 @@ pub use member_lifecycle::{
 };
 pub use private_claims::{
     ensure_active_subject, insert_subject_claim, lock_active_subject_for_read,
-    open_active_subject_claim, open_active_subject_claim_for_read, PrivateClaimError,
+    open_active_subject_claim, open_active_subject_claim_for_read,
+    try_lock_active_subject_for_read, try_open_active_subject_claim_for_read, PrivateClaimError,
 };
 pub use session::{
     authorize_workos_session, issue_classic_password_session, issue_community_admission_session,

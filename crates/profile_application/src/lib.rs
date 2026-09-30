@@ -94,6 +94,95 @@ pub async fn public_posting_profile_in_tx(
     )
 }
 
+/// A current public mention target admitted from its sealed presentation.
+/// Neither private presentation nor a query-projection handle is returned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicMentionProfile {
+    pub profile_id: ProfileId,
+    pub handle: social::ProfileHandle,
+}
+
+/// Keep RFC 0007's public-only discovery corpus, then verify the discovered
+/// candidate against the current sealed source. A corrupt public row cannot
+/// disclose a private handle or retarget a mention. Target authority locks are
+/// nonblocking because a forum command already holds its author's authority.
+pub async fn public_mention_profile_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    handle: &str,
+) -> Result<Option<PublicMentionProfile>, ProfileApplicationError> {
+    let candidate = sqlx::query(
+        r#"
+        SELECT profile.profile_id, profile.active_principal_id, profile.subject_id
+        FROM public_profile AS public
+        JOIN member_profile AS profile USING (profile_id)
+        WHERE public.handle = $1 AND profile.lifecycle = 'active'
+          AND profile.active_principal_id IS NOT NULL
+        "#,
+    )
+    .bind(handle)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(candidate) = candidate else {
+        return Ok(None);
+    };
+    let profile_id: uuid::Uuid = candidate.try_get("profile_id")?;
+    let principal_id = PrincipalId::from_uuid(candidate.try_get("active_principal_id")?);
+    let subject_id = SubjectId::from_uuid(candidate.try_get("subject_id")?);
+    match identity::try_lock_active_subject_for_read(tx, principal_id, subject_id).await {
+        Ok(()) => {}
+        Err(
+            identity::PrivateClaimError::PrincipalUnavailable
+            | identity::PrivateClaimError::SubjectUnavailable
+            | identity::PrivateClaimError::Identity(identity::IdentityFlowError::Unauthorized),
+        ) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error.into()),
+    }
+    // As with posting admission, do not lock the dependent profile row while
+    // an owner edit may hold it and wait for the target's shared authority.
+    let claim = sqlx::query_scalar::<_, Option<uuid::Uuid>>(
+        r#"
+        SELECT profile.current_claim_id
+        FROM member_profile AS profile
+        JOIN public_profile AS public USING (profile_id)
+        WHERE profile.profile_id = $1 AND profile.active_principal_id = $2
+          AND profile.subject_id = $3 AND profile.lifecycle = 'active'
+          AND public.handle = $4
+        "#,
+    )
+    .bind(profile_id)
+    .bind(principal_id.as_uuid())
+    .bind(subject_id.as_uuid())
+    .bind(handle)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(claim) = claim else {
+        return Ok(None);
+    };
+    let claim = claim.ok_or_else(|| {
+        ProfileApplicationError::InvalidState("active profile has no claim".into())
+    })?;
+    let presentation: ProfilePresentation = identity::try_open_active_subject_claim_for_read(
+        tx,
+        principal_id,
+        subject_id,
+        ClaimId::from_uuid(claim),
+        "profile",
+        profile_id,
+        None,
+    )
+    .await?;
+    Ok(
+        (presentation.visibility == social::ProfileVisibility::Public
+            && presentation.handle.as_str() == handle)
+            .then_some(PublicMentionProfile {
+                profile_id: ProfileId::from_uuid(profile_id),
+                handle: presentation.handle,
+            }),
+    )
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProfileApplicationError {
     #[error(transparent)]

@@ -191,12 +191,14 @@ impl ForumTransaction for PgForumTransaction {
         &mut self,
         handle: &str,
     ) -> Result<Option<MentionProfile>, Self::Error> {
-        Ok(projections::public_profile_by_handle(&mut *self.tx, handle)
-            .await?
-            .map(|profile| MentionProfile {
-                profile_id: profile.profile_id,
-                handle: profile.handle,
-            }))
+        Ok(
+            profile_application::public_mention_profile_in_tx(&mut self.tx, handle)
+                .await?
+                .map(|profile| MentionProfile {
+                    profile_id: profile.profile_id.as_uuid(),
+                    handle: profile.handle.as_str().to_owned(),
+                }),
+        )
     }
 
     async fn quotation_thread(
@@ -320,37 +322,41 @@ pub async fn audit_decode(pool: &PgPool) -> Result<(), ForumPostgresError> {
     let streams = sqlx::query_scalar::<_, Uuid>(
         "SELECT DISTINCT stream_id FROM events WHERE kind LIKE 'Discussion%' UNION SELECT area_id FROM forum_area_reservation",
     ).fetch_all(pool).await?;
-    let mut tx = pool.begin().await?;
     for stream in streams {
-        let events = journal::load_in_tx::<ForumCodec>(&mut tx, StreamId::new(stream)).await?;
-        journal::audit_outbox_in_tx::<forum_journal::ForumIntegrationCodec>(
-            &mut tx,
-            StreamId::new(stream),
-        )
-        .await?;
-        journal::audit_source_outbox_in_tx::<ForumCodec>(&mut tx, StreamId::new(stream)).await?;
+        // Each source has its own transaction and fence. Concurrent audits
+        // cannot accumulate stream locks in incompatible orders.
+        let mut tx = pool.begin().await?;
+        let stream_id = StreamId::new(stream);
+        journal::lock_stream_in_tx(&mut tx, stream_id).await?;
+        let events = journal::load_in_tx::<ForumCodec>(&mut tx, stream_id).await?;
+        journal::audit_outbox_in_tx::<forum_journal::ForumIntegrationCodec>(&mut tx, stream_id)
+            .await?;
+        journal::audit_source_outbox_in_tx::<ForumCodec>(&mut tx, stream_id).await?;
         let records: Vec<_> = events
             .into_iter()
             .map(forum_journal::replay_record)
             .collect();
+        let reserved_slug = sqlx::query_scalar::<_, String>(
+            "SELECT slug FROM forum_area_reservation WHERE area_id = $1",
+        )
+        .bind(stream)
+        .fetch_optional(&mut *tx)
+        .await?;
         if matches!(
             records.first().map(|record| &record.event),
             Some(forum::DecodedForumEvent::AreaCreated { .. })
         ) {
             let area = forum::AreaAggregate::replay(stream, &records)?;
-            let slug = sqlx::query_scalar::<_, String>(
-                "SELECT slug FROM forum_area_reservation WHERE area_id = $1",
-            )
-            .bind(stream)
-            .fetch_optional(&mut *tx)
-            .await?;
-            if area.state().map(|area| area.slug.as_str()) != slug.as_deref() {
+            if area.state().map(|area| area.slug.as_str()) != reserved_slug.as_deref() {
                 return Err(ForumPostgresError::InvalidAreaReservation);
             }
         } else {
+            if reserved_slug.is_some() {
+                return Err(ForumPostgresError::InvalidAreaReservation);
+            }
             forum::TopicAggregate::replay(stream, &records)?;
         }
+        tx.commit().await?;
     }
-    tx.commit().await?;
     Ok(())
 }

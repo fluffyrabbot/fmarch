@@ -469,7 +469,11 @@ imports `domain` or `principal`; that target is now a hard ban.
 `forum_postgres` implements narrow identity, membership, profile, source, and budget
 ports. HTTP passes intent and revalidated session authority. Query rows can restrict
 quotation visibility but cannot supply canonical bodies, revisions, authors, or
-posting policy. `forum_journal` owns the typed codec and integration facts. Raw forum
+posting policy. Mentions discover candidates only through the public profile
+corpus, then verify public visibility and the exact handle against sealed profile
+claims. Cross-principal read locks never wait: contention rolls the command back
+for retry instead of forming a lock cycle. `forum_journal` owns the typed codec
+and integration facts. Raw forum
 fixture construction is confined to a debug-only test-support module; release code
 has one forum write path.
 

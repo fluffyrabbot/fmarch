@@ -402,11 +402,25 @@ async fn projector_and_outbox_failures_roll_back_events_facts_budget_and_query_r
 async fn missing_integration_fact_fails_readiness_instead_of_silently_passing_decode(pool: PgPool) {
     let f = fixture(&pool, 1).await;
     forum_postgres::audit_decode(&pool).await.unwrap();
+    let mut corrupt = pool.begin().await.unwrap();
+    sqlx::query(
+        "ALTER TABLE event_integration_outbox DISABLE TRIGGER event_integration_outbox_no_mutation",
+    )
+    .execute(&mut *corrupt)
+    .await
+    .unwrap();
     sqlx::query("DELETE FROM event_integration_outbox WHERE source_seq = $1")
         .bind(f.post)
-        .execute(&pool)
+        .execute(&mut *corrupt)
         .await
         .unwrap();
+    sqlx::query(
+        "ALTER TABLE event_integration_outbox ENABLE TRIGGER event_integration_outbox_no_mutation",
+    )
+    .execute(&mut *corrupt)
+    .await
+    .unwrap();
+    corrupt.commit().await.unwrap();
     assert!(forum_postgres::audit_decode(&pool).await.is_err());
 }
 
@@ -685,4 +699,39 @@ async fn forum_commit_completes_while_profile_writer_waits_on_shared_authority(p
     );
     next.rollback().await.unwrap();
     forum_pool.close().await;
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn orphaned_area_reservation_fails_readiness_without_any_source_events(pool: PgPool) {
+    let _valid = fixture(&pool, 1).await;
+    forum_postgres::audit_decode(&pool).await.unwrap();
+    let orphan = Uuid::new_v4();
+    // Deliberate adapter corruption: the reservation is committed without
+    // its canonical creation fact, so discovery must include reservation IDs.
+    sqlx::query("INSERT INTO forum_area_reservation(area_id, slug) VALUES ($1, 'orphaned-area')")
+        .bind(orphan)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        forum_postgres::audit_decode(&pool).await,
+        Err(ForumPostgresError::InvalidAreaReservation)
+    ));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn area_reservation_bound_to_a_topic_fails_readiness(pool: PgPool) {
+    let f = fixture(&pool, 1).await;
+    forum_postgres::audit_decode(&pool).await.unwrap();
+    // This source has valid typed facts and a complete integration outbox.
+    // It must still be rejected as an area because its root fact is a topic.
+    sqlx::query("INSERT INTO forum_area_reservation(area_id, slug) VALUES ($1, 'topic-as-area')")
+        .bind(f.topic)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        forum_postgres::audit_decode(&pool).await,
+        Err(ForumPostgresError::InvalidAreaReservation)
+    ));
 }
