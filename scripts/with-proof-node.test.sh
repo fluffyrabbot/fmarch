@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Bounded fake-runtime checks: no package downloads, host mutations, or builds.
 set -euo pipefail
+# npm reaches this fixture through Node, whose descendants inherit the private
+# loader scope. Each fake-runtime case supplies its own loader environment.
+unset LD_LIBRARY_PATH
 proof_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/with-proof-node.sh"
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/fmarch-proof-node-test.XXXXXX")
 trap 'rm -rf -- "$test_root"' EXIT
