@@ -7,6 +7,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
 import {
   assertCapacityOverloadReport,
   assertPublicSearchCharacterizationReport,
@@ -30,6 +31,7 @@ import {
   fixturePrincipalTransport,
 } from "./principal_fixture.mjs";
 
+const proofLane = "test:capacity-overload";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultMigrationUrl =
   "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch_capacity_overload";
@@ -88,15 +90,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           : defaultOutput),
   );
   const psql = findPsql(env);
-  if (!existsSync(serverBinary)) {
-    throw new Error("target/debug/server is missing; run cargo build -p server first");
-  }
+  const build = lockedProofCargoInvocation({
+    cwd: repoRoot, laneId: proofLane, target: "server/bin/server", command: "build", env,
+  });
+  await new Promise((resolve, reject) => {
+    const child = spawn(build.command, build.args, { cwd: repoRoot, env, stdio: "inherit" });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`capacity server build exited code=${code} signal=${signal ?? "none"}`));
+    });
+  });
   await mkdir(path.dirname(outputPath), { recursive: true });
   await mkdir(mediaRoot, { recursive: true });
 
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const authority = await runFmarchMigrations({ cwd: repoRoot, migrationUrl, env });
+  const authority = await runFmarchMigrations({ proofLane, cwd: repoRoot, migrationUrl, env });
   const databaseUrl = authority.applicationUrl;
   const profiles = {};
   const profileSequence = [];

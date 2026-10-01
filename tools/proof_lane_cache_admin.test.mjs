@@ -191,7 +191,7 @@ test('cache explanation deterministically identifies every changed input fingerp
   assert.equal(explanation.changes.contract.length, 0);
 });
 
-for (const inputSchema of [1, 2]) test(`historical schema ${inputSchema} remains inspectable custody but cannot qualify current reuse`, (t) => {
+for (const inputSchema of [1, 2, 3]) test(`historical schema ${inputSchema} remains inspectable custody but cannot qualify current reuse`, (t) => {
   const fixture = fixtureRoot(t);
   const old = storeHistorical(fixture, 'historical', inputSchema);
   const paths = proofCachePaths(fixture.root, 'audit', old.proofKey);
@@ -202,7 +202,7 @@ for (const inputSchema of [1, 2]) test(`historical schema ${inputSchema} remains
 
   assert.throws(
     () => readProofCacheEntry(fixture.root, 'audit', old.proofKey),
-    new RegExp(`cache input contract schema ${inputSchema} is obsolete; expected 3`),
+    new RegExp(`cache input contract schema ${inputSchema} is obsolete; expected 4`),
   );
   const inspected = scanProofCache({ root: fixture.root });
   assert.equal(inspected[0].valid, true);
@@ -230,7 +230,7 @@ for (const inputSchema of [1, 2]) test(`historical schema ${inputSchema} remains
   assert.equal(syntheticExact.exact_entry.input_contract_compatible, false);
   const reuse = loadProofCacheHits(['audit'], fixture.manifest, { ...options, computedKeys: new Map([['audit', old]]) });
   assert.equal(reuse.hits.size, 0);
-  assert.match(reuse.misses.get('audit').reason, new RegExp(`schema ${inputSchema} is obsolete; expected 3`));
+  assert.match(reuse.misses.get('audit').reason, new RegExp(`schema ${inputSchema} is obsolete; expected 4`));
   assert.equal(readProofCacheEntry(fixture.root, 'audit', old.proofKey, { allowHistoricalInputs: true }).entry.inputs.schema, inputSchema);
   assert.deepEqual(readFileSync(paths.receipt), originalBytes, 'inspection preserves immutable evidence');
 });

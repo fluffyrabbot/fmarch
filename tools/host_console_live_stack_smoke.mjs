@@ -79,6 +79,7 @@ import {
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
+import { proofCargoArgs } from "./proof_cargo_builds.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -94,6 +95,7 @@ const dayEventRoomOnly =
 const smokeName = dayEventRoomOnly
   ? "host-console-day-event-room-live-stack"
   : "host-console-live-stack-smoke";
+const proofLane = `test:${smokeName}`;
 const artifactDir = path.resolve(
   process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", smokeName),
 );
@@ -413,6 +415,7 @@ try {
     ? runnerOwnedDatabase(migrationUrl)
     : await createScratchDatabase(migrationUrl);
   const authority = await runFmarchMigrations({
+    proofLane,
     cwd: repoRoot,
     migrationUrl: smokeDatabase.url,
   });
@@ -446,7 +449,7 @@ try {
         process.env.FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS ?? "185000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     });
-  server = spawn("cargo", ["run", "-p", "server"], {
+  server = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: runtimeEnvironment,
     stdio: ["ignore", "pipe", "pipe"],
@@ -4555,7 +4558,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   // Replay is an explicit operator process; HTTP only reads stored traces.
   const { stdout: auditJson } = await execFileAsync(
     "cargo",
-    ["run", "--quiet", "-p", "operator_proof", "--bin", "audit_resolution", "--", actionGame],
+    proofCargoArgs({ laneId: proofLane, target: "operator_proof/bin/audit_resolution", quiet: true, args: [actionGame] }),
     { cwd: repoRoot, env: runtimeEnvironment, timeout: 180_000, maxBuffer: 16 * 1024 * 1024 },
   );
   const resolutionAudit = JSON.parse(auditJson);

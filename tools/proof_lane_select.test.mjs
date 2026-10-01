@@ -495,7 +495,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
 });
 
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
-  assert.equal(manifest.version, 10);
+  assert.equal(manifest.version, 11);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
     ([, lane]) => lane.inputs || lane.outputs || lane.write_command,

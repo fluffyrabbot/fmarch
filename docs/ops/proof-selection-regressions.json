@@ -23,20 +23,19 @@
         "cargo:wire",
         "cargo:clippy-workspace",
         "test:host-console-day-event-room-live-stack",
-        "test:frontend-cross-browser",
-        "test:frontend-visual-regression",
-        "test:auth-invite-role-proof",
-        "test:frontend-csp-browser"
+        "test:auth-invite-role-proof"
       ],
       "excludes": [
-        "test:identity-delivery-provider-conformance"
-      ],
-      "scope": "Production Cargo sources are consumed by conservative workspace browser builds. They select those execution lanes without making wire or frontend presentation areas behavioral owners.",
-      "execution_dependency_lanes": [
+        "test:identity-delivery-provider-conformance",
+        "test:frontend-themes",
         "test:frontend-cross-browser",
+        "test:frontend-role-smoke",
         "test:frontend-visual-regression",
-        "test:auth-invite-role-proof",
         "test:frontend-csp-browser"
+      ],
+      "scope": "Production sources reach declared live binary builds. Fixture-backed frontend browser proofs have no Cargo inputs; explicit frontend behavioral triggers remain separate.",
+      "execution_dependency_lanes": [
+        "test:auth-invite-role-proof"
       ],
       "excludes_behavioral_areas": [
         "crate:wire",
@@ -87,16 +86,18 @@
         "cargo:api",
         "test:auth-invite-role-proof",
         "test:frontend-contract",
-        "test:frontend-visual-regression",
-        "test:frontend-cross-browser"
+        "test:frontend-csp-browser"
       ],
       "excludes": [
-        "test:identity-delivery-provider-conformance"
+        "test:identity-delivery-provider-conformance",
+        "test:frontend-themes",
+        "test:frontend-cross-browser",
+        "test:frontend-role-smoke",
+        "test:frontend-visual-regression"
       ],
-      "scope": "Authentication behavior retains its explicit contract gates; runtime browser lanes also consume API sources through their declared workspace build scope.",
+      "scope": "Authentication behavior explicitly retains frontend contract and CSP gates. Live binary inputs select invite proof; fixture-only cross-browser and visual checks have no Cargo dependency.",
       "execution_dependency_lanes": [
-        "test:frontend-visual-regression",
-        "test:frontend-cross-browser"
+        "test:auth-invite-role-proof"
       ],
       "excludes_behavioral_areas": [
         "crate:wire",

@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { executionInputMatches } from './proof_lane_inputs.mjs';
-import { laneProofInputs, validateLaneProofInputPaths } from './proof_lane_cache.mjs';
+import { computeLaneProofKey, laneProofInputs, validateLaneProofInputPaths } from './proof_lane_cache.mjs';
+import { expandHardDependencies } from './proof_lane_execution.mjs';
 import { gitChangedFiles, loadManifest, lockedCargoMetadata, REPO_ROOT, selectLanes } from './proof_lane_select.mjs';
 
 const manifest = loadManifest();
@@ -30,10 +31,151 @@ test('test-only fixture and architecture docs select consuming targets without d
   }
 });
 
-test('compiled package inputs follow dev dependencies and prerequisite artifacts', () => {
+test('compiled package inputs follow direct dev dependencies and declared live builds', () => {
   const selection = select(['docs/ops/proof-runs.json'], withoutAreas);
-  for (const id of ['cargo:commands-audit', 'cargo:operator-proof', 'cargo:api', 'test:frontend-role-smoke', 'check:release-topology-evidence']) {
+  for (const id of ['cargo:commands-audit', 'cargo:operator-proof', 'test:host-console-live-stack-smoke']) {
     assert.ok(selection.laneIds.includes(id), id);
+  }
+  for (const id of ['cargo:api', 'check:release-topology-evidence', 'test:frontend-role-smoke']) {
+    assert.ok(!selection.laneIds.includes(id), `${id} does not compile operator_proof`);
+  }
+});
+
+const staticBrowserLanes = [
+  'test:frontend-themes', 'test:frontend-cross-browser',
+  'test:frontend-role-smoke', 'test:frontend-csp-browser',
+];
+const staticFrontendLanes = [...staticBrowserLanes, 'test:frontend-visual-regression'];
+
+test('frontend fixture browsers explicitly build no Cargo targets, regardless of behavioral owners', () => {
+  const spec = {
+    ...manifest,
+    areas: [...manifest.areas, { id: 'additional-behavioral-owner', crate: 'server', lanes: staticBrowserLanes }],
+  };
+  for (const id of staticBrowserLanes) assert.deepEqual(spec.lanes[id].cargo_inputs, { builds: [] }, id);
+  for (const id of staticFrontendLanes) {
+    const inputs = laneProofInputs([id], spec, { root: REPO_ROOT, metadata });
+    assert.deepEqual(inputs.cargo.packages, [], id);
+    assert.deepEqual(inputs.cargo.targets, [], id);
+    assert.ok(inputs.edges.every(edge => edge.scope === 'lane'), id);
+  }
+});
+
+test('server and operator Rust changes select live proof without arming fixture browsers', () => {
+  for (const path of ['crates/server/src/main.rs', 'crates/operator_proof/src/lib.rs', 'docs/ops/proof-runs.json']) {
+    const selection = select([path], withoutAreas);
+    for (const id of staticFrontendLanes) {
+      assert.ok(!selection.laneIds.includes(id), `${path} must not select ${id}`);
+      assert.ok(!selection.executionTriggers.some(trigger => trigger.laneId === id), `${path} must not be an execution input for ${id}`);
+    }
+    for (const id of ['test:host-console-live-stack-smoke', 'test:auth-invite-role-proof', 'test:capacity-overload']) {
+      assert.ok(selection.laneIds.includes(id), `${path} selects ${id}`);
+    }
+  }
+});
+
+test('wire behavioral contracts still arm frontend proof without claiming a frontend Rust build', () => {
+  const path = 'crates/wire/src/lib.rs';
+  const selection = select([path]);
+  assert.ok(selection.behavioralAreas.includes('frontend:game'));
+  for (const id of ['test:frontend-contract', 'test:frontend-role-smoke', 'test:frontend-cross-browser', 'test:frontend-visual-regression']) {
+    assert.ok(selection.laneIds.includes(id), id);
+    assert.ok(selection.laneReasons[id].some(reason => reason.startsWith('behavior:frontend:game:')), id);
+    assert.ok(!selection.executionTriggers.some(trigger => trigger.laneId === id), `${id} must not compile wire`);
+  }
+});
+
+test('theme mutations retain the theme, role-smoke and visual prerequisite chain', () => {
+  const selection = select(['tools/frontend_theme_browser.mjs']);
+  for (const id of ['test:frontend-themes', 'test:frontend-role-smoke', 'test:frontend-cross-browser', 'test:frontend-visual-regression']) {
+    assert.ok(selection.laneIds.includes(id), id);
+  }
+  assert.deepEqual([...expandHardDependencies(['test:frontend-visual-regression'], manifest)].sort(), [
+    'test:frontend-role-smoke', 'test:frontend-themes', 'test:frontend-visual-regression',
+  ]);
+  assert.deepEqual(laneProofInputs(['test:frontend-visual-regression'], manifest, { root: REPO_ROOT, metadata }).dependencyLaneIds, [
+    'test:frontend-role-smoke', 'test:frontend-themes', 'test:frontend-visual-regression',
+  ]);
+});
+
+test('live proofs bind their declared migrator and schema targets without the epoch-reset executable', () => {
+  const expected = new Map([
+    ['test:host-console-live-stack-smoke', ['operator_proof/bin/audit_resolution', 'server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:host-console-day-event-room-live-stack', ['server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:capacity-overload', ['server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:live-stack-backup-restore-drill', ['server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:database-schema-upgrade', ['server/bin/fmarch-migrate']],
+    ['test:database-tls-boundary', ['server/bin/fmarch-migrate', 'server/bin/fmarch-schema-gate']],
+    ['test:mash-scale-acceptance', ['api/bin/audit_mash_scale_acceptance', 'server/bin/fmarch-migrate']],
+  ]);
+  for (const [id, targets] of expected) {
+    assert.deepEqual(manifest.lanes[id].cargo_inputs.builds.map(build => build.target).sort(), targets, id);
+    for (const build of manifest.lanes[id].cargo_inputs.builds) {
+      assert.equal(build.profile, id === 'test:database-tls-boundary' ? 'release' : 'dev', `${id}: ${build.target}`);
+    }
+    const inputs = laneProofInputs([id], manifest, { root: REPO_ROOT, metadata });
+    assert.deepEqual(inputs.cargo.targets, targets, id);
+    for (const target of targets) {
+      const [packageName, , targetName] = target.split('/');
+      const source = metadata.packages.find(pkg => pkg.name === packageName).targets.find(item => item.name === targetName).src_path;
+      const path = relative(REPO_ROOT, source).replaceAll('\\', '/');
+      const selection = select([path], withoutAreas);
+      assert.ok(selection.laneIds.includes(id), `${path} selects ${id}`);
+      for (const staticId of staticFrontendLanes) assert.ok(!selection.laneIds.includes(staticId), `${path} must not select ${staticId}`);
+    }
+  }
+  const epoch = 'crates/database_schema/schema/epoch.json';
+  const selection = select([epoch], withoutAreas);
+  assert.ok(selection.laneIds.includes('cargo:server'));
+  assert.ok(selection.laneIds.includes('cargo:clippy-workspace'));
+  assert.ok(!selection.laneIds.includes('test:capacity-overload'));
+  const capacity = laneProofInputs(['test:capacity-overload'], manifest, { root: REPO_ROOT, metadata });
+  assert.ok(![...capacity.cargo.selectors, ...capacity.edges.map(edge => edge.selector)].some(selector => executionInputMatches(epoch, selector)));
+  // Repository contract context intentionally remains broader than execution
+  // ownership: it can invalidate a key without selecting a lane to execute.
+  assert.ok(capacity.matchers.some(selector => executionInputMatches(epoch, selector)));
+});
+
+test('Rust and runtime mutations preserve static frontend keys while changing live proof keys', t => {
+  const { root } = gitFixture(t);
+  const paths = [
+    'crates/operator_proof/src/lib.rs', 'crates/server/src/main.rs',
+    'docs/ops/proof-runs.json', 'packs/example/pack.json', 'programs/example.program.json',
+    'tools/frontend_theme_browser.mjs', 'frontend/src/app.css',
+  ];
+  for (const path of paths) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), 'initial');
+  }
+  const members = new Set(metadata.workspace_members);
+  const relocatedMetadata = {
+    ...metadata,
+    packages: metadata.packages.filter(pkg => members.has(pkg.id)).map(pkg => ({
+      ...pkg,
+      manifest_path: join(root, relative(REPO_ROOT, pkg.manifest_path)),
+      targets: pkg.targets.map(target => ({ ...target, src_path: join(root, relative(REPO_ROOT, target.src_path)) })),
+    })),
+  };
+  const compute = id => computeLaneProofKey(id, manifest, { root, metadata: relocatedMetadata, toolchain: { fixture: 'fixed' } });
+  const liveId = 'test:host-console-live-stack-smoke';
+  const ids = [...staticFrontendLanes, liveId];
+  const before = new Map(ids.map(id => [id, compute(id)]));
+  for (const path of paths.slice(0, 5)) {
+    writeFileSync(join(root, path), `changed ${path}`);
+    for (const id of staticFrontendLanes) {
+      assert.ok(!before.get(id).payload.inputs.some(input => input.path === path), `${id} excludes ${path}`);
+      assert.equal(compute(id).proofKey, before.get(id).proofKey, `${id} remains unchanged by ${path}`);
+    }
+    assert.ok(before.get(liveId).payload.inputs.some(input => input.path === path), `${liveId} includes ${path}`);
+    assert.notEqual(compute(liveId).proofKey, before.get(liveId).proofKey, `${liveId} reacts to ${path}`);
+    writeFileSync(join(root, path), 'initial');
+  }
+  for (const path of paths.slice(5)) {
+    writeFileSync(join(root, path), `changed ${path}`);
+    for (const id of staticFrontendLanes) {
+      assert.notEqual(compute(id).proofKey, before.get(id).proofKey, `${id} reacts to ${path}`);
+    }
+    writeFileSync(join(root, path), 'initial');
   }
 });
 

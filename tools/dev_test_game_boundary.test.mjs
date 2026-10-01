@@ -197,7 +197,7 @@ test("host live-stack fixture inspects sealed events only at the opaque storage 
     /octet_length\(sealed_body\)\s*>=\s*16/,
     /FROM vote_ballot/,
     /FROM command_receipt/,
-    /"operator_proof", "--bin", "audit_resolution"/,
+    /proofCargoArgs\(\{[^}]*laneId:\s*proofLane[^}]*target:\s*"operator_proof\/bin\/audit_resolution"[^}]*args:\s*\[actionGame\]/,
     /\/resolution-traces/,
   ]) {
     assert.match(source, sealedBoundary);

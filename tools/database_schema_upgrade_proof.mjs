@@ -7,10 +7,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { normalizeSchemaDump } from "./database_schema_snapshot.mjs";
-import {
-  localMigrationOperationId,
-  migrationDatabaseEnvironment,
-} from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const epochPath = path.join(repoRoot, "crates", "database_schema", "schema", "epoch.json");
@@ -52,16 +49,15 @@ function rejectedDatabaseCommand(command, url, sql) {
   );
 }
 
-function migratorEnvironment(url) {
-  return migrationDatabaseEnvironment({ migrationUrl: url, env: process.env });
-}
-
-function runMigrator(binary, url, { allowFailure = false } = {}) {
-  return run(binary, ["--operation-id", localMigrationOperationId], {
-    env: migratorEnvironment(url),
+async function runMigrator(url, { allowFailure = false } = {}) {
+  const migration = await runFmarchMigrations({
+    cwd: repoRoot,
+    proofLane: "test:database-schema-upgrade",
+    migrationUrl: url,
     capture: true,
     allowFailure,
   });
+  return migration.result;
 }
 
 function dumpSchema(url, epoch) {
@@ -1421,8 +1417,6 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
   }
   const stagedDirectory = await mkdtemp(path.join(os.tmpdir(), "fmarch-staged-migrations-"));
   try {
-    run("cargo", ["build", "--quiet", "--locked", "-p", "server", "--bin", "fmarch-migrate"]);
-    const migrator = path.join(repoRoot, "target", "debug", "fmarch-migrate");
     const headVersion = epoch.migrations.at(-1).version;
     const firstFixtureVersion = Math.min(...migrationFixtures.map((fixture) => fixture.version));
 
@@ -1441,7 +1435,7 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
         databaseCommand("psql", upgradeUrl, fixture.failure.seed);
         let failedMigration;
         if (migration.version === headVersion) {
-          failedMigration = runMigrator(migrator, upgradeUrl, { allowFailure: true });
+          failedMigration = await runMigrator(upgradeUrl, { allowFailure: true });
         } else {
           await writeFile(
             path.join(stagedDirectory, migration.filename),
@@ -1482,8 +1476,8 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       if (migration.version === headVersion) {
         // The shipped migrator, not sqlx, must be what upgrades a populated
         // database; the second run proves the head migration is idempotent.
-        runMigrator(migrator, upgradeUrl);
-        runMigrator(migrator, upgradeUrl);
+        await runMigrator(upgradeUrl);
+        await runMigrator(upgradeUrl);
       } else {
         await writeFile(
           path.join(stagedDirectory, migration.filename),
@@ -1509,7 +1503,7 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       assertMigrationFixture(fixture, upgradeUrl, "after the full migration chain, ");
     }
 
-    runMigrator(migrator, freshUrl);
+    await runMigrator(freshUrl);
 
     const checkedSnapshot = await readFile(snapshotPath, "utf8");
     const upgradedSnapshot = dumpSchema(upgradeUrl, epoch.epoch);
@@ -1573,7 +1567,7 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       upgradeUrl,
       "UPDATE _sqlx_migrations SET checksum = decode(repeat('00', 32), 'hex') WHERE version = 1",
     );
-    const mismatch = runMigrator(migrator, upgradeUrl, { allowFailure: true });
+    const mismatch = await runMigrator(upgradeUrl, { allowFailure: true });
     assert.notEqual(mismatch.status, 0, "checksum corruption unexpectedly passed migration readiness");
     assert.match(`${mismatch.stdout}\n${mismatch.stderr}`, /VersionMismatch\(1\)|version 1.*checksum/iu);
 

@@ -3,12 +3,14 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { proofCargoArgs } from "./proof_cargo_builds.mjs";
 import { assertMashScaleAcceptance } from "./mash_scale_acceptance_contract.mjs";
 import {
   applicationDatabaseEnvironment,
   runFmarchMigrations,
 } from "./run_fmarch_migrations.mjs";
 
+const proofLane = "test:mash-scale-acceptance";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.resolve(
   process.env.FMARCH_PROOF_ARTIFACT_DIR ??
@@ -31,21 +33,17 @@ const scratch = runnerOwnsDatabase
   : await createScratchDatabase(sourceDatabaseUrl);
 try {
   const authority = await runFmarchMigrations({
+    proofLane,
     cwd: repoRoot,
     migrationUrl: scratch.url,
     env: process.env,
   });
-  await run("cargo", [
-    "run",
-    "-q",
-    "-p",
-    "api",
-    "--bin",
-    "audit_mash_scale_acceptance",
-    "--",
-    "--output",
-    artifactPath,
-  ], {
+  await run("cargo", proofCargoArgs({
+    laneId: proofLane,
+    target: "api/bin/audit_mash_scale_acceptance",
+    quiet: true,
+    args: ["--output", artifactPath],
+  }), {
     ...applicationDatabaseEnvironment({
       applicationUrl: authority.applicationUrl,
       env: process.env,

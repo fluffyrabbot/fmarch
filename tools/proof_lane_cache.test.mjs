@@ -90,7 +90,10 @@ function metadata(root) {
     dependencies: dependencies.map((dependency) => ({ name: dependency, kind: null })),
     targets: [
       { name, kind: ['lib'], src_path: join(root, 'crates', name, 'src/lib.rs') },
-      ...(name === 'commands' ? [{ name: 'semantic_audit', kind: ['test'], src_path: join(root, 'crates/commands/tests/semantic_audit/main.rs') }] : []),
+      ...(name === 'commands' ? [
+        { name: 'semantic_audit', kind: ['test'], src_path: join(root, 'crates/commands/tests/semantic_audit/main.rs') },
+        { name: 'runtime', kind: ['bin'], src_path: join(root, 'crates/commands/src/bin/runtime.rs') },
+      ] : []),
     ],
   });
   return { packages: [pkg('commands', ['domain']), pkg('domain'), pkg('membership')] };
@@ -408,6 +411,7 @@ function repositoryFixture(t) {
   const targets = new Set([
     ...Object.values(repositoryManifest.lanes).flatMap(lane => lane.assertion_targets ?? []),
     ...Object.keys(repositoryManifest.execution_inputs.targets),
+    ...Object.values(repositoryManifest.lanes).flatMap(lane => (lane.cargo_inputs?.builds ?? []).map(build => build.target)),
   ]);
   for (const lane of Object.values(repositoryManifest.lanes)) {
     const argv = lane.execution.argv;
@@ -497,13 +501,14 @@ test('target-only fixtures and integration helpers do not invalidate package con
   spec.lanes.runtime = {
     kind: 'shell', command: 'node runtime.mjs', cache_inputs: { groups: [], paths: [] }, execution_inputs: [],
     execution: { class: 'browser', argv: ['node', 'runtime.mjs'], resources: [] },
+    cargo_inputs: { builds: [{ target: 'commands/bin/runtime', profile: 'dev' }] },
   };
   const packages = metadata(root);
   packages.packages.find(pkg => pkg.name === 'membership').dependencies.push({ name: 'commands', kind: null });
   const compute = id => computeLaneProofKey(id, spec, { root, files, metadata: packages, toolchain });
   const ids = ['audit', 'canonical', 'membership', 'runtime'];
   const before = new Map(ids.map(id => [id, compute(id)]));
-  assert.equal(before.get('audit').payload.schema, 3);
+  assert.equal(before.get('audit').payload.schema, 4);
   for (const path of ['fixtures/audit.json', 'crates/commands/tests/semantic_audit/cases.rs']) {
     assert.ok(before.get('audit').payload.inputs.some(input => input.path === path));
     const original = readFileSync(join(root, path));
@@ -528,6 +533,7 @@ test('package-build inputs invalidate transitive and runtime consumers while unr
   spec.lanes.runtime = {
     kind: 'shell', command: 'node runtime.mjs', cache_inputs: { groups: [], paths: [] }, execution_inputs: [],
     execution: { class: 'browser', argv: ['node', 'runtime.mjs'], resources: [] },
+    cargo_inputs: { builds: [{ target: 'commands/bin/runtime', profile: 'dev' }] },
   };
   const packages = metadata(root);
   packages.packages.find(pkg => pkg.name === 'membership').dependencies.push({ name: 'commands', kind: 'dev' });

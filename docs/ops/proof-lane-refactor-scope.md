@@ -12,7 +12,7 @@ reuse delivered 2026-08-23.
 
 The manifest separates broad `cache_inputs` context from narrow typed
 `execution_inputs`. Lane inputs select their direct consumers; package inputs
-follow the complete Cargo dependency closure, including dev/build dependencies;
+follow the compiled Cargo dependency closure;
 target inputs belong only to directly selected tests or compiled binaries.
 Selection and cache keys use the same resolved Cargo source selectors and
 execution edges. Dependency-only matches never forward behavioral
@@ -24,8 +24,27 @@ execution. Runtime and transitive consumers retain package manifests, build
 scripts and production source trees, but omit dependency integration-test trees
 and unit-harness fixture supplements. Direct test targets retain their package's
 integration helper tree. Co-located unit tests and binary source within `src/`
-remain conservatively hashed. Browser and opaque Cargo harnesses retain broad
-workspace roots until explicit compile-target ownership can narrow them safely.
+remain conservatively hashed. Browser and opaque Cargo/Postgres harnesses must
+declare `cargo_inputs.builds` as exact binary target/profile pairs. An empty array
+explicitly declares no Rust build. Behavioral area membership never supplies
+compile roots. Runtime builds follow normal/build dependencies; direct test and
+all-targets roots also include their own dev dependencies, without compiling
+transitive dependencies' test harnesses.
+
+Theme, cross-browser, role-smoke and CSP proofs consume frontend fixtures and
+have no Cargo build inputs. Their cache context uses `frontend-source`; visual
+regression inherits role-smoke's hard prerequisites. Wire changes still trigger
+frontend contracts through explicit behavioral ownership.
+
+Live harnesses derive Cargo arguments from the same target/profile declarations
+used for selection and cache identity. Capacity builds only the server binary;
+migrations remain under `runFmarchMigrations` and the host-wide build lock. The
+full host console additionally runs the operator resolution audit. Schema-upgrade
+uses the dev migrator; TLS builds the release migrator and schema gate. Unknown,
+missing, duplicate or contradictory build declarations fail validation before
+proof execution. The server's normal/build closure still reaches the complete
+workspace today: exact binary ownership removes unrelated binary fixtures, but
+does not claim finer Rust module isolation.
 
 File, prefix and glob selectors have explicit kinds; literal route brackets stay
 literal. Sorted paths and bytes cover edits, additions, deletions and renames.
@@ -46,8 +65,8 @@ Identity's manifest scan and other test-only audits remain target inputs. New
 external file reads must update the owning lane, target or package declaration;
 unknown groups, selectors, packages and targets fail admission.
 
-Input payload schema 3 requires fresh evidence for this execution-input model.
-Historical schema-1 and schema-2 entries remain integrity-checked, available for
+Input payload schema 4 binds exact build targets and profiles and requires fresh
+evidence for this build-input model. Historical schema-1, schema-2 and schema-3 entries remain integrity-checked, available for
 comparison and protected by receipt-based retention, but cannot be reused. Cache
 envelope and maintenance receipt schemas are unchanged; obsolete contracts are
 reported as `input-contract-changed`, not corruption. No cache deletion is part
@@ -68,9 +87,9 @@ queue orders after Cargo and browser prerequisites are reused, without changing
 the workload or timing ceilings.
 
 Cache validity and diff selection remain separate contracts. The catalog does
-not turn broad runtime groups into behavioral ownership edges. A future selection
-audit should reconcile direct runtime consumers such as eventstore's source scan
-and domain's day-vote fixture without making every tool edit select every lane.
+not turn broad runtime groups into behavioral ownership edges. The shared execution
+model binds source audits and target fixtures without making every tool edit
+select every lane.
 
 ### Content-addressed cache operations — 2026-08-30
 

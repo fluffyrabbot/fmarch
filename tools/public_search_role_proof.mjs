@@ -18,6 +18,8 @@ import {
   fixturePrincipalTransport,
 } from "./principal_fixture.mjs";
 
+import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+const proofLane = "test:public-search-role-proof";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
@@ -49,6 +51,7 @@ try {
   await mkdir(artifactDir, { recursive: true });
   proofDatabase = await createScratchDatabase(migrationUrl);
   const authority = await runFmarchMigrations({
+    proofLane,
     cwd: repoRoot,
     migrationUrl: proofDatabase.migrationUrl,
   });
@@ -391,7 +394,7 @@ async function startApi(applicationUrl) {
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  server = spawn("cargo", ["run", "-p", "server"], {
+  server = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: process.env.RUST_LOG ?? "warn" }),
     stdio: ["ignore", "pipe", "pipe"],

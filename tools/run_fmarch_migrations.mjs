@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+
+import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
 
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 
@@ -121,49 +122,66 @@ export function migrationDatabaseEnvironment({ migrationUrl, env = process.env }
 }
 
 /** Build the registered host-wide heavyweight-lane invocation for fmarch-migrate. */
-export function fmarchMigrationInvocation({ cwd, operationId = localMigrationOperationId }) {
-  return Object.freeze({
-    command: "python3",
-    args: Object.freeze([
-      join(cwd, "scripts", "with-heavy-build-lock.py"),
-      "--",
-      "cargo",
-      "run",
-      "--quiet",
-      "-p",
-      "server",
-      "--bin",
-      "fmarch-migrate",
-      "--",
-      "--operation-id",
-      operationId,
-    ]),
+export function fmarchMigrationInvocation({
+  cwd, operationId = localMigrationOperationId, proofLane, profile = "dev", env = process.env,
+}) {
+  return lockedProofCargoInvocation({
+    cwd,
+    laneId: proofLane,
+    target: "server/bin/fmarch-migrate",
+    profile,
+    quiet: true,
+    args: ["--operation-id", operationId],
+    env,
   });
 }
 
 /** Run the explicit schema owner before starting any local API process. */
-export async function runFmarchMigrations({ cwd, migrationUrl, env = process.env }) {
+export async function runFmarchMigrations({
+  cwd, migrationUrl, env = process.env, proofLane, profile = "dev",
+  capture = false, allowFailure = false, spawnProcess = spawn,
+}) {
   const authority = localDatabaseAuthority({ migrationUrl, env });
   const migrationEnv = migrationDatabaseEnvironmentForAuthority(authority, env);
-  const invocation = fmarchMigrationInvocation({ cwd });
+  const invocation = fmarchMigrationInvocation({ cwd, proofLane, profile, env });
+  const collect = capture || allowFailure;
 
-  await new Promise((resolve, reject) => {
-    const child = spawn(
-      invocation.command,
-      invocation.args,
-      {
-        cwd,
-        env: migrationEnv,
-        stdio: ["ignore", "inherit", "inherit"],
-      },
-    );
+  const result = await new Promise((resolve, reject) => {
+    const child = spawnProcess(invocation.command, invocation.args, {
+      cwd,
+      env: migrationEnv,
+      stdio: collect ? ["ignore", "pipe", "pipe"] : ["ignore", "inherit", "inherit"],
+    });
+    const stdout = [];
+    const stderr = [];
+    let capturedBytes = 0;
+    let captureFailure;
+    const collectChunk = (destination, chunk) => {
+      if (captureFailure) return;
+      capturedBytes += chunk.length;
+      if (capturedBytes > 64 * 1024 * 1024) {
+        captureFailure = new Error("fmarch-migrate output exceeded the 64 MiB capture limit");
+        // Keep draining without retaining bytes; the owning proof runner
+        // supervises process lifetime and descendant cancellation.
+      } else destination.push(chunk);
+    };
+    if (collect) {
+      child.stdout.on("data", chunk => collectChunk(stdout, chunk));
+      child.stderr.on("data", chunk => collectChunk(stderr, chunk));
+    }
     child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`fmarch-migrate exited code=${code} signal=${signal ?? "none"}`));
+    child.once("close", (code, signal) => {
+      if (captureFailure) return reject(captureFailure);
+      const result = {
+        status: code, signal,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+      };
+      if (code === 0 || allowFailure) resolve(result);
+      else reject(new Error(`fmarch-migrate exited code=${code} signal=${signal ?? "none"}: ${result.stderr.slice(-4_000)}`));
     });
   });
-  return authority;
+  return collect ? Object.freeze({ ...authority, result }) : authority;
 }
 
 function migrationDatabaseEnvironmentForAuthority(authority, env) {

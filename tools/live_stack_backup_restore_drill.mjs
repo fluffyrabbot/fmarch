@@ -16,6 +16,8 @@ import {
   fixturePrincipalTransport,
 } from "./principal_fixture.mjs";
 
+import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+const proofLane = "test:live-stack-backup-restore-drill";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.resolve(
   process.env.FMARCH_PROOF_ARTIFACT_DIR ??
@@ -69,6 +71,7 @@ try {
     ? runnerOwnedDatabase(migrationUrl)
     : await createScratchDatabase(migrationUrl, "source");
   const sourceAuthority = await runFmarchMigrations({
+    proofLane,
     cwd: repoRoot,
     migrationUrl: sourceDatabase.migrationUrl,
   });
@@ -103,6 +106,7 @@ try {
     dumpPath,
   ]);
   const restoredAuthority = await runFmarchMigrations({
+    proofLane,
     cwd: repoRoot,
     migrationUrl: restoredDatabase.migrationUrl,
   });
@@ -607,7 +611,7 @@ async function startApi(applicationUrl, label) {
       ? path.join(artifactDir, `media-store-${label}`)
       : path.resolve(repoRoot, configuredMediaRoot);
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  const child = spawn("cargo", ["run", "-p", "server"], {
+  const child = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),

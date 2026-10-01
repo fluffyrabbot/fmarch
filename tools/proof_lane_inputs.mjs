@@ -3,9 +3,11 @@
 // without turning every changed context file into a direct execution trigger.
 import { dirname, relative, resolve } from 'node:path';
 import { matchesGlob } from 'node:path';
+import { validateCargoBuilds } from './proof_cargo_builds.mjs';
 
 const SELECTOR_KINDS = new Set(['file', 'prefix', 'glob']);
 const LIBRARY_KINDS = new Set(['lib', 'rlib', 'dylib', 'cdylib', 'staticlib', 'proc-macro']);
+const OPAQUE_CARGO_CLASSES = new Set(['browser', 'cargo', 'postgres']);
 
 function record(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`);
@@ -123,6 +125,21 @@ export function validateCacheInputContract(manifest, { packageNames, metadata } 
     for (const target of lane.assertion_targets ?? []) {
       if (inventory && !inventory.has(target)) throw new Error(`proof lane ${id} refers to unknown target ${target}`);
     }
+    const { command } = cargoArguments(lane);
+    if (lane.cargo_inputs === undefined) {
+      if (!command && OPAQUE_CARGO_CLASSES.has(lane.execution?.class)) {
+        throw new Error(`proof lane ${id} requires explicit cargo_inputs builds for its opaque execution`);
+      }
+      continue;
+    }
+    if (command) throw new Error(`proof lane ${id} may not declare cargo_inputs with a direct Cargo command`);
+    if (lane.assertion_targets?.length) throw new Error(`proof lane ${id} may not combine cargo_inputs with assertion targets`);
+    const builds = validateCargoBuilds(lane.cargo_inputs, `proof lane ${id} Cargo inputs`);
+    for (const build of builds) {
+      if (knownPackages && !knownPackages.has(build.target.split('/')[0]) || inventory && !inventory.has(build.target)) {
+        throw new Error(`proof lane ${id} Cargo build refers to unknown binary target ${build.target}`);
+      }
+    }
   }
   return true;
 }
@@ -152,9 +169,18 @@ function cargoArguments(lane) {
   const index = argv.indexOf('cargo');
   if (index === -1) return { command: null, args: [] };
   const command = argv[index + 1];
-  const args = argv.slice(index + 2);
-  const separator = args.indexOf('--');
-  return { command, args: separator === -1 ? args : args.slice(0, separator) };
+  const trailing = argv.slice(index + 2);
+  const separator = trailing.indexOf('--');
+  const args = [];
+  for (const argument of separator === -1 ? trailing : trailing.slice(0, separator)) {
+    // Cargo accepts both --target value and --target=value, and -pNAME.
+    // Normalize build-selection flags before deciding roots or harness mode.
+    const equals = /^(--(?:package|bin|example|test|bench|profile))=(.*)$/s.exec(argument);
+    if (equals) args.push(equals[1], equals[2]);
+    else if (argument.startsWith('-p') && argument.length > 2) args.push('-p', argument.slice(2).replace(/^=/, ''));
+    else args.push(argument);
+  }
+  return { command, args };
 }
 
 // Package source trees contain co-located unit tests and remain conservative.
@@ -168,15 +194,26 @@ export function resolveLaneCargoInputs(laneIds, manifest, metadata, { root } = {
   const inventory = targetInventory(metadata);
   const selected = new Set();
   const targets = new Set();
+  const devRoots = new Set();
+  const builds = new Map();
   for (const id of laneIds) {
     const lane = manifest.lanes[id];
     if (!lane) throw new Error(`unknown proof lane ${id}`);
-    const roots = new Set((manifest.areas ?? []).filter((area) => area.lanes.includes(id))
-      .map((area) => area.crate ?? area.closure_crate).filter((name) => packages.has(name)));
+    // Behavioral areas own assertions, not build roots. An opaque harness must
+    // declare its runtime binaries; [] explicitly means it does not use Cargo.
+    if (lane.cargo_inputs !== undefined) {
+      for (const build of lane.cargo_inputs.builds) {
+        selected.add(inventory.get(build.target).package);
+        targets.add(build.target);
+        builds.set(JSON.stringify([build.target, build.profile]), { ...build });
+      }
+      continue;
+    }
+    const roots = new Set();
+    const laneTargets = new Set();
     for (const target of lane.assertion_targets ?? []) {
-      if (!inventory.has(target)) throw new Error(`proof lane ${id} refers to unknown target ${target}`);
       roots.add(inventory.get(target).package);
-      targets.add(target);
+      laneTargets.add(target);
     }
     const { command, args } = cargoArguments(lane);
     for (let index = 0; index < args.length; index += 1) {
@@ -186,44 +223,67 @@ export function resolveLaneCargoInputs(laneIds, manifest, metadata, { root } = {
         roots.add(name);
       }
     }
-    if (lane.execution?.class === 'browser' || args.includes('--workspace') ||
-        ['cargo', 'postgres'].includes(lane.execution?.class) && roots.size === 0) {
+    if (args.includes('--workspace')) {
       for (const name of packages.keys()) roots.add(name);
+    } else if (command && roots.size === 0) {
+      const defaults = new Set(metadata.workspace_default_members ?? metadata.workspace_members ?? []);
+      for (const pkg of packages.values()) if (!defaults.size || defaults.has(pkg.id)) roots.add(pkg.name);
     }
-    if (args.includes('--all-targets')) {
-      for (const [target, detail] of inventory) if (roots.has(detail.package)) targets.add(target);
-    }
-    // Compiled binaries can embed files even when no test harness runs.
-    // Library target supplements denote unit-harness inputs; unconditional
-    // library inputs belong to packages and already follow the closure.
+    const rootTargets = [...inventory].filter(([, detail]) => roots.has(detail.package));
+    const addKinds = (...kinds) => {
+      for (const [target, detail] of rootTargets) if (kinds.includes(detail.targetKind)) laneTargets.add(target);
+    };
+    // A lib supplement belongs to its test harness. Ordinary --lib build/check
+    // invocations consume the package inputs but not its unit-test documents.
+    if (args.includes('--all-targets')) addKinds('lib', 'test', 'bin', 'bench', 'example');
+    if (args.includes('--tests')) addKinds('lib', 'bin', 'test');
+    if (args.includes('--benches')) addKinds('lib', 'bin', 'bench');
+    if (args.includes('--bins')) addKinds('bin');
+    if (args.includes('--examples')) addKinds('example');
+    if (args.includes('--lib') && ['test', 'bench'].includes(command)) addKinds('lib');
     if (command) {
       for (let index = 0; index < args.length; index += 1) {
-        if (!['--bin', '--example'].includes(args[index])) continue;
+        if (!['--bin', '--example', '--test', '--bench'].includes(args[index])) continue;
         const kind = args[index].slice(2);
         const name = args[++index];
-        const matches = [...inventory].filter(([, detail]) => roots.has(detail.package) && detail.targetKind === kind && detail.name === name);
+        const matches = rootTargets.filter(([, detail]) => detail.targetKind === kind && detail.name === name);
         if (matches.length !== 1) throw new Error(`proof lane ${id} has unknown or ambiguous ${kind} target ${name}`);
-        targets.add(matches[0][0]);
+        laneTargets.add(matches[0][0]);
       }
     }
     const explicitTarget = args.some((argument) => ['--lib', '--bin', '--example', '--test', '--bench', '--all-targets', '--bins', '--examples', '--tests', '--benches'].includes(argument));
-    const bins = [...inventory].filter(([, detail]) => roots.has(detail.package) && detail.targetKind === 'bin');
+    const bins = rootTargets.filter(([, detail]) => detail.targetKind === 'bin');
     if (command === 'run' && !explicitTarget) {
       const defaults = bins.filter(([, detail]) => packages.get(detail.package).default_run === detail.name);
       const runnable = defaults.length ? defaults : bins;
       if (runnable.length !== 1) throw new Error(`proof lane ${id} has unknown or ambiguous default binary target`);
-      targets.add(runnable[0][0]);
-    } else if (lane.execution?.class === 'browser' ||
-        !command && ['cargo', 'postgres'].includes(lane.execution?.class) || args.includes('--bins') ||
-        ['build', 'check', 'clippy'].includes(command) && !explicitTarget ||
-        [...targets].some((target) => inventory.get(target).targetKind === 'test' && roots.has(inventory.get(target).package))) {
-      for (const [target] of bins) targets.add(target);
+      laneTargets.add(runnable[0][0]);
+    } else if (!explicitTarget && command === 'test') {
+      addKinds('lib', 'bin', 'test', 'example');
+    } else if (!explicitTarget && command === 'bench') {
+      addKinds('lib', 'bin', 'bench');
+    } else if (!explicitTarget && ['build', 'check', 'clippy'].includes(command)) {
+      addKinds('bin');
     }
-    for (const name of roots) selected.add(name);
+    // Cargo builds binary targets alongside direct integration tests.
+    if ([...laneTargets].some((target) => inventory.get(target).targetKind === 'test')) addKinds('bin');
+    const usesDevDependencies = ['test', 'bench'].includes(command) ||
+      args.some((argument) => ['--all-targets', '--tests', '--benches'].includes(argument)) ||
+      [...laneTargets].some((target) => ['test', 'bench', 'example'].includes(inventory.get(target).targetKind)) ||
+      !command && laneTargets.size > 0;
+    for (const name of roots) {
+      selected.add(name);
+      if (usesDevDependencies) devRoots.add(name);
+    }
+    for (const target of laneTargets) targets.add(target);
   }
   const queue = [...selected];
   while (queue.length) {
-    for (const dependency of packages.get(queue.shift()).dependencies ?? []) {
+    const owner = queue.shift();
+    for (const dependency of packages.get(owner).dependencies ?? []) {
+      // A dependent compiles its dependencies' normal/build closure, never
+      // their dev dependencies. Only directly exercised test roots need dev.
+      if (dependency.kind === 'dev' && !devRoots.has(owner)) continue;
       const name = dependency.name;
       if (!packages.has(name) || selected.has(name)) continue;
       selected.add(name);
@@ -256,7 +316,10 @@ export function resolveLaneCargoInputs(laneIds, manifest, metadata, { root } = {
       sources.push({ kind: 'prefix', path: `${pkg.path}${target.targetKind === 'bench' ? 'benches' : 'examples'}/` });
     }
   }
-  return { packages: resolvedPackages, targets: [...targets].sort(), selectors: uniqueSelectors(sources) };
+  return {
+    packages: resolvedPackages, targets: [...targets].sort(), selectors: uniqueSelectors(sources),
+    builds: [...builds.values()].sort((left, right) => left.target.localeCompare(right.target) || left.profile.localeCompare(right.profile)),
+  };
 }
 
 export function resolveLaneExecutionInputs(laneIds, manifest, metadata, options = {}) {

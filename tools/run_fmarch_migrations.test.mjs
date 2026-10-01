@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import {
   applicationDatabaseEnvironment,
   fmarchMigrationInvocation,
@@ -10,6 +12,7 @@ import {
   localDatabaseRoleNames,
   migrationDatabaseEnvironment,
   serverRuntimeEnvironment,
+  runFmarchMigrations,
 } from "./run_fmarch_migrations.mjs";
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 
@@ -187,7 +190,7 @@ test("migrator child environment carries no runtime, key-admin, or ambient libpq
 });
 
 test("every shared migrator launch registers with the host-wide heavyweight lane", () => {
-  const invocation = fmarchMigrationInvocation({ cwd: "/workspace/fmarch" });
+  const invocation = fmarchMigrationInvocation({ cwd: "/workspace/fmarch", env: {} });
 
   assert.equal(invocation.command, "python3");
   assert.deepEqual(invocation.args, [
@@ -195,7 +198,10 @@ test("every shared migrator launch registers with the host-wide heavyweight lane
     "--",
     "cargo",
     "run",
+    "--locked",
     "--quiet",
+    "--profile",
+    "dev",
     "-p",
     "server",
     "--bin",
@@ -295,3 +301,59 @@ function contaminatedEnvironment() {
     ),
   };
 }
+
+
+test("captured migrator results wait for stream closure and retain schema-owner isolation", async () => {
+  let invocation;
+  const authority = await runFmarchMigrations({
+    cwd: "/workspace/fmarch",
+    migrationUrl: "postgres://owner:password@localhost/fmarch",
+    env: contaminatedEnvironment(),
+    capture: true,
+    spawnProcess(command, args, options) {
+      invocation = { command, args, options };
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      queueMicrotask(() => {
+        child.emit("exit", 0, null);
+        child.stdout.write("late output");
+        child.stderr.write("migration diagnostic");
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+  assert.equal(invocation.command, "python3");
+  assert.equal(invocation.args[0], "/workspace/fmarch/scripts/with-heavy-build-lock.py");
+  assert.equal(invocation.options.env.DATABASE_URL, undefined);
+  assert.equal(invocation.options.env.DATABASE_KEY_ADMIN_URL, undefined);
+  assert.equal(invocation.options.env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
+  assert.match(invocation.options.env.DATABASE_MIGRATION_URL, /^postgres:\/\/owner:/);
+  assert.deepEqual(authority.result, {
+    status: 0, signal: null, stdout: "late output", stderr: "migration diagnostic",
+  });
+});
+
+test("a failing migrator is inspectable only for an explicit expected-failure proof", async () => {
+  const options = {
+    cwd: "/workspace/fmarch",
+    migrationUrl: "postgres://owner:password@localhost/fmarch",
+    env: {},
+    capture: true,
+    spawnProcess() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      queueMicrotask(() => {
+        child.stderr.write("VersionMismatch(1)");
+        child.emit("close", 1, null);
+      });
+      return child;
+    },
+  };
+  await assert.rejects(runFmarchMigrations(options), /VersionMismatch\(1\)/);
+  const { result } = await runFmarchMigrations({ ...options, allowFailure: true });
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, "VersionMismatch(1)");
+});

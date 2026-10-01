@@ -6,8 +6,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
-import { localMigrationOperationId } from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
 
+const proofLane = "test:database-tls-boundary";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRoot = path.join(repoRoot, "target");
 // Direct invocations keep their long-lived evidence location.  Proof-lane runs
@@ -82,16 +84,10 @@ try {
   await run(pgCtl, ["-D", dataDir, "-l", logPath, "-w", "start"]);
   postgresRunning = true;
 
-  await run("cargo", [
-    "build",
-    "--release",
-    "-p",
-    "server",
-    "--bin",
-    "fmarch-migrate",
-    "--bin",
-    "fmarch-schema-gate",
-  ]);
+  const schemaGateBuild = lockedProofCargoInvocation({
+    cwd: repoRoot, laneId: proofLane, target: "server/bin/fmarch-schema-gate", profile: "release", command: "build",
+  });
+  await run(schemaGateBuild.command, schemaGateBuild.args);
 
   const ownerPassword = "database-tls-owner-proof-password";
   const applicationPassword = "database-tls-application-proof-password";
@@ -109,18 +105,17 @@ try {
     database: "postgres",
   });
   const releaseDir = path.join(repoRoot, "target", "release");
-  await run(
-    path.join(releaseDir, "fmarch-migrate"),
-    ["--operation-id", localMigrationOperationId],
-    {
-      env: isolatedEnvironment({
-        DATABASE_MIGRATION_URL: ownerUrl,
-        FMARCH_DATABASE_APPLICATION_PASSWORD: applicationPassword,
-        FMARCH_DATABASE_KEY_ADMIN_PASSWORD: keyAdminPassword,
-        ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
-      }),
-    },
-  );
+  await runFmarchMigrations({
+    cwd: repoRoot,
+    proofLane,
+    profile: "release",
+    migrationUrl: ownerUrl,
+    env: isolatedEnvironment({
+      FMARCH_DATABASE_APPLICATION_PASSWORD: applicationPassword,
+      FMARCH_DATABASE_KEY_ADMIN_PASSWORD: keyAdminPassword,
+      ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
+    }),
+  });
   await run(path.join(releaseDir, "fmarch-schema-gate"), [], {
     env: isolatedEnvironment({
       DATABASE_URL: applicationUrl,

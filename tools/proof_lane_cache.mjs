@@ -30,7 +30,7 @@ import { assertNoIgnoredProofInputs, assertProofInputPaths, proofSourceFiles, Un
 // The receipt envelope is historical evidence. Changing the input contract
 // invalidates reuse without making those immutable receipts corrupt.
 export const PROOF_CACHE_SCHEMA = 1;
-export const PROOF_CACHE_INPUT_SCHEMA = 3;
+export const PROOF_CACHE_INPUT_SCHEMA = 4;
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -172,6 +172,7 @@ export function computeLaneProofKey(laneId, manifest, {
     matchers: matcherList,
     execution_inputs: edges,
     cargo_targets: cargo.targets,
+    cargo_builds: cargo.builds,
     inputs: inputFiles,
     toolchain,
   });
@@ -216,7 +217,7 @@ export function readProofCacheEntry(root, laneId, proofKey, { allowHistoricalInp
   if (sha256(JSON.stringify(canonical(entry.inputs))) !== proofKey) {
     throw new Error('cache input fingerprint does not match its key');
   }
-  if (![1, 2, PROOF_CACHE_INPUT_SCHEMA].includes(entry.inputs?.schema) || entry.inputs.lane_id !== laneId) {
+  if (![1, 2, 3, PROOF_CACHE_INPUT_SCHEMA].includes(entry.inputs?.schema) || entry.inputs.lane_id !== laneId) {
     throw new Error('cache input contract schema or lane identity is invalid');
   }
   if (!allowHistoricalInputs && entry.inputs.schema !== PROOF_CACHE_INPUT_SCHEMA) {
