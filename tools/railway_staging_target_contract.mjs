@@ -396,14 +396,12 @@ async function contract() {
   assert.match(gameDayDisarm, /serviceInstanceUpdate/);
   assert.match(gameDayDisarm, /startCommand: "\/bin\/false"/);
   assert.doesNotMatch(gameDayDisarm, /serviceInstanceDeploy/);
-  assert.match(
-    source["tools/database_tls_boundary.mjs"],
-    /\["--operation-id", localMigrationOperationId\]/,
-  );
-  assert.match(
-    source["tools/database_schema_upgrade_proof.mjs"],
-    /\["--operation-id", localMigrationOperationId\]/,
-  );
+  for (const harness of ["tools/database_tls_boundary.mjs", "tools/database_schema_upgrade_proof.mjs"]) {
+    assert.match(source[harness], /await runFmarchMigrations\(\{/);
+    assert.match(source[harness], /proofLane[,:]/);
+  }
+  assert.match(source["tools/run_fmarch_migrations.mjs"], /operationId = localMigrationOperationId/);
+  assert.match(source["tools/run_fmarch_migrations.mjs"], /args: \["--operation-id", operationId\]/);
   for (const forbidden of [
     "DATABASE_URL",
     "DATABASE_KEY_ADMIN_URL",
