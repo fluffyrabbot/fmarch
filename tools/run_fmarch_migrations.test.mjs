@@ -216,8 +216,16 @@ test("every local migrator caller gives each child only its required authority",
   for (const filename of migrationHarnessCallers) {
     const source = readFileSync(new URL(filename, import.meta.url), "utf8");
     assert.match(source, /runFmarchMigrations\(\{/u, `${filename} must run the migrator`);
+    const sharedRoleRuntime = ["profile_role_proof.mjs", "completed_game_export_role_proof.mjs"].includes(filename);
+    if (sharedRoleRuntime) {
+      assert.match(source, /from "\.\/live_role_proof_runtime\.mjs"/u);
+      assert.match(source, /startRoleProofApi\(\{[^}]*applicationUrl: authority\.applicationUrl/u);
+    }
+    const serverSource = sharedRoleRuntime
+      ? readFileSync(new URL("live_role_proof_runtime.mjs", import.meta.url), "utf8")
+      : source;
     assert.match(
-      source,
+      serverSource,
       filename === "mash_scale_acceptance.mjs"
         ? /applicationDatabaseEnvironment\(\{/u
         : /serverRuntimeEnvironment\(\{/u,
@@ -229,7 +237,7 @@ test("every local migrator caller gives each child only its required authority",
       `${filename} must pass an explicit migrationUrl`,
     );
     assert.doesNotMatch(
-      source,
+      serverSource,
       /env:\s*\{\s*\.\.\.process\.env,\s*DATABASE_URL:/u,
       `${filename} must not pass ambient owner authority to a server`,
     );

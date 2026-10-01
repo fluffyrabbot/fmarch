@@ -103,6 +103,8 @@ test('live proofs bind their declared migrator and schema targets without the ep
     ['test:host-console-live-stack-smoke', ['operator_proof/bin/audit_resolution', 'server/bin/fmarch-migrate', 'server/bin/server']],
     ['test:host-console-day-event-room-live-stack', ['server/bin/fmarch-migrate', 'server/bin/server']],
     ['test:capacity-overload', ['server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:dev-test-game-profile', ['server/bin/fmarch-migrate', 'server/bin/server']],
+    ['test:dev-test-game-completed-export', ['server/bin/fmarch-migrate', 'server/bin/server']],
     ['test:live-stack-backup-restore-drill', ['server/bin/fmarch-migrate', 'server/bin/server']],
     ['test:database-schema-upgrade', ['server/bin/fmarch-migrate']],
     ['test:database-tls-boundary', ['server/bin/fmarch-migrate', 'server/bin/fmarch-schema-gate']],
@@ -134,6 +136,51 @@ test('live proofs bind their declared migrator and schema targets without the ep
   // Repository contract context intentionally remains broader than execution
   // ownership: it can invalidate a key without selecting a lane to execute.
   assert.ok(capacity.matchers.some(selector => executionInputMatches(epoch, selector)));
+});
+
+test('profile/export execution inputs select exact routes and shared lifecycle without behavioral ownership', () => {
+  const profile = 'test:dev-test-game-profile';
+  const exported = 'test:dev-test-game-completed-export';
+  for (const [source, required, excluded] of [
+    ['tools/profile_role_proof.mjs', [profile], [exported]],
+    ['tools/completed_game_export_role_proof.mjs', [exported], [profile]],
+    ['frontend/src/routes/profile/edit/+page.svelte', [profile], [exported]],
+    ['frontend/src/routes/u/[handle]/+page.server.js', [profile], [exported]],
+    ['frontend/src/routes/g/[game]/host/export/+page.svelte', [exported], [profile]],
+    ['frontend/src/routes/g/g/host/export/+page.svelte', [], [profile, exported]],
+    ['tools/live_role_proof_runtime.mjs', [profile, exported], []],
+    ['tools/profile_export_proof_evidence.mjs', [profile, exported], []],
+    ['tools/run_fmarch_migrations.mjs', [profile, exported], []],
+    ['frontend/src/lib/server/session-capabilities.mjs', [profile, exported], []],
+    ['frontend/src/lib/app/AppSurfaceHeader.svelte', [profile, exported], []],
+    ['frontend/src/lib/app/app-surface-header-model.mjs', [profile, exported], []],
+    ['frontend/src/routes/+layout.server.js', [profile, exported], []],
+    ['frontend/src/routes/+layout.svelte', [profile, exported], []],
+    ['frontend/src/lib/app/app-shell-model.mjs', [profile, exported], []],
+    ['frontend/src/lib/app/AppShell.svelte', [profile, exported], []],
+    ['frontend/src/lib/app/theme-context.mjs', [profile, exported], []],
+  ]) {
+    const selection = select([source], withoutAreas);
+    for (const laneId of required) {
+      assert.ok(selection.laneIds.includes(laneId), `${source} selects ${laneId}`);
+      const inputs = laneProofInputs([laneId], manifest, { root: REPO_ROOT, metadata });
+      assert.ok(inputs.edges.some(edge => executionInputMatches(source, edge.selector)), `${source} is fingerprinted for ${laneId}`);
+    }
+    for (const laneId of excluded) assert.ok(!selection.laneIds.includes(laneId), `${source} must not select ${laneId}`);
+  }
+});
+
+test('completion evidence declarations participate in their lane proof key', () => {
+  const profile = 'test:dev-test-game-profile';
+  const exported = 'test:dev-test-game-completed-export';
+  const options = { root: REPO_ROOT, metadata, files: [], toolchain: { fixture: 'fixed' } };
+  const before = new Map([profile, exported].map(id => [id, computeLaneProofKey(id, manifest, options).proofKey]));
+  for (const field of ['capability', 'artifact', 'proof']) {
+    const changed = structuredClone(manifest);
+    changed.lanes[profile].completion_evidence[0][field] += '-changed';
+    assert.notEqual(computeLaneProofKey(profile, changed, options).proofKey, before.get(profile), field);
+    assert.equal(computeLaneProofKey(exported, changed, options).proofKey, before.get(exported), `${field} stays lane-scoped`);
+  }
 });
 
 test('Rust and runtime mutations preserve static frontend keys while changing live proof keys', t => {

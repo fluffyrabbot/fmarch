@@ -126,6 +126,58 @@
         "commands:semantic-audit",
         "frontend:game"
       ]
+    },
+    {
+      "name": "profile editor and public profile browser ownership",
+      "scope": "Owner and public profile routes select their exact live browser leaf without unrelated community or export proof.",
+      "changed": [
+        "frontend/src/routes/profile/edit/+page.server.js",
+        "frontend/src/routes/profile/edit/+page.svelte",
+        "frontend/src/routes/u/[handle]/+page.svelte"
+      ],
+      "requires": [
+        "test:frontend-contract",
+        "test:dev-test-game-profile"
+      ],
+      "excludes": [
+        "test:dev-test-game-completed-export",
+        "test:dev-test-game-discussion",
+        "test:dev-test-game-community-moderation",
+        "test:dev-test-game-community-subscriptions"
+      ]
+    },
+    {
+      "name": "literal completed-game host export route ownership",
+      "scope": "Literal Svelte route brackets select the export browser leaf and retain existing game frontend contracts.",
+      "changed": [
+        "frontend/src/routes/g/[game]/host/export/+page.server.js",
+        "frontend/src/routes/g/[game]/host/export/+page.svelte"
+      ],
+      "requires": [
+        "test:frontend-contract",
+        "test:dev-test-game-completed-export",
+        "test:frontend-role-smoke"
+      ],
+      "excludes": [
+        "test:dev-test-game-profile",
+        "test:dev-test-game-discussion"
+      ]
+    },
+    {
+      "name": "shared live role lifecycle proof ownership",
+      "scope": "Changing shared startup, isolated database, and evidence lifecycle code selects both consuming browser proofs plus the bounded lifecycle contract.",
+      "changed": [
+        "tools/live_role_proof_runtime.mjs"
+      ],
+      "requires": [
+        "test:dev-test-game-profile",
+        "test:dev-test-game-completed-export",
+        "test:dev-test-game-contract"
+      ],
+      "excludes": [
+        "test:dev-test-game-discussion",
+        "test:dev-test-game-community-moderation"
+      ]
     }
   ]
 }

@@ -267,3 +267,104 @@ test("registry validation rejects circular evidence and unknown release authorit
     /unknown package script/,
   );
 });
+
+const canonicalCapabilities = [
+  ["product.community.profiles", "test:dev-test-game-profile"],
+  ["product.archive.completed-game-export", "test:dev-test-game-completed-export"],
+];
+
+async function canonicalFixture() {
+  return {
+    registry: await loadCompletionRegistry(),
+    proofManifest: JSON.parse(await readFile(
+      path.resolve(repoRoot, "docs/ops/proof-lane-manifest.json"), "utf8",
+    )),
+  };
+}
+
+test("profile and export completion references resolve canonical browser acceptance", async () => {
+  const { registry, proofManifest } = await canonicalFixture();
+  for (const [capability, laneId] of canonicalCapabilities) {
+    const item = registry.items.find((entry) => entry.id === capability);
+    assert.equal(item.status, "complete");
+    assert.deepEqual(item.evidence.filter((entry) => entry.kind === "canonical-lane"), [
+      { kind: "canonical-lane", value: laneId },
+    ]);
+    assert.ok(!item.evidence.some((entry) => entry.value.includes(":local") || entry.value.startsWith("target/")));
+    assert.equal(proofManifest.lanes[laneId].completion_evidence[0].capability, capability);
+  }
+  assert.equal(await validateRegistry(registry, { proofManifest, verifySourcePaths: false }), registry);
+  assert.match(renderScorecard(registry), /canonical-lane: `test:dev-test-game-profile`/);
+  assert.match(renderScorecard(registry), /canonical-lane: `test:dev-test-game-completed-export`/);
+});
+
+test("canonical completion rejects missing, foreign, and unreciprocated coverage", async (t) => {
+  for (const [name, mutate, expected] of [
+    ["missing lane", ({ proofManifest }, laneId) => { delete proofManifest.lanes[laneId]; }, /unknown canonical lane/],
+    ["missing declaration", ({ proofManifest }, laneId) => { delete proofManifest.lanes[laneId].completion_evidence; }, /no matching canonical declaration/],
+    ["foreign lane", ({ registry }, laneId, capability) => {
+      registry.items.find((item) => item.id === capability).evidence.find((entry) => entry.kind === "canonical-lane").value = "test:dev-test-game-completed-export";
+    }, /no matching canonical declaration/],
+    ["local command substitution", ({ registry }, laneId, capability) => {
+      const item = registry.items.find((entry) => entry.id === capability);
+      item.evidence = item.evidence.filter((entry) => entry.kind !== "canonical-lane");
+      item.evidence.push({ kind: "command", value: `npm run ${laneId}:local` });
+    }, /lacks reciprocal registry evidence/],
+    ["unknown capability", ({ proofManifest }, laneId) => {
+      proofManifest.lanes[laneId].completion_evidence[0].capability = "product.missing";
+    }, /unknown capability/],
+    ["missing behavioral owner", ({ proofManifest }, laneId, capability) => {
+      for (const area of proofManifest.areas) {
+        if (area.capabilities?.includes(capability)) area.lanes = area.lanes.filter((entry) => entry !== laneId);
+      }
+    }, /no direct area owner/],
+    ["duplicate registry reference", ({ registry }, laneId, capability) => {
+      registry.items.find((item) => item.id === capability).evidence.push({ kind: "canonical-lane", value: laneId });
+    }, /repeats canonical lane/],
+  ]) {
+    await t.test(name, async () => {
+      const fixture = await canonicalFixture();
+      mutate(fixture, canonicalCapabilities[0][1], canonicalCapabilities[0][0]);
+      await assert.rejects(
+        validateRegistry(fixture.registry, { proofManifest: fixture.proofManifest, verifySourcePaths: false }),
+        expected,
+      );
+    });
+  }
+});
+
+test("canonical completion requires direct browser execution and runner-owned artifacts", async (t) => {
+  for (const [name, mutate, expected] of [
+    ["hermetic substitution", (lane) => { lane.execution.class = "hermetic"; }, /must execute browser acceptance/],
+    ["local spine wrapper", (lane) => { lane.execution.argv[2] += ":local"; }, /registered npm script directly/],
+    ["foreign script", (lane) => { lane.execution.argv[2] = "test:frontend-contract"; }, /registered npm script directly/],
+    ["shell command", (lane) => { lane.execution.argv = ["sh", "-c", "npm run test:dev-test-game-profile"]; }, /registered npm script directly/],
+    ["ambient artifact directory", (lane) => { lane.execution.resources = lane.execution.resources.filter((resource) => resource.kind !== "artifact-dir"); }, /runner-owned artifact directory/],
+  ]) {
+    await t.test(name, async () => {
+      const { registry, proofManifest } = await canonicalFixture();
+      mutate(proofManifest.lanes[canonicalCapabilities[0][1]]);
+      await assert.rejects(validateRegistry(registry, { proofManifest, verifySourcePaths: false }), expected);
+    });
+  }
+});
+
+test("canonical completion metadata is explicit, unique, and runner relative", async (t) => {
+  for (const [name, mutate, expected] of [
+    ["empty declaration", (lane) => { lane.completion_evidence = []; }, /nonempty array/],
+    ["unknown metadata field", (lane) => { lane.completion_evidence[0].filename = "extra.json"; }, /invalid completion evidence metadata/],
+    ["duplicate capability", (lane) => { lane.completion_evidence.push(structuredClone(lane.completion_evidence[0])); }, /repeats capability/],
+    ["absolute artifact", (lane) => { lane.completion_evidence[0].artifact = "/tmp/proof.json"; }, /safe runner-relative JSON/],
+    ["escaping artifact", (lane) => { lane.completion_evidence[0].artifact = "../proof.json"; }, /safe runner-relative JSON/],
+    ["normalized escape", (lane) => { lane.completion_evidence[0].artifact = "a/../proof.json"; }, /safe runner-relative JSON/],
+    ["artifact wildcard", (lane) => { lane.completion_evidence[0].artifact = "*.json"; }, /safe runner-relative JSON/],
+    ["non JSON artifact", (lane) => { lane.completion_evidence[0].artifact = "proof.txt"; }, /safe runner-relative JSON/],
+    ["missing proof identity", (lane) => { lane.completion_evidence[0].proof = ""; }, /stable proof identifier/],
+  ]) {
+    await t.test(name, async () => {
+      const { registry, proofManifest } = await canonicalFixture();
+      mutate(proofManifest.lanes[canonicalCapabilities[0][1]]);
+      await assert.rejects(validateRegistry(registry, { proofManifest, verifySourcePaths: false }), expected);
+    });
+  }
+});

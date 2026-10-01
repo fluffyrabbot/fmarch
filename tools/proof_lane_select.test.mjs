@@ -660,6 +660,8 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
     ['test:auth-invite-role-proof', ['DATABASE_MIGRATION_URL']],
     ['test:dev-test-game-community-moderation', ['DATABASE_MIGRATION_URL']],
     ['test:dev-test-game-community-subscriptions', ['DATABASE_MIGRATION_URL']],
+    ['test:dev-test-game-profile', ['DATABASE_MIGRATION_URL']],
+    ['test:dev-test-game-completed-export', ['DATABASE_MIGRATION_URL']],
     ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
     ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
     ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
@@ -1525,6 +1527,11 @@ test('direct proof-tool sources select their owning proof lanes', () => {
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
     ['tools/discussion_role_proof.mjs', 'test:dev-test-game-discussion'],
     ['tools/game_index_role_proof.mjs', 'test:dev-test-game-game-index'],
+    ['tools/profile_role_proof.mjs', 'test:dev-test-game-profile'],
+    ['tools/completed_game_export_role_proof.mjs', 'test:dev-test-game-completed-export'],
+    ...['tools/live_role_proof_runtime.mjs', 'tools/live_role_proof_runtime.test.mjs', 'tools/profile_export_proof_evidence.mjs', 'tools/profile_export_proof_evidence.test.mjs'].map(source => [source, [
+      'test:dev-test-game-profile', 'test:dev-test-game-completed-export', 'test:dev-test-game-contract',
+    ]]),
     ['tools/community_moderation_role_proof.mjs', 'test:dev-test-game-community-moderation'],
     ['tools/community_moderation_evidence_contract.mjs', ['test:dev-test-game-community-moderation', 'test:dev-test-game-contract']],
     ['tools/community_moderation_evidence_contract.test.mjs', ['test:dev-test-game-community-moderation', 'test:dev-test-game-contract']],
@@ -1667,6 +1674,61 @@ test('auth-source signer changes re-arm signed capacity and identity proofs', ()
     'test:capacity-overload',
   ]) {
     assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
+  }
+});
+
+test('profile and completed export leaves own independent resource and completion contracts', () => {
+  for (const [laneId, capability, artifact, proof] of [
+    ['test:dev-test-game-profile', 'product.community.profiles', 'profile-proof.json', 'profile-role-proof'],
+    ['test:dev-test-game-completed-export', 'product.archive.completed-game-export', 'completed-game-export-proof.json', 'completed-game-export-role-proof'],
+  ]) {
+    const lane = manifest.lanes[laneId];
+    assert.equal(lane.phase, 'acceptance');
+    assert.equal(lane.execution.class, 'browser');
+    assert.deepEqual(lane.execution.argv, ['npm', 'run', laneId]);
+    assert.deepEqual(lane.depends_on ?? [], [], 'self-contained live state needs no upstream artifact producer');
+    assert.deepEqual(lane.execution.resources, [
+      ...['cargo-target', 'browser', 'frontend-worktree'].map(name => ({ kind: 'lock', name })),
+      { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
+      { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
+    ]);
+    assert.deepEqual(lane.completion_evidence, [{ capability, artifact, proof }]);
+    assert.ok(manifest.areas.some(area => area.capabilities?.includes(capability) && area.lanes.includes(laneId)));
+    const full = selectLanes({ changed: [], manifest, crateGraph: FIXTURE_GRAPH, mode: 'full' });
+    assert.equal(full.laneIds.filter(id => id === laneId).length, 1);
+  }
+});
+
+test('profile and completed export routes select their browser leaf without unrelated live routes', () => {
+  const profile = 'test:dev-test-game-profile';
+  const exported = 'test:dev-test-game-completed-export';
+  for (const [owner, required, excluded, sources] of [
+    ['frontend:profiles', profile, exported, [
+      'frontend/src/routes/profile/edit/+page.server.js',
+      'frontend/src/routes/profile/edit/+page.svelte',
+      'frontend/src/routes/profile-edit.test.mjs',
+      'frontend/src/routes/profile-member-mute.test.mjs',
+      'frontend/src/routes/u/[handle]/+page.server.js',
+      'frontend/src/routes/u/[handle]/+page.svelte',
+    ]],
+    ['frontend:completed-game-export', exported, profile, [
+      'frontend/src/routes/g/[game]/host/export/+page.server.js',
+      'frontend/src/routes/g/[game]/host/export/+page.svelte',
+    ]],
+  ]) {
+    for (const source of sources) {
+      const selection = selectLanes({ changed: [source], manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
+      assert.ok(selection.behavioralAreas.includes(owner), source);
+      assert.ok(selection.laneIds.includes(required), source);
+      assert.ok(selection.laneIds.includes('test:frontend-contract'), source);
+      for (const unrelated of [excluded, 'test:dev-test-game-discussion', 'test:dev-test-game-community-moderation', 'test:dev-test-game-community-subscriptions']) {
+        assert.ok(!selection.laneIds.includes(unrelated), `${source} must not select ${unrelated}`);
+      }
+    }
+  }
+  for (const source of ['frontend/src/routes/discussions/+page.svelte', 'frontend/src/routes/g/[game]/player/+page.svelte']) {
+    const selection = selectLanes({ changed: [source], manifest, crateGraph: FIXTURE_GRAPH, mode: 'inner' });
+    for (const lane of [profile, exported]) assert.ok(!selection.laneIds.includes(lane), `${source} must not select ${lane}`);
   }
 });
 

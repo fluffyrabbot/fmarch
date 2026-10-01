@@ -1,7 +1,7 @@
 {
   "version": 1,
   "boundary": "This is the canonical overall inventory for capability status, dependency order, and assignment. It separates durable product capabilities from operator-owned external evidence, human decisions, and optional optimization; release-readiness authorities remain the delegated validators for their evidence gates. Local or fixture proof can complete a code capability, but it cannot promote hosted, release, or production evidence.",
-  "status_boundary": "Capability status is a reviewed source-control judgment. Validation checks dependency shape, source anchors, release authority, and package commands without executing proofs or treating ignored target artifacts as fresh evidence.",
+  "status_boundary": "Capability status is a reviewed source-control judgment. Validation checks dependency shape, source anchors, release authority, package commands, and canonical-lane references against the proof manifest. Canonical browser evidence declares a capability, proof identity, and runner-relative JSON artifact in the manifest; the canonical lane command validates that artifact before succeeding. Registry validation does not execute proofs or treat ignored target artifacts as fresh evidence.",
   "sections": [
     {
       "id": "foundation",
@@ -1895,7 +1895,7 @@
       "title": "User profiles",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Profiles use an active-owner/redacted-attribution model, encrypted private claims, revision-checked owner editing, explicit public or private visibility, and a seeded Chromium proof.",
+      "summary": "Profiles use an active-owner/redacted-attribution model, encrypted private claims, revision-checked owner editing, explicit public or private visibility, and a seeded Chromium proof in the canonical Linux graph.",
       "complete_when": [
         "A user can view and edit an authorization-safe profile, with durable projection state and browser proof."
       ],
@@ -1916,12 +1916,8 @@
           "value": "docs/arch/02-event-sourcing.md"
         },
         {
-          "kind": "command",
-          "value": "npm run test:dev-test-game-profile:local"
-        },
-        {
-          "kind": "artifact",
-          "value": "target/profile-role-proof/profile-proof.json"
+          "kind": "canonical-lane",
+          "value": "test:dev-test-game-profile"
         }
       ],
       "remaining": []
@@ -2777,7 +2773,7 @@
       "title": "Portable completed-game export",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Completed games export a versioned checksum-bearing event manifest through a host role URL; isolated import, projection rebuild, replay audit, and tamper rejection are locally proven.",
+      "summary": "Completed games export a versioned checksum-bearing event manifest through a host role URL covered by canonical Linux Chromium acceptance; isolated import, projection rebuild, replay audit, and tamper rejection have Postgres integration proof.",
       "complete_when": [
         "A completed game exports its events, schema/version metadata, referenced projections/media manifest, checksum, and deterministic import/audit result."
       ],
@@ -2799,12 +2795,8 @@
           "value": "docs/arch/02-event-sourcing.md"
         },
         {
-          "kind": "command",
-          "value": "npm run test:dev-test-game-completed-export:local"
-        },
-        {
-          "kind": "artifact",
-          "value": "target/completed-game-export-role-proof/completed-game-export-proof.json"
+          "kind": "canonical-lane",
+          "value": "test:dev-test-game-completed-export"
         }
       ],
       "remaining": []

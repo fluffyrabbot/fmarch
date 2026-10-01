@@ -11,6 +11,7 @@ export const repoRoot = path.resolve(
 );
 export const completionRegistryPath = "docs/ops/completion-registry.json";
 export const completenessScorecardPath = "docs/ops/completeness-scorecard.md";
+export const proofLaneManifestPath = "docs/ops/proof-lane-manifest.json";
 
 const executionClassStatuses = Object.freeze({
   code: Object.freeze(["open", "partial", "complete"]),
@@ -18,7 +19,7 @@ const executionClassStatuses = Object.freeze({
   human: Object.freeze(["open", "blocked", "complete"]),
   optional: Object.freeze(["deferred", "open", "partial", "complete"]),
 });
-const evidenceKinds = new Set(["source", "command", "artifact", "planned-command"]);
+const evidenceKinds = new Set(["source", "command", "artifact", "planned-command", "canonical-lane"]);
 const sectionKinds = new Set([
   "foundation",
   "product-capability",
@@ -36,7 +37,7 @@ export async function loadCompletionRegistry({ root = repoRoot } = {}) {
 
 export async function validateRegistry(
   registry,
-  { root = repoRoot, verifySourcePaths = true } = {},
+  { root = repoRoot, verifySourcePaths = true, proofManifest } = {},
 ) {
   if (registry?.version !== 1) {
     throw new Error(`completion registry version drifted: ${registry?.version}`);
@@ -234,6 +235,10 @@ export async function validateRegistry(
     }
   }
   assertAcyclic(items);
+  const canonicalManifest = proofManifest ?? JSON.parse(
+    await readFile(path.resolve(root, proofLaneManifestPath), "utf8"),
+  );
+  assertCanonicalEvidence(items, sections, canonicalManifest, packageScripts);
   return registry;
 }
 
@@ -542,6 +547,107 @@ async function assertEvidence(
       realpath(absoluteSource),
     ]);
     assertContainedSourcePath(itemId, realRoot, realSource);
+  }
+}
+
+// The registry records a reviewed capability judgment, not a live proof result.
+// These references keep its canonical acceptance claims connected to executable
+// lane ownership. Canonical lane commands validate their declared JSON artifacts.
+function assertCanonicalEvidence(items, sections, manifest, packageScripts) {
+  if (!manifest?.lanes || typeof manifest.lanes !== "object" || Array.isArray(manifest.lanes)) {
+    throw new Error("completion registry canonical proof manifest has no lanes");
+  }
+  const declarations = new Map();
+  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
+    if (lane.completion_evidence === undefined) continue;
+    const label = `canonical completion lane ${laneId}`;
+    if (!Array.isArray(lane.completion_evidence) || lane.completion_evidence.length === 0) {
+      throw new Error(`${label} completion_evidence must be a nonempty array`);
+    }
+    const execution = lane.execution;
+    if (execution?.class !== "browser") {
+      throw new Error(`${label} must execute browser acceptance`);
+    }
+    if (
+      !Array.isArray(execution.argv) || execution.argv.length !== 3 ||
+      execution.argv[0] !== "npm" || execution.argv[1] !== "run" ||
+      execution.argv[2] !== laneId || !packageScripts.has(laneId) ||
+      laneId.endsWith(":local")
+    ) {
+      throw new Error(`${label} must execute its registered npm script directly`);
+    }
+    const artifactResources = (execution.resources ?? []).filter(
+      (resource) => resource.kind === "artifact-dir" && resource.env === "FMARCH_PROOF_ARTIFACT_DIR",
+    );
+    if (artifactResources.length !== 1) {
+      throw new Error(`${label} must use the runner-owned artifact directory`);
+    }
+    const laneDeclarations = new Map();
+    const artifacts = new Set();
+    for (const declaration of lane.completion_evidence) {
+      if (
+        !declaration || typeof declaration !== "object" || Array.isArray(declaration) ||
+        Object.keys(declaration).sort().join(",") !== "artifact,capability,proof"
+      ) {
+        throw new Error(`${label} has invalid completion evidence metadata`);
+      }
+      const { capability, artifact, proof } = declaration;
+      assertNonemptyString(capability, `${label} capability`);
+      const item = items.get(capability);
+      if (!item) throw new Error(`${label} cites unknown capability ${capability}`);
+      if (item.execution_class !== "code" || sections.get(item.section).kind !== "product-capability") {
+        throw new Error(`${label} cites a non-product code capability ${capability}`);
+      }
+      if (laneDeclarations.has(capability)) {
+        throw new Error(`${label} repeats capability ${capability}`);
+      }
+      if (
+        typeof artifact !== "string" || !/^[A-Za-z0-9_./-]+\.json$/.test(artifact) ||
+        artifact.split("/").some((part) => ["", ".", ".."].includes(part))
+      ) {
+        throw new Error(`${label} artifact must be a safe runner-relative JSON path`);
+      }
+      if (typeof proof !== "string" || !/^[a-z][a-z0-9-]*$/.test(proof)) {
+        throw new Error(`${label} proof must be a stable proof identifier`);
+      }
+      if (artifacts.has(artifact)) throw new Error(`${label} repeats artifact ${artifact}`);
+      if (!(manifest.areas ?? []).some(
+        (area) => area.capabilities?.includes(capability) && area.lanes?.includes(laneId),
+      )) {
+        throw new Error(`${label} has no direct area owner for capability ${capability}`);
+      }
+      laneDeclarations.set(capability, declaration);
+      artifacts.add(artifact);
+    }
+    declarations.set(laneId, laneDeclarations);
+  }
+
+  const references = new Map();
+  for (const item of items.values()) {
+    const seen = new Set();
+    for (const evidence of item.evidence.filter((entry) => entry.kind === "canonical-lane")) {
+      if (Object.keys(evidence).sort().join(",") !== "kind,value") {
+        throw new Error(`completion registry item ${item.id} canonical evidence must only reference its lane`);
+      }
+      if (seen.has(evidence.value)) {
+        throw new Error(`completion registry item ${item.id} repeats canonical lane ${evidence.value}`);
+      }
+      if (!manifest.lanes[evidence.value]) {
+        throw new Error(`completion registry item ${item.id} cites unknown canonical lane ${evidence.value}`);
+      }
+      if (!declarations.get(evidence.value)?.has(item.id)) {
+        throw new Error(`completion registry item ${item.id} has no matching canonical declaration in ${evidence.value}`);
+      }
+      seen.add(evidence.value);
+      references.set(`${evidence.value}/${item.id}`, true);
+    }
+  }
+  for (const [laneId, laneDeclarations] of declarations) {
+    for (const capability of laneDeclarations.keys()) {
+      if (!references.has(`${laneId}/${capability}`)) {
+        throw new Error(`canonical completion lane ${laneId} lacks reciprocal registry evidence for ${capability}`);
+      }
+    }
   }
 }
 

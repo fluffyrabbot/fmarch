@@ -8,6 +8,30 @@ local proof databases, and the role-smoke/visual artifact handoff delivered
 2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
 reuse delivered 2026-08-23.
 
+### Canonical profile and completed-game export browsers — 2026-09-30
+
+The 83-lane graph includes profile editing/public visibility and completed-game
+host export as independent acceptance leaves. Each leases its own migration
+database and artifact directory, and declares the dev server and migrator
+binaries plus the Cargo, browser, and frontend-worktree locks. Both prepare their
+own application state; neither consumes another lane's artifact or requires a
+synthetic hard dependency. Failed runner-owned databases remain available to the
+runner's diagnostic retention protocol.
+
+Profile editor/public routes and host export routes have precise behavioral
+owners. Literal Svelte route brackets remain literal in execution selectors;
+shared lifecycle, session, and evidence code selects both consuming browser
+leaves. Runtime Cargo dependencies follow the declared binary graph instead of
+adding separate broad crate ownership.
+
+Each lane declares its completion capability, artifact filename, and proof ID in
+`completion_evidence`. The completion registry references the canonical lane;
+the scorecard validates both sides of that relationship. Successful harness exit
+must also produce a passing semantic artifact for the current lane/run and
+runner-owned database lifecycle. Missing, failed, or foreign-run evidence cannot
+satisfy the canonical browser claim. Standalone local aliases retain isolated
+scratch-database behavior without standing in for canonical completion evidence.
+
 ### Explicit cache input contracts — 2026-09-30
 
 The manifest separates broad `cache_inputs` context from narrow typed
