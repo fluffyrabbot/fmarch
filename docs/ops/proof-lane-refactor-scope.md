@@ -29,7 +29,10 @@ Each lane declares its completion capability, artifact filename, and proof ID in
 the scorecard validates both sides of that relationship. Successful harness exit
 must also produce a passing semantic artifact for the current lane/run and
 runner-owned database lifecycle. Missing, failed, or foreign-run evidence cannot
-satisfy the canonical browser claim. Standalone local aliases retain isolated
+satisfy the canonical browser claim. The export leaf compares the page with the
+exact live API response consumed by its route: separate exports intentionally
+use fresh archive-key wrapping nonces and therefore different checksums.
+Standalone local aliases retain isolated
 scratch-database behavior without standing in for canonical completion evidence.
 
 ### Explicit cache input contracts — 2026-09-30

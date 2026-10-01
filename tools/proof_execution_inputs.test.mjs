@@ -144,6 +144,7 @@ test('profile/export execution inputs select exact routes and shared lifecycle w
   for (const [source, required, excluded] of [
     ['tools/profile_role_proof.mjs', [profile], [exported]],
     ['tools/completed_game_export_role_proof.mjs', [exported], [profile]],
+    ['tools/completed_game_export_fetch.mjs', [exported], [profile]],
     ['frontend/src/routes/profile/edit/+page.svelte', [profile], [exported]],
     ['frontend/src/routes/u/[handle]/+page.server.js', [profile], [exported]],
     ['frontend/src/routes/g/[game]/host/export/+page.svelte', [exported], [profile]],

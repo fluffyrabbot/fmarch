@@ -1528,7 +1528,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
     ['tools/discussion_role_proof.mjs', 'test:dev-test-game-discussion'],
     ['tools/game_index_role_proof.mjs', 'test:dev-test-game-game-index'],
     ['tools/profile_role_proof.mjs', 'test:dev-test-game-profile'],
-    ['tools/completed_game_export_role_proof.mjs', 'test:dev-test-game-completed-export'],
+    ...['tools/completed_game_export_role_proof.mjs', 'tools/completed_game_export_fetch.mjs', 'tools/completed_game_export_fetch.test.mjs'].map(source => [source, ['test:dev-test-game-completed-export', 'test:dev-test-game-contract']]),
     ...['tools/live_role_proof_runtime.mjs', 'tools/live_role_proof_runtime.test.mjs', 'tools/profile_export_proof_evidence.mjs', 'tools/profile_export_proof_evidence.test.mjs'].map(source => [source, [
       'test:dev-test-game-profile', 'test:dev-test-game-completed-export', 'test:dev-test-game-contract',
     ]]),
