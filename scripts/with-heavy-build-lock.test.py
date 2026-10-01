@@ -153,8 +153,11 @@ class HeavyBuildLockTests(unittest.TestCase):
         def killpg(_pid: int, signal_number: int) -> None:
             calls.append(signal_number)
 
+        waits: list[int | None] = []
+
         def wait(timeout: int | None = None) -> int:
-            if timeout is not None:
+            waits.append(timeout)
+            if len(waits) == 1:
                 raise subprocess.TimeoutExpired("child", timeout)
             process.returncode = -9
             return process.returncode
@@ -164,6 +167,18 @@ class HeavyBuildLockTests(unittest.TestCase):
             LOCK.terminate_process_group(process)
         self.assertEqual(calls, [LOCK.signal.SIGTERM, LOCK.signal.SIGKILL])
         self.assertEqual(process.returncode, -9)
+        self.assertEqual(waits, [5, 5])
+
+    def test_group_custody_survives_an_exited_leader(self) -> None:
+        process = FakeProcess()
+        process.returncode = 0
+        process.wait = mock.Mock(return_value=0)  # type: ignore[attr-defined]
+        with mock.patch.object(LOCK.os, "killpg") as killpg:
+            LOCK.terminate_process_group(process)
+        self.assertEqual(
+            killpg.call_args_list,
+            [mock.call(process.pid, LOCK.signal.SIGTERM), mock.call(process.pid, LOCK.signal.SIGKILL)],
+        )
 
 
 if __name__ == "__main__":

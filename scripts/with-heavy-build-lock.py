@@ -151,14 +151,24 @@ def report_competitors(competitors: list[str], *, appeared_late: bool) -> None:
 
 
 def terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
+    # A wrapper can exit before descendants that still own its pipes. Retain
+    # custody of the group even after the leader has exited or been reaped.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait(timeout=5)
         return
-    os.killpg(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
+        pass
+    # A fast-path nested wrapper may exit on TERM while Cargo/rustc survives.
+    # Always finish the owned group, even when waiting for its leader succeeded.
+    try:
         os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=5)
 
 
 def main() -> int:
