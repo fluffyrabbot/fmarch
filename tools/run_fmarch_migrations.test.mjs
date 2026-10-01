@@ -357,3 +357,20 @@ test("a failing migrator is inspectable only for an explicit expected-failure pr
   assert.equal(result.status, 1);
   assert.equal(result.stderr, "VersionMismatch(1)");
 });
+
+
+test("expected migration failure does not accept process interruption", async () => {
+  await assert.rejects(runFmarchMigrations({
+    cwd: "/workspace/fmarch",
+    migrationUrl: "postgres://owner:password@localhost/fmarch",
+    env: {},
+    allowFailure: true,
+    spawnProcess() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      queueMicrotask(() => child.emit("close", null, "SIGTERM"));
+      return child;
+    },
+  }), /signal=SIGTERM/);
+});

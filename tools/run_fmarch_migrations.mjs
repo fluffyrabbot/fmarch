@@ -177,7 +177,7 @@ export async function runFmarchMigrations({
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       };
-      if (code === 0 || allowFailure) resolve(result);
+      if (code === 0 || allowFailure && code !== null) resolve(result);
       else reject(new Error(`fmarch-migrate exited code=${code} signal=${signal ?? "none"}: ${result.stderr.slice(-4_000)}`));
     });
   });
