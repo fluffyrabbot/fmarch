@@ -85,11 +85,21 @@ The Playwright dependency pins Chromium.
 `scripts/with-proof-node.sh` selects Node/npm inside each fleet login-shell
 command. If the system versions have drifted, it restores the pinned Cachy
 packages into the fmarch-owned toolchain root, checking their archive digests
-and package signatures. The original package-cache archives must be available;
-missing or invalid packages fail closed. This does not downgrade the system or
-change another workspace's runtime. Cachy's separately packaged npm dependencies
-remain OS-owned and are recorded in the environment snapshot. The wrapper's
-bounded shell tests are part of `test:proof-lane-contract`.
+and package signatures. The v2 runtime also owns the authenticated simdjson 4.6.11
+ABI required by Node 26.9.0. A Node launcher scopes that private library path to
+Node and its descendants; it never substitutes ABI 34 for ABI 33. Existing v1
+runtimes remain intact for inspection. The original package-cache archives must
+be available; missing, invalid or tampered runtime libraries fail closed. This
+does not downgrade the system or change another workspace's runtime. Cachy's
+separately packaged npm dependencies and other shared libraries remain OS-owned
+and are recorded in the environment snapshot. The wrapper's bounded shell tests
+are part of `test:proof-lane-contract`.
+
+Do not upgrade host packages during a proof. A host package update on 2026-09-30
+removed simdjson ABI 33 during a sweep, so its remaining Node processes could not
+start. That sweep is failed evidence. A new complete qualification and unchanged
+reuse run must share the updated environment identity before landing; timings
+from different environment identities remain separate.
 
 `tools/linux_proof_environment.mjs` records the OS/kernel, package versions,
 compiler version, PostgreSQL version/configuration/binary hash, Chromium
