@@ -5,6 +5,9 @@ use wire::Command;
 fn game(value: u128) -> Uuid {
     Uuid::from_u128(value)
 }
+/// The submit field is additive: a client that never heard of mentions still
+/// posts, and one that sends them reaches the write model with the seats it
+/// claimed and no coercion in between.
 #[test]
 fn submit_post_mentions_are_optional_and_survive_to_the_write_model() {
     let expected_game = game(13);
