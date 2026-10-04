@@ -15,8 +15,9 @@
 //! Everything else is name-parity after Wave 1 D3, including
 //! `AddSlotStatusTag`, `RemoveSlotStatusTag`, and `ControlItaSession`.
 
+use command_transport::{CommandDispatch, CommandDispatchExt};
 use uuid::Uuid;
-use wire::{Command, CommandDispatch, ItaSessionControlKind};
+use wire::{Command, ItaSessionControlKind};
 
 /// Core command variant names that intentionally have no wire counterpart.
 /// After D3 this set MUST stay empty — prefer full wire coverage.

@@ -28,6 +28,7 @@ members = [
     "crates/operator_proof",
     "crates/game_platform",
     "crates/wire",
+    "crates/command_transport",
     "crates/api",
     "crates/operator_api",
     "crates/server",

@@ -792,7 +792,7 @@ test('Cargo test lanes select only inventoried assertion-bearing targets', () =>
     }
   }
 
-  assert.equal(cargoLaneCount, 31, 'every current cargo test lane must be inventoried');
+  assert.equal(cargoLaneCount, 32, 'every current cargo test lane must be inventoried');
   assert.equal(manifest.lanes['cargo:profile-application'], undefined);
 });
 

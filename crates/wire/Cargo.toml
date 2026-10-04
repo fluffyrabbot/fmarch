@@ -5,7 +5,6 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-commands = { path = "../commands", version = "0.1.0" }
 content_reference = { path = "../content_reference", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 caps = { path = "../caps", version = "0.1.0" }

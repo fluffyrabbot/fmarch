@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+command_transport = { path = "../command_transport", version = "0.1.0" }
 caps = { path = "../caps", version = "0.1.0" }
 commands = { path = "../commands", version = "0.1.0" }
 domain = { path = "../domain", version = "0.1.0" }

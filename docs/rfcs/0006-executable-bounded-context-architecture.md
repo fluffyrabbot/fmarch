@@ -526,3 +526,13 @@ The architecture is complete only when:
 8. the public binary contains no operator/proof or raw privacy-key authority;
 9. wire generation proves no internal implementation dependency; and
 10. the repository’s forced full local proof sweep passes from a reset database.
+
+### Command transport dependency cut
+
+`command_transport` owns conversion between wire commands and command execution,
+acknowledgements/rejections, and operator trace responses. API and operator API
+consume this adapter; neither `commands` nor `wire` imports it. The wire hard ban
+now forbids `commands` and `command_transport`, and its dependency ratchet removes
+`commands`. Command parity, phase ingress, mention dispatch, and malformed trace
+proof follow the adapter; serialization and generated TypeScript remain with wire.
+Projection, capability, and shared domain dependencies remain explicit wire debt.

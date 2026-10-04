@@ -85,6 +85,8 @@ export const ACTIVE_HARD_BANS = [
     id: "hard:wire-does-not-import-runtime-or-privacy",
     manifests: ["crates/wire/Cargo.toml"],
     dependencies: [
+      "commands",
+      "command_transport",
       "api",
       "database_schema",
       "eventstore",
@@ -123,6 +125,7 @@ export const DEPENDENCY_RATCHETS = [
     id: "ratchet:api-direct-workspace-dependencies",
     manifest: "crates/api/Cargo.toml",
     allowedWorkspaceDependencies: [
+      "command_transport",
       "attention",
       "caps",
       "commands",
@@ -175,7 +178,6 @@ export const DEPENDENCY_RATCHETS = [
     manifest: "crates/wire/Cargo.toml",
     allowedWorkspaceDependencies: [
       "caps",
-      "commands",
       "content_reference",
       "domain",
       "game_platform",
