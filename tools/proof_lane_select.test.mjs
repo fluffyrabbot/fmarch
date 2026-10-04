@@ -1496,6 +1496,10 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
     [
+      'tools/frontend_role_smoke_paths.mjs',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    [
       'tools/fixtures/frontend-visual-baselines/mobile-player.json',
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
