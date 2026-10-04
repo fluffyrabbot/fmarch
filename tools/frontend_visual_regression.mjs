@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { screenshotEvidencePaths } from "./frontend_role_smoke_paths.mjs";
 import { samplePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -43,7 +44,7 @@ const selectedScreenshots = Object.freeze([
 // moderator flows that do produce verified pending/interrupted evidence.
 const roleSmokeEvidence = JSON.parse(await readFile(roleSmokeEvidencePath, "utf8"));
 assert.equal(roleSmokeEvidence.status, "passed", "role-smoke evidence must have passed");
-const declaredScreenshots = screenshotEvidencePaths(roleSmokeEvidence);
+const declaredScreenshots = screenshotEvidencePaths(roleSmokeEvidence, { artifactDir });
 for (const name of selectedScreenshots) {
   const screenshotPath = path.join(artifactDir, name);
   assert.ok(
@@ -166,27 +167,4 @@ function compareSamples(name, expected, actual) {
     heightThreshold: 0.02,
     pixelThreshold: 0.015,
   };
-}
-
-function screenshotEvidencePaths(value) {
-  const paths = new Set();
-  const visit = (entry, key = "") => {
-    if (Array.isArray(entry)) {
-      for (const item of entry) visit(item);
-      return;
-    }
-    if (entry !== null && typeof entry === "object") {
-      for (const [childKey, child] of Object.entries(entry)) visit(child, childKey);
-      return;
-    }
-    if (
-      typeof entry === "string" &&
-      /screenshot$/i.test(key) &&
-      entry.endsWith(".png")
-    ) {
-      paths.add(path.resolve(repoRoot, entry));
-    }
-  };
-  visit(value);
-  return paths;
 }

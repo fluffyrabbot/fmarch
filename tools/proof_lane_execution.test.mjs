@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { screenshotEvidencePaths } from './frontend_role_smoke_paths.mjs';
 import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -402,7 +404,10 @@ test('content-addressed reuse materializes producer artifacts into the new run',
   t.after(() => rm(root, { recursive: true, force: true }));
   const cachedArtifacts = join(root, 'target', 'proof-lanes', 'cache', 'producer', 'key', 'artifacts');
   await mkdir(cachedArtifacts, { recursive: true });
-  await writeFile(join(cachedArtifacts, 'evidence.json'), '{"passed":true}\n');
+  const sourceRoot = 'target/proof-lanes/runs/original/artifacts/producer';
+  const receiptBytes = JSON.stringify({ status: 'passed', artifactRoot: sourceRoot, board: [{ screenshot: `${sourceRoot}/mobile-board-player.png` }] }) + '\n';
+  await writeFile(join(cachedArtifacts, 'role-smoke.json'), receiptBytes);
+  await writeFile(join(cachedArtifacts, 'mobile-board-player.png'), 'immutable screenshot fixture');
   const manifest = fixture({
     producer: lane(
       ['producer'],
@@ -426,6 +431,10 @@ test('content-addressed reuse materializes producer artifacts into the new run',
     }]]),
     spawn(_file, _args, options) {
       producerArtifacts = options.env.PRODUCER_ARTIFACTS;
+      const evidence = JSON.parse(readFileSync(join(producerArtifacts, 'role-smoke.json'), 'utf8'));
+      const declared = screenshotEvidencePaths(evidence, { artifactDir: producerArtifacts });
+      assert.ok(declared.has(join(producerArtifacts, 'mobile-board-player.png')));
+      assert.equal(readFileSync([...declared][0], 'utf8'), 'immutable screenshot fixture');
       return childThatCloses(0);
     },
     log: () => {},
@@ -433,7 +442,8 @@ test('content-addressed reuse materializes producer artifacts into the new run',
   assert.equal(result.success, true);
   assert.notEqual(producerArtifacts, cachedArtifacts);
   assert.match(producerArtifacts, /runs\/.*\/artifacts\/producer$/);
-  assert.equal(await readFile(join(producerArtifacts, 'evidence.json'), 'utf8'), '{"passed":true}\n');
+  assert.equal(await readFile(join(producerArtifacts, 'role-smoke.json'), 'utf8'), receiptBytes);
+  assert.equal(await readFile(join(cachedArtifacts, 'role-smoke.json'), 'utf8'), receiptBytes);
   assert.equal(result.receipt.lanes.producer.reused_from_proof_key, 'a'.repeat(64));
   assert.equal(result.receipt.lanes.producer.artifact_dir, producerArtifacts);
 });

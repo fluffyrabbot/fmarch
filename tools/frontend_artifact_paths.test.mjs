@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { screenshotEvidencePaths } from "./frontend_role_smoke_paths.mjs";
 import "./frontend_theme_proof.test.mjs";
 import { fileURLToPath } from "node:url";
 
@@ -47,7 +48,7 @@ test("visual baselines cover only screenshots declared by the live role-smoke re
 
   assert.deepEqual(actual, expected);
   assert.match(visualSource, /role-smoke\.json/);
-  assert.match(visualSource, /screenshotEvidencePaths\(roleSmokeEvidence\)/);
+  assert.match(visualSource, /screenshotEvidencePaths\(roleSmokeEvidence, \{ artifactDir \}\)/);
   for (const stale of [
     "mobile-admin-confirmation.png",
     "mobile-admin-pending.png",
@@ -120,4 +121,40 @@ test('theme evidence rejects incomplete matrices, preferences, contrasts, and mi
   await assert.rejects(validateThemeEvidence(badContrast, 'chromium', root));
   await rm(path.join(root, cases[0].screenshot));
   await assert.rejects(validateThemeEvidence(evidence, 'chromium', root), /ENOENT/);
+});
+
+
+test("role-smoke screenshot references reject foreign roots and escapes", () => {
+  const artifactRoot = "target/proof-lanes/runs/original/artifacts/role-smoke";
+  const artifactDir = path.join(repoRoot, "target/proof-lanes/runs/current/artifacts/role-smoke");
+  for (const screenshot of [
+    "target/proof-lanes/runs/foreign/artifacts/role-smoke/mobile-board-player.png",
+    `${artifactRoot}-foreign/mobile-board-player.png`,
+    `${artifactRoot}/../foreign/mobile-board-player.png`,
+    `${artifactRoot}/nested/../../mobile-board-player.png`,
+    `${artifactRoot}/nested/../mobile-board-player.png`,
+    `${artifactRoot}//mobile-board-player.png`,
+    `${artifactRoot}/..\\foreign/mobile-board-player.png`,
+    "/tmp/mobile-board-player.png",
+    "C:\\foreign\\mobile-board-player.png",
+    "C:mobile-board-player.png",
+    "\\\\server\\share\\mobile-board-player.png",
+  ]) {
+    assert.throws(() => screenshotEvidencePaths({ artifactRoot, board: [{ screenshot }] }, { artifactDir }), undefined, screenshot);
+  }
+  for (const artifactRoot of [undefined, "", "/tmp/foreign", "C:\\foreign", "target/../foreign"]) {
+    assert.throws(() => screenshotEvidencePaths({ artifactRoot }, { artifactDir }));
+  }
+});
+
+test("role-smoke path resolution retains nested declarations without mutating evidence", () => {
+  const artifactDir = path.join(repoRoot, "target/materialized");
+  // A standalone producer may publish outside its checkout; its root is a
+  // logical namespace, never a filesystem location the consumer reads.
+  const artifactRoot = "../standalone-artifacts";
+  const evidence = { artifactRoot, board: [{ screenshot: `${artifactRoot}/mobile.png` }], roles: [{ pendingScreenshot: `${artifactRoot}/nested/pending.png` }] };
+  const before = JSON.stringify(evidence);
+  assert.deepEqual([...screenshotEvidencePaths(evidence, { artifactDir })].sort(), [path.join(artifactDir, "mobile.png"), path.join(artifactDir, "nested/pending.png")].sort());
+  assert.equal(JSON.stringify(evidence), before);
+  assert.deepEqual([...screenshotEvidencePaths({ artifactRoot: ".", screenshot: "mobile.png" }, { artifactDir })], [path.join(artifactDir, "mobile.png")]);
 });

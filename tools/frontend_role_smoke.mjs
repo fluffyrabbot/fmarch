@@ -122,6 +122,7 @@ try {
   browser = await browserType.launch();
   const evidence = {
     status: "passed",
+    artifactRoot: path.relative(repoRoot, artifactDir).split(path.sep).join("/") || ".",
     browser: {name: browserName, version: browser.version(), node: process.version},
     visualEnvironment: process.platform === "linux" && browserName === "chromium" ? await linuxVisualEnvironment() : {platform:process.platform, arch:process.arch},
     baseUrl,

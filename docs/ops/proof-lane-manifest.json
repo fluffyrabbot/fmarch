@@ -1716,6 +1716,7 @@
       "tier": "frozen",
       "paths": [
         "tools/frontend_visual_regression.mjs",
+        "tools/frontend_role_smoke_paths.mjs",
         "tools/frontend_screenshot_pixels.mjs",
         "tools/fixtures/frontend-visual-baselines/"
       ],
