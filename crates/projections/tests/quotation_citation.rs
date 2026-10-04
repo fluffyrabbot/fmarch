@@ -1,6 +1,5 @@
 //! Public and private quotations retain distinct indexes and stable replay semantics.
 
-use content_reference::{PostKind, PostRef};
 use event_actor::ActorId;
 use eventstore::EventInput;
 use projections::test_support::append_discussion_and_project;
