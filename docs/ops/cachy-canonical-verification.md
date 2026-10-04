@@ -113,6 +113,28 @@ Changed visual identity fails closed until screenshots are reviewed and
 OS update requires fresh qualification; the runner never silently substitutes
 a different required Node, npm, Rust or PostgreSQL version.
 
+### October 2026 visual identity review
+
+The October 1 CachyOS update changed six Noto Sans Devanagari font files
+(`noto-fonts` 1:2026.09.01-1 to 1:2026.10.01-1) and HarfBuzz
+(14.5.0-1.1 to 14.5.1-1.1). Chromium's version and binary stayed unchanged.
+The font-set identity consequently changed from `2dd80bb889524cafd85bd21e213dde3cb5083ea51adb4609237aab67021fbdb7` to `7ecea2df00dfc390ddaf6fc0831e4efdab1c141574afe9024dc366a7dbd1fe47`.
+
+The passing role-smoke producer in fleet job `20261004T015920Z-b7f68db5`
+at `92b7b16dcbcbd7c4294617337eae40ff446f8434` supplied all 16 reviewed Linux
+screenshots. Their dimensions were unchanged, every existing sample threshold
+passed, and all 16 PNGs were byte-identical to the previously qualified producer
+in `20261001T033856Z-06475440`. Six sampled grids differed from the older stored
+baseline within its existing tolerance; those player screenshots were also
+visually inspected. The repository baseline writer was then run explicitly on
+Cachy against that producer to record the new identity and current samples.
+
+The original font inventories, comparison hashes, screenshots, and failed
+aggregate receipt remain retained under the discussion-citation-batch round's
+fleet evidence. The native macOS baseline remains separate. This review does
+not convert the failed aggregate into acceptance: the new checkpoint still
+requires a signed complete canonical sweep and unchanged warm qualification.
+
 ## Qualification and authority gate
 
 Requalification after a material environment or proof-contract change requires:
