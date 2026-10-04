@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
+use command_transport::CommandDispatchExt;
 use media::{ContentId, MediaRepository, VariantFormat, VariantLimits};
 use sqlx::pool::PoolConnection;
 use sqlx::{Connection as _, PgConnection, PgPool, Postgres, Transaction};
@@ -26,9 +27,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio::time::{timeout, timeout_at, Instant};
 use uuid::Uuid;
-use wire::{
-    AckMsg, ClientEnvelope, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
-};
+use wire::{ClientEnvelope, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, PROTOCOL_VERSION};
 
 /// Commands may hold identity owner/session locks only inside this end-to-end
 /// budget. The cleanup reserve is separate so a timed-out SQL future can be
@@ -499,8 +498,8 @@ async fn prepare_wire_command(
     command: wire::Command,
 ) -> Result<commands::Command, CommandPreparationError> {
     let command = match command.into_dispatch() {
-        wire::CommandDispatch::Direct(command) => command,
-        wire::CommandDispatch::AttachDayProgram { game, program_ref } => {
+        command_transport::CommandDispatch::Direct(command) => command,
+        command_transport::CommandDispatch::AttachDayProgram { game, program_ref } => {
             let library = program_library::load_checked_in_program_library().map_err(|error| {
                 commands::Reject::Internal(format!("load checked-in day-program library: {error}"))
             })?;
@@ -701,7 +700,9 @@ async fn command(
     };
     let prepared_command = prepare_wire_command(&state, msg.command).await;
     let body = match prepared_command {
-        Err(CommandPreparationError::Reject(reject)) => ServerMsg::Reject(RejectMsg::from(reject)),
+        Err(CommandPreparationError::Reject(reject)) => {
+            ServerMsg::Reject(command_transport::reject(reject))
+        }
         Err(CommandPreparationError::Unavailable) => {
             return command_api_error_response(
                 envelope.id,
@@ -743,7 +744,7 @@ async fn command(
                             },
                         )
                         .await;
-                    ServerMsg::Ack(AckMsg::from(ack))
+                    ServerMsg::Ack(command_transport::ack(ack))
                 }
                 Err(AuthorizedCommandExecuteError::Boundary(error)) => {
                     return command_api_error_response(envelope.id, error);
@@ -752,7 +753,7 @@ async fn command(
                     return command_retryable_reject_response(envelope.id, reject);
                 }
                 Err(AuthorizedCommandExecuteError::Reject(reject)) => {
-                    ServerMsg::Reject(RejectMsg::from(reject))
+                    ServerMsg::Reject(command_transport::reject(reject))
                 }
                 Err(AuthorizedCommandExecuteError::LeaseExpired) => {
                     return command_authority_lease_expired_response(envelope.id);
@@ -806,7 +807,7 @@ fn command_retryable_reject_response(id: u64, reject: commands::Reject) -> Respo
         command_reject_status(&reject),
         Json(ServerEnvelope::new(
             id,
-            ServerMsg::Reject(RejectMsg::from(reject)),
+            ServerMsg::Reject(command_transport::reject(reject)),
         )),
     )
         .into_response();
@@ -1046,7 +1047,7 @@ pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
         };
     }
     let status = command_reject_status(&reject);
-    let error = RejectCode::from(&reject);
+    let error = command_transport::reject_code(&reject);
     let message = reject.to_string();
     ApiError::Reject {
         status,

@@ -141,8 +141,8 @@ fn attach_day_program_carries_only_a_content_addressed_reference() {
     });
     let parsed = serde_json::from_value::<wire::Command>(command).unwrap();
     assert!(matches!(
-        parsed.into_dispatch(),
-        wire::CommandDispatch::AttachDayProgram { program_ref, .. }
+        parsed,
+        wire::Command::AttachDayProgram { program_ref, .. }
             if program_ref.id.as_str() == "raffle"
                 && program_ref.version == 1
                 && program_ref.content_hash.as_str()

@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+command_transport = { path = "../command_transport", version = "0.1.0" }
 forum_postgres = { path = "../forum_postgres", version = "0.1.0" }
 forum_application = { path = "../forum_application", version = "0.1.0" }
 event_actor = { path = "../event_actor", version = "0.1.0" }

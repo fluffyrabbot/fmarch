@@ -30,7 +30,7 @@ macro_rules! seat_persona {
 /// Deterministic UUID-backed fixture authority for transport tests and proofs.
 #[doc(hidden)]
 pub fn fixture_principal_id(label: impl AsRef<str>) -> PrincipalId {
-    commands::fixture_principal_id(label)
+    PrincipalId::fixture(label)
 }
 
 /// Current fail-closed live transport generation protocol.
@@ -749,39 +749,11 @@ pub enum VoteTarget {
     NoLynch,
 }
 
-impl From<VoteTarget> for commands::VoteTarget {
-    fn from(target: VoteTarget) -> Self {
-        match target {
-            VoteTarget::Slot(slot) => commands::VoteTarget::Slot(slot),
-            VoteTarget::NoLynch => commands::VoteTarget::NoLynch,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum HostPromptDecision {
     SelectSlot { slot: String },
     SelectPolicy { policy: String },
     Acknowledge,
-}
-
-impl From<HostPromptDecision> for commands::HostPromptDecision {
-    fn from(decision: HostPromptDecision) -> Self {
-        match decision {
-            HostPromptDecision::SelectSlot { slot } => {
-                commands::HostPromptDecision::SelectSlot { slot }
-            }
-            HostPromptDecision::SelectPolicy { policy } => {
-                commands::HostPromptDecision::SelectPolicy {
-                    policy,
-                    metadata: serde_json::json!({}),
-                }
-            }
-            HostPromptDecision::Acknowledge => commands::HostPromptDecision::Acknowledge {
-                metadata: serde_json::json!({}),
-            },
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -841,44 +813,6 @@ pub enum CohostPermissionClass {
     DayEventOps,
     DayEventResolve,
     ProgramAttach,
-}
-
-impl From<CohostPermissionClass> for commands::CohostPermissionClass {
-    fn from(value: CohostPermissionClass) -> Self {
-        match value {
-            CohostPermissionClass::Setup => Self::Setup,
-            CohostPermissionClass::PhaseResolve => Self::PhaseResolve,
-            CohostPermissionClass::HostPromptResolve => Self::HostPromptResolve,
-            CohostPermissionClass::Lifecycle => Self::Lifecycle,
-            CohostPermissionClass::Replacement => Self::Replacement,
-            CohostPermissionClass::Deadline => Self::Deadline,
-            CohostPermissionClass::Narrative => Self::Narrative,
-            CohostPermissionClass::ItaControl => Self::ItaControl,
-            CohostPermissionClass::EffectSpec => Self::EffectSpec,
-            CohostPermissionClass::DayEventOps => Self::DayEventOps,
-            CohostPermissionClass::DayEventResolve => Self::DayEventResolve,
-            CohostPermissionClass::ProgramAttach => Self::ProgramAttach,
-        }
-    }
-}
-
-impl From<commands::CohostPermissionClass> for CohostPermissionClass {
-    fn from(value: commands::CohostPermissionClass) -> Self {
-        match value {
-            commands::CohostPermissionClass::Setup => Self::Setup,
-            commands::CohostPermissionClass::PhaseResolve => Self::PhaseResolve,
-            commands::CohostPermissionClass::HostPromptResolve => Self::HostPromptResolve,
-            commands::CohostPermissionClass::Lifecycle => Self::Lifecycle,
-            commands::CohostPermissionClass::Replacement => Self::Replacement,
-            commands::CohostPermissionClass::Deadline => Self::Deadline,
-            commands::CohostPermissionClass::Narrative => Self::Narrative,
-            commands::CohostPermissionClass::ItaControl => Self::ItaControl,
-            commands::CohostPermissionClass::EffectSpec => Self::EffectSpec,
-            commands::CohostPermissionClass::DayEventOps => Self::DayEventOps,
-            commands::CohostPermissionClass::DayEventResolve => Self::DayEventResolve,
-            commands::CohostPermissionClass::ProgramAttach => Self::ProgramAttach,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -1091,313 +1025,9 @@ pub enum Command {
     },
 }
 
-/// Transport commands either map directly to the command core or require an
-/// adapter-owned immutable artifact lookup first.
-#[derive(Debug, Clone, PartialEq)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "dispatch preserves direct command ownership until adapter extraction establishes the final transport shape"
-)]
-pub enum CommandDispatch {
-    Direct(commands::Command),
-    AttachDayProgram {
-        game: Uuid,
-        program_ref: game_platform::DayProgramRef,
-    },
-}
-
-impl Command {
-    pub fn into_dispatch(self) -> CommandDispatch {
-        let command = match self {
-            Command::CreateGame {
-                game,
-                pack,
-                cohost_denied,
-                origin,
-            } => commands::Command::CreateGame {
-                game,
-                pack,
-                cohost_denied: cohost_denied.into_iter().map(Into::into).collect(),
-                origin: origin.map(|origin| {
-                    content_reference::PublicContentRef::new(origin.surface_id, origin.source_seq)
-                }),
-            },
-            Command::AddSlot { game, slot } => commands::Command::AddSlot { game, slot },
-            Command::SeatPersona {
-                game,
-                slot,
-                principal_id,
-                public_name,
-            } => commands::Command::SeatPersona {
-                game,
-                slot,
-                principal_id,
-                public_name,
-            },
-            Command::RenameGamePersona {
-                game,
-                persona_id,
-                public_name,
-            } => commands::Command::RenameGamePersona {
-                game,
-                persona_id: persona_id.into(),
-                public_name,
-            },
-            Command::AssignRole {
-                game,
-                slot,
-                role_key,
-            } => commands::Command::AssignRole {
-                game,
-                slot,
-                role_key,
-            },
-            Command::SetSlotStatus { game, slot, status } => commands::Command::SetSlotStatus {
-                game,
-                slot,
-                status: status.into(),
-            },
-            Command::AddSlotStatusTag { game, slot, tag } => {
-                commands::Command::AddSlotStatusTag { game, slot, tag }
-            }
-            Command::RemoveSlotStatusTag { game, slot, tag } => {
-                commands::Command::RemoveSlotStatusTag { game, slot, tag }
-            }
-            Command::AddCohost { game, principal_id } => {
-                commands::Command::AddCohost { game, principal_id }
-            }
-            Command::GrantSpectator { game, principal_id } => {
-                commands::Command::GrantSpectator { game, principal_id }
-            }
-            Command::RevokeSpectator { game, principal_id } => {
-                commands::Command::RevokeSpectator { game, principal_id }
-            }
-            Command::StartGame { game, phase } => commands::Command::StartGame { game, phase },
-            Command::OpenDayPhase { game, phase } => {
-                commands::Command::OpenDayPhase { game, phase }
-            }
-            Command::AdvancePhase { game } => commands::Command::AdvancePhase { game },
-            Command::AdvancePhaseByDeadline {
-                game,
-                phase,
-                observed_at,
-            } => commands::Command::AdvancePhaseByDeadline {
-                game,
-                phase,
-                observed_at,
-            },
-            Command::LockThread { game } => commands::Command::LockThread { game },
-            Command::UnlockThread { game } => commands::Command::UnlockThread { game },
-            Command::ResolvePhase { game, seed } => commands::Command::ResolvePhase { game, seed },
-            Command::CompleteGame { game } => commands::Command::CompleteGame { game },
-            Command::PublishVotecount { game } => commands::Command::PublishVotecount { game },
-            Command::ResolveHostPrompt {
-                game,
-                prompt_id,
-                decision,
-            } => commands::Command::ResolveHostPrompt {
-                game,
-                prompt_id,
-                decision: decision.into(),
-            },
-            Command::SetPostPolicy {
-                game,
-                channel_id,
-                allow_media_only,
-            } => commands::Command::SetPostPolicy {
-                game,
-                channel_id,
-                allow_media_only,
-            },
-            Command::PublishSpectatorPost { game, body, media } => {
-                commands::Command::PublishSpectatorPost {
-                    game,
-                    body,
-                    media: media
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|media| commands::ThreadPostMedia {
-                            content_id: media.content_id,
-                            alt: media.alt,
-                            variants: BTreeMap::new(),
-                        })
-                        .collect(),
-                }
-            }
-            Command::ControlItaSession {
-                game,
-                session_id,
-                control,
-                message,
-            } => commands::Command::ControlItaSession {
-                game,
-                session_id,
-                control: control.into(),
-                message,
-            },
-            Command::ApplyEffectPlan {
-                game,
-                effects,
-                reason,
-            } => commands::Command::ApplyEffectPlan {
-                game,
-                effects,
-                reason,
-            },
-            Command::AttachDayProgram { game, program_ref } => {
-                return CommandDispatch::AttachDayProgram { game, program_ref };
-            }
-            Command::ScheduleDayEvent { game, event } => {
-                commands::Command::ScheduleDayEvent { game, event }
-            }
-            Command::OpenDayEvent { game, event_id } => {
-                commands::Command::OpenDayEvent { game, event_id }
-            }
-            Command::LockDayEvent { game, event_id } => {
-                commands::Command::LockDayEvent { game, event_id }
-            }
-            Command::CancelDayEvent {
-                game,
-                event_id,
-                reason,
-            } => commands::Command::CancelDayEvent {
-                game,
-                event_id,
-                reason,
-            },
-            Command::SubmitDayEventParticipation {
-                game,
-                event_id,
-                actor_slot,
-                payload,
-            } => commands::Command::SubmitDayEventParticipation {
-                game,
-                event_id,
-                actor_slot,
-                payload,
-            },
-            Command::WithdrawDayEventParticipation {
-                game,
-                event_id,
-                actor_slot,
-            } => commands::Command::WithdrawDayEventParticipation {
-                game,
-                event_id,
-                actor_slot,
-            },
-            Command::ResolveDayEvent {
-                game,
-                event_id,
-                decision,
-            } => commands::Command::ResolveDayEvent {
-                game,
-                event_id,
-                decision,
-            },
-            Command::SubmitVote {
-                game,
-                actor_slot,
-                target,
-            } => commands::Command::SubmitVote {
-                game,
-                actor_slot,
-                target: target.into(),
-            },
-            Command::WithdrawVote { game, actor_slot } => {
-                commands::Command::WithdrawVote { game, actor_slot }
-            }
-            Command::SubmitAction {
-                game,
-                action_id,
-                actor_slot,
-                template_id,
-                targets,
-                grant_id,
-            } => commands::Command::SubmitAction {
-                game,
-                action_id,
-                actor_slot,
-                template_id,
-                targets,
-                grant_id,
-            },
-            Command::WithdrawAction {
-                game,
-                action_id,
-                actor_slot,
-            } => commands::Command::WithdrawAction {
-                game,
-                action_id,
-                actor_slot,
-            },
-            Command::SubmitPost {
-                game,
-                channel_id,
-                actor_slot,
-                body,
-                media,
-                quotations,
-                mentions,
-                embed,
-            } => commands::Command::SubmitPost {
-                game,
-                channel_id,
-                actor_slot,
-                body,
-                media: media
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|media| commands::ThreadPostMedia {
-                        content_id: media.content_id,
-                        alt: media.alt,
-                        variants: BTreeMap::new(),
-                    })
-                    .collect(),
-                quotations: quotations
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(Quotation::into)
-                    .collect(),
-                mentions: mentions
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(SubmitPostMention::into)
-                    .collect(),
-                embed_url: embed
-                    .map(|embed| embed.url)
-                    .filter(|url| !url.trim().is_empty()),
-                embed_snapshot: None,
-            },
-            Command::ExtendDeadline { game, phase, at } => {
-                commands::Command::ExtendDeadline { game, phase, at }
-            }
-            Command::ProcessReplacement {
-                game,
-                slot,
-                outgoing_persona_id,
-                incoming_principal_id,
-            } => commands::Command::ProcessReplacement {
-                game,
-                slot,
-                outgoing_persona_id: outgoing_persona_id.into(),
-                incoming_principal_id,
-            },
-        };
-        CommandDispatch::Direct(command)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct AckMsg {
     pub stream_seqs: Vec<i64>,
-}
-
-impl From<commands::Ack> for AckMsg {
-    fn from(ack: commands::Ack) -> Self {
-        AckMsg {
-            stream_seqs: ack.stream_seqs,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1405,18 +1035,6 @@ pub struct RejectMsg {
     pub error: RejectCode,
     pub retryable: bool,
     pub message: String,
-}
-
-impl From<commands::Reject> for RejectMsg {
-    fn from(reject: commands::Reject) -> Self {
-        let retryable = reject.is_retryable();
-        let message = reject.to_string();
-        RejectMsg {
-            error: RejectCode::from(&reject),
-            retryable,
-            message,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1453,44 +1071,6 @@ pub enum RejectCode {
     DayProgramAlreadyAttached,
     EffectSpecValidation,
     Internal,
-}
-
-impl From<&commands::Reject> for RejectCode {
-    fn from(reject: &commands::Reject) -> Self {
-        match reject {
-            commands::Reject::NotAuthorized => RejectCode::NotAuthorized,
-            commands::Reject::NotYourSlot => RejectCode::NotYourSlot,
-            commands::Reject::NotHost => RejectCode::NotHost,
-            commands::Reject::CohostPermissionDenied(_) => RejectCode::CohostPermissionDenied,
-            commands::Reject::PhaseLocked => RejectCode::PhaseLocked,
-            commands::Reject::SlotNotAlive => RejectCode::SlotNotAlive,
-            commands::Reject::VoteNotAllowed => RejectCode::VoteNotAllowed,
-            commands::Reject::InvalidTarget => RejectCode::InvalidTarget,
-            commands::Reject::ActionAlreadySubmitted => RejectCode::ActionAlreadySubmitted,
-            commands::Reject::InvalidRole(_) => RejectCode::InvalidRole,
-            commands::Reject::StreamConflict => RejectCode::StreamConflict,
-            commands::Reject::RateLimited { .. } => RejectCode::RateLimited,
-            commands::Reject::CommandIdConflict => RejectCode::CommandIdConflict,
-            commands::Reject::UnknownGame => RejectCode::UnknownGame,
-            commands::Reject::UnknownSlot => RejectCode::UnknownSlot,
-            commands::Reject::UnknownPrompt => RejectCode::UnknownPrompt,
-            commands::Reject::PromptAlreadyResolved => RejectCode::PromptAlreadyResolved,
-            commands::Reject::GameAlreadyCompleted => RejectCode::GameAlreadyCompleted,
-            commands::Reject::InvalidPromptDecision => RejectCode::InvalidPromptDecision,
-            commands::Reject::UnknownDayEvent => RejectCode::UnknownDayEvent,
-            commands::Reject::DayEventAlreadyExists => RejectCode::DayEventAlreadyExists,
-            commands::Reject::DayEventStateConflict(_) => RejectCode::DayEventStateConflict,
-            commands::Reject::DuplicateParticipation => RejectCode::DuplicateParticipation,
-            commands::Reject::ParticipationNotFound => RejectCode::ParticipationNotFound,
-            commands::Reject::ParticipationNotAllowed(_) => RejectCode::ParticipationNotAllowed,
-            commands::Reject::DayEventValidation(_) => RejectCode::DayEventValidation,
-            commands::Reject::DayProgramValidation(_) => RejectCode::DayProgramValidation,
-            commands::Reject::PackValidation(_) => RejectCode::PackValidation,
-            commands::Reject::DayProgramAlreadyAttached => RejectCode::DayProgramAlreadyAttached,
-            commands::Reject::EffectSpecValidation(_) => RejectCode::EffectSpecValidation,
-            commands::Reject::Internal(_) => RejectCode::Internal,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -4023,148 +3603,6 @@ pub struct ResolutionTraceNoteRow {
     pub note: String,
 }
 
-impl TryFrom<commands::ResolutionTraceInspectionReport> for ResolutionTraceInspectionReport {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(report: commands::ResolutionTraceInspectionReport) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceInspectionReport {
-            game: report.game_id,
-            traces: report
-                .traces
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceInspectionRun> for ResolutionTraceInspectionRun {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(run: commands::ResolutionTraceInspectionRun) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceInspectionRun {
-            phase_id: run.phase_id,
-            run_id: run.run_id,
-            applied_stream_seq: run.applied_stream_seq,
-            trace_stream_seq: run.trace_stream_seq,
-            trace_version: run.trace_version,
-            decisions: run
-                .decisions
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            edges: run
-                .edges
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            generated: run
-                .generated
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            effect_changes: run
-                .effect_changes
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            visibility: run
-                .visibility
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-            notes: run.notes.into_iter().map(Into::into).collect(),
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceDecisionRow> for ResolutionTraceDecisionRow {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(row: commands::ResolutionTraceDecisionRow) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceDecisionRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            event_index: row.event_index,
-            stage: row.stage,
-            source: row.source,
-            outcome: row.outcome,
-            detail: decode_field("ResolutionTraceDecision", "detail", row.detail)?,
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceEdgeRow> for ResolutionTraceEdgeRow {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(row: commands::ResolutionTraceEdgeRow) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceEdgeRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            from: row.from,
-            to: row.to,
-            kind: row.kind,
-            detail: decode_field("ResolutionTraceEdge", "detail", row.detail)?,
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceGeneratedRow> for ResolutionTraceGeneratedRow {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(row: commands::ResolutionTraceGeneratedRow) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceGeneratedRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            action_id: row.action_id,
-            source: row.source,
-            actor: row.actor,
-            targets: row.targets,
-            detail: decode_field("ResolutionTraceGenerated", "detail", row.detail)?,
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceEffectChangeRow> for ResolutionTraceEffectChangeRow {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(row: commands::ResolutionTraceEffectChangeRow) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceEffectChangeRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            effect: row.effect,
-            target: row.target,
-            operation: row.operation,
-            detail: decode_field("ResolutionTraceEffectChange", "detail", row.detail)?,
-        })
-    }
-}
-
-impl TryFrom<commands::ResolutionTraceVisibilityRow> for ResolutionTraceVisibilityRow {
-    type Error = ProjectionAdapterError;
-
-    fn try_from(row: commands::ResolutionTraceVisibilityRow) -> Result<Self, Self::Error> {
-        Ok(ResolutionTraceVisibilityRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            event_index: row.event_index,
-            audience: row.audience,
-            policy: row.policy,
-            detail: decode_field("ResolutionTraceVisibility", "detail", row.detail)?,
-        })
-    }
-}
-
-impl From<commands::ResolutionTraceNoteRow> for ResolutionTraceNoteRow {
-    fn from(row: commands::ResolutionTraceNoteRow) -> Self {
-        ResolutionTraceNoteRow {
-            row_index: row.row_index,
-            applied_stream_seq: row.applied_stream_seq,
-            note: row.note,
-        }
-    }
-}
-
 impl From<projections::PlayerNotificationRow> for PlayerNotification {
     fn from(row: projections::PlayerNotificationRow) -> Self {
         PlayerNotification {
@@ -4541,38 +3979,6 @@ pub mod typescript {
 }
 
 #[cfg(test)]
-mod phase_id_ingress_tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn lifecycle_commands_deserialize_only_canonical_phase_ids_and_preserve_them_to_commands() {
-        let game = Uuid::nil();
-        let command: Command = serde_json::from_value(json!({
-            "StartGame": { "game": game, "phase": "D01" }
-        }))
-        .expect("canonical phase id crosses the wire");
-
-        match command.into_dispatch() {
-            CommandDispatch::Direct(commands::Command::StartGame { phase, .. }) => {
-                assert_eq!(phase.as_str(), "D01");
-            }
-            other => panic!("unexpected dispatch: {other:?}"),
-        }
-
-        for invalid in ["D00", "D3", "D003", "D01junk", "D01R0", "D01R02"] {
-            let raw = json!({
-                "StartGame": { "game": game, "phase": invalid }
-            });
-            assert!(
-                serde_json::from_value::<Command>(raw).is_err(),
-                "wire must reject noncanonical phase id {invalid}"
-            );
-        }
-    }
-}
-
-#[cfg(test)]
 mod host_console_patch_tests {
     use super::*;
 
@@ -4784,18 +4190,6 @@ mod live_json_map_tests {
         }
     }
 
-    fn trace_decision_row(detail: serde_json::Value) -> commands::ResolutionTraceDecisionRow {
-        commands::ResolutionTraceDecisionRow {
-            row_index: 0,
-            applied_stream_seq: Some(12),
-            event_index: Some(3),
-            stage: "result_contract".into(),
-            source: "domain::resolve/result_version:19".into(),
-            outcome: "2 inner events validated".into(),
-            detail,
-        }
-    }
-
     #[test]
     fn day_vote_outcome_row_becomes_typed_maps() {
         let delta = DayVoteOutcomeDelta::try_from(vote_row(json!({
@@ -4907,21 +4301,6 @@ mod live_json_map_tests {
     }
 
     #[test]
-    fn resolution_trace_detail_becomes_a_typed_atom_map() {
-        let row = ResolutionTraceDecisionRow::try_from(trace_decision_row(json!({
-            "kills": 1,
-            "saves": 0
-        })))
-        .expect("object detail");
-        assert_eq!(row.detail.get("kills"), Some(&JsonAtom::Number(1.0)));
-        assert_eq!(row.detail.get("saves"), Some(&JsonAtom::Number(0.0)));
-
-        let empty = ResolutionTraceDecisionRow::try_from(trace_decision_row(json!({})))
-            .expect("empty object is a valid map");
-        assert!(empty.detail.is_empty());
-    }
-
-    #[test]
     fn projection_adapter_rejects_malformed_json_columns() {
         struct Case {
             name: &'static str,
@@ -4964,15 +4343,6 @@ mod live_json_map_tests {
                 field: "decision",
                 run: || {
                     HostPromptDelta::try_from(host_prompt_row(Some(json!({ "kind": "nope" }))))
-                        .map(|_| ())
-                },
-            },
-            Case {
-                name: "null trace detail is not an empty map",
-                kind: "ResolutionTraceDecision",
-                field: "detail",
-                run: || {
-                    ResolutionTraceDecisionRow::try_from(trace_decision_row(json!(null)))
                         .map(|_| ())
                 },
             },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTIVE_HARD_BANS,
   hardBanViolations,
   outstandingTargetDebt,
   parseCargoDependencies,
@@ -121,4 +122,11 @@ test("target bans report debt without turning unlanded architecture into a false
 
 test("RFC contract distinguishes its governed sections and policy identifiers", () => {
   assert.deepEqual(rfcContractViolations("not an RFC").length > 0, true);
+});
+
+test("wire cannot reacquire command execution through either runtime or adapter", () => {
+  for (const name of ["commands", "command_transport"]) {
+    const dependencies = new Map([["crates/wire/Cargo.toml", [{ name, alias: name, workspacePath: true }]]]);
+    assert.ok(hardBanViolations(dependencies, ACTIVE_HARD_BANS).some((error) => error.includes(name)));
+  }
 });

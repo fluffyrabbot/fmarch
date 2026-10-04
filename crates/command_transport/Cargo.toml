@@ -1,0 +1,17 @@
+[package]
+name = "command_transport"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+commands = { path = "../commands", version = "0.1.0" }
+wire = { path = "../wire", version = "0.1.0" }
+content_reference = { path = "../content_reference", version = "0.1.0" }
+game_platform = { path = "../game_platform", version = "0.1.0" }
+serde = "1"
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+domain = { path = "../domain", version = "0.1.0" }

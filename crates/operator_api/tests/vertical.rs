@@ -6,6 +6,7 @@ use axum::response::Response;
 use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
+use command_transport::CommandDispatchExt;
 use operator_proof::{
     audit_operator_proof_run_go_no_go_retention, build_operator_determinism_fuzz_report,
     build_operator_proof_run_go_no_go_report, build_operator_proof_run_status,
@@ -32,8 +33,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    AckMsg, ClientEnvelope, ClientMsg, Command, HostPromptDecision, JsonAtom, RejectCode,
-    RejectMsg, ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
+    ClientEnvelope, ClientMsg, Command, HostPromptDecision, JsonAtom, RejectCode, RejectMsg,
+    ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
 
 const LOCAL_PROOF_SECRET: &str = "2222222222222222222222222222222222222222222222222222222222222222";
@@ -179,7 +180,7 @@ async fn test_command(
             .and_then(|value| value.strip_prefix("Bearer "))
             .unwrap_or("missing-session"),
     ));
-    let wire::CommandDispatch::Direct(command) = msg.command.into_dispatch() else {
+    let command_transport::CommandDispatch::Direct(command) = msg.command.into_dispatch() else {
         return Json(ServerEnvelope::new(
             envelope.id,
             ServerMsg::Reject(RejectMsg {
@@ -192,8 +193,8 @@ async fn test_command(
     provision_fixture_command_principal(&state.pool, &command).await;
     let body =
         match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command).await {
-            Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
-            Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+            Ok(ack) => ServerMsg::Ack(command_transport::ack(ack)),
+            Err(reject) => ServerMsg::Reject(command_transport::reject(reject)),
         };
     Json(ServerEnvelope::new(envelope.id, body))
 }

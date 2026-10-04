@@ -2484,11 +2484,11 @@ fn build_host_console_authority(
     let allowed_classes = commands::CohostPermissionClass::ALL
         .into_iter()
         .filter(|class| !denied.contains(class))
-        .map(wire::CohostPermissionClass::from)
+        .map(command_transport::wire_cohost_permission_class)
         .collect();
     let denied_classes = denied
         .into_iter()
-        .map(wire::CohostPermissionClass::from)
+        .map(command_transport::wire_cohost_permission_class)
         .collect();
 
     HostConsoleAuthorityDelta {

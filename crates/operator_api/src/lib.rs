@@ -781,12 +781,11 @@ async fn resolution_traces(
     )
     .await?;
 
-    Ok(Json(
+    Ok(Json(command_transport::resolution_trace_inspection_report(
         commands::inspect_resolution_traces(&state.pool, game, query.run_id.as_deref())
             .await
-            .map_err(command_api_error)?
-            .try_into()?,
-    ))
+            .map_err(command_api_error)?,
+    )?))
 }
 
 async fn resolution_traces_view(
@@ -3706,7 +3705,7 @@ fn command_api_error(reject: commands::Reject) -> ApiError {
         | commands::Reject::UnknownPrompt => StatusCode::NOT_FOUND,
         _ => StatusCode::BAD_REQUEST,
     };
-    let error = RejectCode::from(&reject);
+    let error = command_transport::reject_code(&reject);
     ApiError::Reject {
         status,
         error,

@@ -76,6 +76,7 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "command_transport",
  "async-trait",
  "attention",
  "axum",
@@ -651,6 +652,20 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "command_transport"
+version = "0.1.0"
+dependencies = [
+ "commands",
+ "content_reference",
+ "domain",
+ "game_platform",
+ "serde",
+ "serde_json",
+ "uuid",
+ "wire",
 ]
 
 [[package]]
@@ -2316,6 +2331,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 name = "operator_api"
 version = "0.1.0"
 dependencies = [
+ "command_transport",
  "axum",
  "caps",
  "commands",
@@ -4494,7 +4510,6 @@ name = "wire"
 version = "0.1.0"
 dependencies = [
  "caps",
- "commands",
  "content_reference",
  "domain",
  "game_platform",
