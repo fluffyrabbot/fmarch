@@ -1440,17 +1440,6 @@ async fn fold_event(
                 &mentions,
             )
             .await?;
-            record_game_private_citations(
-                tx,
-                PostRef {
-                    kind: PostKind::GamePost,
-                    scope_id: game_id,
-                    source_seq: ev.seq,
-                },
-                &quotations,
-                ev.occurred_at,
-            )
-            .await?;
             if public_main {
                 publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
                 publications::record_publication(
@@ -1476,6 +1465,9 @@ async fn fold_event(
                     ev.occurred_at,
                 )
                 .await?;
+            } else {
+                record_game_private_citations(tx, game_id, ev.seq, &quotations, ev.occurred_at)
+                    .await?;
             }
         }
         "PrivateChannelDeclared"
@@ -4213,17 +4205,6 @@ pub async fn project_discussion_event(
             })?)
             .bind(event.occurred_at)
             .execute(&mut **tx)
-            .await?;
-            record_game_private_citations(
-                tx,
-                PostRef {
-                    kind: PostKind::DiscussionPost,
-                    scope_id: stream_id,
-                    source_seq: event.seq,
-                },
-                &quotations,
-                event.occurred_at,
-            )
             .await?;
             sqlx::query(
                 "UPDATE discussion_topic SET post_count = post_count + 1, updated_seq = $2, updated_at = $3, last_post_seq = $2, last_post_at = $3, version = $4 WHERE topic_id = $1",
@@ -8429,40 +8410,30 @@ pub async fn quotation_thread_for_game_channel_in_tx(
     })
 }
 
-/// Bounded newest-first incoming citations for a visible game post.
-/// Returns `None` when the quoted post is missing or globally hidden.
-pub async fn visible_incoming_citations(
+/// Bounded newest-first incoming citations within one private game channel.
+/// The caller must authorize channel access. Public main is never served by the
+/// private index; missing targets and targets in another channel return `None`.
+pub async fn private_game_incoming_citations(
     pool: &PgPool,
-    quoted: PostRef,
-    channel_id: Option<&str>,
+    game_id: Uuid,
+    channel_id: &str,
+    source_seq: i64,
     limit: i64,
 ) -> Result<Option<PostCitationPage>, ProjectionError> {
+    if channel_id == "main"
+        || !private_game_post_exists(pool, game_id, channel_id, source_seq).await?
+    {
+        return Ok(None);
+    }
     let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
-    let (citation_count, citations) = match quoted.kind {
-        PostKind::DiscussionPost => {
-            // Public discussion citations use `visible_public_incoming_citation_pages`.
-            // There is no private forum citation surface in v2.
-            return Ok(None);
-        }
-        PostKind::GamePost => {
-            let channel_id = channel_id.ok_or_else(|| ProjectionError::Payload {
-                kind: "PostCitation".into(),
-                source: serde::de::Error::custom("game_post citations require a channel"),
-            })?;
-            if !game_post_is_visible(pool, quoted.scope_id, channel_id, quoted.source_seq).await? {
-                return Ok(None);
-            }
-            (
-                game_citation_count(pool, quoted.scope_id, channel_id, quoted.source_seq).await?,
-                game_citation_rows(pool, quoted.scope_id, channel_id, quoted.source_seq, limit)
-                    .await?,
-            )
-        }
-    };
     Ok(Some(PostCitationPage {
-        quoted,
-        citations,
-        citation_count,
+        quoted: PostRef {
+            kind: PostKind::GamePost,
+            scope_id: game_id,
+            source_seq,
+        },
+        citation_count: private_game_citation_count(pool, game_id, channel_id, source_seq).await?,
+        citations: private_game_citation_rows(pool, game_id, channel_id, source_seq, limit).await?,
     }))
 }
 
@@ -8561,45 +8532,34 @@ pub async fn visible_public_incoming_citation_pages(
     Ok(pages.into_values().collect())
 }
 
-async fn game_post_is_visible(
+async fn private_game_post_exists(
     pool: &PgPool,
     game_id: Uuid,
     channel_id: &str,
     source_seq: i64,
 ) -> Result<bool, ProjectionError> {
-    let public_only = channel_id == "main";
     Ok(sqlx::query_scalar(
         r#"
         SELECT EXISTS (
             SELECT 1
             FROM thread_view
             WHERE game_id = $1 AND channel_id = $2 AND source_seq = $3
-              AND (
-                  NOT $4::BOOLEAN OR NOT EXISTS (
-                      SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.surface_id = thread_view.game_id
-                        AND moderation.source_seq = thread_view.source_seq
-                        AND moderation.visibility = 'hidden'
-                  )
-              )
         )
         "#,
     )
     .bind(game_id)
     .bind(channel_id)
     .bind(source_seq)
-    .bind(public_only)
     .fetch_one(pool)
     .await?)
 }
 
-async fn game_citation_count(
+async fn private_game_citation_count(
     pool: &PgPool,
     game_id: Uuid,
     channel_id: &str,
     source_seq: i64,
 ) -> Result<i64, ProjectionError> {
-    let public_only = channel_id == "main";
     Ok(sqlx::query_scalar(
         r#"
         SELECT COUNT(*)::bigint
@@ -8610,20 +8570,11 @@ async fn game_citation_count(
          AND quoting.channel_id = $2
         WHERE citation.game_id = $1
           AND citation.quoted_source_seq = $3
-          AND (
-              NOT $4::BOOLEAN OR NOT EXISTS (
-                  SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.surface_id = quoting.game_id
-                    AND moderation.source_seq = quoting.source_seq
-                    AND moderation.visibility = 'hidden'
-              )
-          )
         "#,
     )
     .bind(game_id)
     .bind(channel_id)
     .bind(source_seq)
-    .bind(public_only)
     .fetch_one(pool)
     .await?)
 }
@@ -8686,14 +8637,13 @@ pub async fn off_page_game_citation_counts(
         .collect())
 }
 
-async fn game_citation_rows(
+async fn private_game_citation_rows(
     pool: &PgPool,
     game_id: Uuid,
     channel_id: &str,
     source_seq: i64,
     limit: i64,
 ) -> Result<Vec<PostCitationRow>, ProjectionError> {
-    let public_only = channel_id == "main";
     let rows = sqlx::query(
         r#"
         SELECT citation.quoting_source_seq, citation.occurred_at
@@ -8704,22 +8654,13 @@ async fn game_citation_rows(
          AND quoting.channel_id = $2
         WHERE citation.game_id = $1
           AND citation.quoted_source_seq = $3
-          AND (
-              NOT $4::BOOLEAN OR NOT EXISTS (
-                  SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.surface_id = quoting.game_id
-                    AND moderation.source_seq = quoting.source_seq
-                    AND moderation.visibility = 'hidden'
-              )
-          )
         ORDER BY citation.quoting_source_seq DESC
-        LIMIT $5
+        LIMIT $4
         "#,
     )
     .bind(game_id)
     .bind(channel_id)
     .bind(source_seq)
-    .bind(public_only)
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -10909,13 +10850,11 @@ fn quotations_from_json(
 
 async fn record_game_private_citations(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    quoting: PostRef,
+    game_id: Uuid,
+    quoting_source_seq: i64,
     quotations: &[Quotation],
     occurred_at: i64,
 ) -> Result<(), ProjectionError> {
-    if quoting.kind != content_reference::PostKind::GamePost {
-        return Ok(());
-    }
     for quotation in quotations {
         if quotation.target.kind != content_reference::PostKind::GamePost {
             continue;
@@ -10928,9 +10867,9 @@ async fn record_game_private_citations(
             ON CONFLICT DO NOTHING
             "#,
         )
-        .bind(quoting.scope_id)
+        .bind(game_id)
         .bind(quotation.target.source_seq)
-        .bind(quoting.source_seq)
+        .bind(quoting_source_seq)
         .bind(occurred_at)
         .execute(&mut **tx)
         .await?;

@@ -2550,12 +2550,12 @@
       "id": "product.community.batched-citation-previews",
       "section": "community",
       "order": 140,
-      "title": "Batched citation previews on topic pages",
+      "title": "Batched public citation previews",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Discussion pages request citation previews once for up to 50 cited posts. One public-publication SQL snapshot filters target and quoting visibility plus viewer mutes, computes complete counts, and caps each target independently. Flat wire coordinates render working on-page and cursor-based off-page links; batch counts replace stale thread counts. Retractions preserve historical citation edges. The singular discussion citation endpoint is removed.",
+      "summary": "Discussion and public-game pages request citation previews once for up to 50 cited posts. One public-publication SQL snapshot filters target and quoting visibility, computes complete counts, and caps each target independently. Discussion reads apply viewer profile mutes; public game publications retain persona-only identity. Flat wire coordinates render working on-page and cursor-based off-page links; batch counts replace stale thread counts without deriving public previews from loaded replies. Retractions preserve historical citation edges. Singular public citation endpoints are removed, and the separate private game citation index and nested endpoint serve private channels only.",
       "complete_when": [
-        "A topic page load issues one bounded citation-preview read for the whole page regardless of how many posts are cited; the batched read applies the same visibility, retraction, hide, and mute overlays as the per-post route; a query-plan or row-count regression ceiling guards it; and the discussion role proof still shows quoted-by previews."
+        "Each discussion or public-game page load issues at most one bounded citation-preview read for its 50-post window; counts remain authoritative after visibility changes; row-count ceilings, replay and private-channel isolation are covered; and browser proofs follow actual off-page citation links without exposing account identity."
       ],
       "depends_on": [
         "product.community.quotations",
@@ -2602,6 +2602,38 @@
         {
           "kind": "command",
           "value": "npm run test:dev-test-game-discussion"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/games/[game]/+page.server.js"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/games/[game]/public-game-publication.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/games/[game]/+page.test.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/game_http.rs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/game_index_role_proof.mjs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-game-index"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/src/public_citations.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical/public_game_citations.rs"
         }
       ],
       "remaining": []
@@ -2754,7 +2786,7 @@
       "title": "Opt-in email notifications for the inbox",
       "execution_class": "code",
       "status": "open",
-      "summary": "The in-app inbox is durable and reason-derived, but nothing reaches a member who is not looking at the site. The only outbound delivery is identity mail (invites and recovery) through the provider-abstracted, retryable, audited IdentityDeliveryGateway in crates/api/src/identity_delivery.rs. Notification mail should reuse that delivery machinery with its own admission and budget: opt-in per reason, a batched digest rather than per-event mail, a one-click unsubscribe, and no private content — no game-room, PM, or conversation bodies — in the message.",
+      "summary": "The in-app inbox is durable and reason-derived, but nothing reaches a member who is not looking at the site. The only outbound delivery is identity mail (invites and recovery) through the provider-abstracted, retryable, audited IdentityDeliveryGateway in crates/api/src/identity_delivery.rs. Notification mail should reuse that delivery machinery with its own admission and budget: opt-in per reason, a batched digest rather than per-event mail, a one-click unsubscribe, and no private content \u2014 no game-room, PM, or conversation bodies \u2014 in the message.",
       "complete_when": [
         "A member can opt in per inbox reason to immediate or digest email; deliveries batch unread inbox items, never include private-channel content, carry a signed one-click unsubscribe, respect mutes and suspension, stop on data-lifecycle transitions, reuse the audited provider gateway with its own retry and quota budget, and are covered by a local fake-provider proof without claiming live provider traffic."
       ],

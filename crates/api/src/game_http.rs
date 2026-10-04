@@ -6,6 +6,7 @@ use super::auth_http::{
     AuthorizationContext,
 };
 use super::command_http::command_reject_api_error;
+use super::public_citations::{self, PublicCitationQuery};
 use super::{ApiError, ApiState};
 use crate::{live_projection, program_library};
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
@@ -21,9 +22,7 @@ mod private_attention_http;
 mod reading_checkpoint_http;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
-use content_reference::{
-    PostKind as ContentPostKind, PostRef as ContentPostRef, DEFAULT_POST_CITATION_LIMIT,
-};
+use content_reference::DEFAULT_POST_CITATION_LIMIT;
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
@@ -38,8 +37,9 @@ use wire::{
     HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
     HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
     HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
-    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation,
-    RejectCode, SlotMentionNotification, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage,
+    PublicPostCitationBatch, Quotation, RejectCode, SlotMentionNotification, ThreadPage,
+    ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -66,10 +66,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/admin/game-bootstrap", get(admin_game_bootstrap))
         .route("/games", get(game_index))
         .route("/games/{game}", get(public_game_thread))
-        .route(
-            "/games/{game}/posts/{source_seq}/citations",
-            get(public_game_post_citations),
-        )
+        .route("/games/{game}/citations", get(public_game_citations))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
@@ -536,11 +533,11 @@ struct PostCitationQuery {
     limit: Option<i64>,
 }
 
-async fn public_game_post_citations(
+async fn public_game_citations(
     State(state): State<GameHttpState>,
-    Path((game, source_seq)): Path<(Uuid, i64)>,
-    Query(query): Query<PostCitationQuery>,
-) -> Result<Json<PostCitationPage>, ApiError> {
+    Path(game): Path<Uuid>,
+    Query(query): Query<PublicCitationQuery>,
+) -> Result<Json<PublicPostCitationBatch>, ApiError> {
     if projections::public_game_by_id(&state.pool, game)
         .await?
         .is_none()
@@ -551,23 +548,11 @@ async fn public_game_post_citations(
             message: "public game was not found".to_string(),
         });
     }
-    let page = projections::visible_incoming_citations(
-        &state.pool,
-        ContentPostRef {
-            kind: ContentPostKind::GamePost,
-            scope_id: game,
-            source_seq,
-        },
-        Some("main"),
-        query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
-    )
-    .await?
-    .ok_or_else(|| ApiError::Reject {
-        status: StatusCode::NOT_FOUND,
-        error: RejectCode::NotAuthorized,
-        message: "game post was not found".to_string(),
-    })?;
-    Ok(Json(PostCitationPage::from(page)))
+    // Public game publications belong to slots, never account profiles. A
+    // member's profile mutes must not reveal the person occupying a slot.
+    Ok(Json(
+        public_citations::read(&state.pool, game, query, None).await?,
+    ))
 }
 
 async fn channel_post_citations(
@@ -591,24 +576,21 @@ async fn channel_post_citations(
         Some(authorization.principal_id()),
     )
     .await?;
-    game_post_citations(&state.pool, game, channel.as_str(), source_seq, query.limit).await
+    private_game_post_citations(&state.pool, game, channel.as_str(), source_seq, query.limit).await
 }
 
-async fn game_post_citations(
+async fn private_game_post_citations(
     pool: &PgPool,
     game: Uuid,
     channel_id: &str,
     source_seq: i64,
     limit: Option<i64>,
 ) -> Result<Json<PostCitationPage>, ApiError> {
-    let page = projections::visible_incoming_citations(
+    let page = projections::private_game_incoming_citations(
         pool,
-        ContentPostRef {
-            kind: ContentPostKind::GamePost,
-            scope_id: game,
-            source_seq,
-        },
-        Some(channel_id),
+        game,
+        channel_id,
+        source_seq,
         limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?

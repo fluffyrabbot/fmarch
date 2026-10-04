@@ -95,3 +95,17 @@ test("game quotation previews normalize tagged wire authors before rendering", (
 
   assert.equal(view.quotations[0].authorLabel, "slot-2");
 });
+
+test("private channel citation previews retain the nested PostCitationPage contract", () => {
+  const post = { source_seq: 12, citation_count: 3 };
+  const view = buildGamePostQuoteView(post, {
+    citations: {
+      quoted: { kind: "game_post", scope_id: game, source_seq: 12 },
+      citation_count: 3,
+      citations: [{ quoting: { kind: "game_post", scope_id: game, source_seq: 18 }, occurred_at: 2 }],
+    },
+  });
+  assert.equal(view.citationCount, 3);
+  assert.equal(view.moreCitationCount, 2);
+  assert.deepEqual(view.incomingCitations, [{ sourceSeq: 18, href: "?post=18#thread-post-18" }]);
+});

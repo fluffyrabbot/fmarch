@@ -68,6 +68,7 @@ try {
   const seeded = await seedPublicGames(apiBaseUrl);
   const pagination = await proveSeededBoard({ frontendBaseUrl, apiBaseUrl, seeded });
   const recovery = await proveInvalidCursorRecovery(frontendBaseUrl);
+  const citations = await provePublicCitationNavigation({ frontendBaseUrl, apiBaseUrl });
   const evidence = {
     version: 1,
     proof: "game-index-role-proof",
@@ -76,7 +77,7 @@ try {
     releaseReady: false,
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres, local Rust API, SvelteKit root board, and Chromium proof. It proves an empty public board, command-pipeline seeded active/completed game discovery, keyset pagination, reload, invalid-cursor recovery, and the absence of host, seat, role, or private-channel data from the public page. It does not prove hosted availability, public per-game play access, search, ranking, recommendations, SEO, or release readiness.",
+      "Local scratch-Postgres, local Rust API, SvelteKit root board and public game routes, and Chromium proof. It proves an empty public board, command-pipeline seeded active/completed game discovery, keyset pagination, reload, invalid-cursor recovery, anonymous flat citation previews and navigation to an off-page quoting post through its canonical post address, and the absence of host, seat, role, or private-channel data from the public board. It does not prove hosted availability, public per-game play access, search, ranking, recommendations, SEO, or release readiness.",
     roleUrl: `${frontendBaseUrl}/`,
     api: {
       endpoint: `${apiBaseUrl}/games`,
@@ -95,6 +96,7 @@ try {
     seeded,
     pagination,
     recovery,
+    citations,
   };
   assertGameIndexProof(evidence);
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -240,6 +242,84 @@ async function proveInvalidCursorRecovery(frontendBaseUrl) {
   }
 }
 
+async function provePublicCitationNavigation({ frontendBaseUrl, apiBaseUrl }) {
+  const principal = "public_citation_author";
+  const sessionToken = await seedSessionToken(apiBaseUrl, principal);
+  await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${sessionToken}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      account_id: "public-citation-author@example.test",
+      password: "correct horse battery staple",
+      principal_id: fixturePrincipalAuthorityId(principal),
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  const game = randomUUID();
+  let id = 1000;
+  await sendCommand(apiBaseUrl, id++, principal, { CreateGame: { game, pack: "mafiascum" } });
+  await sendCommand(apiBaseUrl, id++, principal, { AddSlot: { game, slot: "slot_1" } });
+  await sendCommand(apiBaseUrl, id++, principal, {
+    SeatPersona: { game, slot: "slot_1", principal_id: principal, public_name: "Public citation author" },
+  });
+  await sendCommand(apiBaseUrl, id++, principal, { StartGame: { game, phase: "D01" } });
+  const targetBody = "Public citation target.";
+  await sendCommand(apiBaseUrl, id++, principal, {
+    SubmitPost: { game, channel_id: "main", actor_slot: "slot_1", body: targetBody, media: [] },
+  });
+  const initial = await fetchJson(`${apiBaseUrl}/games/${game}?limit=50`);
+  const targetSeq = initial.posts.find((post) => post.body === targetBody)?.source_seq;
+  if (!Number.isSafeInteger(targetSeq) || targetSeq < 1) throw new Error("citation target was not publicly projected");
+  const replyBody = "A public reply quoting the earlier post.";
+  await sendCommand(apiBaseUrl, id++, principal, {
+    SubmitPost: {
+      game, channel_id: "main", actor_slot: "slot_1", body: replyBody, media: [],
+      quotations: [{ target: { kind: "game_post", scope_id: game, source_seq: targetSeq }, excerpt: targetBody }],
+    },
+  });
+  const updated = await fetchJson(`${apiBaseUrl}/games/${game}?limit=50`);
+  const quotingSeq = updated.posts.find((post) => post.body === replyBody)?.source_seq;
+  if (!Number.isSafeInteger(quotingSeq) || quotingSeq <= targetSeq) throw new Error("quoting reply was not publicly projected");
+  const batch = await fetchJson(`${apiBaseUrl}/games/${game}/citations?source_seqs=${targetSeq}&limit=5`);
+  const preview = batch.pages?.[0];
+  if (batch.pages?.length !== 1 || preview.quoted_surface_id !== game || preview.quoted_source_seq !== targetSeq
+    || preview.citation_count !== 1 || preview.citations?.length !== 1
+    || preview.citations[0].quoting_surface_id !== game || preview.citations[0].quoting_source_seq !== quotingSeq) {
+    throw new Error("public citation batch did not project the flat quoting address");
+  }
+  // This is an anonymous page; the seeding principal is never installed as a
+  // browser session. The cursor excludes the quoting post from the first page.
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.goto(`${frontendBaseUrl}/games/${game.toUpperCase()}?before_seq=${quotingSeq}`, { waitUntil: "networkidle" });
+    await page.getByTestId(`public-game-post-${targetSeq}`).waitFor({ state: "visible" });
+    if (await page.getByTestId(`public-game-post-${quotingSeq}`).count() !== 0) throw new Error("citation target reply must start off-page");
+    const disclosure = page.getByTestId(`public-game-citations-${targetSeq}`);
+    await disclosure.locator("summary").click();
+    const citation = page.getByTestId(`public-game-citation-${targetSeq}-${quotingSeq}`);
+    const href = `/games/${game}?post=${quotingSeq}#thread-post-${quotingSeq}`;
+    if (await citation.getAttribute("href") !== href) throw new Error("public citation omitted its canonical post address");
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}${href}`, { waitUntil: "networkidle" }),
+      citation.click(),
+    ]);
+    const reply = page.getByTestId(`public-game-post-${quotingSeq}`);
+    await reply.waitFor({ state: "visible" });
+    if (!(await reply.innerText()).includes(replyBody)) throw new Error("public citation linked to the wrong reply");
+    await page.waitForFunction((seq) => document.activeElement?.id === `thread-post-${seq}`, quotingSeq);
+    await page.reload({ waitUntil: "networkidle" });
+    await reply.waitFor({ state: "visible" });
+    if (!(await reply.innerText()).includes(replyBody)) throw new Error("addressed public reply did not survive reload");
+    return {
+      status: "passed", game, targetSeq, quotingSeq, citationCount: preview.citation_count,
+      anonymous: true, initiallyOffPage: true, offPageCitationFollowed: true,
+      addressedPostFocused: true, reloadTargetVisible: true, href,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 function assertPublicApiPage(page, expectedCount, hostPrincipalAlias) {
   if (!Array.isArray(page?.games) || page.games.length !== expectedCount) {
     throw new Error(`public game index page shape drifted: ${JSON.stringify(page)}`);
@@ -288,7 +368,14 @@ function assertGameIndexProof(evidence) {
     evidence.pagination?.completedVisible !== true ||
     evidence.pagination?.rawPrivateDataVisible !== false ||
     evidence.recovery?.status !== "passed" ||
-    evidence.recovery?.recoveredCardCount !== pageSize
+    evidence.recovery?.recoveredCardCount !== pageSize ||
+    evidence.citations?.status !== "passed" ||
+    evidence.citations?.citationCount !== 1 ||
+    evidence.citations?.anonymous !== true ||
+    evidence.citations?.initiallyOffPage !== true ||
+    evidence.citations?.offPageCitationFollowed !== true ||
+    evidence.citations?.addressedPostFocused !== true ||
+    evidence.citations?.reloadTargetVisible !== true
   ) {
     throw new Error("game index proof must stay local, paginated, and capability-safe");
   }
@@ -366,7 +453,6 @@ async function startFrontend(apiBaseUrl) {
         host,
         port: 0,
         strictPort: false,
-        proxy: { "/games": apiBaseUrl },
       },
       logLevel: "error",
     });

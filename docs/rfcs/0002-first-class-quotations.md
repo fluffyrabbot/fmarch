@@ -316,37 +316,47 @@ snapshot.
 
 ## Reverse index
 
-Add one rebuildable projection, folded in the same transaction as the
-quoting post:
+Citation edges are rebuildable projections, folded in the same transaction as
+the quoting post. Public discussion and game-main publications share the
+publication index:
 
 ```text
-post_citation
-  quoted_kind
-  quoted_scope_id
+public_citation
+  quoted_surface_id
   quoted_source_seq
-  quoting_kind
-  quoting_scope_id
+  quoting_surface_id
   quoting_source_seq
   occurred_at
 
-  PK (quoting_kind, quoting_scope_id, quoting_source_seq,
-      quoted_kind, quoted_scope_id, quoted_source_seq)
-  INDEX (quoted_kind, quoted_scope_id, quoted_source_seq, quoting_source_seq)
+  PK (quoting_surface_id, quoting_source_seq,
+      quoted_surface_id, quoted_source_seq)
+
+game_private_citation
+  game_id
+  quoted_source_seq
+  quoting_source_seq
+  occurred_at
+
+  PK (game_id, quoting_source_seq, quoted_source_seq)
 ```
 
 Fold only from `DiscussionPostSubmitted` / `PostSubmitted` that carry
-quotations. Rebuild deletes and replays. Read-time visibility uses
-`moderation_target_state` and channel membership for game posts; community
-posts additionally use their profile-mute overlay.
-The index itself stores the edge, not the visibility decision.
+quotations. Rebuild deletes and replays. Game-main edges are written only to
+`public_citation`; private game channels use `game_private_citation`. Private
+reads resolve both event sequences in the authorized channel and reject main.
+Public reads join both ends to visible publications and surfaces, with the
+viewer's profile-mute overlay for discussion publications. Public game
+publications expose personas without account profile identity, so account
+mutes cannot reveal who occupies a game persona. Each index stores the edge,
+not the visibility decision.
 
 Reads:
 
 - outgoing quotations travel with the quoting post (they are part of its
   event payload and may be denormalized onto `discussion_post` /
   `thread_view` as jsonb for the thread page);
-- incoming citations are queried from `post_citation` when rendering a post
-  or a “quoted by” disclosure.
+- incoming citations are queried from the owning public or private index when
+  rendering a post or a “quoted by” disclosure.
 
 Do not store a citation count on `discussion_post` / `thread_view` as a
 mutable counter. Count at read time or maintain a rebuildable aggregate
@@ -388,14 +398,16 @@ apply that count to any already-loaded post. Incoming citation lists still
 come from loaded quoting posts or the sibling query. Community stays
 cold-load.
 
-### Discussion citation batches
+### Public citation batches
 
-Discussion pages read incoming previews with
-`GET /discussions/topics/{topic}/citations?source_seqs=40,80&limit=5`.
+Discussion and public-game pages read incoming previews with
+`GET /discussions/topics/{topic}/citations?source_seqs=40,80&limit=5` and
+`GET /games/{game}/citations?source_seqs=40,80&limit=5`, respectively.
 The request accepts 1–50 distinct positive event sequences; malformed,
 duplicate, or oversized sets are rejected. The per-post preview limit defaults
-to five and is clamped to 1–20. This replaces the singular discussion citation
-route.
+to five and is clamped to 1–20. These replace the singular public citation
+routes. Private-channel citation routes retain their authorized nested
+`PostCitationPage` response.
 
 `PublicPostCitationBatch.pages` contains flat `PublicPostCitationPage` values.
 Each preview identifies `quoting_surface_id` and `quoting_source_seq`.
@@ -406,11 +418,14 @@ eligible citations has an empty page and a zero count. Retraction retains the
 historical edge. Previews order by descending source sequence, independently
 of event timestamps.
 
-The topic loader makes at most one citation request for its 50-post window.
+Each public page loader makes at most one citation request for its 50-post window.
 The returned batch owns displayed counts, including when a target disappears
 between the thread and citation reads. A preview outside the loaded window
 uses the existing `before_seq` cursor to load its destination before following
-the post fragment.
+the post fragment. Public-game previews keep the `?post=SEQ#thread-post-SEQ`
+address, whose `around_seq` resolver loads the target window. Public batch
+counts and previews do not fall back to stale thread counts or citations
+derived from loaded replies.
 
 ## Surfaces
 

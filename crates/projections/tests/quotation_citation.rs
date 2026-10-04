@@ -1,12 +1,12 @@
-//! First-class quotations fold into public and private citation indexes identically.
+//! Public and private quotations retain distinct indexes and stable replay semantics.
 
 use content_reference::{PostKind, PostRef};
 use event_actor::ActorId;
 use eventstore::EventInput;
 use projections::test_support::append_discussion_and_project;
 use projections::{
-    append_and_project, discussion_posts, off_page_game_citation_counts, public_thread_view,
-    rebuild, rebuild_discussion_stream, visible_incoming_citations,
+    append_and_project, discussion_posts, off_page_game_citation_counts,
+    private_game_incoming_citations, public_thread_view, rebuild, rebuild_discussion_stream,
     visible_public_incoming_citation_pages,
 };
 use social::{
@@ -247,8 +247,98 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     assert_eq!(before.len(), 1);
     assert_eq!(before[0].0, quoted_seq);
 
+    let private_target = submit_game_citation_post(&pool, game, "private:one", None).await;
+    let other_target = submit_game_citation_post(&pool, game, "private:two", None).await;
+    let mut private_quoters = Vec::new();
+    for _ in 0..3 {
+        private_quoters.push(
+            submit_game_citation_post(&pool, game, "private:one", Some(private_target)).await,
+        );
+    }
+    submit_game_citation_post(&pool, game, "private:two", Some(other_target)).await;
+    let private_before: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT quoted_source_seq, quoting_source_seq FROM game_private_citation WHERE game_id = $1 ORDER BY quoting_source_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        private_before.len(),
+        4,
+        "public main edges never enter the private index"
+    );
+    assert!(private_before
+        .iter()
+        .all(|(target, _)| *target != quoted_seq));
+    for channel in ["main", "private:one", "private:two"] {
+        assert!(
+            private_game_incoming_citations(&pool, game, channel, quoted_seq, 5)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert!(
+        private_game_incoming_citations(&pool, game, "private:two", private_target, 5)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(visible_public_incoming_citation_pages(
+        &pool,
+        game,
+        &[private_target, other_target],
+        None,
+        5
+    )
+    .await
+    .unwrap()
+    .is_empty());
+    let private_page =
+        private_game_incoming_citations(&pool, game, "private:one", private_target, 0)
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(private_page.citation_count, 3);
+    assert_eq!(private_page.citations.len(), 1);
+    assert_eq!(
+        private_page.citations[0].quoting.source_seq,
+        *private_quoters.last().unwrap()
+    );
+    let public_profile_ids: Vec<Option<Uuid>> = sqlx::query_scalar(
+        "SELECT author_profile_id FROM public_publication WHERE surface_id = $1",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        public_profile_ids,
+        vec![None, None],
+        "slot posts have no account-profile identity"
+    );
+
     rebuild(&pool, game).await.unwrap();
     assert_eq!(before, public_citation_rows(&pool, game).await);
+    let private_after: Vec<(i64, i64)> = sqlx::query_as(
+        "SELECT quoted_source_seq, quoting_source_seq FROM game_private_citation WHERE game_id = $1 ORDER BY quoting_source_seq",
+    )
+    .bind(game).fetch_all(&pool).await.unwrap();
+    assert_eq!(private_after, private_before);
+    let replayed = private_game_incoming_citations(&pool, game, "private:one", private_target, 20)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replayed.citation_count, 3);
+    assert_eq!(
+        replayed
+            .citations
+            .iter()
+            .map(|citation| citation.quoting.source_seq)
+            .collect::<Vec<_>>(),
+        private_quoters.into_iter().rev().collect::<Vec<_>>()
+    );
 
     let page = public_thread_view(&pool, game, None, 10).await.unwrap();
     assert_eq!(page.posts.len(), 2);
@@ -256,19 +346,10 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     assert!(page.posts[0].quotations.is_empty());
     assert_eq!(page.posts[1].quotations[0].excerpt, "Alpha signal");
     assert_eq!(page.posts[1].citation_count, 0);
-    let citations = visible_incoming_citations(
-        &pool,
-        PostRef {
-            kind: PostKind::GamePost,
-            scope_id: game,
-            source_seq: quoted_seq,
-        },
-        Some("main"),
-        5,
-    )
-    .await
-    .unwrap()
-    .unwrap();
+    let citations = visible_public_incoming_citation_pages(&pool, game, &[quoted_seq], None, 5)
+        .await
+        .unwrap()
+        .remove(0);
     assert_eq!(citations.citation_count, 1);
     assert_eq!(
         citations.citations[0].quoting.source_seq,
@@ -291,6 +372,41 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     .await
     .unwrap()
     .is_empty());
+}
+
+async fn submit_game_citation_post(
+    pool: &sqlx::PgPool,
+    game: Uuid,
+    channel: &str,
+    target: Option<i64>,
+) -> i64 {
+    let quotations: Vec<_> = target
+        .into_iter()
+        .map(|source_seq| {
+            serde_json::json!({
+                "target": { "kind": "game_post", "scope_id": game, "source_seq": source_seq },
+                "excerpt": "Claim"
+            })
+        })
+        .collect();
+    append_and_project(
+        pool,
+        game,
+        &[EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": channel,
+                "author": { "kind": "slot", "slot_id": "slot_1" },
+                "body": "Claim", "phase_id": "D01", "quotations": quotations,
+            }),
+            ActorId::Slot("slot_1".into()),
+            5,
+        )],
+    )
+    .await
+    .unwrap()[0]
+        .seq
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

@@ -215,6 +215,70 @@
         "test:dev-test-game-discussion"
       ],
       "excludes": []
+    },
+    {
+      "name": "public game citation HTTP behavior retains browser proof",
+      "scope": "Public batch counts, private isolation and citation destination navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "crates/api/src/game_http.rs"
+      ],
+      "requires": [
+        "cargo:api",
+        "test:dev-test-game-game-index"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "shared public citation boundary keeps both browser proofs",
+      "scope": "Public batch counts, private isolation and citation destination navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "crates/api/src/public_citations.rs"
+      ],
+      "requires": [
+        "cargo:api",
+        "test:dev-test-game-discussion",
+        "test:dev-test-game-game-index"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "public game citation projection retains browser proof",
+      "scope": "Public batch counts, private isolation and citation destination navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "crates/projections/src/lib.rs"
+      ],
+      "requires": [
+        "cargo:projections",
+        "test:dev-test-game-game-index"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "public game citation page retains browser and shared game gates",
+      "scope": "Public batch counts, private isolation and citation destination navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "frontend/src/routes/games/[game]/+page.server.js",
+        "frontend/src/routes/games/[game]/public-game-publication.mjs"
+      ],
+      "requires": [
+        "test:frontend-contract",
+        "test:dev-test-game-game-index",
+        "test:frontend-role-smoke"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "shared game quotation model retains public and private proof",
+      "scope": "Public batch counts, private isolation and citation destination navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "frontend/src/lib/app/game-quotation-model.mjs"
+      ],
+      "requires": [
+        "test:frontend-contract",
+        "test:dev-test-game-game-index",
+        "test:frontend-role-smoke"
+      ],
+      "excludes": []
     }
   ]
 }

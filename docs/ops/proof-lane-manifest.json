@@ -864,7 +864,7 @@
       "paths": ["crates/projections/"],
       "crate": "projections",
       "dependency_lanes": ["cargo:projections", "cargo:clippy-workspace"],
-      "lanes": ["cargo:projections", "cargo:clippy-workspace", "check:event-key-rotation-evidence", "test:railway-staging-target", "test:production-promotion", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace", "check:event-key-rotation-evidence", "test:railway-staging-target", "test:production-promotion", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-game-index", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -1294,6 +1294,44 @@
       "capabilities": ["product.community.search", "product.community.moderation-operations", "product.community.subscriptions", "product.community.batched-citation-previews"]
     },
     {
+      "id": "api:public-game-citations",
+      "tier": "frozen",
+      "paths": [
+        "crates/api/src/game_http.rs"
+      ],
+      "lanes": [
+        "cargo:api",
+        "cargo:clippy-workspace",
+        "test:mash-scale-acceptance",
+        "test:security-release-baseline",
+        "check:event-key-rotation-evidence",
+        "test:dev-test-game-game-index"
+      ],
+      "capabilities": [
+        "product.community.batched-citation-previews",
+        "foundation.wire-live-delivery"
+      ]
+    },
+    {
+      "id": "api:public-citations",
+      "tier": "frozen",
+      "paths": [
+        "crates/api/src/public_citations.rs"
+      ],
+      "lanes": [
+        "cargo:api",
+        "cargo:clippy-workspace",
+        "test:mash-scale-acceptance",
+        "test:security-release-baseline",
+        "check:event-key-rotation-evidence",
+        "test:dev-test-game-discussion",
+        "test:dev-test-game-game-index"
+      ],
+      "capabilities": [
+        "product.community.batched-citation-previews"
+      ]
+    },
+    {
       "id": "api:tests",
       "tier": "frozen",
       "paths": ["crates/api/tests/"],
@@ -1418,7 +1456,6 @@
       "tier": "frozen",
       "paths": [
         "frontend/src/routes/g/",
-        "frontend/src/routes/games/",
         "frontend/src/lib/components/",
         "frontend/src/lib/app/"
       ],
@@ -1444,6 +1481,26 @@
         "product.mash.day-program-library",
         "product.mash.day-event-runtime",
         "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "frontend:public-game",
+      "tier": "frozen",
+      "paths": [
+        "frontend/src/routes/games/",
+        "frontend/src/lib/app/game-quotation-model.mjs",
+        "frontend/src/lib/app/game-quotation-model.test.mjs"
+      ],
+      "lanes": [
+        "test:frontend-contract",
+        "test:dev-test-game-game-index"
+      ],
+      "also_triggers": [
+        "frontend:game"
+      ],
+      "capabilities": [
+        "product.community.batched-citation-previews",
+        "product.community.quotations"
       ]
     },
     {
@@ -1791,7 +1848,8 @@
         "test:dev-test-game-game-index"
       ],
       "capabilities": [
-        "product.community.game-index"
+        "product.community.game-index",
+        "product.community.batched-citation-previews"
       ]
     },
     {"id":"proof:profile-role","tier":"frozen","paths":["tools/profile_role_proof.mjs"],"lanes":["test:dev-test-game-profile"],"capabilities":["product.community.profiles"]},

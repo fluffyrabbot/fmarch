@@ -1,7 +1,8 @@
 import {
   GAME_CITATION_PREVIEW_LIMIT,
-  buildGamePostQuoteView,
+  buildOutgoingQuotationViews,
 } from "../../../lib/app/game-quotation-model.mjs";
+import { postHref } from "../../../lib/app/post-address.mjs";
 import {
   gameThreadAuthorLabel,
   normalizeGameThreadAuthor,
@@ -72,15 +73,28 @@ function humanize(value) {
   return text === "" ? "Game" : `${text[0].toUpperCase()}${text.slice(1)}`;
 }
 
-export function buildPublicGamePosts(posts = [], citationPages = {}) {
+export function buildPublicGamePosts(posts = [], citationPages = {}, gameId) {
   const source = Array.isArray(posts) ? posts : [];
   return Object.freeze(
     source.map((post) => {
       const author = normalizeGameThreadAuthor(post?.author);
-      const quote = buildGamePostQuoteView(post, {
-        posts: source,
-        citations: citationPages[Number(post?.source_seq ?? post?.sourceSeq)] ?? null,
-      });
+      // Public flat DTOs and their current counts have a separate projection
+      // from authenticated channel quotations. Never infer public visibility
+      // from a stale thread page or the private model's local citation scan.
+      const citations = citationPages[Number(post.source_seq)] ?? null;
+      const batchCount = Number(citations?.citation_count ?? 0);
+      const citationCount = Number.isSafeInteger(batchCount) && batchCount > 0 ? batchCount : 0;
+      const incomingCitations = Object.freeze(
+        (citationCount > 0 && Array.isArray(citations?.citations) ? citations.citations : [])
+          .filter((citation) => citation.quoting_surface_id === gameId)
+          .map((citation) => Number(citation.quoting_source_seq))
+          .filter((seq) => Number.isSafeInteger(seq) && seq > 0)
+          .slice(0, GAME_CITATION_PREVIEW_LIMIT)
+          .map((sourceSeq) => Object.freeze({
+            sourceSeq,
+            href: `/games/${encodeURIComponent(gameId)}${postHref(sourceSeq)}`,
+          })),
+      );
       return Object.freeze({
         ...post,
         author,
@@ -89,10 +103,10 @@ export function buildPublicGamePosts(posts = [], citationPages = {}) {
           post.embed,
           post.source_seq ?? post.sourceSeq,
         ),
-        quotations: quote.quotations,
-        citationCount: quote.citationCount,
-        incomingCitations: quote.incomingCitations,
-        moreCitationCount: quote.moreCitationCount,
+        quotations: buildOutgoingQuotationViews(post, source),
+        citationCount,
+        incomingCitations,
+        moreCitationCount: Math.max(0, citationCount - incomingCitations.length),
       });
     }),
   );

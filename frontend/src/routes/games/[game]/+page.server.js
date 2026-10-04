@@ -32,19 +32,20 @@ export async function load({ params, locals, cookies, fetch, url }) {
     ? fixturePublicGame(params.game)
     : response.ok ? await response.json().catch(() => null) : null;
   const available = page !== null && typeof page === "object";
+  const gameId = page?.game?.game;
   const sourcePosts = available && Array.isArray(page.posts) ? page.posts : [];
   const citationPages = available
     ? await loadCitationPages({
         fetch,
         token,
         apiBaseUrl,
-        game: params.game,
+        game: gameId,
         posts: sourcePosts,
       })
     : {};
-  const posts = available ? buildPublicGamePosts(sourcePosts, citationPages) : [];
+  const posts = available ? buildPublicGamePosts(sourcePosts, citationPages, gameId) : [];
   const subscription = available
-    ? await loadSubscription({ locals, cookies, fetch, apiBaseUrl, game: params.game })
+    ? await loadSubscription({ locals, cookies, fetch, apiBaseUrl, game: gameId })
     : null;
   return {
     shellOwner: "layout",
@@ -70,21 +71,27 @@ export async function load({ params, locals, cookies, fetch, url }) {
 }
 
 async function loadCitationPages({ fetch, token, apiBaseUrl, game, posts }) {
-  const cited = (Array.isArray(posts) ? posts : []).filter(
-    (post) => Number(post?.citation_count ?? post?.citationCount ?? 0) > 0,
+  const cited = [...new Set(
+    (Array.isArray(posts) ? posts : [])
+      .filter((post) => Number(post?.citation_count ?? 0) > 0)
+      .map((post) => Number(post.source_seq))
+      .filter((seq) => Number.isSafeInteger(seq) && seq > 0),
+  )].slice(0, 50);
+  if (cited.length === 0) return {};
+  const search = new URLSearchParams({
+    source_seqs: cited.join(","),
+    limit: String(GAME_CITATION_PREVIEW_LIMIT),
+  });
+  const response = await fetch(
+    `${apiBaseUrl}/games/${encodeURIComponent(game)}/citations?${search}`,
+    { headers: readHeaders(token) },
   );
-  const entries = await Promise.all(
-    cited.map(async (post) => {
-      const seq = Number(post.source_seq ?? post.sourceSeq);
-      const response = await fetch(
-        `${apiBaseUrl}/games/${encodeURIComponent(game)}/posts/${seq}/citations?limit=${GAME_CITATION_PREVIEW_LIMIT}`,
-        { headers: readHeaders(token) },
-      );
-      const page = response.ok ? await response.json().catch(() => null) : null;
-      return [seq, page];
-    }),
+  const batch = response.ok ? await response.json().catch(() => null) : null;
+  return Object.fromEntries(
+    (Array.isArray(batch?.pages) ? batch.pages : [])
+      .filter((page) => page?.quoted_surface_id === game && cited.includes(page.quoted_source_seq))
+      .map((page) => [page.quoted_source_seq, page]),
   );
-  return Object.fromEntries(entries.filter(([, page]) => page !== null));
 }
 
 function readHeaders(token) {
