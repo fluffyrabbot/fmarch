@@ -3,17 +3,16 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 use wire::{
     fixture_principal_id, is_valid_live_data_envelope_id, next_live_data_envelope_id,
-    CapabilityGrant, Command, DayVoteOutcomeDelta, GameThreadAuthor, Hello,
-    HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
-    HostConsoleHeaderDelta, HostConsoleSchedulerDelta, HostConsoleSlotsDelta,
-    HostConsoleStateDelta, HostConsoleTasksDelta, HostConsoleThreadPostRemovedDelta,
-    HostConsoleThreadPostsDelta, HostPromptsDelta, LiveAudience, LiveProjectionDelta,
-    LiveResyncRequired, LiveScope, LiveWireError, PlayerInvestigationResultsDelta,
-    PlayerNotification, PlayerNotificationsDelta, PostCitationsChangedDelta, PostKind, PostRef,
-    ProjectionDelta, ServerEnvelope, ServerMsg, SlotMentionNotification, SlotMentionsDelta,
-    SubmitPostMention, ThreadPost, ThreadPostMention, ThreadPostRemovedDelta, ThreadPostsDelta,
-    VoteCountClearedDelta, VoteCountDelta, LIVE_HEARTBEAT_ENVELOPE_ID, MAX_SAFE_LIVE_ENVELOPE_ID,
-    MAX_SAFE_LIVE_INTEGER, PROTOCOL_VERSION,
+    CapabilityGrant, DayVoteOutcomeDelta, GameThreadAuthor, Hello, HostConsoleAuthorityDelta,
+    HostConsoleAuthorityKind, HostConsoleDayEventsDelta, HostConsoleHeaderDelta,
+    HostConsoleSchedulerDelta, HostConsoleSlotsDelta, HostConsoleStateDelta, HostConsoleTasksDelta,
+    HostConsoleThreadPostRemovedDelta, HostConsoleThreadPostsDelta, HostPromptsDelta, LiveAudience,
+    LiveProjectionDelta, LiveResyncRequired, LiveScope, LiveWireError,
+    PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
+    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, ServerEnvelope, ServerMsg,
+    SlotMentionNotification, SlotMentionsDelta, SubmitPostMention, ThreadPost, ThreadPostMention,
+    ThreadPostRemovedDelta, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
+    LIVE_HEARTBEAT_ENVELOPE_ID, MAX_SAFE_LIVE_ENVELOPE_ID, MAX_SAFE_LIVE_INTEGER, PROTOCOL_VERSION,
 };
 
 fn game(id: u128) -> Uuid {
@@ -878,10 +877,6 @@ fn live_thread_delta_rechecks_the_mention_spans_it_did_not_decide() {
         Err(LiveWireError::EmptyIdentifier("slot_id"))
     ));
 }
-
-/// The submit field is additive: a client that never heard of mentions still
-/// posts, and one that sends them reaches the write model with the seats it
-/// claimed and no coercion in between.
 
 fn slot_mention(game: Uuid, audience_slot: &str) -> SlotMentionNotification {
     SlotMentionNotification {
