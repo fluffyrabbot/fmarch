@@ -178,6 +178,43 @@
         "test:dev-test-game-discussion",
         "test:dev-test-game-community-moderation"
       ]
+    },
+    {
+      "name": "discussion citation HTTP behavior retains browser proof",
+      "scope": "Citation batch visibility, counts and navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "crates/api/src/public_platform_http.rs"
+      ],
+      "requires": [
+        "cargo:api",
+        "test:dev-test-game-discussion"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "discussion citation projection behavior retains browser proof",
+      "scope": "Citation batch visibility, counts and navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "crates/projections/src/lib.rs"
+      ],
+      "requires": [
+        "cargo:projections",
+        "test:dev-test-game-discussion"
+      ],
+      "excludes": []
+    },
+    {
+      "name": "discussion citation page keeps its browser and contract gates",
+      "scope": "Citation batch visibility, counts and navigation remain covered when one owning layer changes alone.",
+      "changed": [
+        "frontend/src/routes/discussions/[slug]/t/[topic]/discussion-thread-model.mjs",
+        "frontend/src/routes/discussions/[slug]/t/[topic]/+page.server.js"
+      ],
+      "requires": [
+        "test:frontend-contract",
+        "test:dev-test-game-discussion"
+      ],
+      "excludes": []
     }
   ]
 }

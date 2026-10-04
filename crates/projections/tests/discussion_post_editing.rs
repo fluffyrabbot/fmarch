@@ -18,7 +18,7 @@ use projections::test_support::append_discussion_and_project;
 use projections::{
     discussion_post_write_state, discussion_posts, discussion_topic_by_id, public_inbox,
     public_search, quotation_thread_for_discussion, rebuild_discussion_stream,
-    subscribe_to_public_target, visible_public_incoming_citations, PublicSearchFilter,
+    subscribe_to_public_target, visible_public_incoming_citation_pages, PublicSearchFilter,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
@@ -1059,15 +1059,15 @@ async fn retraction_withholds_content_drops_search_and_preserves_cited_excerpts(
         .unwrap();
     assert_eq!(quoting_post.quotations.len(), 1);
     assert_eq!(quoting_post.quotations[0].excerpt, "bold claim");
-    let citations = visible_public_incoming_citations(
-        &pool,
-        content_reference::PublicContentRef::new(topic, claim),
-        None,
-        10,
-    )
-    .await
-    .unwrap()
-    .expect("a retracted post still has a citation target");
+    let citations = visible_public_incoming_citation_pages(&pool, topic, &[claim], None, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        citations.len(),
+        1,
+        "a retracted post still has a citation target"
+    );
+    let citations = &citations[0];
     assert_eq!(citations.citation_count, 1);
     assert_eq!(citations.citations[0].quoting.source_seq, quoting);
 
@@ -1129,6 +1129,29 @@ async fn retraction_withholds_content_drops_search_and_preserves_cited_excerpts(
         .await
         .unwrap();
     assert_eq!(rebuilt.posts, page.posts);
+
+    // Retracting the quoting post also preserves its historical citation edge.
+    retract_post(&pool, topic, quoter, quoting, 10).await;
+    let citations_after_both_retractions =
+        visible_public_incoming_citation_pages(&pool, topic, &[quoting, claim], None, 10)
+            .await
+            .unwrap();
+    assert_eq!(citations_after_both_retractions.len(), 2);
+    assert_eq!(citations_after_both_retractions[0], *citations);
+    assert_eq!(
+        citations_after_both_retractions[1].quoted.source_seq,
+        quoting
+    );
+    assert_eq!(citations_after_both_retractions[1].citation_count, 0);
+    assert!(citations_after_both_retractions[1].citations.is_empty());
+    rebuild_discussion_stream(&pool, topic).await.unwrap();
+    assert_eq!(
+        visible_public_incoming_citation_pages(&pool, topic, &[claim, quoting], None, 10)
+            .await
+            .unwrap(),
+        citations_after_both_retractions,
+        "replay preserves citations even when both endpoints are retracted"
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

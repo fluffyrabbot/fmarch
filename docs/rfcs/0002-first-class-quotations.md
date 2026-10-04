@@ -388,6 +388,30 @@ apply that count to any already-loaded post. Incoming citation lists still
 come from loaded quoting posts or the sibling query. Community stays
 cold-load.
 
+### Discussion citation batches
+
+Discussion pages read incoming previews with
+`GET /discussions/topics/{topic}/citations?source_seqs=40,80&limit=5`.
+The request accepts 1–50 distinct positive event sequences; malformed,
+duplicate, or oversized sets are rejected. The per-post preview limit defaults
+to five and is clamped to 1–20. This replaces the singular discussion citation
+route.
+
+`PublicPostCitationBatch.pages` contains flat `PublicPostCitationPage` values.
+Each preview identifies `quoting_surface_id` and `quoting_source_seq`.
+One public-publication query resolves both target and quoting visibility,
+viewer mutes, full counts, and per-target preview limits in the same snapshot.
+Missing, hidden, and muted targets are omitted alike; a visible target with no
+eligible citations has an empty page and a zero count. Retraction retains the
+historical edge. Previews order by descending source sequence, independently
+of event timestamps.
+
+The topic loader makes at most one citation request for its 50-post window.
+The returned batch owns displayed counts, including when a target disappears
+between the thread and citation reads. A preview outside the loaded window
+uses the existing `before_seq` cursor to load its destination before following
+the post fragment.
+
 ## Surfaces
 
 ### Composer

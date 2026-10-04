@@ -163,7 +163,7 @@ export function ownPostAffordances(post, { viewerHandle = null, now = null, topi
 
 export function buildDiscussionPostView(
   post,
-  { posts = [], citations = null, viewerHandle = null, now = null, topicOpen = false } = {},
+  { posts = [], citations = null, slug, topic, viewerHandle = null, now = null, topicOpen = false } = {},
 ) {
   const bySeq = postsBySeq(posts);
   const retracted = post?.retracted === true;
@@ -187,18 +187,30 @@ export function buildDiscussionPostView(
       })
       .filter(Boolean),
   );
-  const citationCount = Number(post?.citation_count ?? post?.citationCount ?? 0);
+  // The batch read owns both count and previews. A target can disappear or
+  // lose visible citations after the thread read; never retain its older count.
+  const batchCount = Number(citations?.citation_count ?? 0);
+  const citationCount = Number.isSafeInteger(batchCount) && batchCount > 0 ? batchCount : 0;
   const incomingSource = Array.isArray(citations?.citations) ? citations.citations : [];
   const incomingCitations = Object.freeze(
     incomingSource
       .map((citation) => {
-        const sourceSeq = Number(citation?.quoting?.source_seq ?? citation?.quoting?.sourceSeq);
-        if (!Number.isInteger(sourceSeq) || sourceSeq < 1) {
+        const sourceSeq = Number(citation?.quoting_source_seq);
+        if (!Number.isSafeInteger(sourceSeq) || sourceSeq < 1) {
           return null;
         }
         return Object.freeze({
           sourceSeq,
-          href: `#post-${sourceSeq}`,
+          href: bySeq.has(sourceSeq)
+            ? `#post-${sourceSeq}`
+            : discussionComposerHref({
+                slug,
+                topic,
+                // The API's cursor is exclusive. This puts the cited reply
+                // on the destination page even when it is outside this page.
+                beforeSeq: String(BigInt(sourceSeq) + 1n),
+                hash: `post-${sourceSeq}`,
+              }),
         });
       })
       .filter(Boolean)
@@ -218,7 +230,7 @@ export function buildDiscussionPostView(
     bodySegments: buildMentionSegments(post?.body, post?.mentions),
     createdAt: post?.created_at ?? null,
     quotations,
-    citationCount: Number.isFinite(citationCount) ? citationCount : 0,
+    citationCount,
     incomingCitations,
     moreCitationCount: Math.max(0, citationCount - incomingCitations.length),
     quoteHref: null,
@@ -271,6 +283,8 @@ export function buildDiscussionThreadView({
         const view = buildDiscussionPostView(post, {
           posts,
           citations: citationPages[Number(post.source_seq)] ?? null,
+          slug,
+          topic,
           viewerHandle,
           now,
           topicOpen,

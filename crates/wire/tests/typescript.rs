@@ -163,3 +163,39 @@ fn attach_day_program_carries_only_a_content_addressed_reference() {
     });
     assert!(serde_json::from_value::<wire::Command>(inline).is_err());
 }
+
+#[test]
+fn public_citation_batch_serializes_flat_source_coordinates_and_complete_counts() {
+    let surface_id = uuid::Uuid::new_v4();
+    let batch = wire::PublicPostCitationBatch {
+        pages: vec![projections::PublicCitationPage {
+            quoted: content_reference::PublicContentRef::new(surface_id, 40),
+            citations: vec![projections::PublicCitationRow {
+                quoting: content_reference::PublicContentRef::new(surface_id, 80),
+                occurred_at: 123,
+            }],
+            citation_count: 7,
+        }
+        .into()],
+    };
+    let expected = serde_json::json!({
+        "pages": [{
+            "quoted_surface_id": surface_id,
+            "quoted_source_seq": 40,
+            "citation_count": 7,
+            "citations": [{
+                "quoting_surface_id": surface_id,
+                "quoting_source_seq": 80,
+                "occurred_at": 123,
+            }],
+        }],
+    });
+    assert_eq!(serde_json::to_value(&batch).unwrap(), expected);
+    assert_eq!(
+        serde_json::from_value::<wire::PublicPostCitationBatch>(expected).unwrap(),
+        batch
+    );
+    assert!(wire::typescript::render().contains(
+        "export type PublicPostCitationBatch = { pages: Array<PublicPostCitationPage>, };"
+    ));
+}

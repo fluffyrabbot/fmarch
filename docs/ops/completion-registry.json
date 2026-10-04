@@ -2552,8 +2552,8 @@
       "order": 140,
       "title": "Batched citation previews on topic pages",
       "execution_class": "code",
-      "status": "open",
-      "summary": "The discussion topic page loader requests quoted-by previews with one API call per cited post (loadCitationPages in frontend/src/routes/discussions/[slug]/t/[topic]/+page.server.js), up to one per post on a 50-post page. Each call runs its own visibility-overlay query through projections::visible_public_incoming_citations. Page cost therefore grows with how often a thread is quoted, which is exactly the shape of a busy mafia discussion. A single page-scoped read returning previews for every cited post removes the fan-out without changing the citation model.",
+      "status": "complete",
+      "summary": "Discussion pages request citation previews once for up to 50 cited posts. One public-publication SQL snapshot filters target and quoting visibility plus viewer mutes, computes complete counts, and caps each target independently. Flat wire coordinates render working on-page and cursor-based off-page links; batch counts replace stale thread counts. Retractions preserve historical citation edges. The singular discussion citation endpoint is removed.",
       "complete_when": [
         "A topic page load issues one bounded citation-preview read for the whole page regardless of how many posts are cited; the batched read applies the same visibility, retraction, hide, and mute overlays as the per-post route; a query-plan or row-count regression ceiling guards it; and the discussion role proof still shows quoted-by previews."
       ],
@@ -2576,15 +2576,35 @@
           "value": "crates/projections/src/lib.rs"
         },
         {
+          "kind": "source",
+          "value": "crates/projections/tests/quotation_citation.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/tests/discussion_post_editing.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/vertical/discussion_citations.rs"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/discussions/[slug]/t/[topic]/+page.test.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/discussion_role_proof.mjs"
+        },
+        {
           "kind": "command",
-          "value": "npm run test:dev-test-game-discussion:local"
+          "value": "npm run test:frontend-contract"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-discussion"
         }
       ],
-      "remaining": [
-        "Add a page-scoped projection read returning bounded incoming-citation previews for a set of source sequences in one topic, with the per-post overlays applied in SQL.",
-        "Expose it as one API route keyed by topic and a bounded source_seq list, and replace loadCitationPages with a single call.",
-        "Keep or remove the per-post citations route according to remaining callers, and add a regression ceiling on queries per page load."
-      ]
+      "remaining": []
     },
     {
       "id": "product.community.post-formatting",

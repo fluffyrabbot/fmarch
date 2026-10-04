@@ -862,7 +862,7 @@
       "paths": ["crates/projections/"],
       "crate": "projections",
       "dependency_lanes": ["cargo:projections", "cargo:clippy-workspace"],
-      "lanes": ["cargo:projections", "cargo:clippy-workspace", "check:event-key-rotation-evidence", "test:railway-staging-target", "test:production-promotion", "test:public-search-role-proof", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace", "check:event-key-rotation-evidence", "test:railway-staging-target", "test:production-promotion", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -1288,8 +1288,8 @@
       "id": "api:public-search",
       "tier": "frozen",
       "paths": ["crates/api/src/public_platform_http.rs"],
-      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "check:event-key-rotation-evidence", "test:public-search-role-proof", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
-      "capabilities": ["product.community.search", "product.community.moderation-operations", "product.community.subscriptions"]
+      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "check:event-key-rotation-evidence", "test:public-search-role-proof", "test:dev-test-game-discussion", "test:dev-test-game-community-moderation", "test:dev-test-game-community-subscriptions"],
+      "capabilities": ["product.community.search", "product.community.moderation-operations", "product.community.subscriptions", "product.community.batched-citation-previews"]
     },
     {
       "id": "api:tests",
@@ -1475,6 +1475,7 @@
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
+        "product.community.batched-citation-previews",
         "product.community.profiles",
         "product.community.search",
         "product.community.moderation-operations",
@@ -1773,7 +1774,8 @@
         "test:dev-test-game-discussion"
       ],
       "capabilities": [
-        "product.community.discussions"
+        "product.community.discussions",
+        "product.community.batched-citation-previews"
       ]
     },
     {

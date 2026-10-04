@@ -138,7 +138,7 @@ try {
       releaseReady: false,
       productionReady: false,
       proofBoundary:
-        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves per-member posting budgets against the API restarted under a tight policy (browser acceptance, an over-budget reply that names its wait and keeps its draft, the window reset resubmitting that draft, and the GlobalMod report exemption), the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, locked-topic recovery, and a host-selected signup origin through private setup, public start, game/topic links and watched-topic inbox delivery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
+        "Local scratch-Postgres, local Rust API, enabled accounts with public contribution profiles, canonical SvelteKit community routes, and Chromium proof. It proves per-member posting budgets against the API restarted under a tight policy (browser acceptance, an over-budget reply that names its wait and keeps its draft, the window reset resubmitting that draft, and the GlobalMod report exemption), the public area directory, profile-backed topic and post bylines, keyset pagination and reload, canonical post anchors, batched citation previews with working links to quoting posts on the current page and another page, author post editing inside the window with an edited marker and stale-revision refusal, author retraction as a placeholder that keeps cited excerpts, non-author edit denial, draft identity across same-route pagination and post refresh with explicit conflict reset, GlobalMod rename, pin (pinned-first area ordering), and move with the old area URL redirecting to the canonical one and member curation denied, GlobalMod posting-state moderation, denied member moderation, locked-topic recovery, and a host-selected signup origin through private setup, public start, game/topic links and watched-topic inbox delivery. It does not prove hosted availability, moderation staffing, retention, legal policy, direct messages, search, ranking, recommendations, or release readiness.",
       roleUrl: `${frontendBaseUrl}/discussions/${area.slug}`,
       api: {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
@@ -494,7 +494,7 @@ async function proveQuotations(context, frontendBaseUrl, topic) {
     await page.getByTestId(`discussion-quote-chip-${firstSeq}`).waitFor({ state: "visible" });
     await page.getByTestId("discussion-post-body").fill("Quoting the opening.");
     await Promise.all([
-      page.waitForLoadState("networkidle"),
+      page.waitForURL((url) => !url.searchParams.has("quote") && /^#post-[1-9][0-9]*$/u.test(url.hash), { waitUntil: "networkidle" }),
       page.getByTestId("discussion-create-post-submit").click(),
     ]);
     const quoteBlocks = page.locator('[data-testid^="discussion-quote-block-"]');
@@ -502,6 +502,21 @@ async function proveQuotations(context, frontendBaseUrl, topic) {
       throw new Error("quoted reply did not render a structured quote block");
     }
     await page.getByTestId(`discussion-citations-${firstSeq}`).waitFor({ state: "visible" });
+    const quotingSeq = discussionPostSeq(await page.locator('article[data-testid^="discussion-post-"]').last().getAttribute("data-testid"));
+    await page.goto(`${topicUrl}#post-${firstSeq}`, { waitUntil: "networkidle" });
+    await page.getByTestId(`discussion-citations-${firstSeq}`).locator("summary").click();
+    const currentPageCitation = page.getByTestId(`discussion-citation-${firstSeq}-${quotingSeq}`);
+    if (await currentPageCitation.getAttribute("href") !== `#post-${quotingSeq}`) {
+      throw new Error("citation preview did not link to its quoting post on the current page");
+    }
+    await Promise.all([
+      page.waitForURL((url) => url.hash === `#post-${quotingSeq}`),
+      currentPageCitation.click(),
+    ]);
+    await page.getByTestId(`discussion-post-${quotingSeq}`).waitFor({ state: "visible" });
+    if (!(await page.getByTestId(`discussion-post-body-${quotingSeq}`).innerText()).includes("Quoting the opening.")) {
+      throw new Error("citation preview reached the wrong quoting post");
+    }
     const secondSeq = discussionPostSeq(await page.locator('article[data-testid^="discussion-post-"]').nth(1).getAttribute("data-testid"));
     await Promise.all([
       page.waitForURL(new RegExp(`[?&]quote=${firstSeq}`), { timeout: 15000 }),
@@ -515,7 +530,7 @@ async function proveQuotations(context, frontendBaseUrl, topic) {
     await page.getByTestId(`discussion-quote-chip-${secondSeq}`).waitFor({ state: "visible" });
     await page.getByTestId("discussion-post-body").fill("Quoting two posts.");
     await Promise.all([
-      page.waitForLoadState("networkidle"),
+      page.waitForURL((url) => !url.searchParams.has("quote") && /^#post-[1-9][0-9]*$/u.test(url.hash), { waitUntil: "networkidle" }),
       page.getByTestId("discussion-create-post-submit").click(),
     ]);
     const newest = page.locator('article[data-testid^="discussion-post-"]').last();
@@ -523,10 +538,34 @@ async function proveQuotations(context, frontendBaseUrl, topic) {
     if (multiQuoteCount !== 2) {
       throw new Error(`expected two structured quotes on the multi-quote reply, got ${multiQuoteCount}`);
     }
+    const newestSeq = discussionPostSeq(await newest.getAttribute("data-testid"));
+    // Page back before the original reply. Both quoting posts are now absent;
+    // the incoming citation must load the target page before using its anchor.
+    await page.goto(`${topicUrl}?before_seq=${secondSeq}`, { waitUntil: "networkidle" });
+    if (await page.getByTestId(`discussion-post-${newestSeq}`).count() !== 0) {
+      throw new Error("off-page citation proof did not exclude the quoting post");
+    }
+    await page.getByTestId(`discussion-citations-${firstSeq}`).locator("summary").click();
+    const offPageCitation = page.getByTestId(`discussion-citation-${firstSeq}-${newestSeq}`);
+    const citationHref = `/discussions/general/t/${encodeURIComponent(topic)}?before_seq=${BigInt(newestSeq) + 1n}#post-${newestSeq}`;
+    if (await offPageCitation.getAttribute("href") !== citationHref) {
+      throw new Error("off-page citation omitted its destination cursor");
+    }
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}${citationHref}`, { waitUntil: "networkidle" }),
+      offPageCitation.click(),
+    ]);
+    await page.getByTestId(`discussion-post-${newestSeq}`).waitFor({ state: "visible" });
+    if (!(await page.getByTestId(`discussion-post-body-${newestSeq}`).innerText()).includes("Quoting two posts.")) {
+      throw new Error("off-page citation did not load its quoting post");
+    }
     return {
       status: "passed",
       quotedCount: 1,
       multiQuoteCount,
+      currentPageCitationFollowed: true,
+      offPageCitationFollowed: true,
+      offPageCitationHref: citationHref,
       quoteControlTestId: `discussion-quote-${firstSeq}`,
       citationsTestId: `discussion-citations-${firstSeq}`,
     };
@@ -1024,6 +1063,8 @@ function assertProof(evidence) {
     evidence.quotations?.status !== "passed" ||
     evidence.quotations?.quotedCount !== 1 ||
     evidence.quotations?.multiQuoteCount !== 2 ||
+    evidence.quotations?.currentPageCitationFollowed !== true ||
+    evidence.quotations?.offPageCitationFollowed !== true ||
     evidence.editing?.status !== "passed" ||
     evidence.editing?.editedRevision !== 1 ||
     evidence.editing?.staleEditStatus !== 409 ||

@@ -8440,7 +8440,7 @@ pub async fn visible_incoming_citations(
     let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
     let (citation_count, citations) = match quoted.kind {
         PostKind::DiscussionPost => {
-            // Public discussion citations use `visible_public_incoming_citations`.
+            // Public discussion citations use `visible_public_incoming_citation_pages`.
             // There is no private forum citation surface in v2.
             return Ok(None);
         }
@@ -8466,26 +8466,27 @@ pub async fn visible_incoming_citations(
     }))
 }
 
-/// Bounded newest-first incoming citations for one public-publication item.
-/// The query is intentionally source-agnostic: publication eligibility,
-/// moderation visibility, and mute overlays are resolved by the index before
-/// paging.
-pub async fn visible_public_incoming_citations(
+/// Bounded newest-first incoming citations for visible public-publication items.
+/// Target eligibility, incoming counts, and per-target previews share one query
+/// snapshot. Publication visibility and viewer mutes apply to both endpoints;
+/// retraction leaves historical citation edges intact. The query is deliberately
+/// source-agnostic, so no forum or game projection can become a second authority.
+pub async fn visible_public_incoming_citation_pages(
     pool: &PgPool,
-    quoted: content_reference::PublicContentRef,
+    surface_id: Uuid,
+    source_seqs: &[i64],
     viewer_principal_id: Option<PrincipalId>,
     limit: i64,
-) -> Result<Option<PublicCitationPage>, ProjectionError> {
+) -> Result<Vec<PublicCitationPage>, ProjectionError> {
     let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
-    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
-    let visible: bool = sqlx::query_scalar(
+    let rows = sqlx::query(
         r#"
-        SELECT EXISTS (
-            SELECT 1
+        WITH visible_targets AS (
+            SELECT publication.source_seq
             FROM public_publication AS publication
             JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
             WHERE publication.surface_id = $1
-              AND publication.source_seq = $2
+              AND publication.source_seq = ANY($2::bigint[])
               AND publication.visible
               AND surface.visible
               AND NOT EXISTS (
@@ -8495,87 +8496,69 @@ pub async fn visible_public_incoming_citations(
                     AND mute.target_profile_id = publication.author_profile_id
                     AND mute.active
               )
+        ), eligible_citations AS (
+            SELECT target.source_seq AS quoted_source_seq,
+                   citation.quoting_surface_id, citation.quoting_source_seq, citation.occurred_at,
+                   COUNT(*) OVER (PARTITION BY target.source_seq) AS citation_count,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY target.source_seq
+                       ORDER BY citation.quoting_source_seq DESC, citation.quoting_surface_id
+                   ) AS citation_rank
+            FROM visible_targets AS target
+            JOIN public_citation AS citation
+              ON citation.quoted_surface_id = $1
+             AND citation.quoted_source_seq = target.source_seq
+            JOIN public_publication AS quoting
+              ON quoting.surface_id = citation.quoting_surface_id
+             AND quoting.source_seq = citation.quoting_source_seq
+            JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
+            WHERE quoting.visible
+              AND surface.visible
+              AND NOT EXISTS (
+                  SELECT 1 FROM profile_mute AS mute
+                  WHERE $3::uuid IS NOT NULL
+                    AND mute.principal_id = $3
+                    AND mute.target_profile_id = quoting.author_profile_id
+                    AND mute.active
+              )
         )
+        SELECT target.source_seq AS quoted_source_seq,
+               COALESCE(citation.citation_count, 0)::bigint AS citation_count,
+               citation.quoting_surface_id, citation.quoting_source_seq, citation.occurred_at
+        FROM visible_targets AS target
+        LEFT JOIN eligible_citations AS citation
+          ON citation.quoted_source_seq = target.source_seq
+         AND citation.citation_rank <= $4
+        ORDER BY target.source_seq, citation.quoting_source_seq DESC, citation.quoting_surface_id
         "#,
     )
-    .bind(quoted.surface_id)
-    .bind(quoted.source_seq)
-    .bind(viewer_principal_id)
-    .fetch_one(pool)
-    .await?;
-    if !visible {
-        return Ok(None);
-    }
-    let citation_count: i64 = sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)::bigint
-        FROM public_citation AS citation
-        JOIN public_publication AS quoting
-          ON quoting.surface_id = citation.quoting_surface_id
-         AND quoting.source_seq = citation.quoting_source_seq
-        JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
-        WHERE citation.quoted_surface_id = $1
-          AND citation.quoted_source_seq = $2
-          AND quoting.visible
-          AND surface.visible
-          AND NOT EXISTS (
-              SELECT 1 FROM profile_mute AS mute
-              WHERE $3::uuid IS NOT NULL
-                AND mute.principal_id = $3
-                AND mute.target_profile_id = quoting.author_profile_id
-                AND mute.active
-          )
-        "#,
-    )
-    .bind(quoted.surface_id)
-    .bind(quoted.source_seq)
-    .bind(viewer_principal_id)
-    .fetch_one(pool)
-    .await?;
-    let rows = sqlx::query(
-        r#"
-        SELECT citation.quoting_surface_id, citation.quoting_source_seq, citation.occurred_at
-        FROM public_citation AS citation
-        JOIN public_publication AS quoting
-          ON quoting.surface_id = citation.quoting_surface_id
-         AND quoting.source_seq = citation.quoting_source_seq
-        JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
-        WHERE citation.quoted_surface_id = $1
-          AND citation.quoted_source_seq = $2
-          AND quoting.visible
-          AND surface.visible
-          AND NOT EXISTS (
-              SELECT 1 FROM profile_mute AS mute
-              WHERE $3::uuid IS NOT NULL
-                AND mute.principal_id = $3
-                AND mute.target_profile_id = quoting.author_profile_id
-                AND mute.active
-          )
-        ORDER BY citation.quoting_source_seq DESC
-        LIMIT $4
-        "#,
-    )
-    .bind(quoted.surface_id)
-    .bind(quoted.source_seq)
-    .bind(viewer_principal_id)
+    .bind(surface_id)
+    .bind(source_seqs)
+    .bind(viewer_principal_id.map(PrincipalId::as_uuid))
     .bind(limit)
     .fetch_all(pool)
     .await?;
-    let citations = rows
-        .into_iter()
-        .map(|row| PublicCitationRow {
-            quoting: content_reference::PublicContentRef::new(
-                row.get("quoting_surface_id"),
-                row.get("quoting_source_seq"),
-            ),
-            occurred_at: row.get("occurred_at"),
-        })
-        .collect();
-    Ok(Some(PublicCitationPage {
-        quoted,
-        citations,
-        citation_count,
-    }))
+    let mut pages = BTreeMap::new();
+    for row in rows {
+        let source_seq: i64 = row.get("quoted_source_seq");
+        let page = pages
+            .entry(source_seq)
+            .or_insert_with(|| PublicCitationPage {
+                quoted: content_reference::PublicContentRef::new(surface_id, source_seq),
+                citations: Vec::new(),
+                citation_count: row.get("citation_count"),
+            });
+        if let Some(quoting_surface_id) = row.get::<Option<Uuid>, _>("quoting_surface_id") {
+            page.citations.push(PublicCitationRow {
+                quoting: content_reference::PublicContentRef::new(
+                    quoting_surface_id,
+                    row.get("quoting_source_seq"),
+                ),
+                occurred_at: row.get("occurred_at"),
+            });
+        }
+    }
+    Ok(pages.into_values().collect())
 }
 
 async fn game_post_is_visible(

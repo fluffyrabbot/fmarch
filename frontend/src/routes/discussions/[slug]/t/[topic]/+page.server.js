@@ -28,6 +28,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     { headers: readHeaders(token) },
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
+  const topicId = thread?.topic?.topic;
   // The topic id is the identity; a moved topic still resolves under the
   // area it was linked from, and the canonical URL is wherever it is filed now.
   const canonicalSlug = canonicalAreaSlug(thread, params.slug);
@@ -50,7 +51,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
         locals,
         fetch,
         apiBaseUrl,
-        surfaceId: params.topic,
+        surfaceId: topicId,
       });
   const canPost = profile !== null;
   const citationPages = thread === null
@@ -59,7 +60,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
         fetch,
         token,
         apiBaseUrl,
-        topic: params.topic,
+        topic: topicId,
         posts: thread.posts,
       });
   const view = thread === null
@@ -70,7 +71,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
         citationPages,
         canPost,
         slug: params.slug,
-        topicId: params.topic,
+        topicId,
         beforeSeq,
         viewerHandle: typeof profile?.handle === "string" ? profile.handle : null,
         now: Math.floor(Date.now() / 1000),
@@ -118,21 +119,27 @@ async function loadAreas({ fetch, apiBaseUrl }) {
 }
 
 async function loadCitationPages({ fetch, token, apiBaseUrl, topic, posts }) {
-  const cited = (Array.isArray(posts) ? posts : []).filter(
-    (post) => Number(post?.citation_count ?? 0) > 0,
+  const cited = [...new Set(
+    (Array.isArray(posts) ? posts : [])
+      .filter((post) => Number(post?.citation_count ?? 0) > 0)
+      .map((post) => Number(post.source_seq))
+      .filter((seq) => Number.isSafeInteger(seq) && seq > 0),
+  )].slice(0, 50);
+  if (cited.length === 0) return {};
+  const search = new URLSearchParams({
+    source_seqs: cited.join(","),
+    limit: String(DISCUSSION_CITATION_PREVIEW_LIMIT),
+  });
+  const response = await fetch(
+    `${apiBaseUrl}/discussions/topics/${encodeURIComponent(topic)}/citations?${search}`,
+    { headers: readHeaders(token) },
   );
-  const entries = await Promise.all(
-    cited.map(async (post) => {
-      const seq = Number(post.source_seq);
-      const response = await fetch(
-        `${apiBaseUrl}/discussions/topics/${encodeURIComponent(topic)}/posts/${seq}/citations?limit=${DISCUSSION_CITATION_PREVIEW_LIMIT}`,
-        { headers: readHeaders(token) },
-      );
-      const page = response.ok ? await response.json().catch(() => null) : null;
-      return [seq, page];
-    }),
+  const batch = response.ok ? await response.json().catch(() => null) : null;
+  return Object.fromEntries(
+    (Array.isArray(batch?.pages) ? batch.pages : [])
+      .filter((page) => page?.quoted_surface_id === topic && cited.includes(page.quoted_source_seq))
+      .map((page) => [page.quoted_source_seq, page]),
   );
-  return Object.fromEntries(entries.filter(([, page]) => page !== null));
 }
 
 function readHeaders(token) {

@@ -1,3 +1,5 @@
+#[path = "vertical/discussion_citations.rs"]
+mod discussion_citations;
 #[path = "vertical/posting_budget.rs"]
 mod posting_budget;
 #[path = "vertical/replacement_candidate.rs"]

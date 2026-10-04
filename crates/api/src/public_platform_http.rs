@@ -24,6 +24,7 @@ use social::{
     ProfileRevision, ProfileVisibility,
 };
 use sqlx::postgres::PgPool;
+use std::collections::BTreeSet;
 use std::time::Instant;
 use trust_safety::{
     self, ModerationCaseStatus, ModerationCommand, ModerationTarget, ReportReasonFamily,
@@ -35,8 +36,8 @@ use wire::{
     DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, MemberMutePage,
     MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
     ModerationCasePage, ModerationReportReceipt, ProfileEditor, PublicInboxPage,
-    PublicPostCitationPage, PublicProfile, PublicSearchFilterValue, PublicSearchPage,
-    PublicSearchResult, RejectCode, SubscriptionTargetState,
+    PublicPostCitationBatch, PublicPostCitationPage, PublicProfile, PublicSearchFilterValue,
+    PublicSearchPage, PublicSearchResult, RejectCode, SubscriptionTargetState,
 };
 
 #[derive(Clone)]
@@ -119,8 +120,8 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             axum::routing::put(edit_discussion_post).delete(retract_discussion_post),
         )
         .route(
-            "/discussions/topics/{topic}/posts/{source_seq}/citations",
-            get(discussion_post_citations),
+            "/discussions/topics/{topic}/citations",
+            get(discussion_citations),
         )
         .route(
             "/discussions/topics/{topic}/moderation",
@@ -755,8 +756,30 @@ struct DiscussionPostQuery {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct PostCitationQuery {
+struct DiscussionCitationQuery {
+    source_seqs: String,
     limit: Option<i64>,
+}
+
+impl DiscussionCitationQuery {
+    fn source_seqs(&self) -> Result<Vec<i64>, ApiError> {
+        let invalid = || ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::InvalidArgument,
+            message: "source_seqs must contain 1 to 50 distinct positive event sequences".into(),
+        };
+        let mut source_seqs = BTreeSet::new();
+        for value in self.source_seqs.split(',') {
+            if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Err(invalid());
+            }
+            let source_seq = value.parse::<i64>().map_err(|_| invalid())?;
+            if source_seq <= 0 || !source_seqs.insert(source_seq) || source_seqs.len() > 50 {
+                return Err(invalid());
+            }
+        }
+        Ok(source_seqs.into_iter().collect())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1050,22 +1073,27 @@ async fn retract_discussion_post(
     Ok(Json(projected_forum_topic(&state.pool, topic).await?))
 }
 
-async fn discussion_post_citations(
+async fn discussion_citations(
     State(state): State<PublicPlatformHttpState>,
-    Path((topic, source_seq)): Path<(Uuid, i64)>,
-    Query(query): Query<PostCitationQuery>,
+    Path(topic): Path<Uuid>,
+    Query(query): Query<DiscussionCitationQuery>,
     OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
-) -> Result<Json<PublicPostCitationPage>, ApiError> {
-    let _topic = visible_discussion_topic(&state, topic).await?;
-    let page = projections::visible_public_incoming_citations(
+) -> Result<Json<PublicPostCitationBatch>, ApiError> {
+    let source_seqs = query.source_seqs()?;
+    let pages = projections::visible_public_incoming_citation_pages(
         &state.pool,
-        content_reference::PublicContentRef::new(topic, source_seq),
+        topic,
+        &source_seqs,
         viewer_principal_id,
         query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
-    .await?
-    .ok_or_else(|| discussion_not_found("discussion post"))?;
-    Ok(Json(PublicPostCitationPage::from(page)))
+    .await?;
+    Ok(Json(PublicPostCitationBatch {
+        pages: pages
+            .into_iter()
+            .map(PublicPostCitationPage::from)
+            .collect(),
+    }))
 }
 
 async fn moderate_discussion_topic(
@@ -1802,8 +1830,49 @@ fn profile_conflict(message: &str) -> ApiError {
 
 #[cfg(test)]
 mod tests {
-    use super::public_search_traffic_class;
+    use super::{public_search_traffic_class, DiscussionCitationQuery};
     use axum::http::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn discussion_citation_queries_require_a_bounded_distinct_positive_set() {
+        let parse = |source_seqs: &str| {
+            DiscussionCitationQuery {
+                source_seqs: source_seqs.into(),
+                limit: None,
+            }
+            .source_seqs()
+        };
+        assert_eq!(parse("80,40").unwrap(), vec![40, 80]);
+        assert_eq!(parse("9223372036854775807").unwrap(), vec![i64::MAX]);
+        for invalid in [
+            "",
+            "0",
+            "-1",
+            "+1",
+            "1,1",
+            "01,1",
+            ",1",
+            "1,",
+            "1,,2",
+            "1, 2",
+            " 1",
+            "1.0",
+            "1e2",
+            "9223372036854775808",
+            "one",
+            "１",
+        ] {
+            assert!(parse(invalid).is_err(), "accepted {invalid:?}");
+        }
+        let batch = |count| {
+            (1..=count)
+                .map(|seq| seq.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        assert_eq!(parse(&batch(50)).unwrap().len(), 50);
+        assert!(parse(&batch(51)).is_err());
+    }
 
     #[test]
     fn public_search_canary_classification_is_exact_and_authority_free() {

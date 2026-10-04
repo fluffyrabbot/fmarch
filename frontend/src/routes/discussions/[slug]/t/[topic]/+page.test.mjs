@@ -228,9 +228,12 @@ test("quote query seeds composer chips without copying excerpt into the body fie
       requests.push(url);
       if (String(url).includes("/citations")) {
         return Response.json({
-          quoted: { kind: "discussion_post", scope_id: topic, source_seq: 40 },
-          citations: [{ quoting: { kind: "discussion_post", scope_id: topic, source_seq: 80 }, occurred_at: 2 }],
-          citation_count: 1,
+          pages: [{
+            quoted_surface_id: topic,
+            quoted_source_seq: 40,
+            citations: [{ quoting_surface_id: topic, quoting_source_seq: 80, occurred_at: 2 }],
+            citation_count: 1,
+          }],
         });
       }
       if (String(url).includes(`/discussions/areas/general/topics/${topic}`)) {
@@ -300,7 +303,132 @@ test("quote query seeds composer chips without copying excerpt into the body fie
   assert.match(data.discussion.posts[0].quoteHref, /quote=40/);
   assert.match(data.discussion.posts[1].quoteHref, /quote=40/);
   assert.match(data.discussion.posts[1].quoteHref, /quote=80/);
-  assert.ok(requests.some((url) => String(url).includes("/citations?limit=5")));
+  assert.ok(requests.includes(`/discussions/topics/${topic}/citations?source_seqs=40&limit=5`));
+});
+
+test("a 50-post page makes one bounded citation batch with the viewer's credentials", async () => {
+  const posts = Array.from({ length: 50 }, (_, index) => ({
+    source_seq: index + 1,
+    body: `Post ${index + 1}`,
+    citation_count: 7,
+  }));
+  const requests = [];
+  const data = await load({
+    params: { slug: "general", topic },
+    locals: { resolvedCapabilities: [] },
+    cookies: { get: () => "viewer-session" },
+    url: new URL(`https://fmarch.local/discussions/general/t/${topic}`),
+    fetch: async (url, options) => {
+      if (url === "/profiles/me/editor") return Response.json(null);
+      if (url === `/subscriptions/${topic}`) return Response.json(null);
+      if (String(url).startsWith(`/discussions/areas/general/topics/${topic}?`)) {
+        return Response.json({ area: { slug: "general" }, topic: { topic }, posts });
+      }
+      requests.push({ url, options });
+      return Response.json({
+        pages: posts.map((post) => ({
+          quoted_surface_id: topic,
+          quoted_source_seq: post.source_seq,
+          citation_count: 2,
+          citations: [{ quoting_surface_id: topic, quoting_source_seq: 80, occurred_at: 1 }],
+        })),
+      });
+    },
+  });
+  assert.equal(requests.length, 1);
+  const requestUrl = new URL(requests[0].url, "https://fmarch.local");
+  assert.equal(requestUrl.pathname, `/discussions/topics/${topic}/citations`);
+  assert.equal(requestUrl.searchParams.get("source_seqs"), posts.map((post) => post.source_seq).join(","));
+  assert.equal(requestUrl.searchParams.get("limit"), "5");
+  assert.equal(requests[0].options.headers.authorization, "Bearer viewer-session");
+  for (const post of data.discussion.posts) {
+    assert.equal(post.citationCount, 2);
+    assert.equal(post.moreCitationCount, 1);
+    assert.equal(post.incomingCitations[0].href, `/discussions/general/t/${topic}?before_seq=81#post-80`);
+  }
+});
+
+test("posts without citations make no citation request", async () => {
+  const requests = [];
+  const data = await load({
+    params: { slug: "general", topic },
+    locals: { resolvedCapabilities: [] },
+    cookies: { get: () => null },
+    url: new URL(`https://fmarch.local/discussions/general/t/${topic}`),
+    fetch: async (url) => {
+      requests.push(url);
+      assert.equal(url, `/discussions/areas/general/topics/${topic}?limit=50`);
+      return Response.json({
+        area: { slug: "general" },
+        topic: { topic },
+        posts: [{ source_seq: 40, citation_count: 0 }],
+      });
+    },
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(data.discussion.posts[0].citationCount, 0);
+});
+
+test("an uppercase topic URL uses the loaded canonical identity for citation previews and links", async () => {
+  const canonicalTopic = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const requestedTopic = canonicalTopic.toUpperCase();
+  const requests = [];
+  const data = await load({
+    params: { slug: "general", topic: requestedTopic },
+    locals: { resolvedCapabilities: [] },
+    cookies: { get: () => null },
+    url: new URL(`https://fmarch.local/discussions/general/t/${requestedTopic}`),
+    fetch: async (url) => {
+      requests.push(url);
+      if (url === `/discussions/areas/general/topics/${requestedTopic}?limit=50`) {
+        return Response.json({
+          area: { slug: "general" },
+          topic: { topic: canonicalTopic },
+          posts: [{ source_seq: 40, citation_count: 1 }],
+        });
+      }
+      assert.equal(url, `/discussions/topics/${canonicalTopic}/citations?source_seqs=40&limit=5`);
+      return Response.json({
+        pages: [{
+          quoted_surface_id: canonicalTopic,
+          quoted_source_seq: 40,
+          citation_count: 1,
+          citations: [{ quoting_surface_id: canonicalTopic, quoting_source_seq: 80, occurred_at: 2 }],
+        }],
+      });
+    },
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(data.discussion.posts[0].citationCount, 1);
+  assert.equal(data.discussion.posts[0].incomingCitations[0].href,
+    `/discussions/general/t/${canonicalTopic}?before_seq=81#post-80`);
+});
+
+test("a withdrawn target and a filtered citation use the newer batch counts", async () => {
+  const data = await load({
+    params: { slug: "general", topic },
+    locals: { resolvedCapabilities: [] },
+    cookies: { get: () => null },
+    url: new URL(`https://fmarch.local/discussions/general/t/${topic}`),
+    fetch: async (url) => {
+      if (String(url).startsWith(`/discussions/areas/general/topics/${topic}?`)) {
+        return Response.json({
+          area: { slug: "general" },
+          topic: { topic },
+          posts: [{ source_seq: 40, citation_count: 7 }, { source_seq: 80, citation_count: 2 }],
+        });
+      }
+      assert.equal(url, `/discussions/topics/${topic}/citations?source_seqs=40%2C80&limit=5`);
+      return Response.json({
+        pages: [{ quoted_surface_id: topic, quoted_source_seq: 80, citation_count: 0, citations: [] }],
+      });
+    },
+  });
+  for (const post of data.discussion.posts) {
+    assert.equal(post.citationCount, 0);
+    assert.equal(post.moreCitationCount, 0);
+    assert.deepEqual(post.incomingCitations, []);
+  }
 });
 
 test("createPost submits decided mentions alongside structured quotations", async () => {
@@ -402,7 +530,12 @@ test("discussion quotation helpers keep no-JS quote URLs and hidden originals ho
     thread: { topic: { topic, posting_state: "open" }, posts },
     quoteSeqs: [40],
     citationPages: {
-      40: { citations: [{ quoting: { source_seq: 80 } }], citation_count: 1 },
+      40: {
+        quoted_surface_id: topic,
+        quoted_source_seq: 40,
+        citations: [{ quoting_surface_id: topic, quoting_source_seq: 80, occurred_at: 2 }],
+        citation_count: 1,
+      },
     },
     canPost: true,
     slug: "general",
@@ -424,6 +557,25 @@ test("discussion quotation helpers keep no-JS quote URLs and hidden originals ho
   );
   const locked = buildDiscussionPostView(posts[0], { posts });
   assert.equal(locked.quoteHref, null);
+});
+
+test("off-page citation cursors remain exact at the largest safe sequence", () => {
+  const sourceSeq = Number.MAX_SAFE_INTEGER;
+  const view = buildDiscussionThreadView({
+    thread: { topic: { topic }, posts: [{ source_seq: 40, citation_count: 1 }] },
+    citationPages: {
+      40: {
+        quoted_surface_id: topic,
+        quoted_source_seq: 40,
+        citation_count: 1,
+        citations: [{ quoting_surface_id: topic, quoting_source_seq: sourceSeq, occurred_at: 2 }],
+      },
+    },
+    slug: "general",
+    topicId: topic,
+  });
+  assert.equal(view.posts[0].incomingCitations[0].href,
+    `/discussions/general/t/${topic}?before_seq=9007199254740992#post-9007199254740991`);
 });
 
 test("own posts inside the edit window carry edit and retract affordances; others do not", () => {
