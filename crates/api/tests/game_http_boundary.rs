@@ -23,7 +23,7 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
         "async fn public_game_citations(",
         "async fn completed_game_export(",
         "async fn channel_thread_view(",
-        "async fn channel_post_citations(",
+        "async fn channel_citations(",
         "async fn player_notifications(",
         "async fn player_command_state(",
         "async fn host_phase_controls(",
