@@ -44,8 +44,8 @@ export async function proveMainCitationContinuity({ page, pageUrl, game, sendCom
     return response.json();
   };
   try {
-    // Fixture-only visibility changes exercise the same public publication
-    // filtering as moderation, without inventing a game moderation command.
+    // Fixture-only visibility changes keep the thread moderation and citation
+    // publication projections consistent, as the moderation projector does.
     for (const seq of evidence.quoters) await setVisible(seq, false);
     assert.deepEqual((await read()).pages[0].citations, []);
     await page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
@@ -55,6 +55,8 @@ export async function proveMainCitationContinuity({ page, pageUrl, game, sendCom
     for (const seq of evidence.quoters) await setVisible(seq, true);
     await setVisible(target, false);
     assert.deepEqual(await read(), { pages: [] });
+    const hiddenOriginal = await page.request.get(new URL(`/api/gameplay/games/${game}?limit=50&around_seq=${target}`, pageUrl).href);
+    assert.equal(hiddenOriginal.status(), 404, "the fixture must hide the addressed original, not only its citation publication");
     await page.goto(`${pageUrl}?post=${evidence.quoters[0]}#thread-post-${evidence.quoters[0]}`, { waitUntil: "networkidle" });
     const quotation = page.getByTestId(`player-quote-block-${evidence.quoters[0]}-${target}`);
     await quotation.waitFor();

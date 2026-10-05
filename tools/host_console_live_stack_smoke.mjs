@@ -4136,8 +4136,14 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   const citations = await proveMainCitationContinuity({ page, pageUrl, game, sendCommand,
     setVisible: async (seq, visible) => {
       if (!Number.isSafeInteger(seq) || seq <= 0) throw new Error("invalid fixture sequence");
-      await runSql(smokeDatabase.applicationUrl, `UPDATE public_publication SET visible = ${visible ? "true" : "false"}
-        WHERE surface_id = ${sqlLiteral(game)}::uuid AND source_seq = ${seq}`);
+      await runSql(smokeDatabase.applicationUrl, `BEGIN;
+        INSERT INTO moderation_target_state (surface_id, source_seq, visibility, reason, moderator_principal_id, updated_seq)
+        VALUES (${sqlLiteral(game)}::uuid, ${seq}, ${sqlLiteral(visible ? "visible" : "hidden")},
+          'quotation visibility proof', ${sqlLiteral(fixturePrincipalAuthorityId("moderator"))}::uuid, ${seq})
+        ON CONFLICT (surface_id, source_seq) DO UPDATE SET visibility = EXCLUDED.visibility;
+        UPDATE public_publication SET visible = ${visible ? "true" : "false"}
+        WHERE surface_id = ${sqlLiteral(game)}::uuid AND source_seq = ${seq};
+        COMMIT;`);
     },
   });
   await context.close();
