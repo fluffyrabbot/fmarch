@@ -1542,6 +1542,8 @@ function fakeProjectionStore(overrides = {}) {
     },
     async refresh() {},
     invalidate() {},
+    captureReadGuard() { return () => true; },
+    revokeAuthority() { snapshot = { ...snapshot, thread: { posts: [], nextBeforeSeq: null } }; },
     applySnapshot(patch) {
       snapshot = { ...snapshot, ...patch };
       return snapshot;
@@ -1721,4 +1723,21 @@ test("a cancelled newest request cannot publish or erase the saved refresh targe
     fetchImpl: async () => { active = false; return jsonResponse({ next_before_seq: null, posts: [recoveryPost(500)] }); },
   }), "cancelled");
   assert.equal(store.getSnapshot(), initial);
+});
+
+ test("private pagination denial revokes current authority but cannot revoke a newer owner", async () => {
+  for (const stale of [false, true]) {
+    const thread = { nextBeforeSeq: 41, posts: [{ seq: 44, body: "private" }] };
+    const store = createProjectionStore({ initialSnapshot: { thread }, coldLoads: {
+      thread: { url: "/thread", revoke: { posts: [], nextBeforeSeq: null } },
+    } });
+    await assert.rejects(loadOlderPlayerThreadPage({ data: fixtureData({ threadPager: { channel: "private:room", pageSize: 50 } }),
+      projectionStore: store, thread, fetchImpl: async () => {
+        if (stale) store.applySnapshot({ thread: { ...thread, posts: [{ seq: 99, body: "new authority" }] } });
+        return { ok: false, status: 403 };
+      },
+    }), /Thread page rejected/);
+    assert.deepEqual(store.getSnapshot().thread.posts.map(post => post.seq), stale ? [99] : []);
+    assert.equal(store.isReady(), stale);
+  }
 });

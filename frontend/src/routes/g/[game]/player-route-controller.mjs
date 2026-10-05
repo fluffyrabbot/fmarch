@@ -1035,15 +1035,14 @@ export function playerActionConfig(data, action) {
 export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {}, intent = "origin" }) {
   const seq = intent === "newest" ? null : /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
   if (intent !== "newest" && (!seq || !Number.isSafeInteger(Number(seq)))) return "unavailable";
-  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
+  const currentRead = projectionStore.captureReadGuard(["thread"]);
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
   }), { headers: { accept: "application/json" }, signal });
   if (!isCurrent() || !currentRead()) return "cancelled";
-  if (response.status === 403) {
-    projectionStore.invalidate(["thread"], { reason: "reader_destination_access_denied" });
-    projectionStore.applySnapshot({ thread: { posts: [], nextBeforeSeq: null } });
+  if ([401, 403].includes(response.status)) {
+    projectionStore.revokeAuthority({ reason: "reader_destination_access_denied", status: response.status });
     return "denied";
   }
   if (response.status === 404) {
@@ -1109,7 +1108,7 @@ export async function loadOlderPlayerThreadPage({
     });
   }
 
-  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
+  const currentRead = projectionStore.captureReadGuard(["thread"]);
   const response = await fetchImpl(
     playerThreadUrl({
       game: data.game.id,
@@ -1122,6 +1121,7 @@ export async function loadOlderPlayerThreadPage({
     },
   );
   if (!response.ok) {
+    revokeDeniedReaderResponse(response, { data, projectionStore, currentRead });
     throw new Error(`Thread page rejected: ${response.status}`);
   }
   const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
@@ -1148,10 +1148,13 @@ export async function loadOlderPlayerThreadPage({
 export async function loadNewerPlayerThreadPage({ data, fetchImpl, projectionStore, thread }) {
   const cursor = thread.nextAfterSeq;
   if (cursor == null) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
-  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
+  const currentRead = projectionStore.captureReadGuard(["thread"]);
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id, channel: data.threadPager.channel,
     limit: data.threadPager.pageSize, afterSeq: cursor }), { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`Thread page rejected: ${response.status}`);
+  if (!response.ok) {
+    revokeDeniedReaderResponse(response, { data, projectionStore, currentRead });
+    throw new Error(`Thread page rejected: ${response.status}`);
+  }
   const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
   if (!currentRead()) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
   const page = normalizeThreadPage(payload, { posts: [] });
@@ -1208,5 +1211,11 @@ async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, si
   } catch (error) {
     if (currentRead() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
     throw error;
+  }
+}
+
+function revokeDeniedReaderResponse(response, { data, projectionStore, currentRead }) {
+  if (data.threadPager.channel !== "main" && currentRead() && [401, 403].includes(response.status)) {
+    projectionStore.revokeAuthority({ reason: "reader_page_access_denied", status: response.status });
   }
 }
