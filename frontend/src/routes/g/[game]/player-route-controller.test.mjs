@@ -1741,3 +1741,17 @@ test("a cancelled newest request cannot publish or erase the saved refresh targe
     assert.equal(store.isReady(), stale);
   }
 });
+
+test("public saved-position recovery tolerates concurrent refresh; private previews remain owner-bound", async () => {
+  for (const channel of ["main", "private:room"]) {
+    const initial = { nextBeforeSeq: 400, posts: [{ seq: 443, body: "latest" }] };
+    const store = createProjectionStore({ initialSnapshot: { thread: initial }, coldLoads: { thread: { url: "/thread" } } });
+    const data = fixtureData({ threadPager: { channel, pageSize: 50 } });
+    const result = await recoverPlayerThreadWindow({ ...recoveryArgs(store), data, fetchImpl: async () => {
+      store.applySnapshot({ thread: { ...initial, posts: [{ seq: 443, body: "refreshed" }] } });
+      return jsonResponse({ next_before_seq: 9, next_after_seq: 11, posts: [recoveryPost(10, "original", channel)] });
+    } });
+    assert.equal(result, channel === "main" ? "ready" : "cancelled");
+    assert.equal(store.getSnapshot().thread.posts[0].seq, channel === "main" ? 10 : 443);
+  }
+});

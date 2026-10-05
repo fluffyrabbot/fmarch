@@ -1035,7 +1035,7 @@ export function playerActionConfig(data, action) {
 export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {}, intent = "origin" }) {
   const seq = intent === "newest" ? null : /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
   if (intent !== "newest" && (!seq || !Number.isSafeInteger(Number(seq)))) return "unavailable";
-  const currentRead = projectionStore.captureReadGuard(["thread"]);
+  const currentRead = readerCitationGuard(data, projectionStore);
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
@@ -1108,7 +1108,7 @@ export async function loadOlderPlayerThreadPage({
     });
   }
 
-  const currentRead = projectionStore.captureReadGuard(["thread"]);
+  const currentRead = readerCitationGuard(data, projectionStore);
   const response = await fetchImpl(
     playerThreadUrl({
       game: data.game.id,
@@ -1148,7 +1148,7 @@ export async function loadOlderPlayerThreadPage({
 export async function loadNewerPlayerThreadPage({ data, fetchImpl, projectionStore, thread }) {
   const cursor = thread.nextAfterSeq;
   if (cursor == null) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
-  const currentRead = projectionStore.captureReadGuard(["thread"]);
+  const currentRead = readerCitationGuard(data, projectionStore);
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id, channel: data.threadPager.channel,
     limit: data.threadPager.pageSize, afterSeq: cursor }), { headers: { accept: "application/json" } });
   if (!response.ok) {
@@ -1218,4 +1218,10 @@ function revokeDeniedReaderResponse(response, { data, projectionStore, currentRe
   if (data.threadPager.channel !== "main" && currentRead() && [401, 403].includes(response.status)) {
     projectionStore.revokeAuthority({ reason: "reader_page_access_denied", status: response.status });
   }
+}
+
+// Public recovery already merges concurrent edits and owns navigation through
+// isCurrent/cursors. Private previews additionally belong to one read owner.
+function readerCitationGuard(data, projectionStore) {
+  return data.threadPager.channel === "main" ? () => true : projectionStore.captureReadGuard(["thread"]);
 }
