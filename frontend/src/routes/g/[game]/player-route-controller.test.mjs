@@ -1846,3 +1846,20 @@ test("an omitted original from a superseded read cannot erase a newer visible po
   assert.equal(store.getSnapshot().thread.posts[0].body, "newer authorized post");
   assert.equal(store.getSnapshot().thread.unavailableSeqs, undefined);
 });
+
+test("confirmed missing originals invalidate older in-flight pages in both response forms", async () => {
+  for (const status of [200, 404]) {
+    const thread = { posts: [{ seq: 443 }], nextBeforeSeq: 400 };
+    const store = createProjectionStore({ initialSnapshot: { thread }, coldLoads: { thread: { url: "/thread" } } });
+    let release;
+    const older = loadOlderPlayerThreadPage({ data: fixtureData(), projectionStore: store, thread,
+      fetchImpl: () => new Promise(resolve => { release = resolve; }),
+    });
+    assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>
+      status === 404 ? { status, ok: false } : jsonResponse({ posts: [], next_before_seq: null }) }), "unavailable");
+    release(jsonResponse({ posts: [recoveryPost(10)], next_before_seq: 9 }));
+    await older;
+    assert.deepEqual(store.getSnapshot().thread.posts.map(post => post.seq), [443]);
+    assert.deepEqual(store.getSnapshot().thread.unavailableSeqs, ["10"]);
+  }
+});

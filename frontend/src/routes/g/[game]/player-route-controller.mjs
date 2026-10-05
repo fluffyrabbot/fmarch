@@ -1097,6 +1097,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   const ready = intent === "newest" || posts.some(post => String(post.seq) === seq);
   if (!ready) {
     if (!currentOwner()) return "cancelled";
+    projectionStore.invalidate(["thread"], { reason: "reader_destination_unavailable" });
     projectionStore.applySnapshot({ thread: { ...current,
       posts: current.posts.filter(post => String(post.seq) !== seq),
       unavailableSeqs: [...new Set([...(current.unavailableSeqs ?? []), seq])],
