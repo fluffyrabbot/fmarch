@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -1861,14 +1861,14 @@ test("staging bootstrap is staging-only, confirmed per commit, and bound into th
 });
 
 // These helpers are pure; the actual coordinator authenticates the envelope first.
-import {sourceContentFromVerifiedEnvelope} from './fleet_release_proof.mjs';
+import {sourceContentFromVerifiedEnvelope, loadFleetReleaseProof, fleetReleaseWorkflow} from './fleet_release_proof.mjs';
 import {completeHistory, assertNoReleaseDeployments, finishAbandonment, ABANDONMENT_SETTLE_MS} from './staging_release_abandon.mjs';
 import {CANONICAL_RELEASE_TOPOLOGY} from './release_coordinator_contract.mjs';
 
 test('source report is singular and bound to the qualified commit', () => {
   const commit='a'.repeat(40);
   const report={version:1,kind:'fmarch-source-content',commit,platform:'linux',content:{status:'ok',registry_hash:'b'.repeat(64),pack_count:5,program_count:5,packs:[],programs:[]}};
-  const step={label:'verify: node tools/source_content_report.mjs',stdout:JSON.stringify(report)};
+  const step={label:'verify: bash scripts/with-proof-node.sh node tools/source_content_report.mjs',stdout:JSON.stringify(report)};
   const envelope={document:{evidence:{steps:[step]}}};
   assert.deepEqual(sourceContentFromVerifiedEnvelope(envelope,commit),report);
   assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,'c'.repeat(40)),/commit drifted/);
@@ -1876,6 +1876,77 @@ test('source report is singular and bound to the qualified commit', () => {
   assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,commit),/exactly one/);
   envelope.document.evidence.steps=[step,step];
   assert.throws(()=>sourceContentFromVerifiedEnvelope(envelope,commit),/exactly one/);
+});
+
+test('source report requires the exact pinned command and valid content', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../.fluffyfleet.json', import.meta.url), 'utf8'));
+  const command = 'bash scripts/with-proof-node.sh node tools/source_content_report.mjs';
+  assert.equal(fleetReleaseWorkflow(manifest).verify.filter(value => value === command).length, 1);
+  const report = {version: 1, kind: 'fmarch-source-content', commit, platform: 'linux', content: {status: 'ok', registry_hash: 'b'.repeat(64), pack_count: 5, program_count: 5, packs: [], programs: []}};
+  const envelope = (label, value = report) => ({document: {evidence: {steps: [{label, stdout: JSON.stringify(value)}]}}});
+  for (const label of ['verify: node tools/source_content_report.mjs', `verify: ${command} --extra`, `verify: ${command} `]) {
+    assert.throws(() => sourceContentFromVerifiedEnvelope(envelope(label), commit), /exactly one/);
+  }
+  for (const invalid of [
+    {...report, version: 2}, {...report, kind: 'other'}, {...report, platform: 'darwin'},
+    {...report, content: {...report.content, status: 'failed'}},
+    {...report, content: {...report.content, registry_hash: 'invalid'}},
+    {...report, content: {...report.content, pack_count: 4}},
+    {...report, content: {...report.content, program_count: 4}},
+  ]) assert.throws(() => sourceContentFromVerifiedEnvelope(envelope(`verify: ${command}`, invalid), commit));
+  const malformed = envelope(`verify: ${command}`);
+  malformed.document.evidence.steps[0].stdout = '{';
+  assert.throws(() => sourceContentFromVerifiedEnvelope(malformed, commit), SyntaxError);
+});
+
+test('release loader authenticates the complete pinned audit before consuming source content', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'fmarch-release-proof-'));
+  try {
+    const manifest = JSON.parse(await readFile(new URL('../.fluffyfleet.json', import.meta.url), 'utf8'));
+    // Use the existing ephemeral test authority, never a worker signing key.
+    manifest.releaseAuthority.receiptPublicKeySha256 = fleetTrustRootSha256;
+    const workflow = fleetReleaseWorkflow(manifest);
+    const sourceCommand = 'bash scripts/with-proof-node.sh node tools/source_content_report.mjs';
+    assert.equal(workflow.verify.filter(value => value === sourceCommand).length, 1);
+    const report = {version: 1, kind: 'fmarch-source-content', commit, platform: 'linux', content: {status: 'ok', registry_hash: 'b'.repeat(64), pack_count: 5, program_count: 5, packs: [], programs: []}};
+    const receipt = structuredClone(fleetReceipt);
+    receipt.document.evidence.workflow.setup = workflow.setup;
+    receipt.document.evidence.workflow.verify = workflow.verify;
+    receipt.document.evidence.steps = [
+      ...workflow.setup.map(command => ({label: `setup: ${command}`, ok: true, status: 0, timedOut: false})),
+      ...workflow.verify.map(command => ({label: `verify: ${command}`, ok: true, status: 0, timedOut: false, stdout: command === sourceCommand ? JSON.stringify(report) : ''})),
+    ];
+    const resign = value => {
+      const {signature, ...document} = value.document;
+      value.document.signature = {algorithm: 'ed25519', value: sign(null, Buffer.from(canonicalJson(document)), fleetPrivateKey).toString('base64')};
+      return value;
+    };
+    resign(receipt);
+    const receiptPath = path.join(directory, 'receipt.json');
+    const publicKeyPath = path.join(directory, 'test-public.pem');
+    await writeFile(path.join(directory, '.fluffyfleet.json'), JSON.stringify(manifest));
+    await writeFile(publicKeyPath, fleetPublicKeyPem);
+    const load = async value => {
+      await writeFile(receiptPath, JSON.stringify(value));
+      return loadFleetReleaseProof({repoRoot: directory, commit, receiptPath, publicKeyPath, expectedJobId: fleetJobId, now: releaseNow});
+    };
+    assert.deepEqual((await load(receipt)).source_content, report);
+    const tampered = structuredClone(receipt);
+    tampered.document.evidence.steps.at(-1).stdout = JSON.stringify({...report, commit: 'e'.repeat(40)});
+    await assert.rejects(load(tampered), /signature/);
+    await assert.rejects(load(resign(tampered)), /commit drifted/);
+    const obsolete = structuredClone(receipt);
+    obsolete.document.evidence.steps.at(-1).label = 'verify: node tools/source_content_report.mjs';
+    await assert.rejects(load(resign(obsolete)), /verification commands are missing or differ/);
+    const unsuccessful = structuredClone(receipt);
+    unsuccessful.document.evidence.steps.at(-1).ok = false;
+    await assert.rejects(load(resign(unsuccessful)), /unsuccessful step/);
+    const wrongTrust = {...manifest, releaseAuthority: {...manifest.releaseAuthority, receiptPublicKeySha256: '0'.repeat(64)}};
+    await writeFile(path.join(directory, '.fluffyfleet.json'), JSON.stringify(wrongTrust));
+    await assert.rejects(load(receipt), /pinned Cachy trust root/);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
 });
 
 test('abandonment scans every history page and rejects incomplete or repeating pages',async()=>{

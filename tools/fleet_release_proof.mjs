@@ -72,7 +72,7 @@ export async function loadFleetReleaseProof({
 
 // Call only after the complete envelope signature, workflow and commit are verified.
 export function sourceContentFromVerifiedEnvelope(envelope, commit) {
-  const steps = envelope.document.evidence.steps.filter(s => s.label === "verify: node tools/source_content_report.mjs");
+  const steps = envelope.document.evidence.steps.filter(s => s.label === "verify: bash scripts/with-proof-node.sh node tools/source_content_report.mjs");
   assert.equal(steps.length, 1, "audit must contain exactly one canonical source content report");
   const report = JSON.parse(steps[0].stdout);
   assert.equal(report.kind, "fmarch-source-content");
