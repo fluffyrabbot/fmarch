@@ -33,7 +33,10 @@ export async function load({ params, locals, cookies, fetch, url }) {
     { headers: readHeaders(token) },
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
-  if (originalSeq !== null && response.ok && !thread?.posts?.some(post => String(post.source_seq) === originalSeq)) {
+  if (originalSeq !== null && response.ok && !Array.isArray(thread?.posts)) {
+    throw error(502, "Invalid thread response.");
+  }
+  if (originalSeq !== null && response.ok && !thread.posts.some(post => String(post.source_seq) === originalSeq)) {
     throw error(404, "This post is unavailable.");
   }
   if (originalSeq !== null && !response.ok) throw error(response.status, "This post is unavailable.");

@@ -1831,3 +1831,18 @@ test("authorized missing-original evidence preserves the reading window and clea
     assert.equal(store.getSnapshot().thread.posts[0].seq, 10);
   }
 });
+
+test("an omitted original from a superseded read cannot erase a newer visible post", async () => {
+  const store = fakeProjectionStore();
+  store.applySnapshot({ thread: { posts: [{ seq: 443 }], nextBeforeSeq: 400 } });
+  let owner = true;
+  store.captureReadGuard = () => () => owner;
+  const result = await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () => {
+    owner = false;
+    store.applySnapshot({ thread: { posts: [{ seq: 10, body: "newer authorized post" }, { seq: 443 }], nextBeforeSeq: 400 } });
+    return jsonResponse({ posts: [], next_before_seq: null });
+  } });
+  assert.equal(result, "cancelled");
+  assert.equal(store.getSnapshot().thread.posts[0].body, "newer authorized post");
+  assert.equal(store.getSnapshot().thread.unavailableSeqs, undefined);
+});

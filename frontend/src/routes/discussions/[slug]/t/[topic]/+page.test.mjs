@@ -801,3 +801,10 @@ test("off-page discussion originals use an authorized addressed page and missing
   const retracted = buildDiscussionPostView(post, { posts: [{ source_seq: 3, retracted: true }], slug: "general", topic });
   assert.equal(retracted.quotations[0].originalState, "unavailable");
 });
+
+test("malformed addressed discussion responses never confirm an unavailable original", async () => {
+  await assert.rejects(load({ params: { slug: "general", topic }, locals: {}, cookies: { get: () => null },
+    url: new URL(`http://localhost/discussions/general/t/${topic}?post=3`),
+    fetch: async () => Response.json({}),
+  }), error => error.status === 502);
+});

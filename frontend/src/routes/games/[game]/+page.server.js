@@ -34,6 +34,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
   const available = page !== null && typeof page === "object";
   const gameId = page?.game?.game;
   const sourcePosts = available && Array.isArray(page.posts) ? page.posts : [];
+  if (aroundSeq !== null && !Array.isArray(page?.posts)) throw error(502, "Invalid thread response.");
   if (aroundSeq !== null && available && !sourcePosts.some(post => String(post.source_seq) === aroundSeq)) {
     throw error(404, "This post is unavailable.");
   }

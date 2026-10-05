@@ -243,3 +243,9 @@ test("addressed public originals fail closed when the authorized page omits the 
     fetch: async () => Response.json(publicThread([{ source_seq: 4, body: "Neighbor" }])),
   })), error => error.status === 404);
 });
+
+test("malformed public addressed reads are errors, not missing-original evidence", async () => {
+  await assert.rejects(load(routeContext({ url: new URL(`http://localhost/games/${gameId}?post=3`),
+    fetch: async () => Response.json({}),
+  })), error => error.status === 502);
+});

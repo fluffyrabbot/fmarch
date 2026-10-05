@@ -1096,6 +1096,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   }
   const ready = intent === "newest" || posts.some(post => String(post.seq) === seq);
   if (!ready) {
+    if (!currentOwner()) return "cancelled";
     projectionStore.applySnapshot({ thread: { ...current,
       posts: current.posts.filter(post => String(post.seq) !== seq),
       unavailableSeqs: [...new Set([...(current.unavailableSeqs ?? []), seq])],
@@ -1106,7 +1107,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   projectionStore.applySnapshot({ thread: { ...window, posts, removedSeqs: [...removed],
     unavailableSeqs: (current.unavailableSeqs ?? []).filter(missing => !posts.some(post => String(post.seq) === missing)),
   } });
-  return ready ? "ready" : "unavailable";
+  return "ready";
 }
 
 export async function loadOlderPlayerThreadPage({
