@@ -5,7 +5,7 @@ use eventstore::EventInput;
 use projections::test_support::append_discussion_and_project;
 use projections::{
     append_and_project, discussion_posts, off_page_game_citation_counts,
-    private_game_incoming_citations, public_thread_view, rebuild, rebuild_discussion_stream,
+    private_game_incoming_citation_pages, public_thread_view, rebuild, rebuild_discussion_stream,
     visible_public_incoming_citation_pages,
 };
 use social::{
@@ -272,17 +272,17 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
         .all(|(target, _)| *target != quoted_seq));
     for channel in ["main", "private:one", "private:two"] {
         assert!(
-            private_game_incoming_citations(&pool, game, channel, quoted_seq, 5)
+            private_game_incoming_citation_pages(&pool, game, channel, &[quoted_seq], 5)
                 .await
                 .unwrap()
-                .is_none()
+                .is_empty()
         );
     }
     assert!(
-        private_game_incoming_citations(&pool, game, "private:two", private_target, 5)
+        private_game_incoming_citation_pages(&pool, game, "private:two", &[private_target], 5)
             .await
             .unwrap()
-            .is_none()
+            .is_empty()
     );
     assert!(visible_public_incoming_citation_pages(
         &pool,
@@ -295,16 +295,50 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     .unwrap()
     .is_empty());
     let private_page =
-        private_game_incoming_citations(&pool, game, "private:one", private_target, 0)
+        private_game_incoming_citation_pages(&pool, game, "private:one", &[private_target], 0)
             .await
             .unwrap()
-            .unwrap();
+            .remove(0);
     assert_eq!(private_page.citation_count, 3);
     assert_eq!(private_page.citations.len(), 1);
     assert_eq!(
         private_page.citations[0].quoting.source_seq,
         *private_quoters.last().unwrap()
     );
+    let cold = projections::thread_view_for_channel(&pool, game, "private:one", None, 50)
+        .await
+        .unwrap();
+    assert_eq!(
+        cold.posts
+            .iter()
+            .find(|post| post.source_seq == private_target)
+            .unwrap()
+            .citation_count,
+        3
+    );
+    assert_eq!(
+        off_page_game_citation_counts(&pool, game, "private:one", &private_quoters, &[])
+            .await
+            .unwrap(),
+        vec![(private_target, 3)]
+    );
+    assert!(
+        off_page_game_citation_counts(&pool, game, "private:two", &private_quoters, &[])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let empty = private_game_incoming_citation_pages(
+        &pool,
+        game,
+        "private:one",
+        &[*private_quoters.last().unwrap()],
+        5,
+    )
+    .await
+    .unwrap();
+    assert_eq!(empty[0].citation_count, 0);
+    assert!(empty[0].citations.is_empty());
     let public_profile_ids: Vec<Option<Uuid>> = sqlx::query_scalar(
         "SELECT author_profile_id FROM public_publication WHERE surface_id = $1",
     )
@@ -325,10 +359,11 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     )
     .bind(game).fetch_all(&pool).await.unwrap();
     assert_eq!(private_after, private_before);
-    let replayed = private_game_incoming_citations(&pool, game, "private:one", private_target, 20)
-        .await
-        .unwrap()
-        .unwrap();
+    let replayed =
+        private_game_incoming_citation_pages(&pool, game, "private:one", &[private_target], 20)
+            .await
+            .unwrap()
+            .remove(0);
     assert_eq!(replayed.citation_count, 3);
     assert_eq!(
         replayed

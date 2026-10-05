@@ -636,3 +636,23 @@ When this RFC is accepted, update:
   Quote seeds the existing composer; the dock Reply remains uncited reply;
 - [arch README](../arch/README.md) — move this RFC from Proposed to
   Accepted.
+
+### Private citation continuity
+
+Private channel readers use `GET /games/{game}/channels/{channel}/citations`
+with `source_seqs` (1–50 distinct positive sequences) and `limit` (default 5,
+clamped to 1–20). Channel authorization precedes projection access. One SQL
+snapshot constrains both target and quoter to the requested game and channel,
+returns complete counts and independently capped newest-first previews, and
+includes existing zero-count targets. Missing or foreign-channel targets are
+omitted. Public main is excluded; singular private citation routes are retired.
+
+The private batch keeps nested game references and explicitly names its channel.
+SSR, reconnect, addressed recovery, pagination and live citation changes share
+one validated hydration adapter. Counts from the batch replace stale thread
+counts, including zero; private previews never derive from locally loaded replies.
+Projection generation ownership discards stale results after navigation,
+revocation, refresh or newer live state. Current authorization denial revokes
+private projection authority. The live-stack browser proof follows an actual
+off-page private citation, reloads its destination, and verifies new citation
+previews through live delivery and an explicit reconnect.

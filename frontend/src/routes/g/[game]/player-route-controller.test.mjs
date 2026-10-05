@@ -1229,8 +1229,8 @@ test("player route controller loads and merges older thread pages", async () => 
       return jsonResponse({
         next_before_seq: 10,
         posts: [
-          { source_seq: 40, author: { kind: "slot", slot_id: "slot-2" }, body: "older" },
-          { source_seq: 44, author: { kind: "slot", slot_id: "slot-7" }, body: "stale" },
+          recoveryPost(40, "older"),
+          recoveryPost(44, "stale"),
         ],
       });
     },
@@ -1266,7 +1266,7 @@ test("player route controller pages older posts from the active private channel"
       seenUrls.push(url);
       return jsonResponse({
         next_before_seq: null,
-        posts: [{ source_seq: 40, author: { kind: "slot", slot_id: "slot-7" }, body: "older role note" }],
+        posts: [recoveryPost(40, "older role note", "private:role_pm:slot-7")],
       });
     },
     projectionStore: fakeProjectionStore(),
@@ -1590,7 +1590,7 @@ test("pagination preserves live arrivals and never resurrects removed posts", as
   const result = await loadOlderPlayerThreadPage({ data: fixtureData(), projectionStore: store, thread,
     fetchImpl: async () => {
       store.applySnapshot({ thread: { ...thread, removedSeqs: ["40"], posts: [{ seq: 44, body: "updated" }, { seq: 99, body: "live" }] } });
-      return jsonResponse({ next_before_seq: 20, posts: [{ source_seq: 40, body: "removed while fetching" }, { source_seq: 39, body: "older" }] });
+      return jsonResponse({ next_before_seq: 20, posts: [recoveryPost(40, "removed while fetching"), recoveryPost(39, "older")] });
     },
   });
   assert.deepEqual(result.snapshot.thread.posts.map(p => p.body), ["older", "updated", "live"]);
@@ -1604,7 +1604,7 @@ test("pagination cannot repopulate revoked thread authority", async () => {
   const result = await loadOlderPlayerThreadPage({ data: fixtureData(), projectionStore: store, thread,
     fetchImpl: async () => {
       store.applySnapshot({ thread: { nextBeforeSeq: null, posts: [] } });
-      return jsonResponse({ posts: [{ source_seq: 40, body: "private" }] });
+      return jsonResponse({ next_before_seq: null, posts: [recoveryPost(40, "private")] });
     },
   });
   assert.deepEqual(result.snapshot.thread.posts, []);

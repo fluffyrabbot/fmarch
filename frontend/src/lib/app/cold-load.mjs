@@ -173,7 +173,9 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
     body: typeof post?.body === "string" ? post.body : "",
     quotations: normalizeQuotations(post?.quotations),
     mentions: normalizeSlotMentions(post?.mentions),
-    citationCount: Number(post?.citation_count ?? post?.citationCount ?? 0),
+    citationCount: Number(post?.citationPage?.citation_count ?? post?.citation_count ?? post?.citationCount ?? 0),
+    ...((typeof post?.channel_id === "string" && post.channel_id !== "main") || Object.hasOwn(post ?? {}, "citationPage")
+      ? { citationPage: post?.citationPage ?? null } : {}),
     meta:
       post?.meta ??
       formatOccurredAt(post?.occurred_at ?? post?.occurredAt, {

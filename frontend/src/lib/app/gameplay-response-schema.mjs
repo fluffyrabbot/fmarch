@@ -1038,3 +1038,26 @@ function matchesExpectedGame(value, expected) {
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+
+// Private citations retain nested game references and an explicit channel scope.
+export function validatePrivateCitationBatch(value, { game, channel, sourceSeqs, limit = 5 }) {
+  if (!value || value.game !== game || value.channel !== channel || channel === "main"
+    || !Array.isArray(value.pages) || value.pages.length > 50) return false;
+  const requested = new Set(sourceSeqs);
+  const seen = new Set();
+  const ref = item => item?.kind === "game_post" && item.scope_id === game
+    && Number.isSafeInteger(item.source_seq) && item.source_seq > 0;
+  return value.pages.every(page => {
+    if (!ref(page?.quoted) || !requested.has(page.quoted.source_seq) || seen.has(page.quoted.source_seq)
+      || !Number.isSafeInteger(page.citation_count) || page.citation_count < 0
+      || !Array.isArray(page.citations) || page.citations.length !== Math.min(limit, page.citation_count)) return false;
+    seen.add(page.quoted.source_seq);
+    let previous = Infinity;
+    return page.citations.every(citation => {
+      if (!ref(citation?.quoting) || citation.quoting.source_seq >= previous
+        || !Number.isSafeInteger(citation.occurred_at)) return false;
+      previous = citation.quoting.source_seq;
+      return true;
+    });
+  });
+}

@@ -8410,31 +8410,78 @@ pub async fn quotation_thread_for_game_channel_in_tx(
     })
 }
 
-/// Bounded newest-first incoming citations within one private game channel.
-/// The caller must authorize channel access. Public main is never served by the
-/// private index; missing targets and targets in another channel return `None`.
-pub async fn private_game_incoming_citations(
+/// One snapshot of same-channel targets, complete counts, and capped previews.
+/// Authorization belongs to the caller. Public main never reads this index.
+pub async fn private_game_incoming_citation_pages(
     pool: &PgPool,
     game_id: Uuid,
     channel_id: &str,
-    source_seq: i64,
+    source_seqs: &[i64],
     limit: i64,
-) -> Result<Option<PostCitationPage>, ProjectionError> {
-    if channel_id == "main"
-        || !private_game_post_exists(pool, game_id, channel_id, source_seq).await?
-    {
-        return Ok(None);
+) -> Result<Vec<PostCitationPage>, ProjectionError> {
+    if channel_id == "main" || source_seqs.is_empty() {
+        return Ok(Vec::new());
     }
-    let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
-    Ok(Some(PostCitationPage {
-        quoted: PostRef {
-            kind: PostKind::GamePost,
-            scope_id: game_id,
-            source_seq,
-        },
-        citation_count: private_game_citation_count(pool, game_id, channel_id, source_seq).await?,
-        citations: private_game_citation_rows(pool, game_id, channel_id, source_seq, limit).await?,
-    }))
+    let rows = sqlx::query(
+        r#"
+        WITH targets AS (
+            SELECT source_seq FROM thread_view
+            WHERE game_id = $1 AND channel_id = $2
+              AND source_seq = ANY($3::bigint[])
+        ), incoming AS (
+            SELECT target.source_seq AS quoted_source_seq,
+                   citation.quoting_source_seq, citation.occurred_at,
+                   COUNT(*) OVER (PARTITION BY target.source_seq) AS citation_count,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY target.source_seq ORDER BY citation.quoting_source_seq DESC
+                   ) AS citation_rank
+            FROM targets AS target
+            JOIN game_private_citation AS citation
+              ON citation.game_id = $1 AND citation.quoted_source_seq = target.source_seq
+            JOIN thread_view AS quoting
+              ON quoting.game_id = citation.game_id
+             AND quoting.source_seq = citation.quoting_source_seq
+             AND quoting.channel_id = $2
+        )
+        SELECT target.source_seq AS quoted_source_seq,
+               COALESCE(incoming.citation_count, 0)::bigint AS citation_count,
+               incoming.quoting_source_seq, incoming.occurred_at
+        FROM targets AS target
+        LEFT JOIN incoming ON incoming.quoted_source_seq = target.source_seq
+                          AND incoming.citation_rank <= $4
+        ORDER BY target.source_seq, incoming.quoting_source_seq DESC
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(source_seqs)
+    .bind(limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT))
+    .fetch_all(pool)
+    .await?;
+    let mut pages = BTreeMap::new();
+    for row in rows {
+        let source_seq = row.get("quoted_source_seq");
+        let page = pages.entry(source_seq).or_insert_with(|| PostCitationPage {
+            quoted: PostRef {
+                kind: PostKind::GamePost,
+                scope_id: game_id,
+                source_seq,
+            },
+            citations: Vec::new(),
+            citation_count: row.get("citation_count"),
+        });
+        if let Some(source_seq) = row.get::<Option<i64>, _>("quoting_source_seq") {
+            page.citations.push(PostCitationRow {
+                quoting: PostRef {
+                    kind: PostKind::GamePost,
+                    scope_id: game_id,
+                    source_seq,
+                },
+                occurred_at: row.get("occurred_at"),
+            });
+        }
+    }
+    Ok(pages.into_values().collect())
 }
 
 /// Bounded newest-first incoming citations for visible public-publication items.
@@ -8532,53 +8579,6 @@ pub async fn visible_public_incoming_citation_pages(
     Ok(pages.into_values().collect())
 }
 
-async fn private_game_post_exists(
-    pool: &PgPool,
-    game_id: Uuid,
-    channel_id: &str,
-    source_seq: i64,
-) -> Result<bool, ProjectionError> {
-    Ok(sqlx::query_scalar(
-        r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM thread_view
-            WHERE game_id = $1 AND channel_id = $2 AND source_seq = $3
-        )
-        "#,
-    )
-    .bind(game_id)
-    .bind(channel_id)
-    .bind(source_seq)
-    .fetch_one(pool)
-    .await?)
-}
-
-async fn private_game_citation_count(
-    pool: &PgPool,
-    game_id: Uuid,
-    channel_id: &str,
-    source_seq: i64,
-) -> Result<i64, ProjectionError> {
-    Ok(sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)::bigint
-        FROM game_private_citation AS citation
-        JOIN thread_view AS quoting
-          ON quoting.game_id = citation.game_id
-         AND quoting.source_seq = citation.quoting_source_seq
-         AND quoting.channel_id = $2
-        WHERE citation.game_id = $1
-          AND citation.quoted_source_seq = $3
-        "#,
-    )
-    .bind(game_id)
-    .bind(channel_id)
-    .bind(source_seq)
-    .fetch_one(pool)
-    .await?)
-}
-
 /// Visible citation counts for same-channel quoted posts that a live thread
 /// page will not itself refresh. `quoting_source_seqs` are new or hidden
 /// quoting posts; `present_source_seqs` are posts already in the live page.
@@ -8593,7 +8593,36 @@ pub async fn off_page_game_citation_counts(
         return Ok(Vec::new());
     }
     if channel_id != "main" {
-        return Ok(Vec::new());
+        let rows = sqlx::query(
+            r#"
+            SELECT DISTINCT citation.quoted_source_seq,
+                (SELECT COUNT(*)::bigint FROM game_private_citation AS incoming
+                 JOIN thread_view AS quoting
+                   ON quoting.game_id = incoming.game_id
+                  AND quoting.source_seq = incoming.quoting_source_seq
+                  AND quoting.channel_id = $2
+                 WHERE incoming.game_id = $1
+                   AND incoming.quoted_source_seq = citation.quoted_source_seq) AS citation_count
+            FROM game_private_citation AS citation
+            JOIN thread_view AS quoted ON quoted.game_id = citation.game_id
+              AND quoted.source_seq = citation.quoted_source_seq AND quoted.channel_id = $2
+            JOIN thread_view AS changed ON changed.game_id = citation.game_id
+              AND changed.source_seq = citation.quoting_source_seq AND changed.channel_id = $2
+            WHERE citation.game_id = $1 AND citation.quoting_source_seq = ANY($3)
+              AND NOT (citation.quoted_source_seq = ANY($4))
+            ORDER BY citation.quoted_source_seq
+            "#,
+        )
+        .bind(game_id)
+        .bind(channel_id)
+        .bind(quoting_source_seqs)
+        .bind(present_source_seqs)
+        .fetch_all(pool)
+        .await?;
+        return Ok(rows
+            .into_iter()
+            .map(|row| (row.get("quoted_source_seq"), row.get("citation_count")))
+            .collect());
     }
     let rows = sqlx::query(
         r#"
@@ -8635,47 +8664,6 @@ pub async fn off_page_game_citation_counts(
             )
         })
         .collect())
-}
-
-async fn private_game_citation_rows(
-    pool: &PgPool,
-    game_id: Uuid,
-    channel_id: &str,
-    source_seq: i64,
-    limit: i64,
-) -> Result<Vec<PostCitationRow>, ProjectionError> {
-    let rows = sqlx::query(
-        r#"
-        SELECT citation.quoting_source_seq, citation.occurred_at
-        FROM game_private_citation AS citation
-        JOIN thread_view AS quoting
-          ON quoting.game_id = citation.game_id
-         AND quoting.source_seq = citation.quoting_source_seq
-         AND quoting.channel_id = $2
-        WHERE citation.game_id = $1
-          AND citation.quoted_source_seq = $3
-        ORDER BY citation.quoting_source_seq DESC
-        LIMIT $4
-        "#,
-    )
-    .bind(game_id)
-    .bind(channel_id)
-    .bind(source_seq)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
-    rows.into_iter()
-        .map(|row| {
-            Ok(PostCitationRow {
-                quoting: content_reference::PostRef {
-                    kind: content_reference::PostKind::GamePost,
-                    scope_id: game_id,
-                    source_seq: row.get("quoting_source_seq"),
-                },
-                occurred_at: row.get("occurred_at"),
-            })
-        })
-        .collect()
 }
 
 pub async fn subscription_target_state(
@@ -9399,7 +9387,14 @@ async fn thread_view_for_channel_with_visibility(
         SELECT game_id, source_seq, stream_seq, channel_id, author_kind,
                author_slot_id, phase_id, body, body_private, media, quotations, mentions, embed,
                occurred_at,
-               (
+               CASE WHEN channel_id <> 'main' THEN (
+                   SELECT COUNT(*)::bigint FROM game_private_citation AS citation
+                   JOIN thread_view AS quoting ON quoting.game_id = citation.game_id
+                     AND quoting.source_seq = citation.quoting_source_seq
+                     AND quoting.channel_id = thread_view.channel_id
+                   WHERE citation.game_id = thread_view.game_id
+                     AND citation.quoted_source_seq = thread_view.source_seq
+               ) ELSE (
                    SELECT COUNT(*)::bigint
                    FROM public_citation AS citation
                    JOIN public_publication AS quoting
@@ -9409,7 +9404,7 @@ async fn thread_view_for_channel_with_visibility(
                    WHERE citation.quoted_surface_id = thread_view.game_id
                      AND citation.quoted_source_seq = thread_view.source_seq
                      AND quoting.visible AND surface.visible
-               ) AS citation_count
+               ) END AS citation_count
         FROM thread_view
         WHERE game_id = $1
           AND channel_id = $2

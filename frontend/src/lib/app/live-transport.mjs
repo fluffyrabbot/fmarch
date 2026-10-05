@@ -2044,6 +2044,7 @@ function applyPostCitations(previousThread, delta) {
     return Object.freeze({
       ...post,
       citationCount,
+      ...(Object.hasOwn(post, "citationPage") ? { citationPage: null } : {}),
     });
   });
   if (!changed) {

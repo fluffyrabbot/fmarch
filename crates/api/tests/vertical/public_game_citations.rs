@@ -293,7 +293,7 @@ async fn private_game_citations_remain_authorized_nested_and_channel_scoped(pool
     let public_target = submit_citation_post(&pool, game, "main", None).await;
     let public_quoter = submit_citation_post(&pool, game, "main", Some(public_target)).await;
     let private_uri =
-        format!("/games/{game}/channels/private:one/posts/{private_target}/citations");
+        format!("/games/{game}/channels/private:one/citations?source_seqs={private_target}");
     assert_eq!(
         citation_response(&app, &private_uri, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -306,18 +306,41 @@ async fn private_game_citations_remain_authorized_nested_and_channel_scoped(pool
     );
     let (status, private) = citation_json(&app, &private_uri, Some(&host_token)).await;
     assert_eq!(status, StatusCode::OK);
-    let private_page: wire::PostCitationPage = serde_json::from_value(private.clone()).unwrap();
+    let batch: wire::PrivatePostCitationBatch = serde_json::from_value(private.clone()).unwrap();
+    assert_eq!(batch.game, game);
+    assert_eq!(batch.channel, "private:one");
+    let private_page = &batch.pages[0];
     assert_eq!(private_page.citation_count, 1);
     assert_eq!(
-        private["citations"][0]["quoting"],
+        private["pages"][0]["citations"][0]["quoting"],
         serde_json::json!({
             "kind": "game_post", "scope_id": game, "source_seq": private_quoter,
         })
     );
     for uri in [
+        format!("/games/{game}/channels/private:two/citations?source_seqs={private_target}"),
+        format!("/games/{game}/channels/private:one/citations?source_seqs={public_target}"),
+    ] {
+        let (status, body) = citation_json(&app, &uri, Some(&host_token)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["pages"], serde_json::json!([]));
+    }
+    for invalid in ["", "0", "1,1", "-1", "1,,2", "9223372036854775808"] {
+        assert_eq!(
+            citation_response(
+                &app,
+                &format!("/games/{game}/channels/private:one/citations?source_seqs={invalid}"),
+                Some(&host_token)
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    for uri in [
         format!("/games/{game}/channels/private:two/posts/{private_target}/citations"),
         format!("/games/{game}/channels/private:one/posts/{public_target}/citations"),
-        format!("/games/{game}/channels/main/posts/{public_target}/citations"),
+        format!("/games/{game}/channels/main/citations?source_seqs={public_target}"),
         format!("/games/{game}/posts/{public_target}/citations"),
     ] {
         assert_eq!(
@@ -330,7 +353,7 @@ async fn private_game_citations_remain_authorized_nested_and_channel_scoped(pool
     assert_eq!(
         citation_response(
             &app,
-            &format!("/games/{game}/channels/main/posts/{public_target}/citations"),
+            &format!("/games/{game}/channels/main/citations?source_seqs={public_target}"),
             None
         )
         .await
@@ -353,4 +376,77 @@ async fn private_game_citations_remain_authorized_nested_and_channel_scoped(pool
         public["pages"][0]["citations"][0]["quoting_source_seq"],
         public_quoter
     );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn private_citation_batch_caps_each_target_without_losing_counts(pool: sqlx::PgPool) {
+    let app = router(pool.clone()).await;
+    let host = PrincipalId::fixture("private-batch-host");
+    let token = issue_dev_session_for_principal(&app, host, &[]).await;
+    let game = start_citation_game(&pool, host).await;
+    let mut targets = Vec::new();
+    for _ in 0..50 {
+        targets.push(submit_citation_post(&pool, game, "private:bounded", None).await);
+    }
+    let events: Vec<_> = targets
+        .iter()
+        .flat_map(|target| {
+            (0..21).map(move |_| {
+        eventstore::EventInput::new("PostSubmitted", 1, serde_json::json!({
+            "channel_id": "private:bounded", "author": {"kind": "slot", "slot_id": "slot_1"},
+            "body": "Claim", "phase_id": "D01", "quotations": [{
+                "target": {"kind": "game_post", "scope_id": game, "source_seq": target},
+                "excerpt": "Claim",
+            }],
+        }), event_actor::ActorId::Slot("slot_1".into()), 4)
+    })
+        })
+        .collect();
+    projections::append_and_project(&pool, game, &events)
+        .await
+        .unwrap();
+    let selected = targets
+        .iter()
+        .rev()
+        .map(i64::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    for (limit, cap) in [(0, 1), (5, 5), (100, 20)] {
+        let (status, value) = citation_json(&app,
+            &format!("/games/{game}/channels/private:bounded/citations?source_seqs={selected}&limit={limit}"), Some(&token)).await;
+        assert_eq!(status, StatusCode::OK);
+        let batch: wire::PrivatePostCitationBatch = serde_json::from_value(value).unwrap();
+        assert_eq!(batch.pages.len(), 50);
+        for (index, page) in batch.pages.iter().enumerate() {
+            assert_eq!(page.quoted.source_seq, targets[index]);
+            assert_eq!(page.citation_count, 21);
+            assert_eq!(page.citations.len(), cap);
+            assert!(page
+                .citations
+                .windows(2)
+                .all(|pair| pair[0].quoting.source_seq > pair[1].quoting.source_seq));
+        }
+    }
+    let extra = submit_citation_post(&pool, game, "private:bounded", None).await;
+    assert_eq!(
+        citation_response(
+            &app,
+            &format!(
+                "/games/{game}/channels/private:bounded/citations?source_seqs={selected},{extra}"
+            ),
+            Some(&token)
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let (_, value) = citation_json(
+        &app,
+        &format!("/games/{game}/channels/private:bounded/citations?source_seqs={extra},999999"),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(value["pages"].as_array().unwrap().len(), 1);
+    assert_eq!(value["pages"][0]["citation_count"], 0);
+    assert_eq!(value["pages"][0]["citations"], serde_json::json!([]));
 }

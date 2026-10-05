@@ -1,3 +1,4 @@
+import { hydratePrivateThreadPage } from "../../../lib/app/private-citations.mjs";
 import {
   buildDispatchBridgePlanFromRequest,
   normalizeCommandTrace,
@@ -138,6 +139,9 @@ export function buildPlayerProjectionColdLoads(data, { threadWindow = () => null
           channel: data.threadPager?.channel ?? "main",
         }),
       normalize: normalizeThreadPage,
+      hydrate: (page, options) => hydratePrivateThreadPage(page, {
+        ...options, game: data.game.id, channel: data.threadPager?.channel ?? "main",
+      }),
       ...(privateThread
         ? {
             revoke: () => Object.freeze({
@@ -1031,11 +1035,12 @@ export function playerActionConfig(data, action) {
 export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {}, intent = "origin" }) {
   const seq = intent === "newest" ? null : /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
   if (intent !== "newest" && (!seq || !Number.isSafeInteger(Number(seq)))) return "unavailable";
+  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
   }), { headers: { accept: "application/json" }, signal });
-  if (!isCurrent()) return "cancelled";
+  if (!isCurrent() || !currentRead()) return "cancelled";
   if (response.status === 403) {
     projectionStore.invalidate(["thread"], { reason: "reader_destination_access_denied" });
     projectionStore.applySnapshot({ thread: { posts: [], nextBeforeSeq: null } });
@@ -1052,11 +1057,13 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
     return "unavailable";
   }
   if (!response.ok) throw new Error(`Thread destination rejected: ${response.status}`);
-  const payload = await response.json();
-  if (!isCurrent()) return "cancelled";
+  let payload = await response.json();
+  if (!isCurrent() || !currentRead()) return "cancelled";
   if (!validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: data.threadPager.channel })) {
     throw new Error("Invalid thread destination response");
   }
+  payload = await hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead });
+  if (!isCurrent() || !currentRead()) return "cancelled";
   const current = projectionStore.getSnapshot().thread;
   const window = normalizeThreadPage(payload, { posts: [] });
   if (!current || current.nextBeforeSeq !== initial?.nextBeforeSeq || current.nextAfterSeq !== initial?.nextAfterSeq
@@ -1102,6 +1109,7 @@ export async function loadOlderPlayerThreadPage({
     });
   }
 
+  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
   const response = await fetchImpl(
     playerThreadUrl({
       game: data.game.id,
@@ -1116,7 +1124,9 @@ export async function loadOlderPlayerThreadPage({
   if (!response.ok) {
     throw new Error(`Thread page rejected: ${response.status}`);
   }
-  const olderPage = normalizeThreadPage(await response.json(), {
+  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
+  if (!currentRead()) return { threadPageStatus: threadPageStatusForResult(0), snapshot: projectionStore.getSnapshot() };
+  const olderPage = normalizeThreadPage(payload, {
     nextBeforeSeq: thread.nextBeforeSeq,
     posts: [],
   });
@@ -1138,10 +1148,13 @@ export async function loadOlderPlayerThreadPage({
 export async function loadNewerPlayerThreadPage({ data, fetchImpl, projectionStore, thread }) {
   const cursor = thread.nextAfterSeq;
   if (cursor == null) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
+  const currentRead = projectionStore.captureReadGuard?.(["thread"]) ?? (() => true);
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id, channel: data.threadPager.channel,
     limit: data.threadPager.pageSize, afterSeq: cursor }), { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`Thread page rejected: ${response.status}`);
-  const page = normalizeThreadPage(await response.json(), { posts: [] });
+  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
+  if (!currentRead()) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
+  const page = normalizeThreadPage(payload, { posts: [] });
   const current = projectionStore.getSnapshot().thread;
   if (!current || current.nextAfterSeq !== cursor) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
   const merged = mergeThreadPage(current, { ...page, nextBeforeSeq: current.nextBeforeSeq });
@@ -1183,4 +1196,17 @@ function errorMessage(error) {
     return error.message;
   }
   return String(error);
+}
+
+async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead }) {
+  if (!currentRead()) return payload;
+  if (!validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: data.threadPager.channel })) {
+    throw new Error("Invalid thread page response");
+  }
+  try {
+    return await hydratePrivateThreadPage(payload, { game: data.game.id, channel: data.threadPager.channel, fetchImpl, signal });
+  } catch (error) {
+    if (currentRead() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
+    throw error;
+  }
 }

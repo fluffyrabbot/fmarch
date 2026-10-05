@@ -61,6 +61,13 @@ export function createProjectionStore({
     return () => subscribers.delete(listener);
   }
 
+  function captureReadGuard(keys = registeredKeys) {
+    const selected = normalizeProjectionKeys(keys, registeredKeys);
+    const epoch = authorityEpoch;
+    const owners = selected.map(key => latestOwnerByKey.get(key));
+    return () => epoch === authorityEpoch && selected.every((key, index) => latestOwnerByKey.get(key) === owners[index]);
+  }
+
   function getSnapshot() {
     return snapshot;
   }
@@ -293,6 +300,7 @@ export function createProjectionStore({
 
   async function readProjection(key, { fetchImpl, signal }) {
     const coldLoad = coldLoads[key];
+    const current = captureReadGuard([key]);
     try {
       const response = await fetchImpl(
         projectionRefreshUrl(coldLoad.url, ++refreshNonce),
@@ -321,7 +329,17 @@ export function createProjectionStore({
           status: Number(response?.status ?? 0),
         });
       }
-      const payload = await response.json();
+      let payload = await response.json();
+      if (typeof coldLoad.validate === "function" && coldLoad.validate(payload) !== true) {
+        throw new TypeError(`projection payload for ${key} failed validation`);
+      }
+      if (typeof coldLoad.hydrate === "function") {
+        try { payload = await coldLoad.hydrate(payload, { fetchImpl, signal }); }
+        catch (error) {
+          if (current() && [401, 403].includes(error.status)) revokeAuthority({ reason: "projection_hydration_access_denied", status: error.status });
+          throw error;
+        }
+      }
       return refreshSuccess(
         key,
         normalizeProjectionPayload({
@@ -597,6 +615,7 @@ export function createProjectionStore({
     subscribe,
     subscribeHealth,
     getSnapshot,
+    captureReadGuard,
     getHealth,
     isReady,
     invalidate,

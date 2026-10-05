@@ -392,6 +392,8 @@ function liveStackReadinessFixture() {
         },
       },
       playerPrivateChannel: {
+        citations: { status: "passed", channel: "private:room", target: 1, quoters: [60, 61],
+          offPage: true, navigation: true, reload: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true },
         submitPost: { outcome: { state: "ack" } },
         media: { responses: [{ ok: true }] },
       },
@@ -641,3 +643,12 @@ function voteRaceFixture() {
     firstOutcome: outcome(0, true), secondOutcome: outcome(1, true, 2),
   };
 }
+
+ test("private readiness requires off-page navigation, live counts and reconnect evidence", () => {
+  for (const key of ["offPage", "navigation", "reload", "liveCount", "reconnectCount", "reconnectObserved"]) {
+    const evidence = liveStackReadinessFixture();
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "private-channels"), "passed");
+    delete evidence.browser.playerPrivateChannel.citations[key];
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "private-channels"), "failed");
+  }
+});

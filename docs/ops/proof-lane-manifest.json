@@ -1316,7 +1316,8 @@
       "id": "api:public-citations",
       "tier": "frozen",
       "paths": [
-        "crates/api/src/public_citations.rs"
+        "crates/api/src/public_citations.rs",
+        "crates/api/src/citation_query.rs"
       ],
       "lanes": [
         "cargo:api",

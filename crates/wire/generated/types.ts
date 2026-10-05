@@ -137,6 +137,8 @@ export type PostCitation = { quoting: PostRef, occurred_at: bigint, };
 
 export type PostCitationPage = { quoted: PostRef, citations: Array<PostCitation>, citation_count: bigint, };
 
+export type PrivatePostCitationBatch = { game: string, channel: string, pages: Array<PostCitationPage>, };
+
 export type PublicPostCitation = { quoting_surface_id: string, quoting_source_seq: bigint, occurred_at: bigint, };
 
 export type PublicPostCitationPage = { quoted_surface_id: string, quoted_source_seq: bigint, citations: Array<PublicPostCitation>, citation_count: bigint, };

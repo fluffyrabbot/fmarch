@@ -17,6 +17,7 @@ pub mod mash_scale;
 mod media_http;
 mod membership_http;
 pub mod program_library;
+mod citation_query;
 mod public_citations;
 mod public_platform_http;
 mod runtime_config;

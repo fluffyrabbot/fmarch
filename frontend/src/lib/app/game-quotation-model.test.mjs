@@ -109,3 +109,14 @@ test("private channel citation previews retain the nested PostCitationPage contr
   assert.equal(view.moreCitationCount, 2);
   assert.deepEqual(view.incomingCitations, [{ sourceSeq: 18, href: "?post=18#thread-post-18" }]);
 });
+
+test("private authoritative zero and pending previews never derive stale incoming edges", () => {
+  const target = { seq: 12, citationCount: 8, citationPage: { citation_count: 0, citations: [] } };
+  const posts = [target, { seq: 18, quotations: [{ target: { kind: "game_post", scope_id: game, source_seq: 12 }, excerpt: "claim" }] }];
+  const zero = buildGamePostQuoteView(target, { posts });
+  assert.equal(zero.citationCount, 0);
+  assert.deepEqual(zero.incomingCitations, []);
+  const pending = buildGamePostQuoteView({ ...target, citationPage: null }, { posts });
+  assert.equal(pending.citationCount, 8);
+  assert.deepEqual(pending.incomingCitations, []);
+});

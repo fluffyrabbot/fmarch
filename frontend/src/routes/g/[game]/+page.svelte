@@ -1,5 +1,6 @@
 <script>
   import { getContext, onDestroy, onMount, tick } from "svelte";
+  import { connectPrivateCitationHydration } from "../../../lib/app/private-citations.mjs";
   import { createReadingCheckpoint, deliberateReadingOrigin } from "$lib/app/reading-checkpoint.mjs";
   import { privateNewCount } from "$lib/app/private-attention.mjs";
   import { createPrivateAttentionController } from "$lib/app/private-attention-controller.mjs";
@@ -475,6 +476,12 @@
     coldLoads: buildPlayerProjectionColdLoads(data, { threadWindow: () => readerThreadWindow }),
     liveTransport: data.projectionBoundary,
   });
+
+  onDestroy(() => projectionStore.invalidate(undefined, { reason: "player_route_destroyed" }));
+  onMount(() => connectPrivateCitationHydration({ store: projectionStore, game: data.game.id,
+    channel: data.threadPager.channel, fetchImpl: fetch,
+    onError: () => { threadPageStatus = { state: "reject", message: "Citation previews could not be refreshed." }; },
+  }));
 
   projectionStore.subscribe((snapshot) => {
     const readingPosition = typeof document === "undefined" ? null : captureReadingPosition();

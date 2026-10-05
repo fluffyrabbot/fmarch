@@ -1,3 +1,4 @@
+import { provePrivateCitationContinuity } from "./live_stack/private_citation_scenario.mjs";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -1688,6 +1689,10 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
     },
     projection,
   };
+  evidence.citations = await provePrivateCitationContinuity({
+    page, pageUrl, game, channel: factionDayChatChannel, target: Number(mediaPostSeq),
+    excerpt: factionDayChatPostBody, sendCommand,
+  });
   await context.close();
   return evidence;
 }

@@ -4,7 +4,8 @@ use super::auth_http::{
     authorization_context, bearer_token, unauthorized_account, unix_now_seconds,
     AccountAuthenticatedRequest, AuthHttpState, AuthenticatedRequest,
 };
-use super::public_citations::{self, PublicCitationQuery};
+use super::citation_query::CitationBatchQuery;
+use super::public_citations;
 use super::{ApiError, ApiState};
 use attention::WatchTarget;
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
@@ -1049,7 +1050,7 @@ async fn retract_discussion_post(
 async fn discussion_citations(
     State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
-    Query(query): Query<PublicCitationQuery>,
+    Query(query): Query<CitationBatchQuery>,
     OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<PublicPostCitationBatch>, ApiError> {
     Ok(Json(

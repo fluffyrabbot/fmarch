@@ -5,8 +5,9 @@ use super::auth_http::{
     unauthorized_session, unix_now_seconds, AuthHttpState, AuthenticatedRequest,
     AuthorizationContext,
 };
+use super::citation_query::CitationBatchQuery;
 use super::command_http::command_reject_api_error;
-use super::public_citations::{self, PublicCitationQuery};
+use super::public_citations;
 use super::{ApiError, ApiState};
 use crate::{live_projection, program_library};
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
@@ -37,9 +38,9 @@ use wire::{
     HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
     HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
     HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
-    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage,
-    PublicPostCitationBatch, Quotation, RejectCode, SlotMentionNotification, ThreadPage,
-    ThreadPost, ThreadPostsDelta,
+    PostCitationsChangedDelta, PostKind, PostRef, PrivatePostCitationBatch, ProjectionDelta,
+    PublicGameThreadPage, PublicPostCitationBatch, Quotation, RejectCode, SlotMentionNotification,
+    ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -76,8 +77,8 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             get(channel_thread_view),
         )
         .route(
-            "/games/{game}/channels/{channel}/posts/{source_seq}/citations",
-            get(channel_post_citations),
+            "/games/{game}/channels/{channel}/citations",
+            get(channel_citations),
         )
         .route(
             "/games/{game}/private-attention",
@@ -528,15 +529,10 @@ fn parse_thread_position(
     })
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct PostCitationQuery {
-    limit: Option<i64>,
-}
-
 async fn public_game_citations(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<PublicCitationQuery>,
+    Query(query): Query<CitationBatchQuery>,
 ) -> Result<Json<PublicPostCitationBatch>, ApiError> {
     if projections::public_game_by_id(&state.pool, game)
         .await?
@@ -555,12 +551,12 @@ async fn public_game_citations(
     ))
 }
 
-async fn channel_post_citations(
+async fn channel_citations(
     State(state): State<GameHttpState>,
-    Path((game, channel, source_seq)): Path<(Uuid, String, i64)>,
-    Query(query): Query<PostCitationQuery>,
+    Path((game, channel)): Path<(Uuid, String)>,
+    Query(query): Query<CitationBatchQuery>,
     headers: HeaderMap,
-) -> Result<Json<PostCitationPage>, ApiError> {
+) -> Result<Json<PrivatePostCitationBatch>, ApiError> {
     if channel == "main" {
         return Err(ApiError::Reject {
             status: StatusCode::NOT_FOUND,
@@ -576,30 +572,20 @@ async fn channel_post_citations(
         Some(authorization.principal_id()),
     )
     .await?;
-    private_game_post_citations(&state.pool, game, channel.as_str(), source_seq, query.limit).await
-}
-
-async fn private_game_post_citations(
-    pool: &PgPool,
-    game: Uuid,
-    channel_id: &str,
-    source_seq: i64,
-    limit: Option<i64>,
-) -> Result<Json<PostCitationPage>, ApiError> {
-    let page = projections::private_game_incoming_citations(
-        pool,
+    let source_seqs = query.source_seqs()?;
+    let pages = projections::private_game_incoming_citation_pages(
+        &state.pool,
         game,
-        channel_id,
-        source_seq,
-        limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
+        &channel,
+        &source_seqs,
+        query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
-    .await?
-    .ok_or_else(|| ApiError::Reject {
-        status: StatusCode::NOT_FOUND,
-        error: RejectCode::NotAuthorized,
-        message: "game post was not found".to_string(),
-    })?;
-    Ok(Json(PostCitationPage::from(page)))
+    .await?;
+    Ok(Json(PrivatePostCitationBatch {
+        game,
+        channel,
+        pages: pages.into_iter().map(PostCitationPage::from).collect(),
+    }))
 }
 
 pub(super) async fn current_thread_posts_delta(

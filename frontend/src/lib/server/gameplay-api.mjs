@@ -1,3 +1,4 @@
+import { hydratePrivateThreadPage } from "../app/private-citations.mjs";
 import {
   EMPTY_PLAYER_COMMAND_STATE,
   authenticatedGameReadUrl,
@@ -173,6 +174,13 @@ export async function loadPlayerGameplaySnapshot({
   }
 
   const values = valuesByEndpoint(requests, results);
+  try {
+    values.thread = await hydratePrivateThreadPage(values.thread, { game, channel: activeChannel,
+      fetchImpl, apiBaseUrl, signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined });
+  } catch (error) {
+    return failedSnapshot({ endpoint: "threadCitations", result: { kind: error.status === 403 ? "forbidden"
+      : error.status === 401 ? "unauthorized" : "unavailable", reason: "citation_hydration_failed", status: error.status ?? null } }, EMPTY_PLAYER_GAMEPLAY_SNAPSHOT);
+  }
   return readySnapshot(
     Object.freeze({
       thread: normalizeThreadPage(values.thread, EMPTY_THREAD_PAGE),

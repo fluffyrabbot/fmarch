@@ -179,8 +179,8 @@ export function buildIncomingCitationViews({
       .filter(Boolean)
       .slice(0, GAME_CITATION_PREVIEW_LIMIT),
   );
-  const count = Number(citationCount);
-  const normalizedCount = Number.isFinite(count) && count > 0 ? count : incomingCitations.length;
+  const count = Number(citations?.citation_count ?? citationCount);
+  const normalizedCount = citations !== null ? Math.max(0, count) : Number.isFinite(count) && count > 0 ? count : incomingCitations.length;
   return Object.freeze({
     citationCount: normalizedCount,
     incomingCitations,
@@ -188,7 +188,8 @@ export function buildIncomingCitationViews({
   });
 }
 
-export function buildGamePostQuoteView(post, { posts = [], citations = null } = {}) {
+export function buildGamePostQuoteView(post, { posts = [], citations = Object.hasOwn(post ?? {}, "citationPage")
+  ? post.citationPage ?? { citations: [], citation_count: post.citationCount ?? 0 } : null } = {}) {
   const sourceSeq = postSourceSeq(post);
   const incoming = buildIncomingCitationViews({
     citationCount: post?.citation_count ?? post?.citationCount ?? 0,

@@ -1,3 +1,4 @@
+import { hasPrivateCitationContinuity } from "./live_stack/private_citation_scenario.mjs";
 import {
   hasCompleteSetupCommandEvidence,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
@@ -118,7 +119,8 @@ const CHECKS = Object.freeze([
       evidence?.browser?.playerPrivateChannel?.media?.responses?.some(
         (response) => response.ok === true,
       ) &&
-      evidence?.browser?.privateChannelForbidden?.status === 403,
+      evidence?.browser?.privateChannelForbidden?.status === 403 &&
+      hasPrivateCitationContinuity(evidence?.browser?.playerPrivateChannel?.citations),
   },
   {
     id: "role-pm-replacement-lifecycle",

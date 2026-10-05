@@ -739,3 +739,33 @@ function jsonResponse(body, { status = 200 } = {}) {
     },
   };
 }
+
+test("private SSR hydrates off-page citations atomically and rejects batch denial", async () => {
+  const channel = "private:room";
+  for (const denied of [false, true]) {
+    const requests = [];
+    const result = await loadPlayerGameplaySnapshot({ game: "midsummer", activeChannel: channel,
+      principalId: "player_mira", actorSlot: "slot-4", timeoutMs: 0,
+      fetchImpl: async url => {
+        requests.push(String(url));
+        if (String(url).includes("/citations?")) return denied
+          ? new Response(null, { status: 403 })
+          : jsonResponse({ game: "midsummer", channel, pages: [{
+            quoted: { kind: "game_post", scope_id: "midsummer", source_seq: 1 }, citation_count: 1,
+            citations: [{ quoting: { kind: "game_post", scope_id: "midsummer", source_seq: 99 }, occurred_at: 100 }],
+          }] });
+        const payload = playerPayloadFor(url);
+        if (String(url).includes("/thread?")) payload.posts[0] = { ...payload.posts[0], channel_id: channel, citation_count: 1 };
+        return jsonResponse(payload);
+      },
+    });
+    assert.equal(requests.filter(url => url.includes("/citations?")).length, 1);
+    if (denied) {
+      assert.equal(result.kind, "forbidden");
+      assert.equal(result.data, EMPTY_PLAYER_GAMEPLAY_SNAPSHOT);
+    } else {
+      assert.equal(result.kind, "ready");
+      assert.equal(result.data.thread.posts[0].citationPage.citations[0].quoting.source_seq, 99);
+    }
+  }
+});
