@@ -7,6 +7,7 @@ import {
   buildPlayerProjectionInitialSnapshot,
   recoverPlayerThreadWindow,
   loadOlderPlayerThreadPage,
+  loadNewerPlayerThreadPage,
   normalizePlayerCommandStateRefreshError,
   normalizePrivateRows,
   playerCommandErrorStatus,
@@ -1787,5 +1788,31 @@ test("private recovery rejects revoked authority and ignores stale read denials"
     if (event.includes("revoke")) assert.deepEqual(posts, []);
     else if (event.includes("denial")) assert.equal(posts[0].body, "refreshed");
     else { assert.equal(posts[0].seq, 10); assert.equal(posts[0].citationCount, 0); }
+  }
+});
+
+
+test("main citations hydrate recovery, both pagination directions, and refresh without overwriting concurrent edits", async () => {
+  for (const mode of ["recovery", "older", "newer", "refresh"]) {
+    const data = fixtureData();
+    const initial = { nextBeforeSeq: 40, nextAfterSeq: 60, posts: [{ seq: 50, body: "original" }] };
+    const threadLoad = buildPlayerProjectionColdLoads(data).thread;
+    const store = createProjectionStore({ initialSnapshot: { thread: initial }, coldLoads: { thread: threadLoad } });
+    const target = mode === "newer" ? 70 : mode === "refresh" ? 50 : 10;
+    const fetchImpl = async url => {
+      if (String(url).includes("/citations?")) {
+        if (mode !== "refresh") store.applySnapshot({ thread: { ...initial, posts: [{ seq: 50, body: "live edit" }] } });
+        return jsonResponse({ pages: [{ quoted_surface_id: "midsummer", quoted_source_seq: target, citation_count: 1,
+          citations: [{ quoting_surface_id: "midsummer", quoting_source_seq: 100, occurred_at: 100 }] }] });
+      }
+      return jsonResponse({ next_before_seq: 9, next_after_seq: mode === "newer" ? null : 11,
+        posts: [{ ...recoveryPost(target), citation_count: 1 }] });
+    };
+    if (mode === "recovery") assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl }), "ready");
+    else if (mode === "refresh") await store.refresh(["thread"], { fetchImpl });
+    else await (mode === "older" ? loadOlderPlayerThreadPage : loadNewerPlayerThreadPage)({ data, fetchImpl, projectionStore: store, thread: initial });
+    const posts = store.getSnapshot().thread.posts;
+    assert.equal(posts.find(post => post.seq === target).citationPage.citations[0].quoting.source_seq, 100);
+    if (["older", "newer"].includes(mode)) assert.equal(posts.find(post => post.seq === 50).body, "live edit");
   }
 });

@@ -1,4 +1,4 @@
-import { provePrivateCitationContinuity } from "./live_stack/private_citation_scenario.mjs";
+import { provePrivateCitationContinuity, proveMainCitationContinuity } from "./live_stack/reader_citation_scenario.mjs";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -4133,6 +4133,13 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   await raceVoteSession.context.close();
   await duplicateVoteSession.context.close();
   await staleVoteSession.context.close();
+  const citations = await proveMainCitationContinuity({ page, pageUrl, game, sendCommand,
+    setVisible: async (seq, visible) => {
+      if (!Number.isSafeInteger(seq) || seq <= 0) throw new Error("invalid fixture sequence");
+      await runSql(smokeDatabase.applicationUrl, `UPDATE public_publication SET visible = ${visible ? "true" : "false"}
+        WHERE surface_id = ${sqlLiteral(game)}::uuid AND source_seq = ${seq}`);
+    },
+  });
   await context.close();
   return {
     url: pageUrl,
@@ -4142,6 +4149,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     primaryWithdrawDelivery,
     raceWithdrawDelivery,
     firstPostText,
+    citations,
     commandStatus,
     projection,
     liveProjectionEvents,

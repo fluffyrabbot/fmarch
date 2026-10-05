@@ -656,3 +656,28 @@ revocation, refresh or newer live state. Current authorization denial revokes
 private projection authority. The live-stack browser proof follows an actual
 off-page private citation, reloads its destination, and verifies new citation
 previews through live delivery and an explicit reconnect.
+
+
+### Signed-in main reader citation continuity
+
+The signed-in main reader uses the existing public
+`GET /games/{game}/citations?source_seqs=...&limit=5` batch through its authenticated
+same-origin proxy. The wire response stays flat and contains only public surface
+and post sequences. The shared reader hydration boundary validates that exact
+shape, requested targets, scope, bounded counts and newest-first preview order
+before adapting references to the internal reader model. Private channel DTOs
+cannot enter this public adapter.
+
+Both reader scopes hydrate SSR, cold refresh, addressed recovery, older/newer
+pages and live citation invalidation. Missing targets and explicit zero counts
+replace stale counts and links; loaded replies cannot manufacture previews while
+hydration is pending. Snapshot ownership protects background preview reads and
+stale denials. Addressed recovery and pagination instead keep the scope authority
+epoch and merge concurrent live edits within their existing cursor/navigation
+rules, so a benign refresh does not cancel a valid reading-position recovery.
+
+Canonical browser proof follows an off-page main citation, reloads the addressed
+destination, receives a second citation live, and reconnects. Fixture-only public
+publication visibility changes prove hidden quoters clear rendered previews and
+hidden targets disappear from the public batch. The private browser scenario
+also verifies its target is omitted from the public endpoint.

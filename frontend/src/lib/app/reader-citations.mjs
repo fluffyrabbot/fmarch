@@ -1,5 +1,5 @@
 import { authenticatedGameReadUrl } from "./cold-load.mjs";
-import { validatePrivateCitationBatch } from "./gameplay-response-schema.mjs";
+import { validatePrivateCitationBatch, validatePublicGameCitationBatch } from "./gameplay-response-schema.mjs";
 
 const seqOf = post => Number(post.source_seq ?? post.seq);
 const countOf = post => Number(post.citation_count ?? post.citationCount ?? 0);
@@ -10,17 +10,16 @@ const emptyPage = (game, seq) => Object.freeze({
 
 // Used for SSR, reconnects, paging, addressed recovery, and pending live previews.
 // A missing target is authoritative: no stale count or derived preview survives.
-export async function hydratePrivateThreadPage(page, {
+export async function hydrateReaderThreadPage(page, {
   game, channel, apiBaseUrl = "", fetchImpl = globalThis.fetch, signal,
 }) {
-  if (channel === "main") return page;
   const targets = [...new Set(page.posts.filter(post => countOf(post) > 0).map(seqOf))];
   const pages = new Map();
   for (let offset = 0; offset < targets.length; offset += 50) {
     signal?.throwIfAborted();
     const sourceSeqs = targets.slice(offset, offset + 50);
     const url = authenticatedGameReadUrl({ apiBaseUrl, game,
-      path: `channels/${encodeURIComponent(channel)}/citations?source_seqs=${sourceSeqs.join(",")}&limit=5`,
+      path: `${channel === "main" ? "" : `channels/${encodeURIComponent(channel)}/`}citations?source_seqs=${sourceSeqs.join(",")}&limit=5`,
     });
     const response = await fetchImpl(url, { signal, cache: "no-store", headers: { accept: "application/json" } });
     if (!response.ok) throw Object.assign(new Error(`Citation batch rejected: ${response.status}`), { status: response.status });
@@ -28,8 +27,19 @@ export async function hydratePrivateThreadPage(page, {
     if (type !== "application/json") throw new Error("Invalid citation batch content type");
     const batch = await response.json();
     signal?.throwIfAborted();
-    if (!validatePrivateCitationBatch(batch, { game, channel, sourceSeqs })) throw new Error("Invalid private citation batch");
-    for (const value of batch.pages) pages.set(value.quoted.source_seq, Object.freeze({
+    const validate = channel === "main" ? validatePublicGameCitationBatch : validatePrivateCitationBatch;
+    if (!validate(batch, { game, channel, sourceSeqs })) throw new Error("Invalid reader citation batch");
+    // Public wire DTOs stay flat and carry no private channel/account identity.
+    // Only the reader's internal view uses the shared nested reference shape.
+    const normalized = channel === "main" ? batch.pages.map(value => ({
+      quoted: { kind: "game_post", scope_id: value.quoted_surface_id, source_seq: value.quoted_source_seq },
+      citation_count: value.citation_count,
+      citations: value.citations.map(citation => ({
+        quoting: { kind: "game_post", scope_id: citation.quoting_surface_id, source_seq: citation.quoting_source_seq },
+        occurred_at: citation.occurred_at,
+      })),
+    })) : batch.pages;
+    for (const value of normalized) pages.set(value.quoted.source_seq, Object.freeze({
       ...value, quoted: Object.freeze(value.quoted),
       citations: Object.freeze(value.citations.map(citation => Object.freeze({ ...citation, quoting: Object.freeze(citation.quoting) }))),
     }));
@@ -44,8 +54,7 @@ export async function hydratePrivateThreadPage(page, {
 // Preview reads are owned by the same projection generation as their targets.
 // Subscriptions coalesce a burst of deltas into bounded batches; an intervening
 // snapshot or authority change aborts and supersedes the complete pending read.
-export function connectPrivateCitationHydration({ store, game, channel, fetchImpl, onError = () => {} }) {
-  if (channel === "main") return () => {};
+export function connectReaderCitationHydration({ store, game, channel, fetchImpl, onError = () => {} }) {
   let closed = false, queued = false, generation = 0, controller = null;
   let observedThread, observedHealth, activeGuard;
   function schedule() {
@@ -69,13 +78,13 @@ export function connectPrivateCitationHydration({ store, game, channel, fetchImp
     activeGuard = current;
     controller = new AbortController();
     try {
-      const page = await hydratePrivateThreadPage({ posts: pending }, { game, channel, fetchImpl, signal: controller.signal });
+      const page = await hydrateReaderThreadPage({ posts: pending }, { game, channel, fetchImpl, signal: controller.signal });
       if (closed || version !== generation || !current() || store.getSnapshot().thread !== thread) return;
       const hydrated = new Map(page.posts.map(post => [seqOf(post), post]));
       store.applySnapshot({ thread: { ...thread, posts: thread.posts.map(post => hydrated.get(seqOf(post)) ?? post) } });
     } catch (error) {
       if (closed || version !== generation || !current()) return;
-      if (error.status === 401 || error.status === 403) store.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
+      if (error.status === 401 || error.status === 403) store.revokeAuthority({ reason: "reader_citation_access_denied", status: error.status });
       onError(error);
     }
   }

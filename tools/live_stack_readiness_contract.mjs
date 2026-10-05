@@ -1,4 +1,4 @@
-import { hasPrivateCitationContinuity } from "./live_stack/private_citation_scenario.mjs";
+import { hasPrivateCitationContinuity, hasMainCitationContinuity } from "./live_stack/reader_citation_scenario.mjs";
 import {
   hasCompleteSetupCommandEvidence,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
@@ -109,6 +109,11 @@ const CHECKS = Object.freeze([
       Array.isArray(evidence?.browser?.playerAction?.resolveCommand?.streamSeqs) &&
       Array.isArray(evidence?.browser?.playerAction?.advanceCommand?.streamSeqs) &&
       evidence?.browser?.playerAction?.resolvedTargetSlot?.alive === false,
+  },
+  {
+    id: "main-reader-citations",
+    label: "Main reader proves off-page citations, live updates, reconnect, and public visibility filtering",
+    predicate: evidence => hasMainCitationContinuity(evidence?.browser?.player?.citations),
   },
   {
     id: "private-channels",

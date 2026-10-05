@@ -1061,3 +1061,30 @@ export function validatePrivateCitationBatch(value, { game, channel, sourceSeqs,
     });
   });
 }
+
+
+// This boundary accepts only the public slot-level citation DTO. Never infer
+// public references from private nested data or forward extra identity fields.
+export function validatePublicGameCitationBatch(value, { game, sourceSeqs, limit = 5 }) {
+  const fields = (item, keys) => item !== null && typeof item === "object" && !Array.isArray(item)
+    && Object.keys(item).length === keys.length && keys.every(key => Object.hasOwn(item, key));
+  if (!fields(value, ["pages"]) || !Array.isArray(value.pages) || value.pages.length > 50) return false;
+  const requested = new Set(sourceSeqs), seen = new Set();
+  return value.pages.every(page => {
+    if (!fields(page, ["quoted_surface_id", "quoted_source_seq", "citation_count", "citations"])
+      || page.quoted_surface_id !== game || !Number.isSafeInteger(page.quoted_source_seq) || page.quoted_source_seq <= 0
+      || !requested.has(page.quoted_source_seq) || seen.has(page.quoted_source_seq)
+      || !Number.isSafeInteger(page.citation_count) || page.citation_count < 0
+      || !Array.isArray(page.citations) || page.citations.length !== Math.min(limit, page.citation_count)) return false;
+    seen.add(page.quoted_source_seq);
+    let previous = Infinity;
+    return page.citations.every(citation => {
+      if (!fields(citation, ["quoting_surface_id", "quoting_source_seq", "occurred_at"])
+        || citation.quoting_surface_id !== game || !Number.isSafeInteger(citation.quoting_source_seq)
+        || citation.quoting_source_seq <= 0 || citation.quoting_source_seq >= previous
+        || !Number.isSafeInteger(citation.occurred_at)) return false;
+      previous = citation.quoting_source_seq;
+      return true;
+    });
+  });
+}

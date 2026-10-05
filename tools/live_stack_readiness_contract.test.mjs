@@ -352,6 +352,9 @@ function liveStackReadinessFixture() {
         },
       },
       player: {
+        citations: { status: "passed", channel: "main", target: 1, quoters: [60, 61],
+          offPage: true, navigation: true, reload: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true,
+          hiddenQuotersCleared: true, hiddenTargetOmitted: true },
         duplicateVoteRetry: {
           outcome: { state: "ack" },
           voteRows: ["VoteSubmitted"],
@@ -650,5 +653,14 @@ function voteRaceFixture() {
     assert.equal(checkStatus(buildLiveStackReadiness(evidence), "private-channels"), "passed");
     delete evidence.browser.playerPrivateChannel.citations[key];
     assert.equal(checkStatus(buildLiveStackReadiness(evidence), "private-channels"), "failed");
+  }
+});
+
+
+test("main citation readiness requires navigation, reconnect and visibility evidence", () => {
+  for (const field of ["offPage", "navigation", "reload", "reconnectObserved", "hiddenQuotersCleared", "hiddenTargetOmitted"]) {
+    const evidence = liveStackReadinessFixture();
+    evidence.browser.player.citations[field] = false;
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "main-reader-citations"), "failed");
   }
 });

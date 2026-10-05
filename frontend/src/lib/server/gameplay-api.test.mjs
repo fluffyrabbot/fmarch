@@ -769,3 +769,32 @@ test("private SSR hydrates off-page citations atomically and rejects batch denia
     }
   }
 });
+
+
+test("main SSR hydrates public off-page citations and fails atomically on invalid or denied batches", async () => {
+  for (const mode of ["ready", "zero", "denied", "private-shape"]) {
+    const result = await loadPlayerGameplaySnapshot({ game: "midsummer", activeChannel: "main",
+      principalId: "player_mira", actorSlot: "slot-4", timeoutMs: 0,
+      fetchImpl: async url => {
+        if (String(url).includes("/citations?")) {
+          assert.match(String(url), /^\/api\/gameplay\/games\/midsummer\/citations\?/);
+          if (mode === "denied") return new Response(null, { status: 403 });
+          if (mode === "private-shape") return jsonResponse({ game: "midsummer", channel: "private:room", pages: [] });
+          return jsonResponse({ pages: mode === "zero" ? [] : [{ quoted_surface_id: "midsummer", quoted_source_seq: 1,
+            citation_count: 1, citations: [{ quoting_surface_id: "midsummer", quoting_source_seq: 99, occurred_at: 100 }] }] });
+        }
+        const payload = playerPayloadFor(url);
+        if (String(url).startsWith("/api/gameplay/games/midsummer?")) payload.posts[0] = { ...payload.posts[0], citation_count: 1 };
+        return jsonResponse(payload);
+      },
+    });
+    if (["ready", "zero"].includes(mode)) {
+      assert.equal(result.kind, "ready");
+      assert.equal(result.data.thread.posts[0].citationCount, mode === "ready" ? 1 : 0);
+      assert.equal(result.data.thread.posts[0].citationPage.citations[0]?.quoting.source_seq, mode === "ready" ? 99 : undefined);
+    } else {
+      assert.equal(result.kind, mode === "denied" ? "forbidden" : "unavailable");
+      assert.equal(result.data, EMPTY_PLAYER_GAMEPLAY_SNAPSHOT);
+    }
+  }
+});

@@ -1,4 +1,4 @@
-import { hydratePrivateThreadPage } from "../../../lib/app/private-citations.mjs";
+import { hydrateReaderThreadPage } from "../../../lib/app/reader-citations.mjs";
 import {
   buildDispatchBridgePlanFromRequest,
   normalizeCommandTrace,
@@ -139,7 +139,7 @@ export function buildPlayerProjectionColdLoads(data, { threadWindow = () => null
           channel: data.threadPager?.channel ?? "main",
         }),
       normalize: normalizeThreadPage,
-      hydrate: (page, options) => hydratePrivateThreadPage(page, {
+      hydrate: (page, options) => hydrateReaderThreadPage(page, {
         ...options, game: data.game.id, channel: data.threadPager?.channel ?? "main",
       }),
       ...(privateThread
@@ -1038,7 +1038,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   // Recovery merges concurrent snapshots below. Scope authority must survive,
   // while a stale denial must still belong to the original read owner.
   const currentRead = projectionStore.captureAuthorityGuard();
-  const currentOwner = readerCitationGuard(data, projectionStore);
+  const currentOwner = projectionStore.captureReadGuard(["thread"]);
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
@@ -1112,7 +1112,8 @@ export async function loadOlderPlayerThreadPage({
     });
   }
 
-  const currentRead = readerCitationGuard(data, projectionStore);
+  const currentRead = projectionStore.captureAuthorityGuard();
+  const currentOwner = projectionStore.captureReadGuard(["thread"]);
   const response = await fetchImpl(
     playerThreadUrl({
       game: data.game.id,
@@ -1125,10 +1126,10 @@ export async function loadOlderPlayerThreadPage({
     },
   );
   if (!response.ok) {
-    revokeDeniedReaderResponse(response, { data, projectionStore, currentRead });
+    revokeDeniedReaderResponse(response, { projectionStore, currentRead: currentOwner });
     throw new Error(`Thread page rejected: ${response.status}`);
   }
-  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
+  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead, currentOwner });
   if (!currentRead()) return { threadPageStatus: threadPageStatusForResult(0), snapshot: projectionStore.getSnapshot() };
   const olderPage = normalizeThreadPage(payload, {
     nextBeforeSeq: thread.nextBeforeSeq,
@@ -1152,14 +1153,15 @@ export async function loadOlderPlayerThreadPage({
 export async function loadNewerPlayerThreadPage({ data, fetchImpl, projectionStore, thread }) {
   const cursor = thread.nextAfterSeq;
   if (cursor == null) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
-  const currentRead = readerCitationGuard(data, projectionStore);
+  const currentRead = projectionStore.captureAuthorityGuard();
+  const currentOwner = projectionStore.captureReadGuard(["thread"]);
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id, channel: data.threadPager.channel,
     limit: data.threadPager.pageSize, afterSeq: cursor }), { headers: { accept: "application/json" } });
   if (!response.ok) {
-    revokeDeniedReaderResponse(response, { data, projectionStore, currentRead });
+    revokeDeniedReaderResponse(response, { projectionStore, currentRead: currentOwner });
     throw new Error(`Thread page rejected: ${response.status}`);
   }
-  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead });
+  const payload = await hydrateReaderPage(await response.json(), { data, fetchImpl, projectionStore, currentRead, currentOwner });
   if (!currentRead()) return { snapshot: projectionStore.getSnapshot(), threadPageStatus: threadPageStatusForResult(0) };
   const page = normalizeThreadPage(payload, { posts: [] });
   const current = projectionStore.getSnapshot().thread;
@@ -1211,21 +1213,15 @@ async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, si
     throw new Error("Invalid thread page response");
   }
   try {
-    return await hydratePrivateThreadPage(payload, { game: data.game.id, channel: data.threadPager.channel, fetchImpl, signal });
+    return await hydrateReaderThreadPage(payload, { game: data.game.id, channel: data.threadPager.channel, fetchImpl, signal });
   } catch (error) {
-    if (currentRead() && currentOwner() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
+    if (currentRead() && currentOwner() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "reader_citation_access_denied", status: error.status });
     throw error;
   }
 }
 
-function revokeDeniedReaderResponse(response, { data, projectionStore, currentRead }) {
-  if (data.threadPager.channel !== "main" && currentRead() && [401, 403].includes(response.status)) {
+function revokeDeniedReaderResponse(response, { projectionStore, currentRead }) {
+  if (currentRead() && [401, 403].includes(response.status)) {
     projectionStore.revokeAuthority({ reason: "reader_page_access_denied", status: response.status });
   }
-}
-
-// Public recovery already merges concurrent edits and owns navigation through
-// isCurrent/cursors. Private previews additionally belong to one read owner.
-function readerCitationGuard(data, projectionStore) {
-  return data.threadPager.channel === "main" ? () => true : projectionStore.captureReadGuard(["thread"]);
 }

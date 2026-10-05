@@ -1,4 +1,4 @@
-import { hydratePrivateThreadPage } from "../app/private-citations.mjs";
+import { hydrateReaderThreadPage } from "../app/reader-citations.mjs";
 import {
   EMPTY_PLAYER_COMMAND_STATE,
   authenticatedGameReadUrl,
@@ -175,7 +175,7 @@ export async function loadPlayerGameplaySnapshot({
 
   const values = valuesByEndpoint(requests, results);
   try {
-    values.thread = await hydratePrivateThreadPage(values.thread, { game, channel: activeChannel,
+    values.thread = await hydrateReaderThreadPage(values.thread, { game, channel: activeChannel,
       fetchImpl, apiBaseUrl, signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined });
   } catch (error) {
     return failedSnapshot({ endpoint: "threadCitations", result: { kind: error.status === 403 ? "forbidden"
