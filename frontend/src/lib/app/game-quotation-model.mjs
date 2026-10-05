@@ -1,3 +1,4 @@
+import { quotationOriginalState } from "./quotation-original.mjs";
 import { postHref } from "./post-address.mjs";
 import {
   gameThreadAuthorLabel,
@@ -124,8 +125,9 @@ export function submittedQuotationsPayload(attached) {
   );
 }
 
-export function buildOutgoingQuotationViews(post, posts = []) {
+export function buildOutgoingQuotationViews(post, posts = [], unavailableSeqs = []) {
   const bySeq = postsBySeq(posts);
+  const unavailable = new Set(unavailableSeqs.map(String));
   const outgoing = Array.isArray(post?.quotations) ? post.quotations : [];
   return Object.freeze(
     outgoing
@@ -143,7 +145,7 @@ export function buildOutgoingQuotationViews(post, posts = []) {
           excerpt,
           href: postHref(sourceSeq),
           authorLabel: postAuthorLabel(original),
-          originalUnavailable: original === undefined,
+          originalState: quotationOriginalState(original, unavailable.has(String(sourceSeq))),
         });
       })
       .filter(Boolean),
@@ -188,7 +190,7 @@ export function buildIncomingCitationViews({
   });
 }
 
-export function buildGamePostQuoteView(post, { posts = [], citations = Object.hasOwn(post ?? {}, "citationPage")
+export function buildGamePostQuoteView(post, { posts = [], unavailableSeqs = [], citations = Object.hasOwn(post ?? {}, "citationPage")
   ? post.citationPage ?? { citations: [], citation_count: post.citationCount ?? 0 } : null } = {}) {
   const sourceSeq = postSourceSeq(post);
   const incoming = buildIncomingCitationViews({
@@ -198,7 +200,7 @@ export function buildGamePostQuoteView(post, { posts = [], citations = Object.ha
     sourceSeq,
   });
   return Object.freeze({
-    quotations: buildOutgoingQuotationViews(post, posts),
+    quotations: buildOutgoingQuotationViews(post, posts, unavailableSeqs),
     citationCount: incoming.citationCount,
     incomingCitations: incoming.incomingCitations,
     moreCitationCount: incoming.moreCitationCount,

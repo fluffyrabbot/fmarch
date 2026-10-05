@@ -115,8 +115,10 @@
         >
           <p>{quotation.excerpt}</p>
           <cite>
-            {#if quotation.originalUnavailable}
+            {#if quotation.originalState === "unavailable"}
               Original unavailable
+            {:else if quotation.originalState === "unresolved"}
+              Original post
             {:else}
               {quotation.authorLabel}
             {/if}

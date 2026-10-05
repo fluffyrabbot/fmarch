@@ -60,7 +60,7 @@ export function buildPlayerThreadViewModel(
     pager: buildPlayerThreadPagerViewModel({ thread, threadPageStatus }),
     quoteEnabled: quoteEnabled === true,
     posts: Object.freeze(
-      posts.map((post) => buildPlayerThreadPostViewModel(post, { posts, quoteEnabled })),
+      posts.map((post) => buildPlayerThreadPostViewModel(post, { posts, quoteEnabled, unavailableSeqs: [...(thread.removedSeqs ?? []), ...(thread.unavailableSeqs ?? [])] })),
     ),
   });
 }
@@ -131,11 +131,11 @@ export function buildPlayerThreadPermalinkView(post = {}) {
 
 export function buildPlayerThreadPostViewModel(
   post = {},
-  { posts = [], quoteEnabled = false } = {},
+  { posts = [], quoteEnabled = false, unavailableSeqs = [] } = {},
 ) {
   const author = normalizeGameThreadAuthor(post?.author);
   const media = buildPlayerThreadMedia(post.media);
-  const quote = buildGamePostQuoteView(post, { posts });
+  const quote = buildGamePostQuoteView(post, { posts, unavailableSeqs });
   const excerpt = excerptFromBody(post.body);
   return Object.freeze({
     ...post,

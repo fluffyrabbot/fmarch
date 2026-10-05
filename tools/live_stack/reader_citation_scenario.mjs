@@ -5,6 +5,7 @@ export function hasPrivateCitationContinuity(value) {
     && Number.isSafeInteger(value.target) && value.quoters?.length === 2
     && value.quoters.every(seq => Number.isSafeInteger(seq) && seq > value.target)
     && value.offPage === true && value.navigation === true && value.reload === true
+    && value.originalNavigation === true && value.originalBack === true && value.originalReconnect === true
     && value.liveCount === 2 && value.reconnectCount === 2
     && value.reconnectObserved === true;
 }
@@ -23,8 +24,10 @@ export function hasMainCitationContinuity(value) {
     && Number.isSafeInteger(value.target) && value.quoters?.length === 2
     && value.quoters.every(seq => Number.isSafeInteger(seq) && seq > value.target)
     && value.offPage === true && value.navigation === true && value.reload === true
+    && value.originalNavigation === true && value.originalBack === true && value.originalReconnect === true
     && value.liveCount === 2 && value.reconnectCount === 2 && value.reconnectObserved === true
-    && value.hiddenQuotersCleared === true && value.hiddenTargetOmitted === true;
+    && value.hiddenQuotersCleared === true && value.hiddenTargetOmitted === true
+    && value.hiddenOriginalRejected === true;
 }
 
 export async function proveMainCitationContinuity({ page, pageUrl, game, sendCommand, setVisible }) {
@@ -52,10 +55,18 @@ export async function proveMainCitationContinuity({ page, pageUrl, game, sendCom
     for (const seq of evidence.quoters) await setVisible(seq, true);
     await setVisible(target, false);
     assert.deepEqual(await read(), { pages: [] });
+    await page.goto(`${pageUrl}?post=${evidence.quoters[0]}#thread-post-${evidence.quoters[0]}`, { waitUntil: "networkidle" });
+    const quotation = page.getByTestId(`player-quote-block-${evidence.quoters[0]}-${target}`);
+    await quotation.waitFor();
+    assert.match(await quotation.innerText(), /Original post/);
+    await quotation.locator("a").click();
+    await page.getByTestId("route-error-panel").waitFor();
+    assert.match(await page.getByTestId("route-error-panel").innerText(), /Game state was not found/);
+    assert.equal(await page.getByTestId(`thread-post-${target}`).count(), 0);
   } finally {
     for (const seq of [target, ...evidence.quoters]) await setVisible(seq, true);
   }
-  const result = { ...evidence, hiddenQuotersCleared: true, hiddenTargetOmitted: true };
+  const result = { ...evidence, hiddenQuotersCleared: true, hiddenTargetOmitted: true, hiddenOriginalRejected: true };
   assert.ok(hasMainCitationContinuity(result));
   return result;
 }
@@ -103,6 +114,22 @@ async function proveCitationContinuity({ page, pageUrl, game, channel, target, e
   assert.equal(new URL(page.url()).searchParams.get("post"), String(firstSeq));
   await page.reload({ waitUntil: "networkidle" });
   await page.getByTestId(`thread-post-${firstSeq}`).waitFor();
+  const quotation = page.getByTestId(`player-quote-block-${firstSeq}-${target}`);
+  assert.equal(await page.getByTestId(`thread-post-${target}`).count(), 0);
+  assert.match(await quotation.innerText(), /Original post/);
+  assert.doesNotMatch(await quotation.innerText(), /Original unavailable/);
+  await quotation.locator("a").click();
+  await page.getByTestId(`thread-post-${target}`).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get("post"), String(target));
+  await page.goBack({ waitUntil: "networkidle" });
+  await quotation.waitFor();
+  assert.doesNotMatch(await quotation.innerText(), /Original unavailable/);
+  await page.waitForFunction(() => window.__fmarchLiveProjectionStatus?.state === "connected");
+  const originalEventStart = await page.evaluate(() => window.__fmarchLiveProjectionEvents.length);
+  await page.evaluate(() => window.__fmarchReconnectPlayerLiveProjectionNow());
+  await page.waitForFunction(start => window.__fmarchLiveProjectionEvents.slice(start).some(event => event.kind === "reconnect")
+    && window.__fmarchLiveProjectionStatus?.state === "connected", originalEventStart);
+  assert.doesNotMatch(await quotation.innerText(), /Original unavailable/);
   await page.goto(addressed, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.__fmarchLiveProjectionStatus?.state === "connected");
   await submit("Reader citation live reply", true);
@@ -117,6 +144,6 @@ async function proveCitationContinuity({ page, pageUrl, game, channel, target, e
   await page.waitForFunction(({ target }) => window.__fmarchLiveProjectionStatus?.state === "connected"
     && window.__fmarchPlayerProjection?.thread?.posts?.find(post => post.seq === target)?.citationPage?.citation_count === 2, { target });
   const evidence = { status: "passed", channel, target, quoters: [firstSeq, secondSeq],
-    offPage: true, navigation: true, reload: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true };
+    offPage: true, navigation: true, reload: true, originalNavigation: true, originalBack: true, originalReconnect: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true };
   return evidence;
 }

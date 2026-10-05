@@ -1,3 +1,4 @@
+import { quotationOriginalState } from "../../../../../lib/app/quotation-original.mjs";
 import { buildCommunityAuthorView } from "../../../../../lib/app/community-author-model.mjs";
 import { buildMentionSegments } from "../../../../../lib/app/mention-model.mjs";
 
@@ -124,6 +125,10 @@ export function parseSubmittedQuotations(form, topicId) {
   }
 }
 
+export function discussionOriginalHref({ slug, topic, sourceSeq }) {
+  return `/discussions/${encodeURIComponent(slug)}/t/${encodeURIComponent(topic)}?post=${sourceSeq}#post-${sourceSeq}`;
+}
+
 export function discussionComposerHref({
   slug,
   topic,
@@ -180,9 +185,11 @@ export function buildDiscussionPostView(
         return Object.freeze({
           sourceSeq,
           excerpt,
-          href: `#post-${sourceSeq}`,
+          href: original === undefined
+            ? discussionOriginalHref({ slug, topic, sourceSeq })
+            : `#post-${sourceSeq}`,
           authorLabel: original === undefined ? null : buildCommunityAuthorView(original.author).label,
-          originalUnavailable: original === undefined,
+          originalState: quotationOriginalState(original),
         });
       })
       .filter(Boolean),

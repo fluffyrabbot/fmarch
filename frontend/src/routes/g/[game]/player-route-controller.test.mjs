@@ -1816,3 +1816,18 @@ test("main citations hydrate recovery, both pagination directions, and refresh w
     if (["older", "newer"].includes(mode)) assert.equal(posts.find(post => post.seq === 50).body, "live edit");
   }
 });
+
+test("authorized missing-original evidence preserves the reading window and clears on a fresh successful read", async () => {
+  for (const status of [200, 404]) {
+    const store = fakeProjectionStore();
+    store.applySnapshot({ thread: { posts: [{ seq: 443, body: "quoting post" }], nextBeforeSeq: 400 } });
+    assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>
+      status === 404 ? { status, ok: false } : jsonResponse({ next_before_seq: null, posts: [] }) }), "unavailable");
+    assert.deepEqual(store.getSnapshot().thread.unavailableSeqs, ["10"]);
+    assert.deepEqual(store.getSnapshot().thread.posts.map(post => post.seq), [443]);
+    assert.equal(await recoverPlayerThreadWindow({ ...recoveryArgs(store), fetchImpl: async () =>
+      jsonResponse({ next_before_seq: null, posts: [recoveryPost(10)] }) }), "ready");
+    assert.deepEqual(store.getSnapshot().thread.unavailableSeqs, []);
+    assert.equal(store.getSnapshot().thread.posts[0].seq, 10);
+  }
+});

@@ -1,4 +1,5 @@
-import { fail, redirect } from "@sveltejs/kit";
+import { requestedPost } from "../../../../../lib/app/post-address.mjs";
+import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../../../lib/app/capabilities.mjs";
@@ -21,13 +22,21 @@ export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = serverApiBaseUrl();
   const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
-  const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
+  let originalSeq;
+  try { originalSeq = requestedPost(url); } catch { throw error(400, "Invalid post address"); }
+  // The discussion cursor is exclusive; this authorized page includes the requested original.
+  const beforeSeq = originalSeq === null ? optionalSequence(url.searchParams.get("before_seq"))
+    : String(BigInt(originalSeq) + 1n);
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
   const response = await fetch(
     `${apiBaseUrl}/discussions/areas/${encodeURIComponent(params.slug)}/topics/${encodeURIComponent(params.topic)}?${search}`,
     { headers: readHeaders(token) },
   );
   const thread = response.ok ? await response.json().catch(() => null) : null;
+  if (originalSeq !== null && response.ok && !thread?.posts?.some(post => String(post.source_seq) === originalSeq)) {
+    throw error(404, "This post is unavailable.");
+  }
+  if (originalSeq !== null && !response.ok) throw error(response.status, "This post is unavailable.");
   const topicId = thread?.topic?.topic;
   // The topic id is the identity; a moved topic still resolves under the
   // area it was linked from, and the canonical URL is wherever it is filed now.

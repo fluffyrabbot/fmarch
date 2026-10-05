@@ -353,8 +353,8 @@ function liveStackReadinessFixture() {
       },
       player: {
         citations: { status: "passed", channel: "main", target: 1, quoters: [60, 61],
-          offPage: true, navigation: true, reload: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true,
-          hiddenQuotersCleared: true, hiddenTargetOmitted: true },
+          offPage: true, navigation: true, reload: true, originalNavigation: true, originalBack: true, originalReconnect: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true,
+          hiddenQuotersCleared: true, hiddenTargetOmitted: true, hiddenOriginalRejected: true },
         duplicateVoteRetry: {
           outcome: { state: "ack" },
           voteRows: ["VoteSubmitted"],
@@ -396,7 +396,7 @@ function liveStackReadinessFixture() {
       },
       playerPrivateChannel: {
         citations: { status: "passed", channel: "private:room", target: 1, quoters: [60, 61],
-          offPage: true, navigation: true, reload: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true },
+          offPage: true, navigation: true, reload: true, originalNavigation: true, originalBack: true, originalReconnect: true, liveCount: 2, reconnectCount: 2, reconnectObserved: true },
         submitPost: { outcome: { state: "ack" } },
         media: { responses: [{ ok: true }] },
       },
@@ -662,5 +662,20 @@ test("main citation readiness requires navigation, reconnect and visibility evid
     const evidence = liveStackReadinessFixture();
     evidence.browser.player.citations[field] = false;
     assert.equal(checkStatus(buildLiveStackReadiness(evidence), "main-reader-citations"), "failed");
+  }
+});
+
+test("reader readiness rejects missing outgoing original navigation evidence", () => {
+  for (const reader of ["player", "playerPrivateChannel"]) {
+    const evidence = liveStackReadinessFixture();
+    // Discover the private evidence by its scope rather than assuming an alias.
+    const citation = reader === "player" ? evidence.browser.player.citations
+      : Object.values(evidence.browser).find(value => value?.citations?.channel?.startsWith("private:"))?.citations;
+    assert.ok(citation);
+    for (const key of ["originalNavigation", "originalBack", "originalReconnect"]) {
+      const prior = citation[key]; delete citation[key];
+      assert.ok(buildLiveStackReadiness(evidence).checks.some(check => check.status === "failed"));
+      citation[key] = prior;
+    }
   }
 });

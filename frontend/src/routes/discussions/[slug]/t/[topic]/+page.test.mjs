@@ -289,7 +289,7 @@ test("quote query seeds composer chips without copying excerpt into the body fie
   assert.equal(data.discussion.posts[0].citationCount, 1);
   assert.equal(data.discussion.posts[0].incomingCitations[0].sourceSeq, 80);
   assert.equal(data.discussion.posts[1].quotations[0].excerpt, "Older opening");
-  assert.equal(data.discussion.posts[1].quotations[0].originalUnavailable, false);
+  assert.equal(data.discussion.posts[1].quotations[0].originalState, "loaded");
   assert.deepEqual(
     data.discussion.posts[1].bodySegments.map((segment) => [segment.kind, segment.text, segment.href]),
     [
@@ -541,7 +541,7 @@ test("discussion quotation helpers keep no-JS quote URLs and hidden originals ho
     slug: "general",
     topicId: topic,
   });
-  assert.equal(view.posts[1].quotations[0].originalUnavailable, true);
+  assert.equal(view.posts[1].quotations[0].originalState, "unresolved");
   assert.equal(view.posts[1].quotations[0].authorLabel, null);
   assert.equal(view.posts[0].incomingCitations[0].href, "#post-80");
   assert.equal(
@@ -777,4 +777,27 @@ test("post and edit-draft identities bind topic, source post, and base revision 
   assert.deepEqual(newer.editDraft.mentionHandles, []);
   assert.ok(Object.isFrozen(initial.editDraft));
   assert.ok(Object.isFrozen(initial.editDraft.mentionHandles));
+});
+
+test("off-page discussion originals use an authorized addressed page and missing originals return 404", async () => {
+  const post = { source_seq: 80, quotations: [{ target: { source_seq: 3 }, excerpt: "Earlier claim" }] };
+  const quote = buildDiscussionPostView(post, { posts: [post], slug: "general", topic }).quotations[0];
+  assert.equal(quote.originalState, "unresolved");
+  assert.equal(quote.href, `/discussions/general/t/${topic}?post=3#post-3`);
+  for (const status of [200, 401, 403, 404]) {
+    for (const present of [true, false]) {
+      const args = {
+        params: { slug: "general", topic }, locals: {}, cookies: { get: () => null },
+        url: new URL(quote.href, "http://localhost"),
+        fetch: async (url) => {
+          assert.equal(url, `/discussions/areas/general/topics/${topic}?limit=50&before_seq=4`);
+          return Response.json({ area: { slug: "general", title: "General" }, topic: { topic, posting_state: "open" }, posts: present ? [{ source_seq: 3, body: "Earlier claim" }] : [] }, { status });
+        },
+      };
+      if (status !== 200 || !present) await assert.rejects(load(args), error => error.status === (status === 200 ? 404 : status));
+      else assert.equal((await load(args)).discussion.posts[0].sourceSeq, 3);
+    }
+  }
+  const retracted = buildDiscussionPostView(post, { posts: [{ source_seq: 3, retracted: true }], slug: "general", topic });
+  assert.equal(retracted.quotations[0].originalState, "unavailable");
 });

@@ -43,7 +43,7 @@ test("game quotation helpers attach excerpts without copying them into body", ()
   const view = buildGamePostQuoteView(posts[1], { posts });
   assert.equal(view.quotations[0].excerpt, "Alpha signal");
   assert.equal(view.quotations[0].authorLabel, "slot-2");
-  assert.equal(view.quotations[0].originalUnavailable, false);
+  assert.equal(view.quotations[0].originalState, "loaded");
   assert.equal(view.quotations[0].href, "?post=12#thread-post-12");
 
   const quoted = buildGamePostQuoteView(posts[0], { posts });
@@ -52,7 +52,7 @@ test("game quotation helpers attach excerpts without copying them into body", ()
   assert.equal(quoted.incomingCitations[0].href, "?post=18#thread-post-18");
 });
 
-test("game quotation helpers mark off-page originals unavailable and cap attachments", () => {
+test("game quotation helpers leave off-page originals unresolved and cap attachments", () => {
   const hidden = buildGamePostQuoteView(
     {
       source_seq: 20,
@@ -62,7 +62,7 @@ test("game quotation helpers mark off-page originals unavailable and cap attachm
     },
     { posts: [{ source_seq: 20, author: { kind: "slot", slot_id: "slot-2" }, body: "Reply" }] },
   );
-  assert.equal(hidden.quotations[0].originalUnavailable, true);
+  assert.equal(hidden.quotations[0].originalState, "unresolved");
   assert.equal(hidden.quotations[0].authorLabel, null);
 
   const long = "x".repeat(1200);
@@ -119,4 +119,20 @@ test("reader authoritative zero and pending previews never derive stale incoming
   const pending = buildGamePostQuoteView({ ...target, citationPage: null }, { posts });
   assert.equal(pending.citationCount, 8);
   assert.deepEqual(pending.incomingCitations, []);
+});
+
+test("only scoped removal evidence makes an unloaded quotation unavailable", () => {
+  const post = { seq: 20, quotations: [{ target: { source_seq: 3 }, excerpt: "Preserved excerpt" }] };
+  for (const [posts, unavailableSeqs, state] of [
+    [[post], [], "unresolved"],
+    [[post, { seq: 3, author: { kind: "slot", slotId: "slot-2" } }], [], "loaded"],
+    [[post], ["3"], "unavailable"],
+    [[post], ["4"], "unresolved"],
+    [[post, { seq: 3 }], ["3"], "loaded"],
+  ]) {
+    const quote = buildGamePostQuoteView(post, { posts, unavailableSeqs }).quotations[0];
+    assert.equal(quote.originalState, state);
+    assert.equal(quote.excerpt, "Preserved excerpt");
+    assert.equal(quote.href, "?post=3#thread-post-3");
+  }
 });

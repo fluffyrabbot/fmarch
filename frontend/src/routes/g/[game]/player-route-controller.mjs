@@ -1055,6 +1055,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
       projectionStore.invalidate(["thread"], { reason: "reader_destination_unavailable" });
       projectionStore.applySnapshot({ thread: { ...current,
         posts: current.posts.filter(post => String(post.seq) !== seq),
+        unavailableSeqs: [...new Set([...(current.unavailableSeqs ?? []), seq])],
       } });
     }
     return "unavailable";
@@ -1094,8 +1095,17 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
     posts.sort((a, b) => Number(a.seq) - Number(b.seq));
   }
   const ready = intent === "newest" || posts.some(post => String(post.seq) === seq);
-  if (ready) onRecovered(seq);
-  projectionStore.applySnapshot({ thread: { ...window, posts, removedSeqs: [...removed] } });
+  if (!ready) {
+    projectionStore.applySnapshot({ thread: { ...current,
+      posts: current.posts.filter(post => String(post.seq) !== seq),
+      unavailableSeqs: [...new Set([...(current.unavailableSeqs ?? []), seq])],
+    } });
+    return "unavailable";
+  }
+  onRecovered(seq);
+  projectionStore.applySnapshot({ thread: { ...window, posts, removedSeqs: [...removed],
+    unavailableSeqs: (current.unavailableSeqs ?? []).filter(missing => !posts.some(post => String(post.seq) === missing)),
+  } });
   return ready ? "ready" : "unavailable";
 }
 

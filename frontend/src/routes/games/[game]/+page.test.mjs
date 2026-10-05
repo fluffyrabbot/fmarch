@@ -236,3 +236,10 @@ test("signed-in public game watch uses the typed game-thread endpoint", async ()
   });
   assert.equal(result.subscribed, true);
 });
+
+test("addressed public originals fail closed when the authorized page omits the target", async () => {
+  await assert.rejects(load(routeContext({
+    url: new URL(`http://localhost/games/${gameId}?post=3`),
+    fetch: async () => Response.json(publicThread([{ source_seq: 4, body: "Neighbor" }])),
+  })), error => error.status === 404);
+});
