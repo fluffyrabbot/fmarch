@@ -61,6 +61,11 @@ export function createProjectionStore({
     return () => subscribers.delete(listener);
   }
 
+  function captureAuthorityGuard() {
+    const epoch = authorityEpoch;
+    return () => epoch === authorityEpoch;
+  }
+
   function captureReadGuard(keys = registeredKeys) {
     const selected = normalizeProjectionKeys(keys, registeredKeys);
     const epoch = authorityEpoch;
@@ -616,6 +621,7 @@ export function createProjectionStore({
     subscribeHealth,
     getSnapshot,
     captureReadGuard,
+    captureAuthorityGuard,
     getHealth,
     isReady,
     invalidate,

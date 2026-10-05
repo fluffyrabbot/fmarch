@@ -1543,6 +1543,7 @@ function fakeProjectionStore(overrides = {}) {
     async refresh() {},
     invalidate() {},
     captureReadGuard() { return () => true; },
+    captureAuthorityGuard() { return () => true; },
     revokeAuthority() { snapshot = { ...snapshot, thread: { posts: [], nextBeforeSeq: null } }; },
     applySnapshot(patch) {
       snapshot = { ...snapshot, ...patch };
@@ -1742,7 +1743,7 @@ test("a cancelled newest request cannot publish or erase the saved refresh targe
   }
 });
 
-test("public saved-position recovery tolerates concurrent refresh; private previews remain owner-bound", async () => {
+test("saved-position recovery in either scope merges concurrent refresh without losing authority", async () => {
   for (const channel of ["main", "private:room"]) {
     const initial = { nextBeforeSeq: 400, posts: [{ seq: 443, body: "latest" }] };
     const store = createProjectionStore({ initialSnapshot: { thread: initial }, coldLoads: { thread: { url: "/thread" } } });
@@ -1751,7 +1752,40 @@ test("public saved-position recovery tolerates concurrent refresh; private previ
       store.applySnapshot({ thread: { ...initial, posts: [{ seq: 443, body: "refreshed" }] } });
       return jsonResponse({ next_before_seq: 9, next_after_seq: 11, posts: [recoveryPost(10, "original", channel)] });
     } });
-    assert.equal(result, channel === "main" ? "ready" : "cancelled");
-    assert.equal(store.getSnapshot().thread.posts[0].seq, channel === "main" ? 10 : 443);
+    assert.equal(result, "ready");
+    assert.equal(store.getSnapshot().thread.posts[0].seq, 10);
+  }
+});
+
+
+test("private recovery rejects revoked authority and ignores stale read denials", async () => {
+  for (const event of ["revoke", "late-denial", "batch-revoke", "batch-late-denial", "batch-refresh"]) {
+    const channel = "private:room";
+    const initial = { nextBeforeSeq: 400, posts: [{ seq: 443, body: "latest" }] };
+    const store = createProjectionStore({ initialSnapshot: { thread: initial }, coldLoads: {
+      thread: { url: "/thread", revoke: { posts: [], nextBeforeSeq: null } },
+    } });
+    const data = fixtureData({ threadPager: { channel, pageSize: 50 } });
+    const run = recoverPlayerThreadWindow({ ...recoveryArgs(store), data, fetchImpl: async url => {
+      if (url.includes("/citations?")) {
+        if (event === "batch-revoke") store.revokeAuthority();
+        else store.applySnapshot({ thread: { ...initial, posts: [{ seq: 443, body: "refreshed" }] } });
+        if (event === "batch-late-denial") return { ok: false, status: 403 };
+        return jsonResponse({ game: "midsummer", channel, pages: [] });
+      }
+      if (event === "revoke") store.revokeAuthority();
+      if (event === "late-denial") {
+        store.applySnapshot({ thread: { ...initial, posts: [{ seq: 443, body: "refreshed" }] } });
+        return { ok: false, status: 403 };
+      }
+      return jsonResponse({ next_before_seq: 9, next_after_seq: 11,
+        posts: [{ ...recoveryPost(10, "original", channel), citation_count: event.startsWith("batch-") ? 1 : 0 }] });
+    } });
+    if (event === "batch-late-denial") await assert.rejects(run, /Citation batch rejected/);
+    else assert.equal(await run, event === "batch-refresh" ? "ready" : "cancelled");
+    const posts = store.getSnapshot().thread.posts;
+    if (event.includes("revoke")) assert.deepEqual(posts, []);
+    else if (event.includes("denial")) assert.equal(posts[0].body, "refreshed");
+    else { assert.equal(posts[0].seq, 10); assert.equal(posts[0].citationCount, 0); }
   }
 });

@@ -1035,12 +1035,16 @@ export function playerActionConfig(data, action) {
 export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionStore, origin, signal, isCurrent, onRecovered = () => {}, intent = "origin" }) {
   const seq = intent === "newest" ? null : /^thread-post-([1-9][0-9]*)$/u.exec(origin.id)?.[1];
   if (intent !== "newest" && (!seq || !Number.isSafeInteger(Number(seq)))) return "unavailable";
-  const currentRead = readerCitationGuard(data, projectionStore);
+  // Recovery merges concurrent snapshots below. Scope authority must survive,
+  // while a stale denial must still belong to the original read owner.
+  const currentRead = projectionStore.captureAuthorityGuard();
+  const currentOwner = readerCitationGuard(data, projectionStore);
   const initial = projectionStore.getSnapshot().thread;
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
   }), { headers: { accept: "application/json" }, signal });
   if (!isCurrent() || !currentRead()) return "cancelled";
+  if ([401, 403, 404].includes(response.status) && !currentOwner()) return "cancelled";
   if ([401, 403].includes(response.status)) {
     projectionStore.revokeAuthority({ reason: "reader_destination_access_denied", status: response.status });
     return "denied";
@@ -1061,7 +1065,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   if (!validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: data.threadPager.channel })) {
     throw new Error("Invalid thread destination response");
   }
-  payload = await hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead });
+  payload = await hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead, currentOwner });
   if (!isCurrent() || !currentRead()) return "cancelled";
   const current = projectionStore.getSnapshot().thread;
   const window = normalizeThreadPage(payload, { posts: [] });
@@ -1201,7 +1205,7 @@ function errorMessage(error) {
   return String(error);
 }
 
-async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead }) {
+async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead, currentOwner = currentRead }) {
   if (!currentRead()) return payload;
   if (!validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: data.threadPager.channel })) {
     throw new Error("Invalid thread page response");
@@ -1209,7 +1213,7 @@ async function hydrateReaderPage(payload, { data, fetchImpl, projectionStore, si
   try {
     return await hydratePrivateThreadPage(payload, { game: data.game.id, channel: data.threadPager.channel, fetchImpl, signal });
   } catch (error) {
-    if (currentRead() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
+    if (currentRead() && currentOwner() && [401, 403].includes(error.status)) projectionStore.revokeAuthority({ reason: "private_citation_access_denied", status: error.status });
     throw error;
   }
 }
