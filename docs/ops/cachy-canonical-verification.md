@@ -351,7 +351,7 @@ Cargo image cache namespace. Provisioning and Linux proof additionally reject
 ambient `rustc` or Cargo versions that disagree with that pin.
 
 Rust 1.99.1 qualification uses the fresh owned
-`fmarch-canonical-rust-1.99.1-v1` build/database root; earlier roots and evidence
+`fmarch-canonical-rust-1.99.1-v2` build/database root; earlier roots and evidence
 remain retained. A forced Cachy audit executes every application lane, records
 source content, then builds the committed release Dockerfile from a Git archive
 under the shared heavy-build lock. The image check uses its immutable local ID,
