@@ -479,6 +479,7 @@ test('npm lanes exist as package.json scripts and shell lanes carry commands', (
 });
 
 test('every Rust crate change arms pinned strict workspace Clippy', () => {
+  assert.equal(manifest.lanes['cargo:clippy-workspace'].phase, 'focused');
   assert.equal(
     manifest.lanes['cargo:clippy-workspace'].command,
     'cargo clippy --workspace --all-targets --all-features -- -D warnings',
