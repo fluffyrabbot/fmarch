@@ -102,9 +102,16 @@ impl ResendIdentityDeliveryGateway {
         self.timeouts.total()
     }
 
-    fn message(&self, attempt: &IdentityDeliveryAttempt, credential: &str) -> (&'static str, String) {
+    fn message(
+        &self,
+        attempt: &IdentityDeliveryAttempt,
+        credential: &str,
+    ) -> (&'static str, String) {
         let link = |path: &str, credential_in_link: bool| {
-            let mut url = self.link_origin.join(path).expect("static path joins an origin");
+            let mut url = self
+                .link_origin
+                .join(path)
+                .expect("static path joins an origin");
             {
                 let mut query = url.query_pairs_mut();
                 query.append_pair("account", attempt.account_id.as_str());
@@ -368,7 +375,8 @@ mod tests {
         let app = axum::Router::new().route(
             "/emails",
             axum::routing::post(
-                move |headers: axum::http::HeaderMap, axum::Json(payload): axum::Json<serde_json::Value>| {
+                move |headers: axum::http::HeaderMap,
+                      axum::Json(payload): axum::Json<serde_json::Value>| {
                     let recorded = recorded.clone();
                     let body = body.clone();
                     async move {
@@ -393,7 +401,10 @@ mod tests {
         tokio::spawn(async move {
             axum::serve(listener, app).await.unwrap();
         });
-        (Url::parse(&format!("http://{address}/emails")).unwrap(), seen)
+        (
+            Url::parse(&format!("http://{address}/emails")).unwrap(),
+            seen,
+        )
     }
 
     fn gateway(endpoint: Url) -> ResendIdentityDeliveryGateway {
@@ -410,10 +421,16 @@ mod tests {
 
     #[tokio::test]
     async fn community_invitation_is_mailed_once_per_delivery_with_a_redeemable_link() {
-        let (endpoint, seen) =
-            fake_resend(StatusCode::OK, serde_json::json!({ "id": "resend-email-1" })).await;
+        let (endpoint, seen) = fake_resend(
+            StatusCode::OK,
+            serde_json::json!({ "id": "resend-email-1" }),
+        )
+        .await;
         let gateway = gateway(endpoint);
-        let delivery = attempt(IdentityDeliveryKind::CommunityInvitation, "member@example.org");
+        let delivery = attempt(
+            IdentityDeliveryKind::CommunityInvitation,
+            "member@example.org",
+        );
         assert_eq!(
             gateway.deliver(&delivery).await,
             IdentityDeliveryOutcome::Delivered {
@@ -434,8 +451,14 @@ mod tests {
             idempotency.as_deref(),
             Some(format!("fmarch-identity-delivery/{}", Uuid::from_u128(7)).as_str())
         );
-        assert_eq!(seen[1].1, seen[0].1, "every attempt reuses the delivery key");
-        assert_eq!(seen[1].2, seen[0].2, "every attempt resends the identical payload");
+        assert_eq!(
+            seen[1].1, seen[0].1,
+            "every attempt reuses the delivery key"
+        );
+        assert_eq!(
+            seen[1].2, seen[0].2,
+            "every attempt resends the identical payload"
+        );
         assert_eq!(payload["to"], serde_json::json!(["member@example.org"]));
         assert_eq!(payload["from"], "fmarch staging <invites@example.org>");
         let text = payload["text"].as_str().unwrap();
@@ -446,15 +469,26 @@ mod tests {
 
     #[tokio::test]
     async fn recovery_mail_carries_the_code_but_never_puts_it_in_a_link() {
-        let (endpoint, seen) =
-            fake_resend(StatusCode::OK, serde_json::json!({ "id": "resend-email-2" })).await;
+        let (endpoint, seen) = fake_resend(
+            StatusCode::OK,
+            serde_json::json!({ "id": "resend-email-2" }),
+        )
+        .await;
         let gateway = gateway(endpoint);
         gateway
-            .deliver(&attempt(IdentityDeliveryKind::Recovery, "member@example.org"))
+            .deliver(&attempt(
+                IdentityDeliveryKind::Recovery,
+                "member@example.org",
+            ))
             .await;
-        let text = seen.lock().unwrap()[0].2["text"].as_str().unwrap().to_string();
+        let text = seen.lock().unwrap()[0].2["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("Recovery code: fmci_secret"));
-        assert!(text.contains("https://frontend.example.org/auth/account/recovery?account=member%40example.org\n"));
+        assert!(text.contains(
+            "https://frontend.example.org/auth/account/recovery?account=member%40example.org\n"
+        ));
         assert!(!text.contains("invite="));
     }
 
@@ -463,29 +497,39 @@ mod tests {
         let cases = [
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected),
+                IdentityDeliveryOutcome::PermanentFailure(
+                    IdentityDeliveryFailureCode::RecipientRejected,
+                ),
             ),
             (
                 StatusCode::FORBIDDEN,
-                IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected),
+                IdentityDeliveryOutcome::PermanentFailure(
+                    IdentityDeliveryFailureCode::RecipientRejected,
+                ),
             ),
             (
                 StatusCode::UNAUTHORIZED,
-                IdentityDeliveryOutcome::RetryableFailure(IdentityDeliveryFailureCode::ProviderUnavailable),
+                IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                ),
             ),
             (
                 StatusCode::TOO_MANY_REQUESTS,
-                IdentityDeliveryOutcome::RetryableFailure(IdentityDeliveryFailureCode::ProviderUnavailable),
+                IdentityDeliveryOutcome::RetryableFailure(
+                    IdentityDeliveryFailureCode::ProviderUnavailable,
+                ),
             ),
             (StatusCode::CONFLICT, uncertain(None)),
             (StatusCode::INTERNAL_SERVER_ERROR, uncertain(None)),
         ];
         for (status, expected) in cases {
-            let (endpoint, _) =
-                fake_resend(status, serde_json::json!({ "name": "fixture" })).await;
+            let (endpoint, _) = fake_resend(status, serde_json::json!({ "name": "fixture" })).await;
             assert_eq!(
                 gateway(endpoint)
-                    .deliver(&attempt(IdentityDeliveryKind::CommunityInvitation, "member@example.org"))
+                    .deliver(&attempt(
+                        IdentityDeliveryKind::CommunityInvitation,
+                        "member@example.org"
+                    ))
                     .await,
                 expected,
                 "{status}"
@@ -494,7 +538,10 @@ mod tests {
         let (endpoint, _) = fake_resend(StatusCode::OK, serde_json::json!({ "id": " " })).await;
         assert_eq!(
             gateway(endpoint)
-                .deliver(&attempt(IdentityDeliveryKind::CommunityInvitation, "member@example.org"))
+                .deliver(&attempt(
+                    IdentityDeliveryKind::CommunityInvitation,
+                    "member@example.org"
+                ))
                 .await,
             uncertain(None),
             "an acceptance without a receipt id is not proof of delivery"
@@ -506,10 +553,19 @@ mod tests {
         let (endpoint, seen) =
             fake_resend(StatusCode::OK, serde_json::json!({ "id": "unused" })).await;
         let gateway = gateway(endpoint);
-        for account in ["classic-login", "a@b", "has space@example.org", "x@example.org\r\nBcc: y@z.org"] {
+        for account in [
+            "classic-login",
+            "a@b",
+            "has space@example.org",
+            "x@example.org\r\nBcc: y@z.org",
+        ] {
             assert_eq!(
-                gateway.deliver(&attempt(IdentityDeliveryKind::Invite, account)).await,
-                IdentityDeliveryOutcome::PermanentFailure(IdentityDeliveryFailureCode::RecipientRejected),
+                gateway
+                    .deliver(&attempt(IdentityDeliveryKind::Invite, account))
+                    .await,
+                IdentityDeliveryOutcome::PermanentFailure(
+                    IdentityDeliveryFailureCode::RecipientRejected
+                ),
                 "{account:?}"
             );
         }
@@ -519,13 +575,29 @@ mod tests {
     #[tokio::test]
     async fn probe_accepts_only_a_validation_rejection_of_an_empty_request() {
         for (status, expected) in [
-            (StatusCode::UNPROCESSABLE_ENTITY, IdentityDeliveryProviderProbeOutcome::Available),
-            (StatusCode::UNAUTHORIZED, IdentityDeliveryProviderProbeOutcome::Unavailable),
-            (StatusCode::OK, IdentityDeliveryProviderProbeOutcome::Unavailable),
-            (StatusCode::BAD_GATEWAY, IdentityDeliveryProviderProbeOutcome::Unavailable),
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                IdentityDeliveryProviderProbeOutcome::Available,
+            ),
+            (
+                StatusCode::UNAUTHORIZED,
+                IdentityDeliveryProviderProbeOutcome::Unavailable,
+            ),
+            (
+                StatusCode::OK,
+                IdentityDeliveryProviderProbeOutcome::Unavailable,
+            ),
+            (
+                StatusCode::BAD_GATEWAY,
+                IdentityDeliveryProviderProbeOutcome::Unavailable,
+            ),
         ] {
             let (endpoint, seen) = fake_resend(status, serde_json::json!({})).await;
-            assert_eq!(gateway(endpoint).probe(Uuid::from_u128(1)).await, expected, "{status}");
+            assert_eq!(
+                gateway(endpoint).probe(Uuid::from_u128(1)).await,
+                expected,
+                "{status}"
+            );
             assert_eq!(seen.lock().unwrap()[0].2, serde_json::json!({}));
         }
     }
@@ -544,8 +616,18 @@ mod tests {
                 timeouts(),
             )
         };
-        assert!(build(&Url::parse("http://api.resend.com/emails").unwrap(), "a@b.org", &origin).is_err());
-        assert!(build(&endpoint, "a@b.org", &Url::parse("https://f.example.org/app").unwrap()).is_err());
+        assert!(build(
+            &Url::parse("http://api.resend.com/emails").unwrap(),
+            "a@b.org",
+            &origin
+        )
+        .is_err());
+        assert!(build(
+            &endpoint,
+            "a@b.org",
+            &Url::parse("https://f.example.org/app").unwrap()
+        )
+        .is_err());
         assert!(build(&endpoint, "a@b.org\nBcc: c@d.org", &origin).is_err());
         assert!(build(&endpoint, "no-address", &origin).is_err());
         let first = build(&endpoint, "a@b.org", &origin).unwrap();

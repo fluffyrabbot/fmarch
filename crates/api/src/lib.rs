@@ -7,6 +7,7 @@
 mod auth_http;
 mod authentication;
 mod authority;
+mod citation_query;
 mod command_http;
 mod embed_http;
 mod game_http;
@@ -17,7 +18,6 @@ pub mod mash_scale;
 mod media_http;
 mod membership_http;
 pub mod program_library;
-mod citation_query;
 mod public_citations;
 mod public_platform_http;
 mod runtime_config;
@@ -635,10 +635,12 @@ struct WorkosProviderSessionLogoutRequiredResponse {
 impl From<projections::ProjectionError> for ApiError {
     fn from(err: projections::ProjectionError) -> Self {
         match err {
-            projections::ProjectionError::PostingBudgetExceeded(exceeded) => ApiError::RateLimited {
-                retry_after_seconds: exceeded.retry_after_seconds,
-                message: exceeded.to_string(),
-            },
+            projections::ProjectionError::PostingBudgetExceeded(exceeded) => {
+                ApiError::RateLimited {
+                    retry_after_seconds: exceeded.retry_after_seconds,
+                    message: exceeded.to_string(),
+                }
+            }
             err => ApiError::Projection(err),
         }
     }

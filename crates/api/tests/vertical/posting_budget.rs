@@ -78,8 +78,18 @@ async fn seed_host_seated_game(app: &axum::Router, game: Uuid) {
         })
         .await,
     );
-    for (slot, user) in [("slot_1", "user_a"), ("slot_2", "host_h"), ("slot_3", "user_b")] {
-        expect_ack(host(Command::AddSlot { game, slot: slot.into() }).await);
+    for (slot, user) in [
+        ("slot_1", "user_a"),
+        ("slot_2", "host_h"),
+        ("slot_3", "user_b"),
+    ] {
+        expect_ack(
+            host(Command::AddSlot {
+                game,
+                slot: slot.into(),
+            })
+            .await,
+        );
         expect_ack(host(wire::seat_persona! { game, slot: slot.into(), user: user }).await);
         expect_ack(
             host(Command::AssignRole {

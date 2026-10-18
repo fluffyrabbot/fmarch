@@ -1,9 +1,9 @@
 #[path = "vertical/discussion_citations.rs"]
 mod discussion_citations;
-#[path = "vertical/public_game_citations.rs"]
-mod public_game_citations;
 #[path = "vertical/posting_budget.rs"]
 mod posting_budget;
+#[path = "vertical/public_game_citations.rs"]
+mod public_game_citations;
 #[path = "vertical/replacement_candidate.rs"]
 mod replacement_candidate;
 #[path = "vertical/signup_origin.rs"]
