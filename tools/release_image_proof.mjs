@@ -11,8 +11,13 @@ import { exactImageRuntimeBinaries } from './exact_image_content_smoke.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
-export function validateImageEvidence({ image, commit, expected, first, second }) {
-  assert.match(image.Id, /^sha256:[a-f0-9]{64}$/u, 'image must have an immutable local ID');
+export function validateImageEvidence({ image, imageId, commit, expected, first, second }) {
+  assert.match(imageId, /^sha256:[a-f0-9]{64}$/u, 'build must return an immutable image ID');
+  // Podman inspect reports the full hash without the algorithm prefix, while
+  // its iidfile (and Docker inspect) includes it. Bind both to the built ID.
+  assert.match(image.Id, /^(?:sha256:)?[a-f0-9]{64}$/u, 'image must have an immutable local ID');
+  const inspectedId = image.Id.startsWith('sha256:') ? image.Id : `sha256:${image.Id}`;
+  assert.equal(inspectedId, imageId, 'inspected image must match the built image');
   assert.equal(image.Os, 'linux');
   assert.equal(image.Architecture, 'amd64');
   assert.equal(image.Config?.Labels?.['org.opencontainers.image.revision'], commit);
@@ -25,7 +30,7 @@ export function validateImageEvidence({ image, commit, expected, first, second }
   assert.equal(actual.program_count, 5);
   assert.match(actual.registry_hash, /^[a-f0-9]{64}$/u);
   assert.deepEqual(actual, expected, 'image content must match the canonical source');
-  return { image_id: image.Id, registry_hash: actual.registry_hash };
+  return { image_id: imageId, registry_hash: actual.registry_hash };
 }
 
 export function main() {
@@ -77,7 +82,7 @@ export function main() {
       '/usr/local/bin/fmarch-server --check-content'].join(' && ');
     const first = run('podman', [...args, '--entrypoint', '/bin/sh', id, '-c', check]);
     const second = run('podman', [...args, id, '/usr/local/bin/fmarch-server', '--check-content']);
-    Object.assign(evidence, validateImageEvidence({ image, commit, expected, first, second }));
+    Object.assign(evidence, validateImageEvidence({ image, imageId: id, commit, expected, first, second }));
     clean();
     evidence.status = 'passed';
   } catch (error) {
