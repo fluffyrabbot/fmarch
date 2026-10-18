@@ -1932,7 +1932,7 @@ test('release loader authenticates the complete pinned audit before consuming so
     };
     assert.deepEqual((await load(receipt)).source_content, report);
     const tampered = structuredClone(receipt);
-    tampered.document.evidence.steps.at(-1).stdout = JSON.stringify({...report, commit: 'e'.repeat(40)});
+    tampered.document.evidence.steps.find(step => step.label === `verify: ${sourceCommand}`).stdout = JSON.stringify({...report, commit: 'e'.repeat(40)});
     await assert.rejects(load(tampered), /signature/);
     await assert.rejects(load(resign(tampered)), /commit drifted/);
     const obsolete = structuredClone(receipt);
