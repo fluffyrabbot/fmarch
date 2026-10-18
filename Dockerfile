@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS chef
+FROM rust:1.99.1-bookworm@sha256:e12566d5abc17a0da741628782cdb504b68b8961f5bfcf677936bf3e8b32de29 AS chef
+
+ENV CARGO_BUILD_JOBS=2
 
 RUN cargo install --locked --version 0.1.78 cargo-chef
 
@@ -18,7 +20,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 
-ARG FMARCH_CARGO_CACHE_NAMESPACE=fmarch-exact-image-rust-1.95
+ARG FMARCH_CARGO_CACHE_NAMESPACE=fmarch-exact-image-rust-1.99.1
 ARG FMARCH_RELEASE_COMMIT=development
 
 COPY --from=planner /app/recipe.json ./recipe.json

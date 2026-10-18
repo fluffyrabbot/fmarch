@@ -76,7 +76,7 @@ build root. Failed worktrees and logs are retained for diagnosis.
 
 ## Environment identity
 
-The provisioning script requires Rust 1.98.1, Node 26.9.0 and npm 12.0.2. It builds
+The provisioning script checks Rust against `rust-toolchain.toml` (1.99.1), Node 26.9.0 and npm 12.0.2. It builds
 PostgreSQL 16.15 with OpenSSL from the SHA-256-pinned upstream source archive,
 inside an fmarch-only toolchain root. `FMARCH_DEV_POSTGRES_BIN` selects this
 installation without introducing ambient `PG*` authority into admin commands.
@@ -341,3 +341,23 @@ The Node change alters the environment identity, so no lane evidence from the
 previous environment could be reused, and the forced audit executed every
 lane. Step 4 (MeSH contention and interrupted-job recovery) was not re-run;
 this change touches no admission, lock, or recovery code.
+
+### Rust toolchain qualification
+
+`rust-toolchain.toml` is the version authority. The shared
+`scripts/check-rust-toolchain.py` contract checks the exact stable channel,
+Clippy/rustfmt components, digest-pinned Docker builder, and compiler-specific
+Cargo image cache namespace. Provisioning and Linux proof additionally reject
+ambient `rustc` or Cargo versions that disagree with that pin.
+
+Rust 1.99.1 qualification uses the fresh owned
+`fmarch-canonical-rust-1.99.1-v1` build/database root; earlier roots and evidence
+remain retained. A forced Cachy audit executes every application lane, records
+source content, then builds the committed release Dockerfile from a Git archive
+under the shared heavy-build lock. The image check uses its immutable local ID,
+checks Linux amd64, commit attribution, runtime user, inert default command and
+all seven binaries, then compares two network-disabled content checks against
+the canonical source. Reports and source archives remain under
+`target/release-image-proof/`; the terminal summary is included in the signed
+fleet receipt. This proves the local release image, not registry publication
+or hosted deployment. A normal warm full sweep must pass at the same checkpoint.

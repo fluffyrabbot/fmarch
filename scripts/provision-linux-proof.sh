@@ -6,7 +6,7 @@ if [[ ${FMARCH_PROOF_NODE_ACTIVE:-0} != 1 ]]; then
   exec bash "$(dirname "$0")/with-proof-node.sh" bash "$0" "$@"
 fi
 [[ $(node --version) == v26.9.0 && $(npm --version) == 12.0.2 ]]
-[[ $(rustc --version) == 'rustc 1.98.1 '* ]]
+python3 "$(dirname "$0")/check-rust-toolchain.py" --runtime
 pgroot="$FMARCH_PROOF_TOOLCHAIN_ROOT/postgresql-16.15-openssl"
 if [[ ! -f "$pgroot/.provisioned" ]]; then
   mkdir -p "$FMARCH_PROOF_TOOLCHAIN_ROOT/source"

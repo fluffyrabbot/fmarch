@@ -92,6 +92,10 @@
       },
       {
         "kind": "file",
+        "path": "scripts/check-rust-toolchain.py"
+      },
+      {
+        "kind": "file",
         "path": "tools/proof_lane_cache.mjs"
       },
       {

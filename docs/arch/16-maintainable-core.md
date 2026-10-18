@@ -14,7 +14,7 @@ those contracts are still intentional.
 
 ## Mechanical baseline
 
-- `rust-toolchain.toml` pins Rust 1.95.0 with `clippy` and `rustfmt`.
+- `rust-toolchain.toml` pins Rust 1.99.1 with `clippy` and `rustfmt`.
 - The workspace Clippy lane requires `--all-targets --all-features -- -D warnings`.
   Passing receipts establish warning-clean status for their recorded inputs.
 - Every crate area and the workspace-manifest area in
