@@ -80,6 +80,7 @@ shapes; historical decision records do not override them. Start with the
 - **Accepted:** [RFC 0005 — Closed-community admission](../rfcs/0005-closed-community-admission.md) — invitation and membership authority
 - **Accepted:** [RFC 0006 — Executable bounded-context architecture](../rfcs/0006-executable-bounded-context-architecture.md) — enforced domain ownership and dependency direction
 - **Accepted:** [RFC 0007 — First-class mentions and addressed delivery](../rfcs/0007-first-class-mentions-and-addressed-delivery.md) — mentions as typed write-time facts (profile-addressed in community, slot-addressed in game) with reason-derived inbox and slot-notification delivery
+- **Accepted:** [RFC 0008 — Legible game surfaces](../rfcs/0008-legible-game-surfaces.md) — persona names over seat identifiers, server-owned roster presentation, confirmed roster vote picker, decision-only host queue, and a mechanical legibility guard
 
 ## The one idea everything hangs on
 
