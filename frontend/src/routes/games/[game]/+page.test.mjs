@@ -55,7 +55,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
   assert.equal(data.publicGame.posts[0].citationCount, 1);
   assert.equal(data.publicGame.posts[0].incomingCitations[0].sourceSeq, 8);
   assert.equal(data.publicGame.posts[1].quotations[0].excerpt, "Public signal");
-  assert.equal(data.publicGame.posts[1].quotations[0].authorLabel, "slot-1");
+  assert.equal(data.publicGame.posts[1].quotations[0].authorLabel, "Slot 1");
   assert.ok(requests.includes("/games/00000000-0000-0000-0000-000000000001/citations?source_seqs=4&limit=5"));
   assert.equal(data.publicGame.posts[0].incomingCitations[0].href,
     "/games/00000000-0000-0000-0000-000000000001?post=8#thread-post-8");
