@@ -1,3 +1,5 @@
+import { seatLabel } from "../../app/seat-presenter.mjs";
+
 export const HOST_PHASE_SUMMARY_CONTRACT = Object.freeze({
   rootClassName: "host-console-critical-path__phase",
   factsClassName: "fm-facts fm-facts--ruled",
@@ -12,7 +14,7 @@ export function buildHostPhaseSummaryViewModel({
   const livePhase = projection?.phase ?? {};
   const replacement = projection?.replacement ?? {};
   const revealSummary = endgameRevealSummary(projection?.slots);
-  const slotLabel = slotDisplayLabel(replacement.slotId ?? "slot-7");
+  const slotLabel = seatLabel(replacement.slotId ?? "slot-7");
 
   return Object.freeze({
     root: Object.freeze({
@@ -71,11 +73,6 @@ function fact({ label, value, testId }) {
   });
 }
 
-function slotDisplayLabel(slotId) {
-  return String(slotId)
-    .replace(/^slot[-_]/, "Slot ")
-    .replace(/[-_]+/g, " ");
-}
 
 function endgameRevealSummary(slots) {
   if (!Array.isArray(slots) || slots.length === 0) {

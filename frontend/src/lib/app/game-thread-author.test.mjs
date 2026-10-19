@@ -35,7 +35,7 @@ test("game-thread author presentation derives from kind instead of profile ident
   const narrator = normalizeGameThreadAuthor({ kind: "host_narrator" });
   const system = normalizeGameThreadAuthor({ kind: "system" });
 
-  assert.equal(gameThreadAuthorLabel(player), "slot-7");
+  assert.equal(gameThreadAuthorLabel(player), "Slot 7");
   assert.equal(isHostNarrator(player), false);
   assert.equal(gameThreadAuthorLabel(narrator), "Host");
   assert.equal(isHostNarrator(narrator), true);

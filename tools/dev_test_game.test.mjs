@@ -13723,7 +13723,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         actorSlot: "slot-2",
         actorAlive: "false",
         actorStatus: "dead",
-        text: "Posting target Main thread as slot-2 (dead) Everyone at the table reads this",
+        text: "Posting target Main thread as Slot 2 (dead) Everyone at the table reads this",
       },
       disabledControls: {
         vote: { exists: false, disabled: true, reason: "control absent", text: "" },

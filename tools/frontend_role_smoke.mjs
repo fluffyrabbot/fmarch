@@ -46,6 +46,7 @@ import {
   privateChannelFixtureApiRoutes,
   roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
+import { captureLegibility } from "./frontend_legibility.mjs";
 import {
   DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
   initializeReadingCheckpointClientsSequentially,
@@ -203,8 +204,11 @@ try {
       label: `${boardScenario.id} ${viewport.name}`,
       viewport,
     });
+    const boardLegibility = await captureLegibility(boardPage, { surface: "board" });
+    reportLegibility(`${boardScenario.id} ${viewport.name}`, boardLegibility);
     evidence.board.push({
       scenario: boardScenario.id,
+      legibility: boardLegibility,
       viewport,
       path: boardScenario.path,
       navigation: boardScenario.nav,
@@ -396,6 +400,8 @@ try {
       });
       await setDisclosureState(page, role.expandBeforeChecks, true);
       const capability = await page.getByTestId(role.capabilityTestId).innerText();
+      const legibility = await captureLegibility(page, { surface: role.id });
+      reportLegibility(`${role.id} ${viewport.name}`, legibility);
       const linkClickProofs = [];
       for (const hookName of linkClickProofHooks[role.id] ?? []) {
         linkClickProofs.push(
@@ -414,6 +420,7 @@ try {
         viewport,
         path: role.path,
         capability,
+        legibility,
         liveStatusRegion,
         statusRegions,
         disclosureDefaults,
@@ -544,8 +551,13 @@ try {
         viewport,
       },
     );
+    const privateChannelLegibility = await captureLegibility(privateChannelPage, {
+      surface: "player-private",
+    });
+    reportLegibility(`player-private-channel ${viewport.name}`, privateChannelLegibility);
     evidence.playerPrivateChannel.push({
       role: "player-private-channel",
+      legibility: privateChannelLegibility,
       viewport,
       path: privateChannelPath,
       activeChannelTestId: "player-channel-private:role_pm:slot-7",
@@ -725,6 +737,17 @@ try {
   } else {
     process.env.FMARCH_FRONTEND_FIXTURE_SESSION = previousFixtureEnv;
   }
+}
+
+// Report mode (RFC 0008): print each surface's leaks so the receipt log names
+// them; the evidence contract checks only that the scan ran.
+function reportLegibility(label, legibility) {
+  const counts = new Map();
+  for (const violation of legibility.violations) {
+    counts.set(violation.rule, (counts.get(violation.rule) ?? 0) + 1);
+  }
+  const summary = [...counts].map(([rule, count]) => `${rule}=${count}`).join(" ");
+  console.log(`legibility ${label}: ${legibility.violations.length} violation(s)${summary === "" ? "" : ` ${summary}`}`);
 }
 
 async function prepareRoleDecisionCanvas(page, role, viewport) {

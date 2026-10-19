@@ -61,7 +61,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     actorAlive: "unknown",
     actorStatus: "",
     label: "Posting target",
-    value: "Role PM as slot-7",
+    value: "Role PM as Slot 7",
     audienceLabel: "Only this channel's members read this",
   });
   assert.equal(view.heading, "Vote");
@@ -78,7 +78,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     testId: "player-full-votecount",
     summary: "Full votecount · 1 target",
     open: false,
-    rows: [{ target: "slot-2 / Ilya", tally: "4/7" }],
+    rows: [{ target: "slot-2 / Ilya", label: "Slot 2 / Ilya", tally: "4/7" }],
   });
   assert.equal(
     view.quickActions.className,
@@ -173,7 +173,7 @@ test("player command panel model disables command controls for dead actors", () 
     actorAlive: "false",
     actorStatus: "dead",
     label: "Posting target",
-    value: "Main thread as slot-2 (dead)",
+    value: "Main thread as Slot 2 (dead)",
     audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
@@ -421,7 +421,7 @@ test("player command panel model surfaces replaced slot recovery context", () =>
     actorAlive: "false",
     actorStatus: "replaced",
     label: "Posting target",
-    value: "Main thread as slot-7 (replaced)",
+    value: "Main thread as Slot 7 (replaced)",
     audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(
@@ -443,7 +443,7 @@ test("player command panel model normalizes missing row and label data", () => {
     votecount: [{}],
   });
 
-  assert.deepEqual(view.votecount.rows, [{ target: "unknown", tally: "0/0" }]);
+  assert.deepEqual(view.votecount.rows, [{ target: "unknown", label: "Unknown seat", tally: "0/0" }]);
   assert.deepEqual(view.composer.channelContext, {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",

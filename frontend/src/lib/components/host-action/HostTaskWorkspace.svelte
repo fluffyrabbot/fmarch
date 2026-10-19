@@ -1,4 +1,5 @@
 <script>
+  import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import HostAction from "./HostAction.svelte";
@@ -146,7 +147,7 @@
                           on:change={() =>
                             toggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
                         />
-                        <span>{participant.slot}</span>
+                        <span>{seatLabel(participant.slot)}</span>
                       </label>
                     {/each}
                   </div>
@@ -183,7 +184,7 @@
             </div>
           {/if}
 
-          <details class="host-task-workspace__diagnostics">
+          <details class="host-task-workspace__diagnostics" data-legibility="technical">
             <summary>Technical details</summary>
             <dl>
               <div><dt>Required access</dt><dd>{task.diagnostics.authority}</dd></div>

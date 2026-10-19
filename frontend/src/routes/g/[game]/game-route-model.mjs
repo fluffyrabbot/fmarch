@@ -47,6 +47,7 @@ import {
 } from "../../../lib/components/player-private-queue/player-private-queue-model.mjs";
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 import { buildPlayerRouteLayoutViewModel } from "./player-route-layout.mjs";
+import { voteTargetLabel } from "../../../lib/app/seat-presenter.mjs";
 
 export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "player-surface",
@@ -548,7 +549,7 @@ export function playerCurrentVoteLabel(currentVote) {
   if (currentVote.kind === "no_lynch") {
     return "Current vote: No lynch";
   }
-  return `Current vote: ${currentVote.label}`;
+  return `Current vote: ${voteTargetLabel(currentVote)}`;
 }
 
 export function buildPlayerVoteCommands(baseComposer, commandState) {
@@ -569,7 +570,7 @@ export function buildPlayerVoteCommands(baseComposer, commandState) {
       return Object.freeze({
         action: index === 0 ? "submit_vote" : `submit_vote:${target.slotId}`,
         commandKind: "submit_vote",
-        label: `Vote ${target.label}`,
+        label: `Vote ${voteTargetLabel(target)}`,
         voteTarget: { Slot: target.slotId },
       });
     }),

@@ -172,6 +172,15 @@ headers use the game title, never its slug.
 
 ### 8. One navigation row; absent capabilities are absent
 
+Capability names stop being display text. Today the raw `HostOf(game)` /
+`SlotOccupant(slot)` string is rendered into screen-reader spans, technical
+drawers and the role-smoke `capability` evidence, and two components
+(`host-lifecycle-control-checkpoint.mjs`, `admin-surface-model.mjs`) even test
+authority by matching that string. This slice passes typed capabilities to
+those checks, renders a sentence ("Hosting Midsummer Invitational") using the
+game title, and moves the role-smoke, DOM-smoke and `dev_test_game` evidence
+from the display string to a `data-capability-kind` attribute.
+
 The shell has one row: Games, Community, Inbox, and a search control. Host and
 admin entry points move into the account menu and appear only for principals
 holding the capability; nothing renders as a disabled role tab. Inside a game
@@ -191,7 +200,7 @@ route's rendered text and accessible names: no `slot[-_]\d`, no UUID, no
 `[A-Z][a-z]+Of(`, no `snake_case` token outside code blocks and post bodies, no
 "command ID", "receipt", "principal" or "projection" on player routes. Host
 and admin "Technical details" drawers are the only exempt regions and are
-marked with `data-legibility="technical"`. Capability names are removed from
+marked with `data-legibility="technical"`; post bodies are marked `data-legibility="author-content"`. Capability names are removed from
 `fm-sr-only` text.
 
 ## Delivery slices
@@ -210,10 +219,12 @@ every slice passes `npm run proof:remote -- --mode push` before landing.
 | 5 | Interruption copy | 3 | `CommandRecovery.svelte`, `command-interruption.mjs`, `player-command-receipt-model.mjs`, game bar |
 | 6 | Host queue, pack prompt labels, deadline | 2 | `crates/domain/src/pack`, `packs/*/pack.json`, `host-route-model.mjs`, `host-action` |
 | 7 | Setup seating and signup import | 2 | `setup-route-*.mjs`, `setup/+page.svelte`, `crates/api` setup routes |
-| 8 | Shell and board | 1 | `app-shell-model.mjs`, `AppShell.svelte`, `routes/+page.svelte`, board route |
+| 8 | Shell, board and capability text | 1 | `app-shell-model.mjs`, `AppShell.svelte`, `routes/+page.svelte`, board route, `capabilities.mjs`, `presentation-copy.mjs`, capability evidence in `tools/` |
 | 9 | Doctrine | 4, 6 | `docs/arch/13-interaction-architecture.md`, `docs/ops/completion-registry.json` |
 
-Slice 1 lands its guard in report mode listing current violations; each later
+Slice 1 keeps today's fallback wording ("Slot 7", "Slot 7 / Mira") so the
+consolidation does not churn the live proofs; slice 3 changes the wording in
+`seat-presenter.mjs` alone. Slice 1 lands its guard in report mode listing current violations; each later
 slice removes its violations, and slice 9 makes the guard failing. Slices 6, 7
 and 8 touch disjoint paths and may run in parallel once their dependency has
 landed; slices 3 → 4 → 5 share the player route and run in order.

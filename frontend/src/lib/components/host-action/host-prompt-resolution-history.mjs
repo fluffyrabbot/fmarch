@@ -47,7 +47,7 @@ function hostPromptResolutionRow(prompt) {
       return Object.freeze({
         ...row,
         label: `${phaseLabelFromId(resolution.phase_id ?? prompt.phaseId) ?? "Day"} official elimination`,
-        detail: `${slotLabel(resolution.selected_slot)} selected after host decision`,
+        detail: `${seatLabel(resolution.selected_slot)} selected after host decision`,
       });
     case "phase_advance":
       return Object.freeze({
@@ -66,14 +66,10 @@ function hostPromptResolutionRow(prompt) {
   }
 }
 
-function slotLabel(slot) {
-  const value = String(slot ?? "slot");
-  const ordinal = value.match(/\d+$/)?.[0];
-  return ordinal === undefined ? value : `Slot ${ordinal}`;
-}
 
 function reasonLabel(reason) {
   const value = String(reason ?? "Host resolution").replaceAll("_", " ");
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 import { phaseLabelFromId } from "../../phase-id.mjs";
+import { seatLabel } from "../../app/seat-presenter.mjs";

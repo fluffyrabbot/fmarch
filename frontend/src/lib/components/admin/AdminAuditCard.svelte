@@ -7,7 +7,7 @@
 <article class="fm-panel" data-testid={item.testId}>
   <h2>{item.label}</h2>
   <p class="admin-surface__summary">{item.boundary}</p>
-  <details class="fm-proof-disclosure admin-surface__technical-details">
+  <details class="fm-proof-disclosure admin-surface__technical-details" data-legibility="technical">
     <summary>Technical details</summary>
     <p
       class="admin-surface__boundary fm-well fm-well--kv"

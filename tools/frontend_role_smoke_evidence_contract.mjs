@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { legibilityEvidenceComplete } from "./frontend_legibility.mjs";
 import {
   ADMIN_OPERATOR_INBOX_CONTRACT,
 } from "../frontend/src/routes/admin/admin-operator-inbox.mjs";
@@ -256,6 +257,7 @@ export function playerPrivateChannelBrowserPostEvidenceComplete(roleSmoke) {
       command?.actor_slot === "slot-7" &&
       command?.body === "Browser smoke private:role_pm:slot-7 post" &&
       result.refreshedPostTestId === "thread-post-446" &&
+      legibilityEvidenceComplete(entry.legibility, { surface: "player-private" }) &&
       entry.overlapCheckedTargets > 0 &&
       focusTraversalEvidenceComplete(entry.focusTraversal) &&
       screenshotEvidenceComplete(entry, entry.viewport)
@@ -360,6 +362,7 @@ function roleSurfaceEvidenceComplete(entry, scenario) {
     entry.path === scenario.path &&
     typeof entry.capability === "string" &&
     entry.capability.trim() !== "" &&
+    legibilityEvidenceComplete(entry.legibility, { surface: scenario.id }) &&
     entry.overlapCheckedTargets > 0 &&
     focusTraversalEvidenceComplete(entry.focusTraversal) &&
     screenshotEvidenceComplete(entry, entry.viewport)
@@ -382,6 +385,7 @@ function boardEvidenceComplete(roleSmoke) {
     return (
       entry.scenario === boardScenario.id &&
       entry.path === boardScenario.path &&
+      legibilityEvidenceComplete(entry.legibility, { surface: "board" }) &&
       entry.overlapCheckedTargets > 0 &&
       focusTraversalEvidenceComplete(entry.focusTraversal) &&
       screenshotEvidenceComplete(entry, viewport)

@@ -1,4 +1,5 @@
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+import { seatLabel } from "../../app/seat-presenter.mjs";
 
 export const PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT = Object.freeze({
   proofCheckId: "player-action-submission",
@@ -76,7 +77,7 @@ export function buildPlayerActionSubmissionCheckpoint({
     actor: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.actorTestId,
       label: "Actor",
-      value: `${actorSlot || "unknown"} / ${String(
+      value: `${actorSlot ? seatLabel(actorSlot) : "unknown"} / ${String(
         commandState?.actorStatus ?? player.status ?? "unknown",
       )}`,
     }),

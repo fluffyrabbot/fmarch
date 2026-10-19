@@ -29,7 +29,7 @@ test("game quotation helpers attach excerpts without copying them into body", ()
     {
       sourceSeq: 12,
       excerpt: "Alpha signal analysis",
-      authorLabel: "slot-2",
+      authorLabel: "Slot 2",
       target: { kind: "game_post", scope_id: game, source_seq: 12 },
     },
   ]);
@@ -42,7 +42,7 @@ test("game quotation helpers attach excerpts without copying them into body", ()
 
   const view = buildGamePostQuoteView(posts[1], { posts });
   assert.equal(view.quotations[0].excerpt, "Alpha signal");
-  assert.equal(view.quotations[0].authorLabel, "slot-2");
+  assert.equal(view.quotations[0].authorLabel, "Slot 2");
   assert.equal(view.quotations[0].originalState, "loaded");
   assert.equal(view.quotations[0].href, "?post=12#thread-post-12");
 
@@ -93,7 +93,7 @@ test("game quotation previews normalize tagged wire authors before rendering", (
     },
   );
 
-  assert.equal(view.quotations[0].authorLabel, "slot-2");
+  assert.equal(view.quotations[0].authorLabel, "Slot 2");
 });
 
 test("private channel citation previews retain the nested PostCitationPage contract", () => {

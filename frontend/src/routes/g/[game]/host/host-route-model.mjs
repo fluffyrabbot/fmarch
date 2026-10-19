@@ -32,6 +32,7 @@ import {
   canonicalPrincipalId,
   FIXTURE_PRINCIPAL_IDS,
 } from "../../../../lib/principal-id.mjs";
+import { seatLabel } from "../../../../lib/app/seat-presenter.mjs";
 
 export const HOST_CONSOLE_REQUIRED_CAPABILITIES = Object.freeze([
   "HostOf",
@@ -270,7 +271,7 @@ function replacementQueueLabel(replacement) {
     replacement.occupantLabel,
     "current persona",
   );
-  return `${slotDisplayLabel(slotId)} / ${occupant}`;
+  return seatLabel(slotId, { name: occupant });
 }
 
 export function buildHostInviteTargets({
@@ -302,7 +303,7 @@ export function buildHostInviteTargets({
       principalId: occupant ?? "",
       expectedOccupantPrincipalId: occupant ?? "",
       targetLabel: available
-        ? `${slotDisplayLabel(slotId)} / ${publicName}`
+        ? seatLabel(slotId, { name: publicName })
         : "No authoritative slot selected",
       submitLabel: "Issue player invite",
     }),
@@ -322,7 +323,7 @@ export function buildHostInviteTargets({
       expectedOccupantPrincipalId: occupant ?? "",
       targetLabel:
         available && replacementPrincipal !== ""
-          ? `${slotDisplayLabel(slotId)} / ${replacementLabel}`
+          ? seatLabel(slotId, { name: replacementLabel })
           : "No authoritative replacement selected",
       submitLabel: "Issue invite",
     }),
@@ -569,7 +570,3 @@ function normalizeSlotId(slotId) {
   return slotId;
 }
 
-function slotDisplayLabel(slotId) {
-  const suffix = slotId.match(/\d+/)?.[0];
-  return suffix === undefined ? slotId : `Slot ${suffix}`;
-}

@@ -67,7 +67,7 @@
       <p class="fm-eyebrow">{item.displayAuthority}</p>
       <h2>{item.label}</h2>
       <p>{item.displayValue}</p>
-      <details class="fm-proof-disclosure admin-surface__technical-details">
+      <details class="fm-proof-disclosure admin-surface__technical-details" data-legibility="technical">
         <summary>Technical details</summary>
         <p
           class="fm-well fm-well--kv"

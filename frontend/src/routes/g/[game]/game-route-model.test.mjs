@@ -246,7 +246,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
         // The rail names the seat that was addressed, never its occupant:
         // occupancy was resolved by the read that produced this row.
         id: "slot-mention-443-slot-7",
-        label: "Addressed as slot-7",
+        label: "Addressed as Slot 7",
         value: "Main thread",
         detail: "Phase Day 2",
         reviewHref: "/g/midsummer?post=443#thread-post-443",

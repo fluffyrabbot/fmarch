@@ -774,7 +774,7 @@ test("static role contract artifact records shared nav focus and route state mat
     actorAlive: "unknown",
     actorStatus: "",
     label: "Posting target",
-    value: "Main thread as slot-7",
+    value: "Main thread as Slot 7",
     audienceLabel: "Everyone at the table reads this",
   });
   assert.deepEqual(playerStaticRole.commandReceipt, {

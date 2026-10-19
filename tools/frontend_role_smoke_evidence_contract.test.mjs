@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { LEGIBILITY_MODE } from "./frontend_legibility.mjs";
 import {
   HOST_SETUP_ROLE_SMOKE_CONTRACT,
   expectedHostSetupLayout,
@@ -226,6 +227,7 @@ function validRoleSmoke() {
       scenario: boardScenario.id,
       viewport: { ...viewport },
       path: boardScenario.path,
+      legibility: legibility("board"),
       focusTraversal: focusTraversal(),
       overlapCheckedTargets: 1,
       ...screenshotEvidence(viewport, `${viewport.name}-${boardScenario.id}`),
@@ -266,12 +268,17 @@ function validRoleSmoke() {
   };
 }
 
+function legibility(surface) {
+  return { mode: LEGIBILITY_MODE, surface, sampleCount: 1, violations: [] };
+}
+
 function validRoleEntry(scenario, viewport) {
   const base = {
     role: scenario.id,
     viewport: { ...viewport },
     path: scenario.path,
     capability: `Capability for ${scenario.id}`,
+    legibility: legibility(scenario.id),
     focusTraversal: focusTraversal(),
     overlapCheckedTargets: 1,
     thumbZones: scenario.thumbZones.map((zone) => ({
@@ -367,6 +374,7 @@ function validPlayerCommandResult() {
 function validPrivateChannelEntry(viewport) {
   return {
     role: "player-private-channel",
+    legibility: legibility("player-private"),
     viewport: { ...viewport },
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
     activeChannelTestId: "player-channel-private:role_pm:slot-7",

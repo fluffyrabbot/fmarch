@@ -1,4 +1,5 @@
 <script>
+  import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import { onDestroy } from "svelte";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import CommandRecovery from "$lib/app/CommandRecovery.svelte";
@@ -27,7 +28,7 @@
 
 {#if context || commandStatus}
   <details class="host-console-critical-path__drawer" data-testid="host-replacement-chooser">
-    <summary><span>Replace a player</span><small>{replacement?.slotId ?? "Replacement"} / {replacement?.occupantLabel ?? "Command history"}</small></summary>
+    <summary><span>Replace a player</span><small>{replacement?.slotId ? seatLabel(replacement.slotId, { name: replacement.occupantLabel }) : "Command history"}</small></summary>
     <div class="host-console-critical-path__drawer-content">
       {#if context}
       <p>Choose an available member by their full public handle. The replacement keeps this slot’s history.</p>
@@ -45,7 +46,7 @@
         <p data-testid="host-replacement-candidate" data-handle={view.candidate.handle} data-slot-id={view.candidate.slotId}
           data-outgoing-persona-id={view.candidate.outgoingPersonaId}>
           <strong>{view.candidate.displayName} (@{view.candidate.handle})</strong>
-          will replace {replacement.occupantLabel} in {replacement.slotId}.
+          will replace {seatLabel(replacement.slotId, { name: replacement.occupantLabel })}.
         </p>
       {/if}
       <p role="status" data-testid="host-replacement-lookup-status" data-state={view.state}>

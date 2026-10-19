@@ -8,6 +8,7 @@ import {
 import { canonicalPhaseId, phaseLabelFromId } from "../../../../lib/phase-id.mjs";
 import { resolveHostConsoleAccess } from "../host/host-route-model.mjs";
 import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
+import { seatLabel } from "../../../../lib/app/seat-presenter.mjs";
 
 export const HOST_SETUP_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "host-setup-surface",
@@ -334,7 +335,7 @@ export function occupiedSetupInviteTargets(setupState) {
           slotId: slot.slotId,
           principalId: slot.assignedPrincipalId,
           expectedOccupantPrincipalId: slot.assignedPrincipalId,
-          targetLabel: `${slotLabel(slot.slotId)} / ${slot.publicName}`,
+          targetLabel: seatLabel(slot.slotId, { name: slot.publicName }),
         }),
       ),
   );
@@ -432,9 +433,6 @@ function hostSetupFixtureState({ game }) {
   });
 }
 
-function slotLabel(slotId) {
-  return String(slotId).replace(/^slot[-_]?/i, "Slot ");
-}
 
 function authenticatedReadHeaders(sessionToken) {
   return typeof sessionToken === "string" && sessionToken.trim() !== ""

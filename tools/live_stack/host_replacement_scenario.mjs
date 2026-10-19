@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { normalizeCommandResponse } from "../../frontend/src/lib/app/command-boundary.mjs";
+import { seatLabel } from "../../frontend/src/lib/app/seat-presenter.mjs";
 
 export function assertHostReplacementCandidate(candidate) {
   const { game, slotId, incomingPrincipalId, handle, outgoing, lookup, renderedText, renderedIdentity } = candidate;
@@ -31,7 +32,7 @@ export function assertHostReplacementEvidence(evidence, expected) {
   assert.equal(candidate.slotId, expected.slotId);
   assert.equal(candidate.incomingPrincipalId, expected.incomingPrincipalId);
   assert.equal(candidate.handle, expected.handle);
-  for (const text of [candidate.lookup.body.display_name, `@${expected.handle}`, candidate.outgoing.occupantLabel, expected.slotId]) {
+  for (const text of [candidate.lookup.body.display_name, `@${expected.handle}`, candidate.outgoing.occupantLabel, seatLabel(expected.slotId)]) {
     assert.ok(confirmationMessage.includes(text));
   }
   // Looking up a member is a read; only the later confirmed command may mutate.

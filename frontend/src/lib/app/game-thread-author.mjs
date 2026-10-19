@@ -1,3 +1,5 @@
+import { seatLabel } from "./seat-presenter.mjs";
+
 export const GAME_THREAD_AUTHOR_KINDS = Object.freeze([
   "slot",
   "host_narrator",
@@ -21,7 +23,7 @@ export function normalizeGameThreadAuthor(value) {
 export function gameThreadAuthorLabel(author) {
   switch (author?.kind) {
     case "slot":
-      return String(author.slotId ?? "").trim() || "Unknown player";
+      return String(author.slotId ?? "").trim() === "" ? "Unknown player" : seatLabel(author.slotId);
     case "host_narrator":
       return "Host";
     case "system":

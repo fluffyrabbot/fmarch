@@ -63,20 +63,20 @@ export function buildDayVoteOutcomePanelViewModel({
 
 function outcomeSummary(outcome) {
   if (outcome.status === "Lynch" && typeof outcome.winnerSlot === "string") {
-    return `${slotDisplayLabel(outcome.winnerSlot)} was eliminated by official vote.`;
+    return `${voteTargetLabel(outcome.winnerSlot)} was eliminated by official vote.`;
   }
   if (outcome.status === "NoLynch") {
     return "The official vote resolved without an elimination.";
   }
   if (typeof outcome.winnerSlot === "string") {
-    return `${outcome.status}: ${slotDisplayLabel(outcome.winnerSlot)}`;
+    return `${outcome.status}: ${voteTargetLabel(outcome.winnerSlot)}`;
   }
   return outcome.status;
 }
 
 function outcomeWinnerLabel(outcome) {
   if (typeof outcome.winnerSlot === "string" && outcome.winnerSlot.trim() !== "") {
-    return slotDisplayLabel(outcome.winnerSlot);
+    return voteTargetLabel(outcome.winnerSlot);
   }
   return outcome.status === "NoLynch" ? "No lynch" : "No winner";
 }
@@ -86,7 +86,7 @@ function outcomeReasonLabel(outcome) {
     outcome.reason === "host_decides_tie" &&
     typeof outcome.winnerSlot === "string"
   ) {
-    return `HostDecides selected ${slotDisplayLabel(outcome.winnerSlot)} after the tied vote.`;
+    return `HostDecides selected ${voteTargetLabel(outcome.winnerSlot)} after the tied vote.`;
   }
   return outcome.reason;
 }
@@ -98,7 +98,7 @@ function outcomeTallies(outcome) {
   return Object.entries(outcome.tallies)
     .map(([slot, count]) => ({
       slot,
-      slotLabel: slotDisplayLabel(slot),
+      slotLabel: voteTargetLabel(slot),
       count: Number(count),
       majority: outcome.majority,
     }))
@@ -106,16 +106,9 @@ function outcomeTallies(outcome) {
     .sort((left, right) => right.count - left.count || left.slot.localeCompare(right.slot));
 }
 
-function slotDisplayLabel(slotId) {
-  const normalized = String(slotId);
-  if (normalized === "no_lynch") {
-    return "No lynch";
-  }
-  const suffix = normalized.match(/\d+/)?.[0];
-  return suffix === undefined ? normalized : `Slot ${suffix}`;
-}
 
 function sanitizeTestId(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]+/g, "_");
 }
 import { phaseLabelFromId } from "../../phase-id.mjs";
+import { voteTargetLabel } from "../../app/seat-presenter.mjs";

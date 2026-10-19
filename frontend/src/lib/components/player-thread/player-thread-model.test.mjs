@@ -276,11 +276,11 @@ test("player thread model renders quote blocks and incoming citation disclosure"
   assert.equal(thread.posts[0].citationCount, 1);
   assert.equal(thread.posts[0].incomingCitations[0].sourceSeq, 18);
   assert.equal(thread.posts[1].quotations[0].excerpt, "Alpha signal");
-  assert.equal(thread.posts[1].quotations[0].authorLabel, "slot-7");
+  assert.equal(thread.posts[1].quotations[0].authorLabel, "Slot 7");
   assert.equal(thread.posts[1].quotations[0].href, "?post=12#thread-post-12");
   assert.equal(thread.quoteEnabled, true);
   assert.deepEqual(thread.posts[0].author, { kind: "slot", slotId: "slot-7" });
-  assert.equal(thread.posts[0].authorLabel, "slot-7");
+  assert.equal(thread.posts[0].authorLabel, "Slot 7");
   assert.deepEqual(thread.posts[0].permalink, {
     href: "?post=12#thread-post-12",
     testId: "thread-post-permalink-12",
@@ -301,7 +301,7 @@ test("player thread model renders tagged author attribution without person ident
   });
 
   assert.deepEqual(thread.posts.map((post) => post.authorLabel), [
-    "slot-7",
+    "Slot 7",
     "Host",
     "System",
     "Unknown",

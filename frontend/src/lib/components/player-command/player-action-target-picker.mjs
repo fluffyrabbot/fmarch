@@ -1,4 +1,5 @@
 import { buildConfirmationActionViewModel } from "../../app/confirmation-action-model.mjs";
+import { seatLabel } from "../../app/seat-presenter.mjs";
 
 export const PLAYER_ACTION_TARGET_PICKER_CONTRACT = Object.freeze({
   componentName: "player-action-target-picker",
@@ -84,7 +85,7 @@ function pickerAction({ command, confirmingAction, disabled }) {
         const slot = String(option);
         return Object.freeze({
           slot,
-          label: slotLabel(slot),
+          label: seatLabel(slot),
           checked: slot === selectedTarget,
           name: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.optionTestIdPrefix}-${templateId}`,
           testId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.optionTestIdPrefix}-${templateId}-${slot}`,
@@ -155,7 +156,7 @@ function withdrawPickerAction({ command, confirmingAction, disabled }) {
   );
   const label = String(command.label ?? `Withdraw ${templateId}`);
   const detail = String(command.detail ?? "");
-  const pick = targets.length > 0 ? targets.map(slotLabel).join(", ") : "no target";
+  const pick = targets.length > 0 ? targets.map((target) => seatLabel(target)).join(", ") : "no target";
   return Object.freeze({
     action,
     commandKind: "withdraw_action",
@@ -204,10 +205,3 @@ function withdrawPickerAction({ command, confirmingAction, disabled }) {
   });
 }
 
-function slotLabel(slot) {
-  const match = /^slot[-_](.+)$/u.exec(slot);
-  if (match === null) {
-    return slot;
-  }
-  return `Slot ${match[1]}`;
-}

@@ -1,4 +1,5 @@
 import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
+import { seatLabel, voteTargetLabel } from "../../app/seat-presenter.mjs";
 
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   rootClassName: "player-command-panel fm-card fm-primary-action-zone",
@@ -177,7 +178,7 @@ function buildChannelContextViewModel({ channel = {}, player = {} }) {
     actorAlive,
     actorStatus,
     label: "Posting target",
-    value: `${channelLabel} as ${slotId}${lifecycleSuffix}`,
+    value: `${channelLabel} as ${seatLabel(slotId)}${lifecycleSuffix}`,
     audienceLabel:
       channelId === "main"
         ? "Everyone at the table reads this"
@@ -202,6 +203,7 @@ function buildDeadlineViewModel(phase) {
 function normalizeVotecountRow(row) {
   return Object.freeze({
     target: String(row.target ?? "unknown"),
+    label: voteTargetLabel(row.target),
     tally: `${Number(row.count ?? 0)}/${Number(row.needed ?? 0)}`,
   });
 }

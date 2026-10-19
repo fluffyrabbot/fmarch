@@ -1,4 +1,5 @@
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+import { seatLabel } from "../../app/seat-presenter.mjs";
 import {
   FIXTURE_PRINCIPAL_IDS,
   canonicalPrincipalId,
@@ -108,13 +109,14 @@ function buildProcessReplacementAction(gameId, replacement) {
   const replacementDescription = incomingDisplayLabel === null
     ? `replace ${outgoingPublicName}`
     : `replace ${outgoingPublicName} with ${incomingDisplayLabel}`;
+  const objectLabel = seatLabel(replacementSlotId, { name: outgoingPublicName });
   return freezeHostAction({
     id: "process_replacement",
     label: "Process replacement",
-    objectLabel: `${replacementSlotId} / ${outgoingPublicName}`,
+    objectLabel,
     outcomeLabel: `${replacementDescription} and preserve slot history`,
     confirmationText:
-      `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: ${replacementDescription} and preserve slot history.`,
+      `Process replacement for ${objectLabel}: ${replacementDescription} and preserve slot history.`,
     irreversible: true,
     payload: {
       kind: "process_replacement",

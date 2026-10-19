@@ -674,7 +674,7 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
-    "Role PM as slot-7",
+    "Role PM as Slot 7",
     "player private channel command target label",
   );
   assertIncludes(
@@ -1559,7 +1559,7 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(html, 'data-channel-id="main"', "player command main channel id");
   assertIncludes(html, "Posting target", "player command channel label");
-  assertIncludes(html, "Main thread as slot-7", "player command channel value");
+  assertIncludes(html, "Main thread as Slot 7", "player command channel value");
   assertIncludes(
     html,
     'data-testid="player-day-event-rail"',

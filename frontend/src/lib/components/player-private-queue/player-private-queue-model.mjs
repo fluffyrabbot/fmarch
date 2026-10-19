@@ -50,7 +50,7 @@ export function buildPrivateQueue({
         id: privateItemId("slot-mention", mention),
         kind: "slot-mention",
         destination: { channel: mention.channel_id, sourceSeq: mention.source_seq },
-        label: `Addressed as ${mention.audience_slot}`,
+        label: `Addressed as ${seatLabel(mention.audience_slot)}`,
         value: channelLabel(mention.channel_id),
         detail:
           phaseLabel === null
@@ -128,3 +128,4 @@ function channelLabel(channelId) {
 }
 
 import { phaseLabelFromId } from "../../phase-id.mjs";
+import { seatLabel } from "../../app/seat-presenter.mjs";

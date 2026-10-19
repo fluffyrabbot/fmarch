@@ -50,7 +50,7 @@ test("player private queue model derives scoped private projection boundary", ()
       id: "slot-mention-443-slot-7",
       kind: "slot-mention",
       destination: { channel: "private:faction:mafia", sourceSeq: 443 },
-      label: "Addressed as slot-7",
+      label: "Addressed as Slot 7",
       value: "private:faction:mafia",
       detail: "Phase Day 2",
       buttonLabel: "Review",
@@ -59,7 +59,7 @@ test("player private queue model derives scoped private projection boundary", ()
       id: "slot-mention-12-slot-7",
       kind: "slot-mention",
       destination: { channel: "main", sourceSeq: 12 },
-      label: "Addressed as slot-7",
+      label: "Addressed as Slot 7",
       value: "Main thread",
       detail: "Addressed outside a phase",
       buttonLabel: "Review",
@@ -100,7 +100,7 @@ test("a delivered slot mention names a seat and a room, never an occupant", () =
       `slot mention rail row leaked ${forbidden}`,
     );
   }
-  assert.equal(item.label, "Addressed as slot-7");
+  assert.equal(item.label, "Addressed as Slot 7");
 });
 
 test("player private queue model builds disclosure view state without host leakage", () => {

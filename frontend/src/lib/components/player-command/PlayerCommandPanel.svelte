@@ -136,7 +136,7 @@
     <div class="fm-proof-disclosure__body">
       {#each view.votecount.rows as row}
         <div class="player-command-panel__vote-row">
-          <span>{row.target}</span>
+          <span>{row.label}</span>
           <strong>{row.tally}</strong>
         </div>
       {/each}
