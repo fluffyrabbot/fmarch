@@ -1695,8 +1695,11 @@ export async function runExecutionPlan(
         if (running.size >= jobs || exclusiveLane) break;
         const record = records.get(laneId);
         if (record.state !== 'pending') continue;
-        if (phases[laneId] === 2 && !focused.every((id) => records.get(id)?.state === 'passed')) continue;
-        if (!dependenciesFor(laneId, manifest).every((dependency) => records.get(dependency)?.state === 'passed')) continue;
+        // A lane reads `passed` before its cleanup finishes; a dependent must
+        // wait until the producer has released resources and published output.
+        const finishedPassing = (id) => records.get(id)?.state === 'passed' && !running.has(id);
+        if (phases[laneId] === 2 && !focused.every(finishedPassing)) continue;
+        if (!dependenciesFor(laneId, manifest).every(finishedPassing)) continue;
         const execution = laneExecution(laneId, manifest.lanes[laneId]);
         // An exclusive lane measures the host; it runs with nothing beside it.
         if (execution.exclusive && running.size > 0) continue;
