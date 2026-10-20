@@ -58,7 +58,10 @@ macOS behavior.
 ## Ownership and admission
 
 The Linux workflow is `heavy` and runs the declared repository DAG with up to
-six compatible lanes (`runner.max_parallel`). Cargo compilation stays
+six compatible lanes (`runner.max_parallel`), bounded by a `cpu` budget of
+twelve cores that matches the worker quota: each build phase claims two (Cargo
+runs two jobs), each Rust test run phase claims its test threads plus one for
+Postgres, and browser lanes claim two per engine. Cargo compilation stays
 capacity-one: a lane with `execution.prebuild` holds `cargo-target` only while
 `tools/proof_prebuild.mjs` compiles its tests or harness binaries, then runs
 the hard-linked executables without Cargo (a refusing `cargo` shadows the real

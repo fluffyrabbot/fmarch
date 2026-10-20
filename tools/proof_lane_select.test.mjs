@@ -1694,6 +1694,8 @@ test('profile and completed export leaves own independent resource and completio
     assert.equal(lane.execution.prebuild, 'cargo-builds');
     assert.deepEqual(lane.depends_on ?? [], [], 'self-contained live state needs no upstream artifact producer');
     assert.deepEqual(lane.execution.resources, [
+      { kind: 'lock', name: 'cpu', scope: 'build', amount: 2 },
+      { kind: 'lock', name: 'cpu', amount: 2 },
       { kind: 'lock', name: 'cargo-target', scope: 'build' },
       { kind: 'lock', name: 'browser' },
       { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
