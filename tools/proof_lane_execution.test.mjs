@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { loadManifest } from './proof_lane_select.mjs';
+import { loadManifest, REPO_ROOT } from './proof_lane_select.mjs';
 import {
   PREEMPTED_EXIT_CODE,
   createRepoLocalPostgresProvider,
@@ -1665,11 +1665,17 @@ test('every compiling or test-running phase budgets its CPU against the worker q
   const manifest = loadManifest();
   const { lock_capacities: capacities } = manifest.runner;
   assert.equal(capacities.cpu, 12, 'the Cachy worker runs under CPUQuota=1200%');
+  const fleetJobs = Number(JSON.parse(readFileSync(join(REPO_ROOT, '.fluffyfleet.json'), 'utf8')).profiles.linux.environment.CARGO_BUILD_JOBS);
+  const scriptJobs = Number(/^export CARGO_BUILD_JOBS=(\d+)$/m.exec(readFileSync(join(REPO_ROOT, 'scripts', 'linux-proof.sh'), 'utf8'))?.[1]);
+  assert.equal(scriptJobs, fleetJobs, 'linux-proof.sh and the fleet profile agree on CARGO_BUILD_JOBS');
   for (const [id, entry] of Object.entries(manifest.lanes)) {
     const { execution } = entry;
     if (execution.exclusive) continue;
     const cpu = (scope) => lockClaims(id, entry, capacities, scope).get('cpu') ?? 0;
-    if (execution.prebuild) assert.ok(cpu('build') >= 2, `${id} build phase runs CARGO_BUILD_JOBS=2 rustc processes`);
+    if (execution.prebuild) assert.ok(cpu('build') >= fleetJobs, `${id} build phase runs CARGO_BUILD_JOBS=${fleetJobs} rustc processes`);
+    if (lockClaims(id, entry, capacities, 'run').has('cargo-target')) {
+      assert.ok(cpu('run') >= fleetJobs, `${id} compiles under cargo-target with CARGO_BUILD_JOBS=${fleetJobs} rustc processes`);
+    }
     if (execution.prebuild === 'cargo-test') {
       const explicit = execution.argv.map((arg) => /^--test-threads=(\d+)$/.exec(arg)?.[1]).find(Boolean);
       const threads = Math.min(Number(explicit ?? 4), 4);
