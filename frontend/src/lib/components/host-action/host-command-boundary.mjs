@@ -353,6 +353,9 @@ export function projectHostConsoleState(state, fallback) {
         ? state.completed
         : fallback.completed === true,
     phase: projectHostConsolePhase(phase, fallback?.phase ?? null),
+    roster: Array.isArray(state.roster)
+      ? Object.freeze([...state.roster])
+      : (fallback?.roster ?? Object.freeze([])),
     replacement:
       slot === null && fallbackReplacement === null
         ? null
@@ -383,6 +386,7 @@ export const HOST_CONSOLE_LIVE_DELTA_KINDS = Object.freeze([
   "HostConsoleStateChanged",
   "HostConsoleHeaderChanged",
   "HostConsoleSlotsChanged",
+  "HostConsoleRosterChanged",
   "HostConsoleThreadPostsChanged",
   "HostConsoleThreadPostRemoved",
   "HostConsoleDayEventsChanged",
@@ -447,6 +451,13 @@ export function applyHostConsoleLiveDelta(previous, delta) {
       slots: next.slots,
       replacement: next.replacement,
       threadPosts: next.threadPosts,
+    });
+  }
+
+  if (kind === "HostConsoleRosterChanged") {
+    return Object.freeze({
+      ...fallback,
+      roster: Object.freeze([...(Array.isArray(body.roster) ? body.roster : [])]),
     });
   }
 

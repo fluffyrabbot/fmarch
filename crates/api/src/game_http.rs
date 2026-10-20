@@ -32,7 +32,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use wire::{
     DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
-    GameIndexEntry, GameIndexPage, GameThreadAuthor, HostConsoleAuthorityDelta,
+    GameIndexEntry, GameIndexPage, GameRosterSeat, GameThreadAuthor, HostConsoleAuthorityDelta,
     HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
     HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
     HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
@@ -426,11 +426,13 @@ async fn public_game_thread(
     )
     .await?
     .ok_or_else(post_unavailable)?;
+    let roster = load_game_roster(&state.pool, game).await?;
     Ok(Json(PublicGameThreadPage {
         next_after_seq: page.next_after_seq,
         game: GameIndexEntry::from(game_row),
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
         next_before_seq: page.next_before_seq,
+        roster,
     }))
 }
 
@@ -907,6 +909,9 @@ pub struct PlayerCommandStateResponse {
     /// thread addresses a seat, and only a seat that can read the room.
     #[serde(default)]
     pub mention_targets: Vec<ChannelMentionTargets>,
+    /// Every seat by persona name and occupancy history (RFC 0008), so the
+    /// client names authors, targets and votes without deriving names itself.
+    pub roster: Vec<GameRosterSeat>,
     pub boundary: String,
 }
 
@@ -1095,6 +1100,7 @@ async fn player_command_state(
     let day_event_workspace =
         load_player_day_event_workspace(&state.pool, game, actor, game_completed).await?;
     let mention_targets = channel_mention_targets(&state.pool, game, &caps).await?;
+    let roster = load_game_roster(&state.pool, game).await?;
     let post_policies = projections::post_policies(&state.pool, game)
         .await?
         .into_iter()
@@ -1121,6 +1127,7 @@ async fn player_command_state(
         day_event_rooms: day_event_workspace.rooms,
         post_policies,
         mention_targets,
+        roster,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {
@@ -1468,6 +1475,14 @@ fn action_label(action: &domain::pack::ActionTemplate) -> String {
     }
 }
 
+async fn load_game_roster(pool: &PgPool, game: Uuid) -> Result<Vec<GameRosterSeat>, ApiError> {
+    Ok(projections::game_roster(pool, game)
+        .await?
+        .into_iter()
+        .map(GameRosterSeat::from)
+        .collect())
+}
+
 fn slot_label(slot_id: &str) -> String {
     let suffix: String = slot_id.chars().filter(|ch| ch.is_ascii_digit()).collect();
     if suffix.is_empty() {
@@ -1811,6 +1826,7 @@ pub struct HostConsoleStateResponse {
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
     pub thread_posts: Vec<HostConsoleThreadPost>,
+    pub roster: Vec<GameRosterSeat>,
     pub day_event_scheduler: Option<DayEventSchedulerDelta>,
     pub day_events: Vec<HostDayEventDelta>,
     pub tasks: Vec<HostTaskDelta>,
@@ -1967,6 +1983,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
                 .into_iter()
                 .map(HostConsoleThreadPostDelta::from)
                 .collect(),
+            roster: response.roster,
             day_event_scheduler: response.day_event_scheduler,
             day_events: response.day_events,
             tasks: response.tasks,
@@ -2277,6 +2294,7 @@ pub(super) async fn load_host_console_state(
         })
         .collect();
 
+    let roster = load_game_roster(pool, game).await?;
     Ok(HostConsoleStateResponse {
         game,
         authority,
@@ -2284,6 +2302,7 @@ pub(super) async fn load_host_console_state(
         phase,
         slots,
         thread_posts,
+        roster,
         day_event_scheduler,
         day_events,
         tasks,

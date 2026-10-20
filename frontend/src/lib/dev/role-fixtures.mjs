@@ -53,6 +53,11 @@ export const mockStateProjections = Object.freeze({
           alignment_revealed: false,
         },
       ],
+      roster: [
+        rosterSeat("slot-1", "Juniper"),
+        rosterSeat("slot-2", "Ilya"),
+        rosterSeat("slot-7", "Mira", { alive: state.slotStatus === "alive", status: state.slotStatus }),
+      ],
       thread_posts: [
         {
           stream_seq: 72,
@@ -393,3 +398,13 @@ export const fixtureApiRoutes = Object.freeze([
   }),
 ]);
 
+function rosterSeat(slotId, publicName, { alive = true, status = "alive" } = {}) {
+  return {
+    slot_id: slotId,
+    alive,
+    status,
+    occupancies: [
+      { began_seq: 3, ended_seq: null, names: [{ effective_seq: 3, public_name: publicName }] },
+    ],
+  };
+}

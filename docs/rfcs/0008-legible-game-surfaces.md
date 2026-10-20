@@ -77,24 +77,35 @@ the identity.
 
 ### 2. The server owns the roster presentation; the frontend owns none
 
-Player, public and host reads gain one `roster` array:
+Public game thread, player command-state and host-console reads carry one
+`roster` array of wire `GameRosterSeat`:
 
 ```text
-RosterSeat { slot_id, seat_number, persona_id, persona_name,
-             replaced_persona_names[], alive, status, status_tags[],
-             revealed_role_label?, revealed_alignment_label? }
+GameRosterSeat      { slot_id, alive, status, occupancies[] }
+GameRosterOccupancy { began_seq, ended_seq?, names[] }   // [began, ended)
+GameRosterName      { effective_seq, public_name }
 ```
 
-Thread posts, quotations, mentions, votecount rows, vote targets, current
-vote, day-vote outcomes and host prompts carry `slot_id` plus the
-`persona_id` that authored or is addressed, and the frontend resolves names
-through one `seat-presenter.mjs`. Server `slot_label` and the six frontend
-helpers are deleted. Revealed role and alignment labels come from the pack, so
-the frontend never title-cases a role key.
+It is a read-side join over `slot_state`, `slot_occupancy_epoch` and
+`game_persona_name_history`, with `game_persona_redaction` overriding every
+name of an erased persona, and it is rebuildable from the log. It carries no
+principal and no persona id. Seats sort by numeric suffix.
 
-*Rationale:* seven partial name derivations cannot agree. One read-side join
-over `game_persona_public` and occupancy history is the only place that knows
-the truth, and it is rebuildable from the log.
+Posts, quotations, mentions, votes and outcomes keep addressing seats by
+`slot_id` and carry their stream sequence; the single client resolver in
+`seat-presenter.mjs` names a seat at a sequence by choosing the occupancy
+covering it and that occupancy's latest name effective at or before it. The
+current name is the open occupancy's last name. No other client code derives a
+name, and server `slot_label` is deleted once slice 3 lands. Revealed roles stay
+with the endgame summary, which already owns reveal policy.
+
+The host console's live channel sends `HostConsoleRosterChanged` with the whole
+roster whenever it differs from the previous snapshot.
+
+*Rationale:* seven partial name derivations cannot agree. The epochs and name
+history are already the authority; serving them once per read is smaller than
+stamping a name onto every post payload and live delta, and a replacement or
+rename then never rewrites history.
 
 ### 3. Voting is a roster picker with an inline confirmation
 
@@ -213,7 +224,7 @@ every slice passes `npm run proof:remote -- --mode push` before landing.
 | # | Slice | Depends on | Main paths |
 |---|---|---|---|
 | 1 | Legibility guard and seat presenter | — | `tools/frontend_role_smoke*.mjs`, `frontend/src/lib/app/seat-presenter.mjs`, `presentation-copy.mjs`, `AppShell.svelte` |
-| 2 | Server roster read | 1 | `crates/api/src/game_http.rs`, `crates/projections`, `crates/wire`, `frontend/src/lib/wire/types.ts`, `gameplay-response-schema.mjs` |
+| 2 | Server roster read | 1 | `crates/api/src/game_http.rs`, `crates/projections`, `crates/wire`, `crates/api/src/live_delivery.rs`, `frontend/src/lib/wire/types.ts`, `game-roster.mjs`, host live validators |
 | 3 | Names on every player surface | 2 | `game-thread-author.mjs`, `player-thread`, `day-vote-outcome`, `player-action-target-picker.mjs`, mention and quotation models |
 | 4 | Vote picker and player context | 3 | `game-route-model.mjs`, `player-command`, `player-posture`, `player-role-card`, `player-private-queue` |
 | 5 | Interruption copy | 3 | `CommandRecovery.svelte`, `command-interruption.mjs`, `player-command-receipt-model.mjs`, game bar |
@@ -233,9 +244,13 @@ landed; slices 3 → 4 → 5 share the player route and run in order.
 
 1. The workbench report lists every current violation by route; the seven
    name helpers have one replacement with tests.
-2. API tests prove roster names for a live seat, a replaced seat (post keeps
-   the old persona), a renamed persona (post keeps the name at its sequence)
-   and a dead seat; the roster is identical after projection rebuild.
+2. A pipeline test proves the roster for a renamed-then-replaced seat (the
+   outgoing epoch keeps both names and ends where the incoming epoch begins),
+   a dead seat and an unseated seat, numeric seat order, agreement with the
+   open-occupancy selector, and identity after projection rebuild; a wire test
+   proves a roster change travels as one `HostConsoleRosterChanged` cell. The
+   host live channel and host-console validators require the roster; the
+   player and public validators require it in slice 3, which consumes it.
 3. No player route renders a slot identifier; quotes, mentions and outcomes
    name personas.
 4. A 13-seat fixture votes, changes vote and unvotes through the picker on

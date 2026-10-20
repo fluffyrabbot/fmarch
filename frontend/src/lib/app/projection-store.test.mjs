@@ -1393,6 +1393,7 @@ function canonicalHostStateBody(overrides = {}) {
     phase: { phase_id: "D01", locked: false, deadline: null },
     slots: [],
     thread_posts: [],
+    roster: [],
     day_event_scheduler: null,
     day_events: [],
     tasks: [],

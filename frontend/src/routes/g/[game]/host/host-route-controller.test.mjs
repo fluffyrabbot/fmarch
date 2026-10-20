@@ -175,6 +175,7 @@ test("host cold load normalizes an empty game after authority revocation", () =>
       completed: false,
       phase: null,
       slots: [],
+      roster: [],
       thread_posts: [],
       day_event_scheduler: null,
       day_events: [],

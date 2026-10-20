@@ -494,6 +494,7 @@ async function proveModeratorLiveRuntime() {
         completed: false,
         phase: null,
         slots: [],
+        roster: [],
         thread_posts: [],
         day_event_scheduler: null,
         day_events: [],
@@ -628,6 +629,7 @@ async function proveModeratorPageLifecycle() {
     refreshBody: {
       phase: { phase_id: "D02", locked: true },
       slots: [],
+      roster: [],
       thread_posts: [],
     },
     recoveredSeq: (snapshot) => snapshot.host.phase.phase_id,

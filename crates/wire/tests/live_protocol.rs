@@ -121,6 +121,7 @@ fn every_projection_delta_by_audience(game: Uuid) -> [Vec<ProjectionDelta>; 4] {
             phase: None,
             slots: Vec::new(),
             thread_posts: Vec::new(),
+            roster: Vec::new(),
             day_event_scheduler: None,
             day_events: Vec::new(),
             tasks: Vec::new(),

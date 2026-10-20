@@ -458,6 +458,36 @@ pub struct SpectatorMembershipRow {
     pub principal_id: PrincipalId,
 }
 
+/// One seat of a game's public roster (RFC 0008): who has held it, under which
+/// public names, and whether it is still in the game. It carries no principal
+/// and no persona id; a seat is addressed by `slot_id` and a person by the name
+/// in effect at a stream sequence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RosterSeatRow {
+    pub slot_id: String,
+    pub alive: bool,
+    pub status: String,
+    /// Occupancy epochs in seat order, oldest first. The last epoch with no
+    /// `ended_seq` is the current occupant.
+    pub occupancies: Vec<RosterOccupancyRow>,
+}
+
+/// One persona's tenure in a seat, `[began_seq, ended_seq)`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RosterOccupancyRow {
+    pub began_seq: i64,
+    pub ended_seq: Option<i64>,
+    /// The persona's public names, oldest first, each effective from its
+    /// sequence. A redacted persona's names are its replacement alias.
+    pub names: Vec<RosterNameRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RosterNameRow {
+    pub effective_seq: i64,
+    pub public_name: String,
+}
+
 /// A public selector row for the one open epoch in a slot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlotOccupancyRow {
@@ -956,6 +986,10 @@ pub enum ProjectionError {
     Privacy(String),
     #[error("stored pack identity is invalid: {0}")]
     PackIdentity(String),
+    /// Two read models that must agree do not (for example an occupancy epoch
+    /// for a seat with no `slot_state` row). Never a caller error.
+    #[error("projection integrity violated: {0}")]
+    Integrity(String),
     #[error("this active report already exists")]
     DuplicateModerationReport,
     #[error(transparent)]
@@ -7266,6 +7300,96 @@ where
             public_name: r.get("current_public_name"),
         })
         .collect())
+}
+
+/// Read a game's public roster: every seat, its liveness, and the named
+/// occupancy history needed to attribute any post to the persona that wrote it.
+/// Seats are ordered by their numeric suffix, then by id.
+pub async fn game_roster(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Vec<RosterSeatRow>, ProjectionError> {
+    let slots = sqlx::query(
+        "SELECT slot_id, alive, status FROM slot_state WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    let epochs = sqlx::query(
+        "SELECT slot_id, persona_id, began_seq, ended_seq FROM slot_occupancy_epoch \
+         WHERE game_id = $1 ORDER BY slot_id, began_seq, occupancy_id",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    let names = sqlx::query(
+        "SELECT h.persona_id, h.effective_seq, \
+                COALESCE(r.replacement_public_name, h.public_name) AS public_name \
+         FROM game_persona_name_history h \
+         LEFT JOIN game_persona_redaction r \
+           ON r.game_id = h.game_id AND r.persona_id = h.persona_id \
+         WHERE h.game_id = $1 ORDER BY h.persona_id, h.effective_seq",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut names_by_persona: HashMap<Uuid, Vec<RosterNameRow>> = HashMap::new();
+    for row in names {
+        let history = names_by_persona.entry(row.get("persona_id")).or_default();
+        let public_name: String = row.get("public_name");
+        // A redaction overlay collapses every historical name into one alias.
+        if history.last().map(|last| last.public_name.as_str()) != Some(public_name.as_str()) {
+            history.push(RosterNameRow {
+                effective_seq: row.get("effective_seq"),
+                public_name,
+            });
+        }
+    }
+
+    let mut seats: BTreeMap<String, RosterSeatRow> = BTreeMap::new();
+    for row in slots {
+        let slot_id: String = row.get("slot_id");
+        seats.insert(
+            slot_id.clone(),
+            RosterSeatRow {
+                slot_id,
+                alive: row.get("alive"),
+                status: row.get("status"),
+                occupancies: Vec::new(),
+            },
+        );
+    }
+    for row in epochs {
+        let slot_id: String = row.get("slot_id");
+        let persona_id: Uuid = row.get("persona_id");
+        let seat = seats.get_mut(&slot_id).ok_or_else(|| {
+            ProjectionError::Integrity(format!(
+                "occupancy epoch names seat {slot_id} that has no slot_state row"
+            ))
+        })?;
+        seat.occupancies.push(RosterOccupancyRow {
+            began_seq: row.get("began_seq"),
+            ended_seq: row.get("ended_seq"),
+            names: names_by_persona.get(&persona_id).cloned().unwrap_or_default(),
+        });
+    }
+
+    let mut seats: Vec<RosterSeatRow> = seats.into_values().collect();
+    seats.sort_by(|a, b| roster_seat_key(&a.slot_id).cmp(&roster_seat_key(&b.slot_id)));
+    Ok(seats)
+}
+
+fn roster_seat_key(slot_id: &str) -> (Option<u64>, &str) {
+    let digits: String = slot_id
+        .chars()
+        .rev()
+        .take_while(char::is_ascii_digit)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    (digits.parse().ok(), slot_id)
 }
 
 /// Whether a principal has any open game occupancy. This stays private to

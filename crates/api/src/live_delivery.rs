@@ -1731,6 +1731,7 @@ fn live_projection_delta_for_plan(
         delta @ (ProjectionDelta::HostConsoleStateChanged(_)
         | ProjectionDelta::HostConsoleHeaderChanged(_)
         | ProjectionDelta::HostConsoleSlotsChanged(_)
+        | ProjectionDelta::HostConsoleRosterChanged(_)
         | ProjectionDelta::HostConsoleThreadPostsChanged(_)
         | ProjectionDelta::HostConsoleThreadPostRemoved(_)
         | ProjectionDelta::HostConsoleDayEventsChanged(_)

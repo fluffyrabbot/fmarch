@@ -371,6 +371,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           completed: false,
           phase: null,
           slots: [],
+          roster: [],
           thread_posts: [],
           day_event_scheduler: {
             pending: true,
@@ -622,6 +623,7 @@ test("host console route data is allowed for CohostOf scoped to the current game
             completed: false,
             phase: null,
             slots: [],
+            roster: [],
             thread_posts: [],
             day_event_scheduler: null,
             day_events: [],

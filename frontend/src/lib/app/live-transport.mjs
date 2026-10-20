@@ -1,5 +1,6 @@
 import { normalizeThreadPost as normalizeProjectionThreadPost } from "./cold-load.mjs";
 import { Decoder, encode } from "cbor-x";
+import { isGameRoster } from "./game-roster.mjs";
 
 // Rust encodes safe u64 values above u32 as CBOR int64. Validators below
 // reject unsafe numbers; safe wire integers must not become JS bigint.
@@ -305,6 +306,7 @@ const LIVE_AUDIENCE_DELTA_KINDS = Object.freeze({
     "HostConsoleStateChanged",
     "HostConsoleHeaderChanged",
     "HostConsoleSlotsChanged",
+    "HostConsoleRosterChanged",
     "HostConsoleThreadPostsChanged",
     "HostConsoleThreadPostRemoved",
     "HostConsoleDayEventsChanged",
@@ -1312,6 +1314,7 @@ const LIVE_DELTA_BODY_VALIDATORS = Object.freeze({
       "phase",
       "slots",
       "thread_posts",
+      "roster",
       "day_event_scheduler",
       "day_events",
       "tasks",
@@ -1324,6 +1327,7 @@ const LIVE_DELTA_BODY_VALIDATORS = Object.freeze({
     body.slots.every(isCanonicalHostSlot) &&
     Array.isArray(body.thread_posts) &&
     body.thread_posts.every(isCanonicalHostThreadPost) &&
+    isGameRoster(body.roster) &&
     isCanonicalScheduler(body.day_event_scheduler) &&
     isPlainRecordArray(body.day_events) &&
     isPlainRecordArray(body.tasks),
@@ -1339,6 +1343,10 @@ const LIVE_DELTA_BODY_VALIDATORS = Object.freeze({
     Array.isArray(body.slots) &&
     body.slots.every(isCanonicalHostSlot) &&
     isIdentifierArray(body.removed_slot_ids),
+  HostConsoleRosterChanged: (body) =>
+    hasExactKeys(body, ["game", "roster"]) &&
+    isIdentifier(body.game) &&
+    isGameRoster(body.roster),
   HostConsoleThreadPostsChanged: (body) =>
     hasExactKeys(body, ["game", "posts"]) &&
     isIdentifier(body.game) &&

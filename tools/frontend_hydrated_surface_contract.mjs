@@ -832,6 +832,7 @@ function hostConsoleModkilledProjectionState() {
         alive: false,
       },
     ],
+    roster: [],
     thread_posts: [
       {
         author: { kind: "slot", slot_id: "slot-7" },

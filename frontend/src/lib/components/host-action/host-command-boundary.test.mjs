@@ -711,6 +711,7 @@ test("host command sender can refresh projected host console state after ack", a
             status: "modkilled",
           },
         ],
+        roster: [],
         thread_posts: [{ author: { kind: "slot", slot_id: "slot-7" }, body: "before replacement" }],
       });
     },
@@ -792,6 +793,7 @@ test("host console projection maps deadline and stable slot history to labels", 
           alignment_revealed: true,
         },
       ],
+      roster: [],
       thread_posts: [{ author: { kind: "slot", slot_id: "slot-7" }, body: "before replacement" }],
       tasks: [
         {
@@ -909,6 +911,7 @@ test("host console projection clears explicit null deadlines", () => {
       completed: false,
       phase: { phase_id: "D03", locked: false, deadline: null },
       slots: [],
+      roster: [],
       thread_posts: [],
     },
     {
@@ -939,6 +942,7 @@ test("host console projection preserves an explicit pre-phase null", () => {
       completed: false,
       phase: null,
       slots: [],
+      roster: [],
       thread_posts: [],
     },
     {
@@ -964,6 +968,7 @@ test("host console projection derives labels when the current phase changes", ()
       completed: false,
       phase: { phase_id: "D03R2", locked: false, deadline: 1782014400 },
       slots: [],
+      roster: [],
       thread_posts: [],
     },
     {
@@ -995,6 +1000,7 @@ test("host console projection preserves fallback labels for unchanged phase ids"
       completed: false,
       phase: { phase_id: "D01", locked: false, deadline: 1781841600 },
       slots: [],
+      roster: [],
       thread_posts: [],
     },
     {
@@ -1038,6 +1044,7 @@ test("host console live cells patch the Hello snapshot instead of replacing it",
           status: "alive",
         },
       ],
+      roster: [],
       thread_posts: [{ stream_seq: 10, author: { kind: "slot", slot_id: "slot-7" }, body: "hello" }],
       tasks: [],
     },

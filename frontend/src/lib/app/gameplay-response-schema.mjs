@@ -1,4 +1,5 @@
 import { isCanonicalPrincipalId } from "../principal-id.mjs";
+import { isGameRoster } from "./game-roster.mjs";
 
 const HOST_ROUTE_CAPABILITY_KINDS = new Set(["HostOf", "CohostOf"]);
 const COHOST_PERMISSION_CLASSES = new Set([
@@ -675,6 +676,7 @@ export function validateHostConsoleStateResponse(
     isHostConsolePhase(value.phase) &&
     isHostConsoleSlotArray(value.slots) &&
     isHostConsoleThreadPostArray(value.thread_posts) &&
+    isGameRoster(value.roster) &&
     isDayEventScheduler(value.day_event_scheduler) &&
     isHostDayEventArray(value.day_events) &&
     isHostTaskArray(value.tasks)
@@ -728,6 +730,8 @@ export function validateHostConsoleLiveDelta(
         isHostConsoleSlotArray(body.slots) &&
         isStringArray(body.removed_slot_ids)
       );
+    case "HostConsoleRosterChanged":
+      return body.game === game && isGameRoster(body.roster);
     case "HostConsoleThreadPostsChanged":
       return (
         body.game === game &&

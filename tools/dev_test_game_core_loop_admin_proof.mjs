@@ -10205,6 +10205,7 @@ function hostLockedConsoleState({ deadline = null } = {}) {
         role_key: "mafia_goon",
       },
     ],
+    roster: [],
     thread_posts: [
       {
         seq: 41,
@@ -10232,6 +10233,7 @@ function hostOpenConsoleState({ boundary, deadline = null }) {
         role_key: "mafia_goon",
       },
     ],
+    roster: [],
     thread_posts: [
       {
         seq: 41,
@@ -10265,6 +10267,7 @@ function hostPhaseTransitionConsoleState({
         role_key: "mafia_goon",
       },
     ],
+    roster: [],
     thread_posts: [
       {
         seq,
@@ -10313,6 +10316,7 @@ function hostCompletedConsoleState({
         alignment_revealed: completed,
       },
     ],
+    roster: [],
     thread_posts: [
       {
         seq,

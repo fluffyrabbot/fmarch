@@ -1084,6 +1084,7 @@ pub enum ProjectionDelta {
     HostConsoleStateChanged(HostConsoleStateDelta),
     HostConsoleHeaderChanged(HostConsoleHeaderDelta),
     HostConsoleSlotsChanged(HostConsoleSlotsDelta),
+    HostConsoleRosterChanged(HostConsoleRosterDelta),
     HostConsoleThreadPostsChanged(HostConsoleThreadPostsDelta),
     HostConsoleThreadPostRemoved(HostConsoleThreadPostRemovedDelta),
     HostConsoleDayEventsChanged(HostConsoleDayEventsDelta),
@@ -1175,6 +1176,7 @@ fn live_projection_audience_kind(delta: &ProjectionDelta) -> &'static str {
         ProjectionDelta::HostConsoleStateChanged(_)
         | ProjectionDelta::HostConsoleHeaderChanged(_)
         | ProjectionDelta::HostConsoleSlotsChanged(_)
+        | ProjectionDelta::HostConsoleRosterChanged(_)
         | ProjectionDelta::HostConsoleThreadPostsChanged(_)
         | ProjectionDelta::HostConsoleThreadPostRemoved(_)
         | ProjectionDelta::HostConsoleDayEventsChanged(_)
@@ -1197,6 +1199,7 @@ fn projection_delta_kind(delta: &ProjectionDelta) -> &'static str {
         ProjectionDelta::HostConsoleStateChanged(_) => "HostConsoleStateChanged",
         ProjectionDelta::HostConsoleHeaderChanged(_) => "HostConsoleHeaderChanged",
         ProjectionDelta::HostConsoleSlotsChanged(_) => "HostConsoleSlotsChanged",
+        ProjectionDelta::HostConsoleRosterChanged(_) => "HostConsoleRosterChanged",
         ProjectionDelta::HostConsoleThreadPostsChanged(_) => "HostConsoleThreadPostsChanged",
         ProjectionDelta::HostConsoleThreadPostRemoved(_) => "HostConsoleThreadPostRemoved",
         ProjectionDelta::HostConsoleDayEventsChanged(_) => "HostConsoleDayEventsChanged",
@@ -1227,6 +1230,7 @@ fn projection_delta_game(delta: &ProjectionDelta) -> Result<Uuid, LiveWireError>
         ProjectionDelta::HostConsoleStateChanged(body) => Ok(body.game),
         ProjectionDelta::HostConsoleHeaderChanged(body) => Ok(body.game),
         ProjectionDelta::HostConsoleSlotsChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleRosterChanged(body) => Ok(body.game),
         ProjectionDelta::HostConsoleThreadPostsChanged(body) => Ok(body.game),
         ProjectionDelta::HostConsoleThreadPostRemoved(body) => Ok(body.game),
         ProjectionDelta::HostConsoleDayEventsChanged(body) => Ok(body.game),
@@ -1302,6 +1306,7 @@ fn validate_live_projection_payload(delta: &ProjectionDelta) -> Result<(), LiveW
             for post in &body.thread_posts {
                 validate_host_thread_post(post)?;
             }
+            validate_roster(&body.roster)?;
             validate_scheduler(body.day_event_scheduler.as_ref())?;
         }
         ProjectionDelta::HostConsoleHeaderChanged(body) => {
@@ -1316,6 +1321,7 @@ fn validate_live_projection_payload(delta: &ProjectionDelta) -> Result<(), LiveW
                 require_nonempty_identifier(slot_id.as_str(), "removed_slot_id")?;
             }
         }
+        ProjectionDelta::HostConsoleRosterChanged(body) => validate_roster(&body.roster)?,
         ProjectionDelta::HostConsoleThreadPostsChanged(body) => {
             for post in &body.posts {
                 validate_host_thread_post(post)?;
@@ -1464,6 +1470,24 @@ fn validate_host_slot(slot: &HostConsoleSlotOccupancyDelta) -> Result<(), LiveWi
     validate_identifiers(&slot.status_tags, "status_tag")?;
     validate_optional_identifier(slot.role_key.as_deref(), "role_key")?;
     validate_optional_identifier(slot.alignment.as_deref(), "alignment")
+}
+
+fn validate_roster(roster: &[GameRosterSeat]) -> Result<(), LiveWireError> {
+    for seat in roster {
+        require_nonempty_identifier(seat.slot_id.as_str(), "slot_id")?;
+        require_nonempty_identifier(seat.status.as_str(), "status")?;
+        for occupancy in &seat.occupancies {
+            require_nonnegative_safe_integer(occupancy.began_seq, "began_seq")?;
+            if let Some(ended_seq) = occupancy.ended_seq {
+                require_nonnegative_safe_integer(ended_seq, "ended_seq")?;
+            }
+            for name in &occupancy.names {
+                require_nonnegative_safe_integer(name.effective_seq, "effective_seq")?;
+                require_nonempty_identifier(name.public_name.as_str(), "public_name")?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_host_thread_post(post: &HostConsoleThreadPostDelta) -> Result<(), LiveWireError> {
@@ -1615,6 +1639,8 @@ pub struct HostConsoleStateDelta {
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+    /// Public roster used to name thread authors at their post sequence.
+    pub roster: Vec<GameRosterSeat>,
     /// Operational scheduler posture for this game. This is worker state, not a
     /// second source of DayEvent truth.
     pub day_event_scheduler: Option<DayEventSchedulerDelta>,
@@ -1641,6 +1667,14 @@ pub struct HostConsoleSlotsDelta {
     pub game: Uuid,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub removed_slot_ids: Vec<String>,
+}
+
+/// The host console's public roster after a seating, rename, replacement or
+/// lifecycle change. Sent whole: a roster is small and its epochs interlock.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleRosterDelta {
+    pub game: Uuid,
+    pub roster: Vec<GameRosterSeat>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1726,6 +1760,15 @@ pub fn host_console_patches(
                 game: current.game,
                 slots: changed_slots,
                 removed_slot_ids,
+            },
+        ));
+    }
+
+    if previous.roster != current.roster {
+        deltas.push(ProjectionDelta::HostConsoleRosterChanged(
+            HostConsoleRosterDelta {
+                game: current.game,
+                roster: current.roster.clone(),
             },
         ));
     }
@@ -2852,6 +2895,62 @@ pub struct PublicGameThreadPage {
     pub game: GameIndexEntry,
     pub posts: Vec<ThreadPost>,
     pub next_before_seq: Option<i64>,
+    pub roster: Vec<GameRosterSeat>,
+}
+
+/// One seat of a game's public roster (RFC 0008). Clients name a seat, and
+/// attribute a post to the persona that wrote it, only through this record:
+/// the occupancy epoch covering the post's sequence, and that epoch's name in
+/// effect at the sequence. It carries no principal and no persona id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GameRosterSeat {
+    pub slot_id: String,
+    pub alive: bool,
+    pub status: String,
+    /// Oldest first; the epoch with no `ended_seq` is the current occupant.
+    pub occupancies: Vec<GameRosterOccupancy>,
+}
+
+/// One persona's tenure in a seat, `[began_seq, ended_seq)`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GameRosterOccupancy {
+    pub began_seq: i64,
+    pub ended_seq: Option<i64>,
+    /// Oldest first, each effective from its sequence. A redacted persona has
+    /// only its replacement alias.
+    pub names: Vec<GameRosterName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GameRosterName {
+    pub effective_seq: i64,
+    pub public_name: String,
+}
+
+impl From<projections::RosterSeatRow> for GameRosterSeat {
+    fn from(row: projections::RosterSeatRow) -> Self {
+        Self {
+            slot_id: row.slot_id,
+            alive: row.alive,
+            status: row.status,
+            occupancies: row
+                .occupancies
+                .into_iter()
+                .map(|occupancy| GameRosterOccupancy {
+                    began_seq: occupancy.began_seq,
+                    ended_seq: occupancy.ended_seq,
+                    names: occupancy
+                        .names
+                        .into_iter()
+                        .map(|name| GameRosterName {
+                            effective_seq: name.effective_seq,
+                            public_name: name.public_name,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3758,7 +3857,7 @@ pub mod typescript {
         EmbedSnapshot, GameIndexEntry, GameIndexPage, GameOriginTopic, GameThreadAuthor, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
-        HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
+        HostConsoleRosterDelta, HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
         HostConsoleTasksDelta, HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta,
         HostConsoleThreadPostsDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
         HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution,
@@ -3773,7 +3872,7 @@ pub mod typescript {
         PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
         PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
         PrivatePostCitationBatch, ProfileEditor, ProjectionDelta, PublicContentRef,
-        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
+        GameRosterName, GameRosterOccupancy, GameRosterSeat, PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
         PublicPostCitationBatch, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
         PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
         Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
@@ -3884,6 +3983,7 @@ pub mod typescript {
         push::<HostConsolePhaseStateDelta>(&mut out, &config);
         push::<HostConsoleSlotOccupancyDelta>(&mut out, &config);
         push::<HostConsoleSlotsDelta>(&mut out, &config);
+        push::<HostConsoleRosterDelta>(&mut out, &config);
         push::<HostConsoleThreadPostDelta>(&mut out, &config);
         push::<HostConsoleThreadPostsDelta>(&mut out, &config);
         push::<HostConsoleThreadPostRemovedDelta>(&mut out, &config);
@@ -3914,6 +4014,9 @@ pub mod typescript {
         push::<SpawnedGame>(&mut out, &config);
         push::<GameIndexEntry>(&mut out, &config);
         push::<GameIndexPage>(&mut out, &config);
+        push::<GameRosterName>(&mut out, &config);
+        push::<GameRosterOccupancy>(&mut out, &config);
+        push::<GameRosterSeat>(&mut out, &config);
         push::<PublicGameThreadPage>(&mut out, &config);
         push::<PublicSearchExcerptSegment>(&mut out, &config);
         push::<PublicSearchResultKind>(&mut out, &config);
@@ -4019,6 +4122,7 @@ mod host_console_patch_tests {
             }),
             slots: vec![slot("slot-1", "alive", true)],
             thread_posts: vec![post(10, "hello")],
+            roster: Vec::new(),
             day_event_scheduler: None,
             day_events: Vec::new(),
             tasks: Vec::new(),
@@ -4133,6 +4237,48 @@ mod host_console_patch_tests {
                 }),
             ]
         );
+    }
+
+    #[test]
+    fn roster_changes_travel_as_one_whole_roster_cell() {
+        let game = Uuid::new_v4();
+        let previous = snapshot(game);
+        let mut current = previous.clone();
+        current.roster = vec![GameRosterSeat {
+            slot_id: "slot-1".into(),
+            alive: true,
+            status: "alive".into(),
+            occupancies: vec![
+                GameRosterOccupancy {
+                    began_seq: 3,
+                    ended_seq: Some(9),
+                    names: vec![GameRosterName {
+                        effective_seq: 3,
+                        public_name: "Mira".into(),
+                    }],
+                },
+                GameRosterOccupancy {
+                    began_seq: 9,
+                    ended_seq: None,
+                    names: vec![GameRosterName {
+                        effective_seq: 8,
+                        public_name: "Wren".into(),
+                    }],
+                },
+            ],
+        }];
+
+        let patches = host_console_patches(Some(&previous), &current);
+        assert_eq!(
+            patches,
+            vec![ProjectionDelta::HostConsoleRosterChanged(HostConsoleRosterDelta {
+                game,
+                roster: current.roster.clone(),
+            })]
+        );
+        for patch in &patches {
+            validate_live_projection_payload(patch).expect("roster patch is canonical");
+        }
     }
 }
 

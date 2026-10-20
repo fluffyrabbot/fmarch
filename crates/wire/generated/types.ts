@@ -187,6 +187,8 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupancy_id: str
 
 export type HostConsoleSlotsDelta = { game: string, slots: Array<HostConsoleSlotOccupancyDelta>, removed_slot_ids: Array<string>, };
 
+export type HostConsoleRosterDelta = { game: string, roster: Array<GameRosterSeat>, };
+
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author: GameThreadAuthor, phase_id: PhaseId | null, body: string, quotations: Array<Quotation>, };
 
 export type HostConsoleThreadPostsDelta = { game: string, posts: Array<HostConsoleThreadPostDelta>, };
@@ -236,6 +238,10 @@ source_id: string, allowed_commands: Array<HostTaskAllowedCommand>, blocked_reas
 
 export type HostConsoleStateDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>,
 /**
+ * Public roster used to name thread authors at their post sequence.
+ */
+roster: Array<GameRosterSeat>,
+/**
  * Operational scheduler posture for this game. This is worker state, not a
  * second source of DayEvent truth.
  */
@@ -281,7 +287,22 @@ export type GameIndexEntry = { game: string, pack: string, status: string, phase
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
-export type PublicGameThreadPage = { next_after_seq: bigint | null, game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
+export type GameRosterName = { effective_seq: bigint, public_name: string, };
+
+export type GameRosterOccupancy = { began_seq: bigint, ended_seq: bigint | null,
+/**
+ * Oldest first, each effective from its sequence. A redacted persona has
+ * only its replacement alias.
+ */
+names: Array<GameRosterName>, };
+
+export type GameRosterSeat = { slot_id: string, alive: boolean, status: string,
+/**
+ * Oldest first; the epoch with no `ended_seq` is the current occupant.
+ */
+occupancies: Array<GameRosterOccupancy>, };
+
+export type PublicGameThreadPage = { next_after_seq: bigint | null, game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, roster: Array<GameRosterSeat>, };
 
 export type PublicSearchExcerptSegment = { text: string, highlighted: boolean, };
 
@@ -398,7 +419,7 @@ export type ResolutionTraceInspectionRun = { phase_id: PhaseId, run_id: string, 
 
 export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
 
-export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostConsoleHeaderChanged", "body": HostConsoleHeaderDelta } | { "kind": "HostConsoleSlotsChanged", "body": HostConsoleSlotsDelta } | { "kind": "HostConsoleThreadPostsChanged", "body": HostConsoleThreadPostsDelta } | { "kind": "HostConsoleThreadPostRemoved", "body": HostConsoleThreadPostRemovedDelta } | { "kind": "HostConsoleDayEventsChanged", "body": HostConsoleDayEventsDelta } | { "kind": "HostConsoleSchedulerChanged", "body": HostConsoleSchedulerDelta } | { "kind": "HostConsoleTasksChanged", "body": HostConsoleTasksDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "SlotMentionsChanged", "body": SlotMentionsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta };
+export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostConsoleHeaderChanged", "body": HostConsoleHeaderDelta } | { "kind": "HostConsoleSlotsChanged", "body": HostConsoleSlotsDelta } | { "kind": "HostConsoleRosterChanged", "body": HostConsoleRosterDelta } | { "kind": "HostConsoleThreadPostsChanged", "body": HostConsoleThreadPostsDelta } | { "kind": "HostConsoleThreadPostRemoved", "body": HostConsoleThreadPostRemovedDelta } | { "kind": "HostConsoleDayEventsChanged", "body": HostConsoleDayEventsDelta } | { "kind": "HostConsoleSchedulerChanged", "body": HostConsoleSchedulerDelta } | { "kind": "HostConsoleTasksChanged", "body": HostConsoleTasksDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "SlotMentionsChanged", "body": SlotMentionsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta };
 
 export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { game: string, slot: string, } } | { "kind": "ChannelMember", "body": { game: string, channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } } | { "kind": "SpectatorOf", "body": { game: string, } };
 

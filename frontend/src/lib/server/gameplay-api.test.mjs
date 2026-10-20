@@ -719,6 +719,7 @@ function hostConsolePayload(overrides = {}) {
     phase: null,
     slots: [],
     thread_posts: [],
+    roster: [],
     day_event_scheduler: null,
     day_events: [],
     tasks: [],
