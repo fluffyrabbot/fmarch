@@ -2118,7 +2118,7 @@ async function assertPostInteractionGeometry(
     () => document.documentElement.scrollHeight,
   );
   const anchorUsesViewport =
-    baseline.anchor.fixed === true && anchorAfter.fixed === true;
+    baseline.anchor.viewportAnchored === true && anchorAfter.viewportAnchored === true;
   const anchorShift = Math.max(
     Math.abs(
       (anchorUsesViewport ? anchorAfter.viewportX : anchorAfter.x) -
@@ -2178,6 +2178,10 @@ async function assertPostInteractionGeometry(
 async function readDocumentBox(locator) {
   return locator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const stickyTop = Number.parseFloat(style.top);
+    const viewportAnchored = style.position === "fixed" ||
+      (style.position === "sticky" && Number.isFinite(stickyTop) && Math.abs(rect.top - stickyTop) <= 1);
     return {
       x: rect.x + window.scrollX,
       y: rect.y + window.scrollY,
@@ -2185,7 +2189,8 @@ async function readDocumentBox(locator) {
       viewportY: rect.y,
       width: rect.width,
       height: rect.height,
-      fixed: window.getComputedStyle(node).position === "fixed",
+      fixed: style.position === "fixed",
+      viewportAnchored,
     };
   });
 }
