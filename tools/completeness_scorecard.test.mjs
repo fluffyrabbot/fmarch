@@ -18,8 +18,8 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 51,
-    partial: 2,
+    complete: 52,
+    partial: 1,
     open: 5,
     blocked: 0,
     deferred: 0,

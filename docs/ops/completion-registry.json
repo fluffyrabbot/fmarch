@@ -3306,8 +3306,8 @@
       "order": 95,
       "title": "Legible gameplay, setup, and host decisions",
       "execution_class": "code",
-      "status": "partial",
-      "summary": "RFC 0008 supplies roster-based public names, a confirmed vote picker, compact game-bar interruption feedback, handle-based setup seating and confirmed signup import, contextual navigation, typed capability presentation, and a decision-only host queue with labelled pack prompts. The legibility guard is enforcing; canonical browser verification and visual baseline review are in progress.",
+      "status": "complete",
+      "summary": "RFC 0008 supplies roster-based public names, a confirmed vote picker, compact game-bar interruption feedback, handle-based setup seating and confirmed signup import, contextual navigation, typed capability presentation, and a decision-only host queue with labelled pack prompts. Canonical Chromium, Firefox, WebKit, API and live-stack acceptance pass; the Linux visual baselines are reviewed and the legibility guard is enforcing.",
       "complete_when": [
         "All RFC 0008 slice acceptance checks pass on the canonical Linux worker, changed visual baselines are reviewed, and the interaction architecture records the shipped behavior."
       ],
@@ -3338,9 +3338,7 @@
           "value": "npm run test:frontend-visual-regression"
         }
       ],
-      "remaining": [
-        "Complete canonical browser acceptance and review the Linux visual baselines for the remaining RFC 0008 slices."
-      ]
+      "remaining": []
     }
   ],
   "orchestration_rules": [

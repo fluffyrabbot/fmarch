@@ -275,11 +275,18 @@ landed; slices 3 → 4 → 5 share the player route and run in order.
 
 ### Implementation checkpoint
 
-The remaining interruption, setup, navigation, and host-queue changes are
-implemented on the RFC completion task branch. Local contract checks cover the
-new feedback and queue behavior; canonical API/browser proof and Linux visual
-baseline review are still in progress. The completion registry tracks this
-boundary under `product.game.legible-surfaces`.
+All delivery slices are implemented. Interruption feedback lives in the game
+bar and preserves the exact retry request and visible action position. Setup
+resolves handles through a host-authorized lookup, previews signup seating once,
+and refreshes candidates and the roster before importing. Contextual navigation
+and board facts replace the overlapping role tabs. The host queue contains only
+decisions and recovery work; routine actions live in Tools.
+
+Canonical Linux acceptance covers Chromium, Firefox and WebKit role journeys,
+host setup and signup import, API authorization, live-stack recovery, legibility,
+and reviewed Chromium visual baselines. The interaction architecture records the
+shipped behavior; `product.game.legible-surfaces` is complete. Native Safari and
+real-device acceptance remain separate from the Linux browser proof.
 
 ### Slice acceptance
 
