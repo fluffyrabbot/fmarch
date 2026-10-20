@@ -218,7 +218,7 @@ test('resume retries failures and their artifact producers while reusing unrelat
     },
   };
   const receipt = {
-    schema: 3,
+    schema: 4,
     id: 'prior',
     state: 'failed',
     context: { ...context, selected_lane_ids: ['producer', 'consumer', 'unrelated'] },
@@ -1691,9 +1691,11 @@ test('profile and completed export leaves own independent resource and completio
     assert.equal(lane.phase, 'acceptance');
     assert.equal(lane.execution.class, 'browser');
     assert.deepEqual(lane.execution.argv, ['npm', 'run', laneId]);
+    assert.equal(lane.execution.prebuild, 'cargo-builds');
     assert.deepEqual(lane.depends_on ?? [], [], 'self-contained live state needs no upstream artifact producer');
     assert.deepEqual(lane.execution.resources, [
-      ...['cargo-target', 'browser', 'frontend-worktree'].map(name => ({ kind: 'lock', name })),
+      { kind: 'lock', name: 'cargo-target', scope: 'build' },
+      ...['browser', 'frontend-worktree'].map(name => ({ kind: 'lock', name })),
       { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
       { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
     ]);

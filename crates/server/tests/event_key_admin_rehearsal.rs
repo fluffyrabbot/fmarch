@@ -9,6 +9,13 @@ use identity::{MethodKind, PrincipalId};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+/// The proof runner pins each lane's binaries and exports their paths at run
+/// time; plain `cargo test` falls back to Cargo's compile-time path.
+fn event_key_admin_binary() -> String {
+    std::env::var("CARGO_BIN_EXE_fmarch-event-key-admin")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_fmarch-event-key-admin").to_string())
+}
+
 static ENCRYPTION_ENV_LOCK: Mutex<()> = Mutex::new(());
 const APPLICATION_DATABASE_PASSWORD: &str = "event-key-admin-application-proof";
 const KEY_ADMIN_DATABASE_PASSWORD: &str = "event-key-admin-key-authority-proof";
@@ -64,7 +71,7 @@ fn run_admin(
     operation: &str,
     historical: Option<(&str, &str)>,
 ) -> serde_json::Value {
-    let binary = env!("CARGO_BIN_EXE_fmarch-event-key-admin");
+    let binary = event_key_admin_binary();
     let mut command = Command::new(binary);
     command
         .args([
@@ -113,7 +120,7 @@ fn rejected_admin_configuration(
     archive_kid: &str,
     archive_key: &str,
 ) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_fmarch-event-key-admin"))
+    let output = Command::new(event_key_admin_binary())
         .args([
             "runtime-kek",
             "plan",
@@ -300,7 +307,7 @@ async fn deployed_admin_rehearses_old_key_removal_before_retirement(pool: PgPool
         .fetch_one(&mut *held_registry)
         .await
         .unwrap();
-    let timeout = Command::new(env!("CARGO_BIN_EXE_fmarch-event-key-admin"))
+    let timeout = Command::new(event_key_admin_binary())
         .args([
             "runtime-kek",
             "migrate",

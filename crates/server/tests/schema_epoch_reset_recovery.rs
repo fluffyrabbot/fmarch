@@ -7,6 +7,20 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
+/// The proof runner pins each lane's binaries and exports their paths at run
+/// time; plain `cargo test` falls back to Cargo's compile-time path.
+fn schema_epoch_reset_binary() -> String {
+    std::env::var("CARGO_BIN_EXE_fmarch-schema-epoch-reset")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_fmarch-schema-epoch-reset").to_string())
+}
+
+/// The proof runner pins each lane's binaries and exports their paths at run
+/// time; plain `cargo test` falls back to Cargo's compile-time path.
+fn migrate_binary() -> String {
+    std::env::var("CARGO_BIN_EXE_fmarch-migrate")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_fmarch-migrate").to_string())
+}
+
 const RELEASE_COMMIT: &str = "1111111111111111111111111111111111111111";
 const PROJECT_ID: &str = "9d285d67-c11b-4508-9efb-fad042787b4c";
 const ENVIRONMENT_ID: &str = "e109e500-2a4c-48a3-96f2-e92a9edb63e4";
@@ -39,7 +53,7 @@ fn epoch() -> u64 {
 
 fn reset_command(database_url: &str, execute: bool, expected: Option<&Value>) -> Command {
     let epoch = epoch();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_fmarch-schema-epoch-reset"));
+    let mut command = Command::new(schema_epoch_reset_binary());
     command
         .env_clear()
         .env("DATABASE_MIGRATION_URL", database_url)
@@ -77,7 +91,7 @@ fn reset_command(database_url: &str, execute: bool, expected: Option<&Value>) ->
 }
 
 fn migration_command(database_url: &str) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_fmarch-migrate"));
+    let mut command = Command::new(migrate_binary());
     command
         .arg("--operation-id")
         .arg(MIGRATION_OPERATION_ID)
