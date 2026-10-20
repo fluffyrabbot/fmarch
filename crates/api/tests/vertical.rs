@@ -4259,7 +4259,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
         .expect("official votecount post");
 
     assert!(matches!(&official.author, GameThreadAuthor::HostNarrator));
-    assert!(official.body.contains("- Player slot_2 · S2: 1"));
+    assert!(official.body.contains("- Slot 2: 1"));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -5291,7 +5291,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
                                 && delta.posts.iter().any(|post|
                                     matches!(&post.author, GameThreadAuthor::HostNarrator)
                                         && post.body.starts_with("Official votecount for D01")
-                                        && post.body.contains("- Player slot_2 · S2: 1")
+                                        && post.body.contains("- Slot 2: 1")
                                 )
                     ) {
                         return Some(envelope);
