@@ -4259,7 +4259,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
         .expect("official votecount post");
 
     assert!(matches!(&official.author, GameThreadAuthor::HostNarrator));
-    assert!(official.body.contains("- slot_2: 1"));
+    assert!(official.body.contains("- Player slot_2 · S2: 1"));
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -5291,7 +5291,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
                                 && delta.posts.iter().any(|post|
                                     matches!(&post.author, GameThreadAuthor::HostNarrator)
                                         && post.body.starts_with("Official votecount for D01")
-                                        && post.body.contains("- slot_2: 1")
+                                        && post.body.contains("- Player slot_2 · S2: 1")
                                 )
                     ) {
                         return Some(envelope);
@@ -15839,10 +15839,10 @@ async fn slot_mention_rail_resolves_occupancy_at_read_time_and_survives_replacem
                 game,
                 channel_id: "main".into(),
                 actor_slot: "slot_1".into(),
-                body: "@slot_7 you have been quiet".into(),
+                body: "@Player slot_7 you have been quiet".into(),
                 media: None,
                 quotations: None,
-                mentions: Some(vec![SubmitPostMention::new("slot_7", 0, 7)
+                mentions: Some(vec![SubmitPostMention::new("slot_7", 0, 14)
                     .expect("the composer span names a seat and covers its @")]),
                 embed: None,
             },

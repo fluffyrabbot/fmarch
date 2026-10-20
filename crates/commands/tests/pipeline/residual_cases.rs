@@ -12173,7 +12173,7 @@ async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(poo
            AND channel_id = 'main' \
            AND author_kind = 'host_narrator' \
            AND phase_id = 'D01' \
-           AND body = 'Official votecount for D01\n- slot_2: 1'",
+           AND body = 'Official votecount for D01\n- Slot 2: 1'",
     )
     .bind(game)
     .fetch_one(&pool)
