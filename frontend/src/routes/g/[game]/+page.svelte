@@ -754,7 +754,7 @@
           typeof window === "undefined" ? null : window,
         ),
       });
-      commandStatus = result.commandStatus;
+      commandStatus = { ...result.commandStatus, actionId: action, commandTrace: optimisticStatus.commandTrace };
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
         action,
@@ -1009,16 +1009,12 @@
 
 {#if playerForcedRouteState}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId} data-capability-kind={player.capability?.kind}>
-      Your game access
-    </span>
+    <GameBar shell={data.shell} game={data.game} {phase} {player} />
     <RouteState view={playerForcedRouteState} />
   </main>
 {:else if playerSurfaceEmpty}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId} data-capability-kind={player.capability?.kind}>
-      Your game access
-    </span>
+    <GameBar shell={data.shell} game={data.game} {phase} {player} />
     <RouteState view={playerEmptyState} />
   </main>
 {:else}

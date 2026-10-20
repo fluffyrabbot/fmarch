@@ -5006,7 +5006,8 @@ async function driveModeratorBrowser(
       }
     }
     // The chooser exists before a candidate-dependent replacement task does.
-    await page.getByTestId(`host-task-${taskId}`).click();
+    if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+  await page.getByTestId(`host-task-${taskId}`).click();
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -5662,6 +5663,7 @@ async function rejectStalePlayerInviteFromBrowser(page) {
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
   const taskId = actionId === "extend_deadline" ? "deadline" : "phase";
+  if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await page.getByTestId(`host-task-${taskId}`).click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
@@ -5857,6 +5859,7 @@ async function resolveHostPromptFromBrowser(page) {
 
 async function modkillSlotFromBrowser(page) {
   const actionId = "modkill_slot";
+  if (!(await page.getByTestId("host-task-slot-lifecycle").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await page.getByTestId("host-task-slot-lifecycle").click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");

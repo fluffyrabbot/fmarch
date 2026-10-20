@@ -241,16 +241,8 @@ test("shared shell keyboard order starts with skip link before allowed role navi
 
   assert.equal(focus.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
   assert.equal(focus.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
-  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-community", "role-nav-inbox", "role-nav-search", "role-nav-player"]);
-  assert.deepEqual(focus.expectedOrder, [
-    "app-shell-skip-link",
-    "role-nav-board",
-    "role-nav-community",
-    "role-nav-inbox",
-    "role-nav-search",
-    "role-nav-player",
-    "player-command-submit",
-  ]);
+  assert.deepEqual(focus.linkedNavTestIds, []);
+  assert.deepEqual(focus.expectedOrder, ["app-shell-skip-link", "account-menu-toggle", "player-command-submit"]);
   assert.deepEqual(focus.forbiddenTestIds, [
     "role-nav-moderator",
     "role-nav-admin",
@@ -319,7 +311,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
   assert.equal(hostError.error.actionHref, "/");
   assert.equal(
     hostError.error.message,
-    "Host console for midsummer requires HostOf(midsummer).",
+    "You do not have access to this page. Return to Games to choose an available game.",
   );
 
   const adminError = buildRouteErrorData({
@@ -414,7 +406,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
   assert.equal(pending.title, "Loading game surface");
   assert.equal(
     pending.message,
-    "Fetching thread, channel, votecount, deadline, and private projection state.",
+    "Loading posts, votes, and your game information.",
   );
   assert.equal(pending.activeNavTestId, "role-nav-player");
   assert.equal(pending.sessionViewer, "Your account");

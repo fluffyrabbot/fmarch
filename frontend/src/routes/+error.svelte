@@ -27,7 +27,6 @@
       <p class="fm-eyebrow">{routeError.error.status}</p>
       <h1>{routeError.error.title}</h1>
       <p>{routeError.error.message}</p>
-      <p class="fm-error-panel__path">{routeError.error.path}</p>
       <a
         class="fm-touch-button"
         href={routeError.error.actionHref}

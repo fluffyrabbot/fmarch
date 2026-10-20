@@ -708,6 +708,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 | Member | Rust declaration |
 |---|---|
+| <code>host_prompt_kinds</code> | <code>host_prompt_kinds: BTreeMap&lt;String, HostPromptPresentation&gt;</code> |
 | <code>name</code> | <code>name: String</code> |
 | <code>version</code> | <code>version: u32</code> |
 | <code>ir_version</code> | <code>ir_version: u16</code> |
@@ -750,7 +751,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## Role
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L164) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L166) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -762,7 +763,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## ActionTemplate
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1439) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1441) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -791,7 +792,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## Constraints
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1534) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1536) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -814,7 +815,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## PrecedenceRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1578) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1580) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -827,7 +828,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## VisibilityRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1608) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1610) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -836,7 +837,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## ResultOverride
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1774) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1776) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -844,7 +845,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## RedirectPolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1635) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1637) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -854,7 +855,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## RedirectKind
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L240) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L242) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -865,7 +866,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## TriggerRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1643) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1645) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -877,7 +878,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## TriggerOn
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1655) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1657) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -886,7 +887,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## TriggerEvent
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1661) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1663) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -899,7 +900,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## ActorRef
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1680) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1682) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -910,7 +911,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## TargetRef
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1688) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1690) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -921,7 +922,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## VotePolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1696) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1698) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -937,7 +938,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## DynamicVoteWeightPolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1727) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1729) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -947,7 +948,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## DynamicVoteWeightRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1737) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1739) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -957,7 +958,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## DynamicVoteWeightGrantRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1745) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1747) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -966,7 +967,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## HostPromptResolutionEffectPolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1035) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1037) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -978,7 +979,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## PhasePolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1764) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1766) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -988,7 +989,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## WinPolicy
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1869) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1871) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -997,7 +998,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## WinRule
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1879) (struct).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1881) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -1007,7 +1008,7 @@ Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#
 
 ## WinCondition
 
-Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1910) (enum).
+Source: [crates/domain/src/pack/model.rs](../../crates/domain/src/pack/model.rs#L1912) (enum).
 
 | Member | Rust declaration |
 |---|---|

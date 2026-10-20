@@ -406,6 +406,7 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
       "Set up games, manage access, and review system health.",
     capability: {
       visible: true,
+      kind: "GlobalAdmin",
       label: "Site administrator",
       testId: "admin-capability",
       className: "fm-capability-pill",

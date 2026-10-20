@@ -10,7 +10,7 @@
 // authored text (a mention chip, `data-legibility="rendered"`) is checked
 // again.
 
-export const LEGIBILITY_MODE = "report";
+export const LEGIBILITY_MODE = "enforce";
 
 export const LEGIBILITY_EXEMPT_REGIONS = Object.freeze(["technical", "author-content"]);
 
@@ -69,11 +69,11 @@ export function collectLegibilitySamples(exemptRegions) {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (parent === null || skipTags.has(parent.tagName) || exempted(parent)) continue;
+    if (parent === null || skipTags.has(parent.tagName) || parent.closest("pre,code,[hidden],[aria-hidden=true],script,style") || exempted(parent)) continue;
     push(node.nodeValue, parent, "text");
   }
   for (const element of document.body.querySelectorAll("[aria-label],[title],[placeholder],img[alt]")) {
-    if (exempted(element)) continue;
+    if (element.closest("pre,code,[hidden],[aria-hidden=true]") || exempted(element)) continue;
     for (const attribute of ["aria-label", "title", "placeholder", "alt"]) {
       if (element.hasAttribute(attribute)) push(element.getAttribute(attribute), element, attribute);
     }
@@ -122,8 +122,7 @@ export function legibilityEvidenceComplete(evidence, { surface } = {}) {
     Number.isInteger(evidence.sampleCount) &&
     evidence.sampleCount > 0 &&
     Array.isArray(evidence.violations) &&
-    // Report mode records violations; the gating flip (RFC 0008 slice 9)
-    // replaces this clause with `evidence.violations.length === 0`.
+    evidence.violations.length === 0 &&
     evidence.violations.every(
       (violation) =>
         LEGIBILITY_RULES.some((rule) => rule.id === violation?.rule) &&

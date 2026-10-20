@@ -225,3 +225,74 @@ async fn signup_admission_serializes_with_topic_hiding_and_rejects_empty_lock_cy
     assert_eq!(results.0.unwrap_err(), Reject::InvalidTarget);
     assert_eq!(results.1.unwrap_err(), Reject::InvalidTarget);
 }
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn setup_signups_are_distinct_public_authors_and_exclude_host(pool: sqlx::PgPool) {
+    let (host, _, topic) = origin_fixture(&pool).await;
+    let host_id = PrincipalId::fixture("signup_host");
+    for (label, public) in [("signup_reader", true), ("signup_private", false)] {
+        let principal_id = PrincipalId::fixture(label);
+        {
+            let mut connection = pool.acquire().await.unwrap();
+            identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
+                .await
+                .unwrap();
+        }
+        let profile = profile_application::create_profile(
+            &pool,
+            principal_id,
+            social::ProfilePresentation::new(
+                social::ProfileHandle::new(label).unwrap(),
+                social::ProfileDisplayName::new("Signup Player").unwrap(),
+                social::ProfileBio::new("").unwrap(),
+                if public {
+                    social::ProfileVisibility::Public
+                } else {
+                    social::ProfileVisibility::Private
+                },
+            ),
+            1,
+        )
+        .await
+        .unwrap()
+        .as_uuid();
+        for _ in 0..2 {
+            projections::test_support::append_discussion_and_project(
+                &pool,
+                topic,
+                &[EventInput::new(
+                    "DiscussionPostSubmitted",
+                    1,
+                    serde_json::json!({"body":"I'd like to play", "author_profile_id":profile}),
+                    ActorId::Principal(principal_id),
+                    5,
+                )],
+            )
+            .await
+            .unwrap();
+        }
+    }
+    let game = Uuid::new_v4();
+    commands::handle(&pool, &host, create(game, PublicContentRef::new(topic, 0)))
+        .await
+        .unwrap();
+    let candidates = projections::setup_candidates(&pool, game, host_id, None)
+        .await
+        .unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(
+        candidates[0].principal_id,
+        PrincipalId::fixture("signup_reader")
+    );
+    assert!(!candidates[0].already_seated);
+    // Removing the origin's public surface removes its candidates too.
+    sqlx::query("UPDATE publication_surface SET visible = false WHERE surface_id = $1")
+        .bind(topic)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(projections::setup_candidates(&pool, game, host_id, None)
+        .await
+        .unwrap()
+        .is_empty());
+}

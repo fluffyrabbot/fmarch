@@ -3,8 +3,9 @@
   export let includeNavigation = false;
 </script>
 <details class="account-menu">
-  <summary class="fm-touch-button fm-touch-button--secondary" aria-label={includeNavigation ? 'Navigation and account' : 'Account menu'}>{includeNavigation ? 'Menu' : shell.session.initials}</summary>
+  <summary data-testid="account-menu-toggle" class="fm-touch-button fm-touch-button--secondary" aria-label={includeNavigation ? 'Navigation and account' : 'Account menu'}>{includeNavigation ? 'Menu' : shell.session.initials}</summary>
   <nav aria-label="Account navigation">
+    <span data-testid={shell.session.viewerTestId}>{shell.session.viewerLabel}</span>
     {#each shell.surfaces.filter(surface => surface.allowed && (includeNavigation || surface.group === 'workspace') && surface.id !== 'player') as surface}
       <a href={surface.href} data-testid={surface.testId} data-capability-kind={surface.capability?.kind} aria-current={surface.active ? 'page' : undefined}>{surface.label}</a>
     {/each}

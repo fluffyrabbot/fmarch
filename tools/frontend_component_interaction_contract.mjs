@@ -121,7 +121,7 @@ async function proveSourceContracts() {
     await proveSourceContract({
       component: "PlayerFeedback",
       path: "frontend/src/lib/components/player-command/PlayerFeedback.svelte",
-      requiredSnippets: ["<CommandRecovery", "status={currentStatus}"],
+      requiredSnippets: ["settle(onRetry)", "settle(onDismiss)", "playerFeedback({ status, attempt, roster })"],
     }),
     await proveSourceContract({
       component: "HostTaskWorkspace",
@@ -245,17 +245,17 @@ async function provePlayerInteraction(bundle) {
   assert.equal(postReceipts[0].state, "pending");
 
   return {
-    component: "VoteSheet/PlayerCommandReceipt",
+    component: "VoteSheet/PlayerFeedback",
     actions: [
       {
         action: invoked[0],
         actionAttribute: "submit_vote",
-        visibleRowTestId: "player-command-receipt-submit_vote",
+        visibleRowTestId: null,
       },
       {
         action: invoked[1],
         actionAttribute: "submit_post",
-        visibleRowTestId: "player-command-receipt-submit_post",
+        visibleRowTestId: null,
       },
     ],
     statusTestId: "player-command-status",

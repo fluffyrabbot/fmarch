@@ -13,7 +13,7 @@ const ROUTE_STATE_COPY = Object.freeze({
   board: Object.freeze({
     empty: Object.freeze({
       title: "No active games are visible",
-      message: "Active games and role queues will appear here when this session has visible projections.",
+      message: "Games you can read or join will appear here.",
       actionLabel: "Back to board",
       actionHref: "/",
     }),
@@ -53,19 +53,19 @@ const ROUTE_STATE_COPY = Object.freeze({
   player: Object.freeze({
     empty: Object.freeze({
       title: "No visible thread activity",
-      message: "Posts, votecounts, and private results will appear when this session has scoped projections.",
+      message: "Posts, votes, and private results will appear here as the game progresses.",
       actionLabel: "Back to board",
       actionHref: "/",
     }),
     loading: Object.freeze({
       title: "Loading game surface",
-      message: "Fetching thread, channel, votecount, deadline, and private projection state.",
+      message: "Loading posts, votes, and your game information.",
       actionLabel: "Back to board",
       actionHref: "/",
     }),
     reject: Object.freeze({
       title: "Player action rejected",
-      message: "The server rejected this player action. Keep the visible projection as truth and retry after refresh.",
+      message: "Your action was not accepted. Check the current game state before trying again.",
       actionLabel: "Back to board",
       actionHref: "/",
     }),

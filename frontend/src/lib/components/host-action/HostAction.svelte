@@ -14,14 +14,18 @@
   export let onDispatch = () => {};
   export let initialConfirmationOpen = false;
 
-  let customTime = '';
+  function localInputTime(value) {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16) : '';
+  }
+  let customTime = action?.id === 'extend_deadline' ? localInputTime(action.payload?.extendsTo) : '';
   $: customDeadline = action?.id === 'extend_deadline';
   $: timestamp = customTime ? new Date(customTime).getTime() : NaN;
-  $: effectiveAction = customDeadline ? {
+  $: effectiveAction = customDeadline && timestamp !== Date.parse(action.payload?.extendsTo) ? {
     ...action,
-    disabled: !Number.isFinite(timestamp) || timestamp <= Date.now(),
-    outcomeLabel: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : 'Choose a future deadline.',
-    confirmationText: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : 'Choose a future deadline.',
+    disabled: !Number.isFinite(timestamp),
+    outcomeLabel: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
+    confirmationText: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
     payload: {...action.payload, extendsTo: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null},
   } : action;
   let controller;

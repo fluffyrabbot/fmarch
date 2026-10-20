@@ -219,8 +219,8 @@ function proveBoardSurface() {
     [
       ["board", "link"],
       ["community", "link"],
-      ["search", "link"],
       ["inbox", "link"],
+      ["search", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
       ["admin", "blocked"],
@@ -229,9 +229,8 @@ function proveBoardSurface() {
   assert.deepEqual(
     data.board.games[0].actions.map((action) => [action.id, action.navigation]),
     [
-      ["public-thread", "link"],
       ["player", "link"],
-      ["moderator", "blocked"],
+      ["public-thread", "link"],
     ],
   );
   return {
@@ -776,7 +775,7 @@ function proveLinkAffordanceCoverage(roleSurfaces) {
 
 function proveNavFocusCoverage() {
   const coverage = navFocusCoverage.surfaces.map((surface) => {
-    assert.equal(surface.linkedNavTestIds.length > 0, true);
+    assert.equal(surface.expectedFocusOrder.includes("account-menu-toggle"), true);
     assert.equal(surface.blockedNavTestIds.length > 0, true);
     assert.equal(surface.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
     assert.equal(surface.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
@@ -785,7 +784,7 @@ function proveNavFocusCoverage() {
       APP_SHELL_CONTRACT.skipLinkTestId,
       `${surface.id} focus order must start with the shell skip link`,
     );
-    assertUnique(surface.linkedNavTestIds, `${surface.id} linked nav targets`);
+    assert.equal(new Set(surface.linkedNavTestIds).size, surface.linkedNavTestIds.length);
     assertUnique(surface.blockedNavTestIds, `${surface.id} blocked nav targets`);
     assert.deepEqual(
       surface.expectedFocusOrder.slice(1, 1 + surface.linkedNavTestIds.length),
@@ -1963,7 +1962,7 @@ async function proveModeratorSurface() {
   assert.equal(controls.tasks.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
+    summary: "Technical details",
     label: "Technical access",
     value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
@@ -1993,7 +1992,7 @@ async function proveModeratorSurface() {
 
   const irreversibleAction = extendDeadlineAction;
   const hostAction = buildHostActionViewModel(irreversibleAction);
-  assert.equal(hostAction.trigger.data.danger, "true");
+  assert.equal(hostAction.trigger.data.danger, "false");
   const dispatched = [];
   const controller = createHostActionController(irreversibleAction, (event) => {
     dispatched.push(event);

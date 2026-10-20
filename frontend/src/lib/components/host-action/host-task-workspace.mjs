@@ -1,3 +1,4 @@
+import { seatNames } from "../../app/seat-presenter.mjs";
 import { visibleHostCommandStatus } from "./host-command-status.mjs";
 import {
   canonicalPrincipalId,
@@ -36,6 +37,7 @@ export function buildHostTaskWorkspaceViewModel({
   hostPrompts = [],
   hostTasks = [],
   hostDayEvents = [],
+  roster = [],
   dayEventSelections = {},
   votecount = [],
   selectedTaskId = null,
@@ -59,6 +61,7 @@ export function buildHostTaskWorkspaceViewModel({
       promptGroup,
       hostPrompts,
       hostDayEvents,
+      roster,
       dayEventSelections,
       gameId: commandContext.gameId,
       commandStatuses,
@@ -120,7 +123,9 @@ function buildTask({
   const activeStatus = activeTaskStatus(group.actions, commandStatuses);
   const state = taskState(activeStatus);
   const rank = ["interrupted", "blocked"].includes(state) ? 0 : posture.rank;
-  const actions = buildTaskActions(group.actions, commandStatuses);
+  const orderedActions = group.id === 'deadline'
+    ? [...group.actions].sort((a,b) => ['extend_deadline_24h','extend_deadline_48h','extend_deadline'].indexOf(a.id) - ['extend_deadline_24h','extend_deadline_48h','extend_deadline'].indexOf(b.id)) : group.actions;
+  const actions = buildTaskActions(orderedActions, commandStatuses);
   const primaryAction = group.actions[0] ?? null;
 
   return Object.freeze({
@@ -132,7 +137,7 @@ function buildTask({
     urgencyLabel: stateLabel(state, posture.label),
     state,
     label: group.label,
-    intent: group.value,
+    intent: group.id === "deadline" ? "Choose when this phase should end." : group.value,
     consequence: primaryAction?.outcomeLabel ?? group.emptyLabel,
     meta: taskMeta({ groupId: group.id, phase, replacement, hostPrompts, votecount }),
     testId: `host-task-${group.id}`,
@@ -152,6 +157,7 @@ function buildHostTaskInstance({
   promptGroup,
   hostPrompts,
   hostDayEvents,
+  roster,
   dayEventSelections,
   gameId,
   commandStatuses,
@@ -171,6 +177,7 @@ function buildHostTaskInstance({
         selectedSlots: dayEventSelections[task.sourceId] ?? [],
         task,
         gameId,
+        roster,
       })
     : null;
   const sourceActions = dayEventDecision
@@ -203,7 +210,7 @@ function buildHostTaskInstance({
     consequence: blockedReason ?? (prompt ? "Your choice will resolve this decision." : task.consequence),
     meta:
       dayEvent?.meta ??
-      [phaseLabelFromId(task.phaseId), task.subjectSlot].filter(Boolean).join(" · "),
+      [phaseLabelFromId(task.phaseId), task.subjectSlot ? seatNames(roster).label(task.subjectSlot) : null].filter(Boolean).join(" · "),
     testId: `host-task-${stableTestId(task.id)}`,
     panelTestId: `moderator-control-${stableTestId(task.id)}`,
     actions: buildTaskActions(sourceActions, commandStatuses),
@@ -223,7 +230,7 @@ function buildHostTaskInstance({
   });
 }
 
-function buildDayEventContext({ event, selectedSlots, task, gameId }) {
+function buildDayEventContext({ event, selectedSlots, task, gameId, roster }) {
   if (event === null || event === undefined) {
     return Object.freeze({
       eventId: task.sourceId,
@@ -242,6 +249,7 @@ function buildDayEventContext({ event, selectedSlots, task, gameId }) {
   const participants = event.participantSlots.map((slot) =>
     Object.freeze({
       slot,
+      label: seatNames(roster).label(slot),
       selected: winners.includes(slot),
       disabled: task.state !== "ready",
       testId: `day-event-winner-${stableTestId(event.eventId)}-${stableTestId(slot)}`,
@@ -252,7 +260,7 @@ function buildDayEventContext({ event, selectedSlots, task, gameId }) {
     presentThemeKey(reward.labelKey || reward.key, reward.key || "Reward"),
   );
   const selectedLabel =
-    winners.length === 1 ? winners[0] : `${winners.length} participants`;
+    winners.length === 1 ? seatNames(roster).label(winners[0]) : `${winners.length} participants`;
   const outcomeLabel =
     winners.length === 0
       ? "select at least one winner before applying rewards"
@@ -351,13 +359,13 @@ function stateLabel(state, fallback) {
 }
 
 function taskMeta({ groupId, phase, replacement, hostPrompts, votecount }) {
-  if (groupId === "deadline") return phase?.deadlineLabel ?? "No phase deadline";
+  if (groupId === "deadline") return "Change when this phase ends";
   if (groupId === "host-prompts") {
     const count = hostPrompts.filter((prompt) => prompt.status === "pending").length;
     return `${count} unresolved prompt${count === 1 ? "" : "s"}`;
   }
   if (groupId === "replacement") {
-    return `${replacement.slotId ?? "Slot"} · ${replacement.occupantLabel ?? "player"}`;
+    return replacement.occupantLabel ?? "Player waiting";
   }
   if (groupId === "votecount") {
     return `${votecount.length} target${votecount.length === 1 ? "" : "s"}`;

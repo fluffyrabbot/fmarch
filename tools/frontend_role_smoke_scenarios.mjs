@@ -506,7 +506,7 @@ export const roles = Object.freeze([
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
     mobileViewportBudget: Object.freeze({
       primaryActionSelector:
-        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 2.5,
     }),
@@ -598,11 +598,10 @@ export const roles = Object.freeze([
     ],
     statusRegions: [],
     touchSelectors: [
-      '[data-testid="host-task-deadline"]',
       '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       '[data-testid="host-task-day-event-resolve-event-cookie"]',
       '[data-testid="host-task-replacement"]',
-      '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="host-console-votecount-row-slot-2"]',
       '[data-testid="host-supporting-evidence"] > summary',
       '[data-testid="host-invite-workflows"] > summary',
@@ -612,9 +611,7 @@ export const roles = Object.freeze([
         testId: "moderator-primary-action-zone",
         zone: "moderator-primary-actions",
         targetSelectors: Object.freeze([
-          '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-extend_deadline_24h"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-extend_deadline_48h"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
         ]),
       }),
     ]),
@@ -805,7 +802,7 @@ function roleFocusScenario({ shell, expectedAfterNav = [] }) {
 }
 
 function routeStateFocusScenario({ role, actionTestId }) {
-  const linkedNavTestIds = navTestIds(role.nav, "link");
+  const linkedNavTestIds = role.focus.expectedOrder.filter(id => id.startsWith("role-nav-"));
   return Object.freeze({
     skipLinkTestId: role.focus.skipLinkTestId,
     mainTargetTestId: role.focus.mainTargetTestId,
@@ -813,6 +810,7 @@ function routeStateFocusScenario({ role, actionTestId }) {
     expectedOrder: Object.freeze([
       role.focus.skipLinkTestId,
       ...linkedNavTestIds,
+      "account-menu-toggle",
       actionTestId,
     ]),
     forbiddenTestIds: Object.freeze(navTestIds(role.nav, "blocked")),
@@ -826,7 +824,7 @@ function navFocusCoverageForScenario({ id, path, nav, focus }) {
     navigation: nav,
     skipLinkTestId: focus.skipLinkTestId,
     mainTargetTestId: focus.mainTargetTestId,
-    linkedNavTestIds: Object.freeze(navTestIds(nav, "link")),
+    linkedNavTestIds: Object.freeze(focus.expectedOrder.filter(id => id.startsWith("role-nav-"))),
     blockedNavTestIds: Object.freeze(navTestIds(nav, "blocked")),
     expectedFocusOrder: focus.expectedOrder,
     forbiddenFocusTestIds: focus.forbiddenTestIds,

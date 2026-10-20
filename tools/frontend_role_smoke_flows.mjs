@@ -300,6 +300,8 @@ const moderatorActionTarget = (testId) =>
 export const commandFlows = Object.freeze({
   moderator: Object.freeze({
     steps: Object.freeze([
+      { type: "click", target: { within: "host-tools", selector: "summary" } },
+      { type: "click", target: { testId: "host-task-deadline" } },
       {
         type: "capture-geometry-baseline",
         id: "confirmationGeometryBaseline",

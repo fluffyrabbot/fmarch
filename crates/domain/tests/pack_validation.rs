@@ -66,6 +66,11 @@ fn set_effect_policy(value: &mut Value, tag: &str, duration: &str, visibility: &
 fn valid_pack_value() -> Value {
     json!({
         "name": "testpack",
+        "host_prompt_kinds": {
+            "skip_next_day": {"label": "Skip the next day?", "description": "Choose whether to skip the next day."},
+            "revote": {"label": "Hold another vote?", "description": "Choose whether players should vote again."},
+            "pk": {"label": "Resolve the tied vote", "description": "Choose how to resolve this tie."}
+        },
         "version": 1,
         "ir_version": 1,
         "night_resolution": { "mode": "Generic" },

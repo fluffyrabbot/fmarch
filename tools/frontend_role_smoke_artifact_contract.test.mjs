@@ -855,7 +855,7 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
+    summary: "Technical details",
     label: "Technical access",
     value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
@@ -978,7 +978,7 @@ test("static role contract artifact records shared nav focus and route state mat
         "critical-host-action-trigger",
         true,
         "confirm-cancel",
-        "true",
+        "false",
       ],
       [
         "extend_deadline_24h",
@@ -1375,7 +1375,7 @@ test("route-state render artifact covers every forced board and role page state"
     activeNavTestId: roleNavTestId("player"),
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     htmlBytes: routeStateRender.errorSurface.htmlBytes,
   });
   assert.equal(routeStateRender.errorSurface.htmlBytes > 0, true);
@@ -1509,9 +1509,9 @@ test("route-state render artifact covers every forced board and role page state"
   assert.deepEqual(routeStateRender.feedbackRailMarkup.player, {
     role: "player",
     render: "renderPlayerCommandReceipt",
-    component: "player-command-receipt",
-    testId: "player-command-receipt",
-    itemTestId: "player-command-receipt-submit_vote",
+    component: "player-feedback",
+    testId: "player-feedback",
+    itemTestId: "player-feedback",
     statusTestId: PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     statusState: "reject",
     commandTrace: {
@@ -2174,8 +2174,8 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/gameplay/ComposeSheet.svelte",
       ],
       [
-        "PlayerCommandReceipt",
-        "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
+        "PlayerFeedback",
+        "frontend/src/lib/components/player-command/PlayerFeedback.svelte",
       ],
       [
         "HostTaskWorkspace",
@@ -2217,17 +2217,17 @@ test("component interaction artifact records no-bind command component wiring", 
   }
   assert.equal(componentInteractions.interactions.admin.renderedAckBytes > 0, true);
   assert.deepEqual(componentInteractions.interactions.player, {
-    component: "VoteSheet/PlayerCommandReceipt",
+    component: "VoteSheet/PlayerFeedback",
     actions: [
       {
         action: "submit_vote",
         actionAttribute: "submit_vote",
-        visibleRowTestId: "player-command-receipt-submit_vote",
+        visibleRowTestId: null,
       },
       {
         action: "submit_post",
         actionAttribute: "submit_post",
-        visibleRowTestId: "player-command-receipt-submit_post",
+        visibleRowTestId: null,
       },
     ],
     statusTestId: "player-command-status",
@@ -6690,8 +6690,8 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
             "app-shell-skip-link",
             "role-nav-board",
             "role-nav-community",
-            "role-nav-search",
             "role-nav-inbox",
+            "role-nav-search",
             "role-nav-player",
             "player-channel-main",
             "player-channel-private:role_pm:slot-7",
@@ -6765,7 +6765,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
     activeNavTestId: roleNavTestId("player"),
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     touchTargets: {
       count: domErrorSurface.touchTargets.count,
       minPx: domErrorSurface.touchTargets.minPx,
@@ -7153,6 +7153,7 @@ function shellNavCoverageSummary(entry) {
 }
 
 function shellNavCoverageExpected({ id, render, navigation }) {
+  navigation = Object.fromEntries(Object.entries(navigation).map(([key, value]) => [key, key === "player" || value === "blocked" ? "absent" : value]));
   return {
     id,
     render,

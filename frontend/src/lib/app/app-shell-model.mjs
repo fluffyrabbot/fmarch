@@ -269,7 +269,7 @@ function normalizeBoardGameIndexEntry(entry) {
     seatsFilled: Number.isInteger(entry.seats_filled) ? entry.seats_filled : null,
     seatsTotal: Number.isInteger(entry.seats_total) ? entry.seats_total : null,
     hostName: entry.host_name ?? null,
-    signupLabel: status === 'completed' ? 'Signups closed' : phaseId ? 'Game in progress' : 'Preparing to start', 
+    signupLabel: status === 'completed' ? 'Signups closed' : phaseId ? 'Game in progress' : 'Preparing to start',
     status,
     statusLabel: status === "active" ? "Active" : "Completed",
     phaseId,
@@ -326,7 +326,7 @@ export function buildShellKeyboardOrder({
   assertTestIdArray(forbiddenContentTestIds, "forbiddenContentTestIds");
 
   const linkedNavTestIds = shell.surfaces
-    .filter((surface) => surface.navigation === "link")
+    .filter((surface) => surface.navigation === "link" && surface.group === "primary" && !["player", "moderator"].includes(shell.activeSurface))
     .map((surface) => surface.testId);
   const blockedNavTestIds = shell.surfaces
     .filter((surface) => surface.navigation === "blocked")
@@ -339,6 +339,7 @@ export function buildShellKeyboardOrder({
     expectedOrder: Object.freeze([
       APP_SHELL_CONTRACT.skipLinkTestId,
       ...linkedNavTestIds,
+      "account-menu-toggle",
       ...contentTestIds,
     ]),
     forbiddenTestIds: Object.freeze([
@@ -370,10 +371,14 @@ export function buildRouteErrorData({
     error: Object.freeze({
       status: Number(status),
       title: errorTitle(status),
-      message: String(message ?? "The requested surface is unavailable."),
+      message: Number(status) === 403
+        ? "You do not have access to this page. Return to Games to choose an available game."
+        : Number(status) === 404
+          ? "This page could not be found. Return to Games to continue."
+          : "This page could not be loaded. Try again, or return to Games.",
       path: route.path,
       actionHref: "/",
-      actionLabel: "Back to board",
+      actionLabel: "Back to Games",
     }),
   });
 }

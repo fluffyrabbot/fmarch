@@ -531,6 +531,7 @@
           {hostPrompts}
           {hostTasks}
           {hostDayEvents}
+          roster={projection.roster ?? []}
           {votecount}
           onDispatch={handleDispatch}
           onRetry={retryHostCommand}

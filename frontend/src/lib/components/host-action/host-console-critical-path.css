@@ -625,12 +625,12 @@
 @media (max-width: 760px) {
   .host-console-bar {
     gap: 8px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     min-block-size: 60px;
     padding-block: 6px;
   }
 
-  .host-console-bar dl > div:not(:first-child) {
+  .host-console-bar dl > div:first-child {
     display: none;
   }
 

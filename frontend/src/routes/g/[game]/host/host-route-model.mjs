@@ -126,14 +126,14 @@ export function buildHostConsoleRouteData({
     }),
     game: Object.freeze({
       id: gameId,
-      label: gameId,
+      label: coldLoad.hostConsoleState?.title ?? (fixtureMode ? "Midsummer Invitational" : "Game"),
     }),
     session: Object.freeze({
       principalId: commandPrincipalId,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "moderator",
-      eyebrow: gameId,
+      eyebrow: coldLoad.hostConsoleState?.title ?? "Game",
       title: "Host console",
       summary: hostConsoleSummary({
         phase: hostProjection.phase,
@@ -454,6 +454,8 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
     Object.freeze({
       prompt_id: "D01:skip_next_day:slot_1",
       kind: "skip_next_day",
+      label: "Skip the next day?",
+      description: "A Beloved Princess died. Decide whether the next day should be skipped.",
       reason: "beloved_princess_death",
       status: "pending",
       phase_id: "D01",

@@ -13,6 +13,7 @@
   export let hostPrompts = [];
   export let hostTasks = [];
   export let hostDayEvents = [];
+  export let roster = [];
   export let votecount = [];
   export let onDispatch = () => {};
   export let onRetry = () => {};
@@ -29,6 +30,7 @@
     hostPrompts,
     hostTasks,
     hostDayEvents,
+    roster,
     dayEventSelections,
     votecount,
     selectedTaskId: preferredTaskId,
@@ -91,7 +93,7 @@
     <details class="host-tools" data-testid="host-tools">
       <summary class="fm-touch-button fm-touch-button--secondary">Tools</summary>
       {#each view.tools as tool}
-        <button class="fm-touch-button fm-touch-button--secondary" type="button" data-testid={tool.testId} on:click={() => preferredTaskId = tool.id}>{tool.label}</button>
+        <button class="fm-touch-button fm-touch-button--secondary" type="button" data-testid={tool.testId} data-task-id={tool.id} on:click={() => preferredTaskId = tool.id}>{tool.label}</button>
       {/each}
     </details>
   </nav>
@@ -152,7 +154,7 @@
                           on:change={() =>
                             toggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
                         />
-                        <span>{seatLabel(participant.slot)}</span>
+                        <span>{participant.label}</span>
                       </label>
                     {/each}
                   </div>

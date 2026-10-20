@@ -1,3 +1,5 @@
+import { principalFixtureId } from "./principal_fixture.mjs";
+import { hostSetupFixtureState } from "../frontend/src/routes/g/[game]/setup/setup-route-model.mjs";
 import { provePhaseGroundContrast } from "./frontend_phase_contrast.mjs";
 import assert from "node:assert/strict";
 import { linuxVisualEnvironment } from "./linux_visual_environment.mjs";
@@ -598,7 +600,10 @@ try {
         label: `${forbidden.id} ${viewport.name}`,
         viewport,
       });
+      const legibility = await captureLegibility(page, { surface: "player" });
+      reportLegibility(`${forbidden.id} ${viewport.name}`, legibility);
       evidence.forbidden.push({
+        legibility,
         role: "forbidden",
         scenario: forbidden.id,
         viewport,
@@ -635,7 +640,10 @@ try {
         label: `${scenario.id} ${viewport.name}`,
         viewport,
       });
+      const legibility = await captureLegibility(page, { surface: scenario.surface });
+      reportLegibility(`${scenario.id} ${viewport.name}`, legibility);
       evidence.routeStates.push({
+        legibility,
         ...routeState,
         screenshot: path.relative(repoRoot, screenshot),
         screenshotPixels,
@@ -668,8 +676,10 @@ try {
       label: `${hostSetupScenario.id} ${viewport.name}`,
       viewport,
     });
+    const seating = await proveSetupSeating(page);
     evidence.setup.push({
       ...setupGeometry,
+      seating,
       screenshot: path.relative(repoRoot, screenshot),
       screenshotPixels,
     });
@@ -700,7 +710,10 @@ try {
       label: `${publicGameScenario.id} ${viewport.name}`,
       viewport,
     });
+    const legibility = await captureLegibility(page, { surface: "public-game" });
+    reportLegibility(`${publicGameScenario.id} ${viewport.name}`, legibility);
     evidence.publications.push({
+      legibility,
       ...publicationGeometry,
       screenshot: path.relative(repoRoot, screenshot),
       screenshotPixels,
@@ -743,6 +756,7 @@ try {
 // Report mode (RFC 0008): print each surface's leaks so the receipt log names
 // them; the evidence contract checks only that the scan ran.
 function reportLegibility(label, legibility) {
+  if (legibility.violations.length) throw new Error(`Legibility failed on ${label}: ${JSON.stringify(legibility.violations)}`);
   const counts = new Map();
   for (const violation of legibility.violations) {
     counts.set(violation.rule, (counts.get(violation.rule) ?? 0) + 1);
@@ -1099,8 +1113,8 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
   for (const slotId of scenario.slotIds) {
     const card = page.getByTestId(`host-setup-slot-${slotId}`);
     const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} roster card`);
-    const assignment = card.locator(".host-setup__slot-form");
-    await assertHitTarget(assignment.locator("button"), `${scenario.id} ${slotId} assign player`);
+    const assignment = card.locator(".player-selection");
+    await assertHitTarget(assignment.locator("button[type=submit]"), `${scenario.id} ${slotId} assign player`);
     rosterCards.push({ slotId, cardBox });
   }
 
@@ -2567,6 +2581,7 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mock
 
 async function selectHostTask(page, taskId) {
   const task = page.locator(`button[data-task-id="${taskId}"]`);
+  if (!(await task.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await task.waitFor({ state: "visible" });
   await task.click();
   await page
@@ -3474,9 +3489,11 @@ async function assertRoleNav(page, expectedNavigation = null) {
   for (const id of ["board", "player", "moderator", "admin"]) {
     const locator = page.getByTestId(roleNavTestId(id));
     const expected = expectedNavigation?.[id];
-    if (!(await locator.isVisible())) {
+    if (expected === "blocked") {
+      assert.equal(await locator.count(), 0, `Forbidden ${id} navigation must be absent`);
       continue;
     }
+    if (!(await locator.isVisible())) continue;
     targets.push({
       label: `role nav ${id}`,
       box:
@@ -3749,11 +3766,11 @@ async function assertForbiddenRouteError(page, scenario) {
     throw new Error(`${scenario.id} rendered error status ${status}`);
   }
   const bodyText = await page.textContent("body");
-  if (!bodyText?.includes(scenario.message)) {
+  if (!bodyText?.includes("You do not have access to this page.")) {
     throw new Error(`${scenario.id} did not render forbidden message`);
   }
   const navTargets = await assertRoleNav(page);
-  const action = page.getByRole("link", { name: "Back to board" });
+  const action = page.getByRole("link", { name: "Back to Games" });
   const actionTarget = {
     label: `${scenario.id} back to board`,
     box: await assertHitTarget(action, `${scenario.id} back to board`),
@@ -3764,7 +3781,7 @@ async function assertForbiddenRouteError(page, scenario) {
   });
   return {
     status,
-    message: scenario.message,
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     overlapCheckedTargets: navTargets.length + 1,
   };
 }
@@ -4474,4 +4491,52 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
     await page.waitForFunction(id => document.activeElement?.id === id, id);
     await page.getByTestId("return-previous-place").waitFor();
   } finally { await page.unroute(endpoint, checkpoint); await page.unroute(threadEndpoint, denied); }
+}
+
+async function proveSetupSeating(page) {
+  const state = structuredClone(hostSetupFixtureState({game: 'midsummer'}));
+  state.origin_topic = {topic_id: principalFixtureId('signup-topic'), title: 'Signup players', href: '/community'};
+  const ilya = {principal_id: principalFixtureId('setup-ilya'), handle: 'ilya', display_name: 'Ilya', already_seated: false};
+  const rook = {principal_id: principalFixtureId('setup-rook'), handle: 'rook', display_name: 'Rook', already_seated: false};
+  const sent = [];
+  await page.route('**/api/mention-suggestions?*', route => route.fulfill({json: {suggestions: [{profile_id: principalFixtureId('profile-ilya'), handle: ilya.handle, display_name: ilya.display_name}]}}));
+  await page.route('**/setup/candidate?*', route => route.fulfill({json: ilya}));
+  await page.route('**/setup/signup-candidates', route => route.fulfill({json: [ilya,rook].map(candidate => ({...candidate, already_seated: state.slots.some(slot => slot.assigned_principal_id === candidate.principal_id)}))}));
+  await page.route('**/setup-state', route => route.fulfill({json: state}));
+  await page.route('**/commands', async route => {
+    const envelope = route.request().postDataJSON();
+    const command = envelope.body.body.command;
+    sent.push(command);
+    if (command.AddSlot) state.slots.push({slot_id: command.AddSlot.slot, persona_id: null, assigned_principal_id: null, public_name: null, alive: true, role_key: null});
+    else if (command.SeatPersona) {
+      const slot = state.slots.find(slot => slot.slot_id === command.SeatPersona.slot);
+      assert.ok(slot, 'seat must exist before assignment');
+      assert.equal(state.slots.some(slot => slot.assigned_principal_id === command.SeatPersona.principal_id), false, 'signup import cannot duplicate an occupant');
+      Object.assign(slot, {persona_id: principalFixtureId(`persona-${sent.length}`), assigned_principal_id: command.SeatPersona.principal_id, public_name: command.SeatPersona.public_name});
+    } else throw new Error(`Unexpected setup command ${Object.keys(command)}`);
+    await route.fulfill({json:{v:3,id:envelope.id,body:{kind:'Ack',body:{stream_seqs:[100+sent.length]}}}});
+  });
+  await page.getByTestId('host-setup-step-roster').click();
+  const seat = page.getByTestId('host-setup-slot-slot_2');
+  await seat.getByLabel('Player handle').fill('il');
+  await seat.getByRole('button', {name:'Ilya · @ilya'}).click();
+  assert.equal(await seat.getByLabel('Public game name').inputValue(), 'Ilya');
+  await seat.getByLabel('Public game name').fill('Ilya North');
+  assert.equal(sent.length, 0, 'choosing a handle must not assign a seat');
+  await seat.getByRole('button', {name:'Assign player'}).click();
+  await page.waitForFunction(() => window.__fmarchHostSetupState.slots.some(slot => slot.publicName === 'Ilya North'));
+  assert.equal(sent[0].SeatPersona.principal_id, ilya.principal_id);
+  await page.getByRole('button', {name:'Seat signups', exact:true}).click();
+  await page.getByRole('button', {name:'Confirm seating', exact:true}).waitFor();
+  assert.equal(sent.length, 1, 'reviewing signup authors must not assign them');
+  await page.getByRole('button', {name:'Confirm seating', exact:true}).click();
+  await page.getByText('1 player seated.', {exact:true}).waitFor();
+  assert.deepEqual(sent.map(command => Object.keys(command)[0]), ['SeatPersona','AddSlot','SeatPersona']);
+  assert.equal(state.slots.filter(slot => slot.assigned_principal_id === rook.principal_id).length, 1);
+  await page.getByRole('button', {name:'Seat signups', exact:true}).click();
+  await page.getByText('All available signup authors are already seated.', {exact:true}).waitFor();
+  assert.equal(sent.length, 3, 'repeated imports must not duplicate seats');
+  const legibility = await captureLegibility(page, {surface:'host-setup'});
+  reportLegibility('setup seating', legibility);
+  return {handleSelection: true, editedName: 'Ilya North', signupConfirmation: true, repeatedImport: 'no-op', commandKinds: sent.map(command=>Object.keys(command)[0]), legibility};
 }

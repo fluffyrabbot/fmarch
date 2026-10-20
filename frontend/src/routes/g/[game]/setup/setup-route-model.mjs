@@ -58,7 +58,7 @@ export async function buildHostSetupRouteData({
       title: "Host setup",
       summary: "Roster, roles, post policy, invites, and start readiness.",
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
+      capabilityLabel: "Game host",
       capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
@@ -350,7 +350,7 @@ function readinessCheck(id, label, ready) {
   });
 }
 
-function hostSetupFixtureState({ game }) {
+export function hostSetupFixtureState({ game }) {
   return Object.freeze({
     game,
     created: true,

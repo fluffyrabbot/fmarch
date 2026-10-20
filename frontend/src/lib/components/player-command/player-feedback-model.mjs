@@ -5,7 +5,7 @@ import { seatNames } from "../../app/seat-presenter.mjs";
 export function playerFeedback({ status, attempt, roster = [], action = null } = {}) {
   if (!status || (status.state === "ack" && !status.projectionUnavailable)) return null;
   const actionId = status.actionId ?? status.commandTrace?.actionId ?? action;
-  const command = attempt?.command;
+  const command = attempt?.command ?? status.requestEnvelope?.body?.body?.command;
   const target = command?.SubmitVote?.target;
   const names = seatNames(roster);
   const voteName = target?.Slot ? names.name(target.Slot) ?? names.label(target.Slot) : null;

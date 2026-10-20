@@ -65,16 +65,16 @@
         if (!slotId) {
           slotId = `slot_${nextSeatNumber}`;
           const add = new FormData(); add.set('slotId', slotId);
-          if ((await submitSetupCommand('add-slot', add))?.state !== 'ack') throw new Error();
+          if ((await submitSetupCommand('add-slot', add))?.state !== 'ack' || !setupState.slots.some(slot => slot.slotId === slotId)) throw new Error();
         }
         const assign = new FormData();
         assign.set('slotId', slotId); assign.set('principalId', candidate.principal_id); assign.set('publicName', candidate.display_name);
-        if ((await submitSetupCommand('assign-slot', assign))?.state !== 'ack') throw new Error();
+        if ((await submitSetupCommand('assign-slot', assign))?.state !== 'ack' || !setupState.slots.some(slot => slot.slotId === slotId && slot.assignedPrincipalId === candidate.principal_id)) throw new Error();
         seated += 1;
       }
       signupCandidates = null;
-      signupMessage = `${seated} players seated.`;
-    } catch { signupCandidates = null; signupMessage = `${seated} players seated. Import stopped; review signups again to continue.`; }
+      signupMessage = `${seated} ${seated === 1 ? "player" : "players"} seated.`;
+    } catch { signupCandidates = null; signupMessage = `${seated} ${seated === 1 ? "player" : "players"} seated. Import stopped; review signups again to continue.`; }
     finally { importingSignups = false; }
   }
 
@@ -401,7 +401,7 @@
                     <p data-testid="host-setup-player-invite-delivery">Delivery: {form.playerInvite.deliveryStatus}</p>
                   {/if}
                   {#if form.playerInvite.loginUrl}
-                    <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">{form.playerInvite.loginUrl}</a>
+                    <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">Open player invitation</a>
                   {:else if form.playerInvite.currentOccupantPrincipalId}
                     <form method="POST" action="?/issuePlayerInvite">
                       <input type="hidden" name="principalId" value={form.playerInvite.currentOccupantPrincipalId} />

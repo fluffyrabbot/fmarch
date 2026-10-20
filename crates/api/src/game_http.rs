@@ -1823,6 +1823,7 @@ struct HostConsoleStateQuery {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostConsoleStateResponse {
+    pub title: String,
     pub game: Uuid,
     pub authority: HostConsoleAuthorityDelta,
     pub completed: bool,
@@ -2292,7 +2293,15 @@ pub(super) async fn load_host_console_state(
         .collect();
 
     let roster = load_game_roster(pool, game).await?;
+    let title = if let Some(origin) = projections::game_origin_topic(pool, game).await? {
+        origin.title
+    } else if let Some(artifact) = projections::game_pack_artifact(pool, game).await? {
+        resolve_pack_artifact(&artifact)?.document().name.clone()
+    } else {
+        "Game".to_string()
+    };
     Ok(HostConsoleStateResponse {
+        title,
         game,
         authority,
         completed,

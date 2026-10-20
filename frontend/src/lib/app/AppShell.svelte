@@ -32,7 +32,7 @@
   >
     {APP_SHELL_CONTRACT.skipLinkLabel}
   </a>
-  {#if !shell.gameBarOwned && shell.activeSurface !== 'player'}
+  {#if !shell.gameBarOwned}
     <header class="fm-app-shell__topbar" data-testid={APP_SHELL_CONTRACT.topbarTestId}>
       {#if shell.game && shell.activeSurface === 'moderator'}
         <a href="/" class="fm-app-shell__brand">Games</a>

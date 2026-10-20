@@ -68,11 +68,12 @@ test("host console route data is allowed for HostOf scoped to the current game",
     className: "fm-surface__masthead",
     eyebrowClassName: "fm-eyebrow",
     statusStackClassName: "fm-status-stack",
-    eyebrow: "midsummer",
+    eyebrow: "Game",
     title: "Host console",
     summary: "Day 1 deadline is active. player-mira · S7 has a pending replacement.",
     capability: {
       visible: true,
+      kind: "HostOf",
       label: "Hosting midsummer",
       testId: "host-console-capability",
       className: "fm-capability-pill",
@@ -116,6 +117,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
     principalId: HOST_PRINCIPAL_ID,
+    capability: { kind: "HostOf", game: "midsummer", source: "session" },
     capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -202,11 +204,11 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(extend48.payload.extendsTo, "2026-06-21T04:00:00.000Z");
   assert.equal(
     extend24.confirmationText,
-    "Extend Day 1 deadline by 24 hours: move the deadline 24 hours later to June 19, 2026 at 9:00 PM PT for Day 1 deadline.",
+    "Day 1 deadline: move the deadline 24 hours later to June 19, 2026 at 9:00 PM PT.",
   );
   assert.equal(
     extend48.confirmationText,
-    "Extend Day 1 deadline by 48 hours: move the deadline 48 hours later to June 20, 2026 at 9:00 PM PT for Day 1 deadline.",
+    "Day 1 deadline: move the deadline 48 hours later to June 20, 2026 at 9:00 PM PT.",
   );
   assert.equal(data.deadlineClock.nowSeconds, 1781806740);
   assert.equal(data.phase.deadline, 1781841600);
@@ -484,8 +486,8 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   assert.deepEqual(data.hostPrompts, [
     {
       id: "D01:tie:slot_2",
-      label: "tie",
-      value: "host_decides_tie",
+      label: "Host decision",
+      value: "Awaiting host decision",
       status: "pending",
       phaseId: "D01",
       subjectSlot: "slot_2",
@@ -661,12 +663,13 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
     principalId: COHOST_PRINCIPAL_ID,
+    capability: { kind: "CohostOf", game: "midsummer", source: "session" },
     capabilityLabel: "CohostOf(midsummer)",
     commandEndpoint: "/commands",
   });
   assert.equal(
     data.hostLifecycleControlCheckpoint.root.data.actionState,
-    "disabled:requires HostOf capability",
+    "disabled:only the host can change player status",
   );
   assert.equal(data.hostLifecycleControlCheckpoint.status.state, "pending");
 });
