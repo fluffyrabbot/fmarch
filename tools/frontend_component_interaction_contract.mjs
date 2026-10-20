@@ -163,7 +163,7 @@ async function proveAdminInteraction(bundle) {
   invoked.push(item.commandAction, recoveryGateItem.action);
 
   assertIncludes(confirm.html, 'data-testid="admin-command-confirm-cohost"', "admin confirm button");
-  assertIncludes(confirm.html, "Delegate @cohost_c as cohost", "admin confirmation copy");
+  assertIncludes(confirm.html, "Delegate Cohost C as cohost", "admin confirmation copy");
   assertIncludes(
     recoveryConfirm.html,
     'action="?/checkRecoveryGate"',
@@ -362,13 +362,13 @@ function adminCohostItem() {
   return {
     id: "cohost",
     label: "Add cohost",
-    value: "cohost_c",
+    value: "Cohost C",
     authority: "GlobalAdmin",
     boundary: "Command boundary",
     boundaryDetail: "Typed command dispatch",
     buttonLabel: "Add cohost",
     commandAction: "add_cohost",
-    confirmMessage: "Delegate cohost_c as cohost for this game",
+    confirmMessage: "Delegate Cohost C as cohost for this game",
   };
 }
 
@@ -441,13 +441,13 @@ function adminCohostItem() {
   return {
     id: "cohost",
     label: "Add cohost",
-    value: "cohost_c",
+    value: "Cohost C",
     authority: "GlobalAdmin",
     boundary: "Command boundary",
     boundaryDetail: "Typed command dispatch",
     buttonLabel: "Add cohost",
     commandAction: "add_cohost",
-    confirmMessage: "Delegate cohost_c as cohost for this game",
+    confirmMessage: "Delegate Cohost C as cohost for this game",
   };
 }
 

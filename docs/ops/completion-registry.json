@@ -3299,6 +3299,48 @@
         "Split each extra into its own registry item when promoted, with a recorded owner decision on scope."
       ],
       "decision_trigger": "Promote an individual extra only after required 1.0 platform scope is complete, or earlier when the owner records a community request that the existing features cannot meet."
+    },
+    {
+      "id": "product.game.legible-surfaces",
+      "section": "game",
+      "order": 95,
+      "title": "Legible gameplay, setup, and host decisions",
+      "execution_class": "code",
+      "status": "partial",
+      "summary": "RFC 0008 supplies roster-based public names, a confirmed vote picker, compact game-bar interruption feedback, handle-based setup seating and confirmed signup import, contextual navigation, typed capability presentation, and a decision-only host queue with labelled pack prompts. The legibility guard is enforcing; canonical browser verification and visual baseline review are in progress.",
+      "complete_when": [
+        "All RFC 0008 slice acceptance checks pass on the canonical Linux worker, changed visual baselines are reviewed, and the interaction architecture records the shipped behavior."
+      ],
+      "depends_on": [
+        "product.game.setup",
+        "product.game.host-moderation",
+        "product.game.core-loop"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0008-legible-game-surfaces.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/arch/13-interaction-architecture.md"
+        },
+        {
+          "kind": "source",
+          "value": "tools/frontend_legibility.mjs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-role-smoke"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:frontend-visual-regression"
+        }
+      ],
+      "remaining": [
+        "Complete canonical browser acceptance and review the Linux visual baselines for the remaining RFC 0008 slices."
+      ]
     }
   ],
   "orchestration_rules": [

@@ -2153,13 +2153,13 @@ export async function buildAdminRouteData({
       Object.freeze({
         id: "cohost",
         label: "Cohost delegation",
-        value: "@cohost_c",
+        value: "Cohost C",
         authority: "HostOf(game)",
         boundary: "Command pipeline",
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
-        confirmLabel: "Delegate @cohost_c",
-        confirmMessage: "Delegate @cohost_c as cohost for this game",
+        confirmLabel: "Delegate Cohost C",
+        confirmMessage: "Delegate Cohost C as cohost for this game",
         buttonLabel: "Review",
       }),
     ]),
@@ -2279,7 +2279,7 @@ export async function buildAdminRouteData({
       Object.freeze({
         id: "moderation",
         label: "Cross-game moderation",
-        value: "GlobalMod only",
+        value: "Platform moderators only",
       }),
     ]),
   });

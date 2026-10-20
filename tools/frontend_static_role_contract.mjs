@@ -1119,14 +1119,14 @@ async function proveConfirmationActionContract() {
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
         buttonLabel: "Review",
-        confirmLabel: "Delegate @cohost_c",
-        confirmMessage: "Delegate @cohost_c as cohost for this game",
+        confirmLabel: "Delegate Cohost C",
+        confirmMessage: "Delegate Cohost C as cohost for this game",
       },
     ],
     commandStatuses: {
       cohost: {
         state: "confirm",
-        message: "Delegate @cohost_c as cohost for this game",
+        message: "Delegate Cohost C as cohost for this game",
       },
     },
   });

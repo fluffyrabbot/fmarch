@@ -135,7 +135,7 @@ test("admin command activity summarizes recent setup and recovery status", () =>
       },
       cohost: {
         state: "confirm",
-        message: "Delegate @cohost_c as cohost for this game",
+        message: "Delegate Cohost C as cohost for this game",
         confirmationTrace: {
           kind: "confirmation-command-trace",
           confirmationKind: "confirmation-action",
@@ -179,7 +179,7 @@ test("admin command activity summarizes recent setup and recovery status", () =>
         actionId: "cohost",
         state: "confirm",
         label: "Cohost",
-        message: "Delegate @cohost_c as cohost for this game",
+        message: "Delegate Cohost C as cohost for this game",
         testId: "admin-command-activity-cohost",
         statusTestId: "admin-command-activity-status-cohost",
         confirmationTrace: {
@@ -228,8 +228,8 @@ test("admin setup grid view model binds command status and confirmation metadata
         boundaryDetail: "/commands AddCohost",
         commandAction: "add_cohost",
         buttonLabel: "Review",
-        confirmLabel: "Delegate @cohost_c",
-        confirmMessage: "Delegate cohost_c as cohost for this game",
+        confirmLabel: "Delegate Cohost C",
+        confirmMessage: "Delegate Cohost C as cohost for this game",
       },
       {
         id: "host-setup",
@@ -245,7 +245,7 @@ test("admin setup grid view model binds command status and confirmation metadata
     commandStatuses: {
       cohost: {
         state: "confirm",
-        message: "Delegate cohost_c as cohost for this game",
+        message: "Delegate Cohost C as cohost for this game",
       },
     },
   });
@@ -275,10 +275,10 @@ test("admin setup grid view model binds command status and confirmation metadata
   assert.equal(view.items[0].cancelTestId, "admin-command-cancel-cohost");
   assert.equal(view.items[0].triggerTestId, "admin-command-trigger-cohost");
   assert.equal(view.items[0].minTouchTargetPx, 44);
-  assert.equal(view.items[0].displayConfirmLabel, "Delegate @cohost_c");
+  assert.equal(view.items[0].displayConfirmLabel, "Delegate Cohost C");
   assert.deepEqual(view.items[0].status, {
     state: "confirm",
-    message: "Delegate @cohost_c as cohost for this game",
+    message: "Delegate Cohost C as cohost for this game",
   });
   assert.deepEqual(view.items[0].confirmation, {
     kind: "confirmation-action",
@@ -288,7 +288,7 @@ test("admin setup grid view model binds command status and confirmation metadata
     ariaModal: ADMIN_CONFIRMATION_CONTRACT.ariaModal,
     ariaLabel: "Confirm Cohost delegation",
     label: "Cohost delegation",
-    message: "Delegate @cohost_c as cohost for this game",
+    message: "Delegate Cohost C as cohost for this game",
     messageId: "admin-command-confirmation-message-cohost",
     messageTestId: "admin-command-confirmation-message-cohost",
     confirmationTestId: null,

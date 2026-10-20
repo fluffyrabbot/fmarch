@@ -2595,7 +2595,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       [
         "player-primary-action-zone",
         "player-primary-actions",
-        ["submit_vote", "submit_vote:no_lynch", "player-dock-reply"],
+        ["player-dock-vote", "player-dock-reply"],
       ],
     ],
   );

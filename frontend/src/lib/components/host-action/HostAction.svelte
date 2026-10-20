@@ -23,7 +23,7 @@
   $: timestamp = customTime ? new Date(customTime).getTime() : NaN;
   $: effectiveAction = customDeadline && timestamp !== Date.parse(action.payload?.extendsTo) ? {
     ...action,
-    disabled: !Number.isFinite(timestamp),
+    disabled: action.disabled === true || !Number.isFinite(timestamp),
     outcomeLabel: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
     confirmationText: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
     payload: {...action.payload, extendsTo: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null},

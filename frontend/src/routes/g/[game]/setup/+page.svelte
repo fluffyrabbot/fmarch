@@ -374,7 +374,7 @@
                         {slot.personaId ? "seated" : "needs player"}
                       </span>
                     </div>
-                    <SetupPlayer game={data.game.id} {slot} onSubmit={(event) => handleSetupSubmit(event, "assign-slot")} />
+                    <SetupPlayer game={data.game.id} {slot} disabled={importingSignups || commandStatuses["assign-slot"]?.state === "pending"} onSubmit={(event) => handleSetupSubmit(event, "assign-slot")} />
                   </article>
                 {/each}
               </div>

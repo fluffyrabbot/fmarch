@@ -2,6 +2,7 @@
   export let game;
   export let slot;
   export let onSubmit;
+  export let disabled = false;
   let handle = '';
   let publicName = slot.publicName ?? '';
   let selected = null;
@@ -59,7 +60,7 @@
   {/if}
   <p role="status">{message}</p>
   <label class="fm-field"><span>Public game name</span><input name="publicName" bind:value={publicName} required /></label>
-  <button class="fm-touch-button fm-touch-button--secondary" type="submit" disabled={!selected || busy}>Assign player</button>
+  <button class="fm-touch-button fm-touch-button--secondary" type="submit" disabled={!selected || busy || disabled || selected?.principal_id === slot.assignedPrincipalId}>Assign player</button>
 </form>
 
 <style>

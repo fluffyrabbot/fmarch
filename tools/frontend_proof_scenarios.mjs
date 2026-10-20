@@ -28,7 +28,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     targetSelector: '[data-testid="admin-command-confirm-cohost"]',
     targetTestId: "admin-command-confirm-cohost",
     rootSelector: '[data-testid="admin-setup-cohost"]',
-    expectedText: "Delegate @cohost_c as cohost",
+    expectedText: "Delegate Cohost C as cohost",
   },
   {
     id: "admin-recovery-gate-confirm-click",

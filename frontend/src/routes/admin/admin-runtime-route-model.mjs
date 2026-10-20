@@ -117,7 +117,7 @@ export async function buildAdminRuntimeRouteData({
       Object.freeze({
         id: "moderation",
         label: "Cross-game moderation",
-        value: "GlobalMod only",
+        value: "Platform moderators only",
       }),
     ]),
   });

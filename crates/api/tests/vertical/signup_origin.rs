@@ -244,7 +244,7 @@ async fn setup_signups_are_distinct_public_authors_and_exclude_host(pool: sqlx::
             social::ProfilePresentation::new(
                 social::ProfileHandle::new(label).unwrap(),
                 social::ProfileDisplayName::new("Signup Player").unwrap(),
-                social::ProfileBio::new("").unwrap(),
+                social::ProfileBio::new("Signup participant").unwrap(),
                 if public {
                     social::ProfileVisibility::Public
                 } else {

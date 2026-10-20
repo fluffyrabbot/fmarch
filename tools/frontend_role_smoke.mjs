@@ -275,6 +275,7 @@ try {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
       }
 
+      const navigationMenu = await proveAccountMenu(page, role);
       const roleParadigm = await prepareRoleDecisionCanvas(page, role, viewport);
 
       const disclosureDefaults = await assertDisclosuresClosed(
@@ -420,6 +421,7 @@ try {
 
       evidence.roles.push({
         role: role.id,
+        navigationMenu,
         viewport,
         path: role.path,
         capability,
@@ -4539,4 +4541,22 @@ async function proveSetupSeating(page) {
   const legibility = await captureLegibility(page, {surface:'host-setup'});
   reportLegibility('setup seating', legibility);
   return {handleSelection: true, editedName: 'Ilya North', signupConfirmation: true, repeatedImport: 'no-op', commandKinds: sent.map(command=>Object.keys(command)[0]), legibility};
+}
+
+
+async function proveAccountMenu(page, role) {
+  const toggle = page.getByTestId("account-menu-toggle");
+  await toggle.click();
+  const menu = page.locator("details.account-menu[open]");
+  await menu.waitFor({state: "visible"});
+  if (role.id === "player") {
+    for (const id of ["admin", "moderator"]) assert.equal(await page.getByTestId(roleNavTestId(id)).count(), 0, `player must not see ${id} navigation`);
+    for (const id of ["board", "community", "inbox", "search"]) await menu.getByTestId(roleNavTestId(id)).waitFor({state: "visible"});
+  }
+  const links = await menu.locator("a").evaluateAll(nodes => nodes.map(node => ({text:node.textContent.trim(), href:node.getAttribute("href")})));
+  assert.ok(links.length > 0);
+  await toggle.press("Escape");
+  assert.equal(await page.locator("details.account-menu[open]").count(), 0);
+  assert.equal(await toggle.evaluate(node => document.activeElement === node), true);
+  return {links, escapeCloses: true, returnsFocus: true};
 }

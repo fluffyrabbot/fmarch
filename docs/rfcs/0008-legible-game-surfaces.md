@@ -273,6 +273,14 @@ slice removes its violations, and slice 9 makes the guard failing. Slices 6, 7
 and 8 touch disjoint paths and may run in parallel once their dependency has
 landed; slices 3 → 4 → 5 share the player route and run in order.
 
+### Implementation checkpoint
+
+The remaining interruption, setup, navigation, and host-queue changes are
+implemented on the RFC completion task branch. Local contract checks cover the
+new feedback and queue behavior; canonical API/browser proof and Linux visual
+baseline review are still in progress. The completion registry tracks this
+boundary under `product.game.legible-surfaces`.
+
 ### Slice acceptance
 
 1. The workbench report lists every current violation by route; the seven
