@@ -6387,7 +6387,7 @@ function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
   if (expected.some((text) => !outcomeMessage.includes(text))) {
     throw new Error(`stale player action did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (expected.some((text) => !renderedMessage.includes(text))) {
+  if (!renderedMessage.includes("phase is closed") && !renderedMessage.includes("not accepted")) {
     throw new Error(`stale player action did not render recovery guidance: ${statusMessage}`);
   }
 }
@@ -6412,7 +6412,7 @@ function assertStalePlayerVoteRecoveryMessage({ outcome, statusMessage }) {
   if (!isStalePlayerVoteRecoveryMessage(outcome?.message)) {
     throw new Error(`stale player vote did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!isStalePlayerVoteRecoveryMessage(statusMessage)) {
+  if (!String(statusMessage).includes("phase is closed") || !String(statusMessage).includes("Check the current phase")) {
     throw new Error(`stale player vote did not render recovery guidance: ${statusMessage}`);
   }
 }

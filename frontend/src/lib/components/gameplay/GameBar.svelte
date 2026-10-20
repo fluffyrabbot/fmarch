@@ -83,6 +83,7 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
     position: sticky;
     top: var(--fm-app-topbar-block-size);
+    margin-block-end: 8px;
     z-index: 11;
     min-block-size: 76px;
     padding: 10px clamp(14px, 3vw, 30px);
