@@ -27,7 +27,7 @@
       "cpu": 12,
       "cargo-target": 1,
       "postgres-admin": 1,
-      "browser": 3,
+      "browser": 6,
       "frontend-worktree": 1,
       "container-engine": 1,
       "network": 1

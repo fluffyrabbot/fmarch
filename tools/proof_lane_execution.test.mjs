@@ -1621,7 +1621,9 @@ function lockClaimsForTest(id, entry, manifest) {
 test('browser capacity counts engines and only the production build owns the frontend worktree', () => {
   const manifest = loadManifest();
   const { lock_capacities: capacities } = manifest.runner;
-  assert.equal(capacities.browser, 3);
+  // Engines are bounded by the cpu budget at two cores each, not by a
+  // separate browser ceiling below it.
+  assert.equal(capacities.browser, capacities.cpu / 2);
   const engines = (id) => lockClaims(id, manifest.lanes[id], capacities, 'run').get('browser');
   assert.equal(engines('test:frontend-themes'), 3, 'themes runs chromium, firefox and webkit at once');
   assert.equal(engines('test:frontend-cross-browser'), 2, 'cross-browser runs firefox and webkit at once');
