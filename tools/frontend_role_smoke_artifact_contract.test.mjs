@@ -6305,6 +6305,11 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.notEqual(continuity.before.focusedElement, null);
         assert.notEqual(continuity.after.focusedElement, null);
         assert.equal(continuity.scrollDelta <= continuity.maxScrollDelta, true);
+        if (continuityBudget.continuityAnchorSelector) {
+          assert.equal(continuity.scrollMetric, "anchor-viewport");
+          assert.equal(continuity.continuityAnchorSelector, continuityBudget.continuityAnchorSelector);
+          assert.equal(continuity.scrollDelta, Math.abs(continuity.after.continuityAnchor.viewportY - continuity.before.continuityAnchor.viewportY));
+        }
         assert.equal(
           continuity.announcementLatencyMs <=
             continuity.maxAnnouncementLatencyMs,

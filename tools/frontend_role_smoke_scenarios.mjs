@@ -402,6 +402,7 @@ export const roles = Object.freeze([
         '[data-testid="command-recovery-retry-submit_post"]',
       afterFocusSelector:
         '[data-testid="player-composer"] [data-action="submit_post"]',
+      continuityAnchorSelector: '[data-testid="player-composer"] [data-action="submit_post"]',
       statusSelector: '[data-testid="player-command-status"]',
       maxScrollDeltaPx: 1,
       maxAnnouncementLatencyMs: 500,

@@ -2212,6 +2212,7 @@ async function captureCommandContinuityBaseline(
   );
   return {
     focusedElement: await readFocusedElement(page),
+    continuityAnchor: budget.continuityAnchorSelector ? await readDocumentBox(page.locator(budget.continuityAnchorSelector).first()) : null,
     ...(await readViewportContinuityState(page)),
   };
 }
@@ -2239,11 +2240,17 @@ async function assertCommandContinuity(
   const focusSettledAtMs = performance.now();
   const after = {
     focusedElement: await readFocusedElement(page),
+    continuityAnchor: budget.continuityAnchorSelector ? await readDocumentBox(page.locator(budget.continuityAnchorSelector).first()) : null,
     ...(await readViewportContinuityState(page)),
   };
   const status = page.locator(budget.statusSelector).first();
   await assertVisibleBox(status, `${label} announcement status`);
-  const scrollDelta = Math.abs(after.scrollY - baseline.scrollY);
+  const rawScrollDelta = Math.abs(after.scrollY - baseline.scrollY);
+  // Inline game-bar feedback changes document height. Scroll anchoring may
+  // adjust scrollY while leaving the composer exactly where the reader saw it.
+  const scrollDelta = baseline.continuityAnchor && after.continuityAnchor
+    ? Math.abs(after.continuityAnchor.viewportY - baseline.continuityAnchor.viewportY)
+    : rawScrollDelta;
   const announcementLatencyMs = announcedAtMs - dispatchedAtMs;
   const focusSettleMs = focusSettledAtMs - dispatchedAtMs;
   const visualViewportDelta = Math.abs(
@@ -2279,6 +2286,9 @@ async function assertCommandContinuity(
     before: baseline,
     after,
     scrollDelta,
+    rawScrollDelta,
+    scrollMetric: budget.continuityAnchorSelector ? "anchor-viewport" : "document-scroll",
+    continuityAnchorSelector: budget.continuityAnchorSelector ?? null,
     maxScrollDelta: budget.maxScrollDeltaPx,
     announcementLatencyMs,
     maxAnnouncementLatencyMs: budget.maxAnnouncementLatencyMs,

@@ -18,10 +18,21 @@
   $: canRetry = attempt && (status?.state === "interrupted" || retryAvailable);
   async function settle(callback) {
     const action = view.actionId;
+    const returnSelector = `[data-command-recovery-return="${CSS.escape(action)}"]`;
+    const returnTop = document.querySelector(returnSelector)?.getBoundingClientRect().top;
     await callback(action);
     await tick();
     if (status?.state === "interrupted" || (retryAvailable && status?.state === "reject")) retryButton?.focus({ preventScroll: true });
-    else document.querySelector(`[data-command-recovery-return="${CSS.escape(action)}"]`)?.focus({ preventScroll: true });
+    else {
+      const control = document.querySelector(returnSelector);
+      control?.focus({ preventScroll: true });
+      // Keep the original action in place as the inline feedback collapses
+      // and refreshed posts arrive above it.
+      if (control && Number.isFinite(returnTop)) {
+        await new Promise(requestAnimationFrame);
+        window.scrollBy({ top: control.getBoundingClientRect().top - returnTop, behavior: "instant" });
+      }
+    }
   }
 </script>
 
@@ -34,6 +45,7 @@
     data-command-dispatch-kind={status?.commandTrace?.dispatchKind}
     data-command-refresh-keys={status?.commandTrace?.projectionRefreshKeys?.join(",")} data-outcome={status?.state === "interrupted" ? "unknown" : status?.state === "reject" ? "confirmed-rejection" : undefined}>
     <p role="status" aria-live={["reject", "interrupted"].includes(view.state) ? "assertive" : "polite"} aria-atomic="true" data-testid="player-command-status" data-state={view.state}>{view.message}</p>
+    <span class="player-feedback__actions">
     {#if canRetry}
       <span class="player-feedback__recovery" data-testid={`command-recovery-${view.actionId}`} data-command-id={status?.commandId} data-interruption={status?.interruption} data-outcome={status?.state === "reject" ? "confirmed-rejection" : "unknown"}>
       <button class="fm-touch-button fm-touch-button--secondary" data-testid={`command-recovery-retry-${view.actionId}`} bind:this={retryButton} disabled={!retryEnabled} on:click={() => settle(onRetry)}>Retry</button>
@@ -42,11 +54,14 @@
     {#if view.dismissible}
       <button class="fm-touch-button fm-touch-button--secondary" data-testid={`command-recovery-cancel-${view.actionId}`} on:click={() => settle(onDismiss)}>Dismiss</button>
     {/if}
+    </span>
   </div>
 {:else if status?.state === "ack"}
   <p class="fm-sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="player-command-status" data-state="ack">Saved.</p>
 {/if}
 <style>
   .player-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; grid-column: 1 / -1; border-block-start: 1px solid var(--fm-line); padding-block-start: 8px; }
+  .player-feedback__actions { display: flex; flex: 0 0 auto; gap: 8px; }
+  .player-feedback__actions:empty { display: none; }
   .player-feedback p { flex: 1 1 220px; margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 </style>
