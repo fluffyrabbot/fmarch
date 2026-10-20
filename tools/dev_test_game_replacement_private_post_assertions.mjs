@@ -406,7 +406,7 @@ export function replacementCompletedPrivatePostRejectMatches(
       true &&
     proof?.currentReceipt?.actionId === scenario.commandAction &&
     proof?.currentReceipt?.state === "reject" &&
-    proof?.receiptStatusText?.includes(`Reject ${scenario.commandError}`) ===
+    proof?.receiptStatusText?.includes("The game is complete.") ===
       true &&
     completedCommandStateMatches(proof?.commandStateAfterReject, scenario) &&
     channelContextMatches(proof?.channelContextAfterReject, scenario) &&

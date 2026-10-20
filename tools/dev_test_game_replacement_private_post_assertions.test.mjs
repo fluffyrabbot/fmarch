@@ -233,7 +233,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
   },
   dispatchPlan: { projectionRefreshKeys: ["commandState"] },
   currentReceipt: { actionId: scenario.commandAction, state: "reject" },
-  receiptStatusText: scenario.commandMessage,
+  receiptStatusText: "The game is complete. Your action was not accepted.",
   commandStateAfterReject: {
     actorSlot: scenario.actorSlot,
     gameCompleted: true,

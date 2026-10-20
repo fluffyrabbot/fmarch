@@ -1418,7 +1418,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.requestEnvelope?.body?.body?.command?.SubmitPost?.body ===
             verification.privateChannel?.stalePostAfterPhaseTransition?.postBody &&
           verification.privateChannel?.stalePostAfterPhaseTransition
-            ?.receiptStatusText?.includes("Ack") === true &&
+            ?.receiptStatusText?.includes("Saved.") === true &&
           verification.privateChannel?.stalePostAfterPhaseTransition
             ?.commandStateAfterAck?.phase?.locked === true &&
           verification.privateChannel?.stalePostAfterPhaseTransition
@@ -1497,7 +1497,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           verification.privateChannel?.completedGameRecovery?.reject?.error ===
             "GameAlreadyCompleted" &&
           verification.privateChannel?.completedGameRecovery?.receiptStatusText?.includes(
-            staleCompletedPrivatePostScenario().commandMessage,
+            "The game is complete.",
           ) === true &&
           verification.privateChannel?.completedGameRecovery?.reject
             ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
@@ -2628,7 +2628,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.projectionRefreshKeys?.includes("commandState") === true &&
         hardening.actionIdempotentRetry?.currentReceipt?.commandTrace
           ?.projectionRefreshKeys?.includes("dayVoteOutcomes") === false &&
-        hardening.actionIdempotentRetry?.receiptStatusText?.includes("Ack") ===
+        hardening.actionIdempotentRetry?.receiptStatusText?.includes("Saved.") ===
           true &&
         hardening.actionIdempotentRetry?.staleN01Phase?.phaseId === "N01" &&
         hardening.actionIdempotentRetry?.commandStateAfterRetry?.actorSlot ===

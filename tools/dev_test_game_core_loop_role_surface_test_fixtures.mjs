@@ -247,10 +247,10 @@ export function hostPhaseTransitionSurfaceFixture({
         checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
         checkpointTargetSlotsAfterReject: "slot-3",
         recoveryText:
-          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         receiptCount: 1,
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
       },
       staleActionRecoveryProof: {
         status: "passed",
@@ -311,10 +311,10 @@ export function hostPhaseTransitionSurfaceFixture({
         checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
         checkpointTargetSlotsAfterReject: "slot-3",
         recoveryText:
-          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         receiptCount: 2,
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
       },
       staleTransitionRecoveryRoleUrlConsistency: {
         staleVoteSourceRoleUrl: baseRoleUrl,
@@ -495,7 +495,7 @@ export function playerActionSubmissionRoleSurfaceFixture({
       checkpointTargetSlotsAfterReject:
         invalidScenario.checkpointTargetSlots,
       receiptCount: 1,
-      receiptStatusText: invalidScenario.messageIncludes,
+      receiptStatusText: "Your night action was not accepted. Choose an available target.",
     },
     releaseReady: false,
     productionReady: false,
