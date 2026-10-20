@@ -1695,7 +1695,7 @@ test('profile and completed export leaves own independent resource and completio
     assert.deepEqual(lane.depends_on ?? [], [], 'self-contained live state needs no upstream artifact producer');
     assert.deepEqual(lane.execution.resources, [
       { kind: 'lock', name: 'cargo-target', scope: 'build' },
-      ...['browser', 'frontend-worktree'].map(name => ({ kind: 'lock', name })),
+      { kind: 'lock', name: 'browser' },
       { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
       { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
     ]);
