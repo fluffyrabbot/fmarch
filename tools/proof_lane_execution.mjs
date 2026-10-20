@@ -40,6 +40,7 @@ const RESERVED_ENV = new Set([
   'FMARCH_PROOF_LANE_ID',
   'FMARCH_PROOF_LANE_DIR',
   'FMARCH_PROOF_ARTIFACT_DIR',
+  'FMARCH_FRONTEND_SCRATCH_DIR',
   PREBUILT_PLAN_ENV,
 ]);
 
@@ -716,6 +717,9 @@ export async function prepareLaneInvocation({
     FMARCH_PROOF_LANE_ID: laneId,
     FMARCH_PROOF_LANE_DIR: laneDir,
     FMARCH_PROOF_ARTIFACT_DIR: artifactDir,
+    // Vite and SvelteKit keep per-process state inside the checkout; each
+    // lane gets its own (frontend/vite.config.js, frontend/svelte.config.js).
+    FMARCH_FRONTEND_SCRATCH_DIR: frontendScratchDirectory(laneDir),
   };
   const resources = [];
   const databases = [];
@@ -800,6 +804,10 @@ export async function prepareLaneInvocation({
       await releaseAll({ success, signal });
     },
   };
+}
+
+function frontendScratchDirectory(laneDir) {
+  return join(laneDir, 'frontend-scratch');
 }
 
 function terminateChildProcess(child, signal, detached) {
@@ -1614,6 +1622,10 @@ export async function runExecutionPlan(
       if (prebuiltDir) {
         // The links only pin executables for this run phase; the plan stays.
         await rm(prebuiltDir, { recursive: true, force: true }).catch(() => {});
+      }
+      if (invocation) {
+        // Dependency caches and generated frontend output are not evidence.
+        await rm(frontendScratchDirectory(invocation.laneDir), { recursive: true, force: true }).catch(() => {});
       }
       try {
         await releaseHold();

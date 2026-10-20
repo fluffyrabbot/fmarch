@@ -1390,6 +1390,7 @@ test('a cargo-builds run phase resolves binaries through its plan, never PATH Ca
   assert.deepEqual(spawned[1].args.slice(0, 4), ['tools/proof_prebuild.mjs', 'build-binaries', '--plan', join(result.run.laneDirectory('live'), 'prebuild-plan.json')]);
   assert.deepEqual([spawned[2].file, ...spawned[2].args], ['npm', 'run', 'live']);
   assert.equal(spawned[2].env.FMARCH_PROOF_PREBUILT_PLAN, join(result.run.laneDirectory('live'), 'prebuild-plan.json'));
+  assert.equal(spawned[2].env.FMARCH_FRONTEND_SCRATCH_DIR, join(result.run.laneDirectory('live'), 'frontend-scratch'));
   assert.deepEqual(result.receipt.lanes.live.phases.run.claims, { browser: 1 });
 });
 
@@ -1580,3 +1581,17 @@ test('the real manifest splits every cargo test lane and keeps timing lanes excl
 function lockClaimsForTest(id, entry, manifest) {
   return Object.fromEntries(lockClaims(id, entry, manifest.runner.lock_capacities, 'run'));
 }
+
+test('browser capacity counts engines and only the production build owns the frontend worktree', () => {
+  const manifest = loadManifest();
+  const { lock_capacities: capacities } = manifest.runner;
+  assert.equal(capacities.browser, 3);
+  const engines = (id) => lockClaims(id, manifest.lanes[id], capacities, 'run').get('browser');
+  assert.equal(engines('test:frontend-themes'), 3, 'themes runs chromium, firefox and webkit at once');
+  assert.equal(engines('test:frontend-cross-browser'), 2, 'cross-browser runs firefox and webkit at once');
+  const owners = Object.entries(manifest.lanes)
+    .filter(([id, entry]) => lockClaims(id, entry, capacities, 'run').has('frontend-worktree'))
+    .map(([id]) => id);
+  // Every other lane keeps Vite and SvelteKit state in FMARCH_FRONTEND_SCRATCH_DIR.
+  assert.deepEqual(owners, ['test:frontend-csp-browser']);
+});

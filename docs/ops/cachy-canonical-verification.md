@@ -63,9 +63,11 @@ capacity-one: a lane with `execution.prebuild` holds `cargo-target` only while
 `tools/proof_prebuild.mjs` compiles its tests or harness binaries, then runs
 the hard-linked executables without Cargo (a refusing `cargo` shadows the real
 one in that run phase). `postgres-admin` is held only while a lane database is
-created or dropped. Browser and frontend-worktree claims keep capacity one. The
-real-timing lanes (capacity-overload, mash-scale) are exclusive and run alone.
-It acquires the same
+created or dropped. `browser` counts concurrent engines (capacity three; themes
+runs its three engines at once and claims all three), and every lane keeps its
+Vite cache and SvelteKit output in its own scratch directory, so only the
+production build owns `frontend-worktree`. The real-timing lanes
+(capacity-overload, mash-scale) are exclusive and run alone. It acquires the same
 `/tmp/closure-heavy-rust-build.lock` as MeSH. The fleet admits one heavy job; a
 manual contender exits 75 without starting its command. Unregistered Cargo
 process detection remains enabled.

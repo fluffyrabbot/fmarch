@@ -15,17 +15,17 @@ if (process.argv.includes('--provision')) {
 } else {
   const output = path.resolve(process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(root, 'target/frontend-cross-browser'));
   await mkdir(output, {recursive: true});
-  const results = [];
-  for (const name of ['firefox', 'webkit']) {
+  // Both engines run at once; the lane claims one browser slot per engine.
+  const results = await Promise.all(['firefox', 'webkit'].map(async name => {
     try {
       const artifactDir = path.join(output, name);
       await mkdir(artifactDir, {recursive: true});
       const evidence = await runContainerBrowser({name, artifactDir, script: 'tools/frontend_role_smoke.mjs', evidenceFile: 'role-smoke.json'});
-      results.push({...evidence.browser, status: 'passed'});
+      return {...evidence.browser, status: 'passed'};
     } catch (error) {
-      results.push({name, status: 'failed', error: error.message});
+      return {name, status: 'failed', error: error.message};
     }
-  }
+  }));
   const passed = results.every(result => result.status === 'passed');
   await writeFile(path.join(output, 'cross-browser.json'), JSON.stringify({status: passed ? 'passed' : 'failed', image, browsers: results, boundary: 'Local fixture-backed browser journeys; not real Safari/device or hosted acceptance.'}, null, 2) + '\n');
   assert.ok(passed, 'Cross-browser journeys failed; inspect per-engine evidence');

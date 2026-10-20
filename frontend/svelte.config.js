@@ -1,10 +1,21 @@
+import { mkdirSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 import adapter from "@sveltejs/adapter-node";
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+
+// SvelteKit rewrites every generated file when a process starts, and dev
+// servers watch them; concurrent proof processes each keep their own copy.
+// Generated imports are relative to outDir while Vite resolves importers by
+// real path, so a scratch path through a symlink (the proof build root) must
+// be resolved first.
+const scratchDir = process.env.FMARCH_FRONTEND_SCRATCH_DIR;
+const scratch = scratchDir ? (mkdirSync(scratchDir, { recursive: true }), realpathSync(scratchDir)) : null;
 
 const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
+    ...(scratch ? { outDir: join(scratch, "svelte-kit") } : {}),
     csp: {
       mode: "nonce",
       directives: {
