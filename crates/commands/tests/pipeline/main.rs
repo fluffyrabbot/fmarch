@@ -20,3 +20,4 @@ mod mentions;
 mod quotations;
 #[allow(dead_code, unused_imports)]
 mod residual;
+mod roster;
