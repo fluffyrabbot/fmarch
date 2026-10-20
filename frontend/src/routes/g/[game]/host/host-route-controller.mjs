@@ -407,7 +407,7 @@ export async function dispatchHostRouteAction({
   }
   if (retainedReplacementAttempt === null && !currentDerivedState.criticalActions.some((action) =>
     action.id === event?.actionId &&
-    canonicalJson(action.payload) === canonicalJson(event?.payload)
+    currentHostPayloadMatches(action.payload, event?.payload)
   )) {
     throw new Error(`host action ${String(event?.actionId)} is no longer authoritative`);
   }
@@ -629,4 +629,14 @@ function canonicalJson(value) {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function currentHostPayloadMatches(current, selected) {
+  if (current?.kind === "extend_deadline" && selected?.kind === "extend_deadline") {
+    // The host chooses the time. Only that field may differ from the current
+    // authorized action; game, phase and payload shape remain exact.
+    return typeof selected.extendsTo === "string" && Number.isFinite(Date.parse(selected.extendsTo)) &&
+      canonicalJson(current) === canonicalJson({ ...selected, extendsTo: current.extendsTo });
+  }
+  return canonicalJson(current) === canonicalJson(selected);
 }
