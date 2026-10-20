@@ -1,6 +1,13 @@
 use sqlx::PgPool;
 use std::process::Command;
 
+/// The proof runner pins each lane's binaries and exports their paths at run
+/// time; plain `cargo test` falls back to Cargo's compile-time path.
+fn staging_search_corpus_binary() -> String {
+    std::env::var("CARGO_BIN_EXE_fmarch-staging-search-corpus")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_fmarch-staging-search-corpus").to_string())
+}
+
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn reconciler_uses_commands_and_is_idempotent(pool: PgPool) {
     let first = server::staging_search_corpus::reconcile(&pool)
@@ -62,7 +69,7 @@ async fn reconciler_uses_a_non_login_machine_principal(pool: PgPool) {
 
 #[test]
 fn deployed_reconciler_refuses_non_staging_environments_before_database_access() {
-    let output = Command::new(env!("CARGO_BIN_EXE_fmarch-staging-search-corpus"))
+    let output = Command::new(staging_search_corpus_binary())
         .env_clear()
         .arg("reconcile")
         .env("RAILWAY_ENVIRONMENT_NAME", "production")

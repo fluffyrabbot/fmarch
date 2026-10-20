@@ -5,7 +5,7 @@ import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
+import { lockedProofCargoInvocation, prebuiltBinary } from "./proof_cargo_builds.mjs";
 import { serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 
 const roleLanes = new Set(["test:dev-test-game-profile", "test:dev-test-game-completed-export"]);
@@ -215,9 +215,12 @@ export async function waitForRoleProofHealth(observed, baseUrl, { deadline = Dat
 export async function startRoleProofApi({ repoRoot, context, applicationUrl, localProofAuth, host = "127.0.0.1", env = process.env }) {
   const deadline = Date.now() + 240_000;
   const applicationEnv = serverRuntimeEnvironment({ applicationUrl, env });
-  const invocation = lockedProofCargoInvocation({ cwd: repoRoot, laneId: context.laneId, target: "server/bin/server", profile: "dev", command: "build", env });
-  const output = await runProofCommand(invocation.command, [...invocation.args, "--message-format=json"], { cwd: repoRoot, env: applicationEnv, timeoutMs: Math.max(1, deadline - Date.now()) });
-  const executable = serverExecutableFromBuild(output, repoRoot);
+  let executable = prebuiltBinary({ target: "server/bin/server", profile: "dev", env });
+  if (!executable) {
+    const invocation = lockedProofCargoInvocation({ cwd: repoRoot, laneId: context.laneId, target: "server/bin/server", profile: "dev", command: "build", env });
+    const output = await runProofCommand(invocation.command, [...invocation.args, "--message-format=json"], { cwd: repoRoot, env: applicationEnv, timeoutMs: Math.max(1, deadline - Date.now()) });
+    executable = serverExecutableFromBuild(output, repoRoot);
+  }
   const port = await freePort(host);
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(context.artifactDir, "media-store");

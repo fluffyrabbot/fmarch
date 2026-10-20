@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
-import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
+import { lockedProofBinaryCommand } from "./proof_cargo_builds.mjs";
 
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 
@@ -121,11 +121,11 @@ export function migrationDatabaseEnvironment({ migrationUrl, env = process.env }
   return migrationDatabaseEnvironmentForAuthority(authority, env);
 }
 
-/** Build the registered host-wide heavyweight-lane invocation for fmarch-migrate. */
+/** The prebuilt fmarch-migrate, or its registered host-wide heavyweight-lane Cargo invocation. */
 export function fmarchMigrationInvocation({
   cwd, operationId = localMigrationOperationId, proofLane, profile = "dev", env = process.env,
 }) {
-  return lockedProofCargoInvocation({
+  return lockedProofBinaryCommand({
     cwd,
     laneId: proofLane,
     target: "server/bin/fmarch-migrate",

@@ -106,7 +106,7 @@ test("dev postgres keeps Unix sockets beside PGDATA, not in /run/postgresql", ()
       port: 5544,
       socketDir: "/tmp/fmarch-pg/sockets",
     }),
-    "-p 5544 -h 127.0.0.1 -k /tmp/fmarch-pg/sockets",
+    "-p 5544 -h 127.0.0.1 -k /tmp/fmarch-pg/sockets -c max_connections=400",
   );
   assert.equal(
     unixSocketDirectoriesSetting("/tmp/fmarch-pg/sockets"),

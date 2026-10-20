@@ -10,11 +10,11 @@ test('remote proof accepts only bounded repository modes, with full default', ()
 test('narrow Linux modes use controller-pinned base and the common heavy workflow', () => {
   const p = JSON.parse(fs.readFileSync(new URL('../.fluffyfleet.json', import.meta.url))).profiles.linux;
   assert.equal(p.resourceClass, 'heavy');
-  for (const mode of ['push','sprint']) assert.deepEqual(p.verificationModes[mode], [`bash scripts/linux-proof.sh --mode ${mode} --base "$FLEET_COMPARISON_SHA" --jobs 2 --keep-going`]);
+  for (const mode of ['push','sprint']) assert.deepEqual(p.verificationModes[mode], [`bash scripts/linux-proof.sh --mode ${mode} --base "$FLEET_COMPARISON_SHA" --jobs 6 --keep-going`]);
   assert.match(p.verify[0], /--mode full/);
 });
 
 test('audit forces the complete graph under the canonical workflow', () => {
   const p = JSON.parse(fs.readFileSync(new URL('../.fluffyfleet.json', import.meta.url))).profiles.linux;
-  assert.deepEqual(p.verificationModes.audit, ['bash scripts/linux-proof.sh --mode full --force --jobs 2 --keep-going', 'bash scripts/with-proof-node.sh node tools/source_content_report.mjs', 'bash scripts/with-proof-node.sh python3 scripts/with-heavy-build-lock.py -- node tools/release_image_proof.mjs']);
+  assert.deepEqual(p.verificationModes.audit, ['bash scripts/linux-proof.sh --mode full --force --jobs 6 --keep-going', 'bash scripts/with-proof-node.sh node tools/source_content_report.mjs', 'bash scripts/with-proof-node.sh python3 scripts/with-heavy-build-lock.py -- node tools/release_image_proof.mjs']);
 });
