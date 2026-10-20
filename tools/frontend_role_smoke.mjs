@@ -384,6 +384,7 @@ try {
           commandLatency,
           commandInterruption,
           mediaRequests: playerMediaRequests,
+          mockState,
         });
       }
 
@@ -1310,7 +1311,10 @@ function resolveFlowHook(name) {
   const hooks = {
     moderatorHostPromptAck: (page) => driveModeratorHostPromptAck(page),
     moderatorSlotLifecycleAck: (page, ctx) =>
-      driveModeratorSlotLifecycleAck(page, { commandRequests: ctx.commandRequests }),
+      driveModeratorSlotLifecycleAck(page, {
+        commandRequests: ctx.commandRequests,
+        mockState: ctx.mockState,
+      }),
     playerMediaNetwork: (page, ctx) =>
       assertPlayerMediaNetwork(page, { mediaRequests: ctx.mediaRequests }),
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
@@ -2363,7 +2367,7 @@ async function driveModeratorHostPromptAck(page) {
   };
 }
 
-async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {}) {
+async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mockState } = {}) {
   const actionId = "modkill_slot";
   await selectHostTask(page, "slot-lifecycle");
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
@@ -2398,6 +2402,10 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
       (outcome) => outcome.actionId === expectedActionId && outcome.state === "ack",
     );
   }, actionId);
+  // The host page learns a committed lifecycle change from its live socket,
+  // as it does in production. Without this push it would only refetch when the
+  // 30 s freshness lease expires.
+  await emitHostConsoleSlots(page, mockState);
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="host-console-slot-lifecycle"]',
@@ -3279,6 +3287,35 @@ async function installLiveProjectionHarness(page, { roleId, channel = "main" }) 
       });
     };
   }, helloFrame);
+}
+
+/** Push the host console's current seats, as the server does after a change. */
+async function emitHostConsoleSlots(page, mockState) {
+  if (mockState === undefined) {
+    throw new Error("host console slot push needs the role mock state");
+  }
+  await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
+  const frame = [...encodeServerEnvelopeFrame({
+    v: 3,
+    id: 1,
+    body: {
+      kind: "Delta",
+      body: {
+        audience: { Host: { game: "midsummer" } },
+        delta: {
+          kind: "HostConsoleSlotsChanged",
+          body: {
+            game: "midsummer",
+            slots: mockStateProjections.hostConsoleState(mockState).slots,
+            removed_slot_ids: [],
+          },
+        },
+      },
+    },
+  })];
+  await page.evaluate((frameBytes) => {
+    window.__fmarchEmitLiveProjection(frameBytes);
+  }, frame);
 }
 
 async function emitPlayerOfficialThreadPost(page) {
