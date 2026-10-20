@@ -1182,8 +1182,8 @@ async function main(argv) {
     context ??= currentProofContext();
     const execution = await runExecutionPlan(ordered, manifest, {
       jobs: args.jobs,
-      // Recorded costs (runtime observations over the tracked baseline) let a
-      // parallel run start its longest lanes first.
+      // Recorded costs (runtime observations over the tracked baseline) rank
+      // a parallel run's admission by critical path.
       priorities: new Map(Object.entries(timings.lanes).map(([id, entry]) => [id, entry?.seconds ?? Infinity])),
       keepGoing: args.keepGoing,
       skippedLaneIds,

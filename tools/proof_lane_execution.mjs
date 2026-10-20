@@ -266,6 +266,30 @@ export function executionPhases(laneIds, manifest) {
   return Object.fromEntries(planned.map((id) => [id, focused.has(id) ? 0 : manifest.lanes[id].phase === 'acceptance' ? 2 : 1]));
 }
 
+// A lane's admission rank is its own cost plus the costliest chain of lanes
+// that cannot start before it finishes. Acceptance waits on every focused
+// lane, so a cheap focused lane still leads the acceptance chains instead of
+// queueing behind long independent work.
+export function criticalPathRanks(planned, phases, manifest, costOf) {
+  const plannedSet = new Set(planned);
+  const acceptance = planned.filter((id) => phases[id] === 2);
+  const dependents = new Map(planned.map((id) => [id, phases[id] === 0 ? [...acceptance] : []]));
+  for (const id of planned) {
+    for (const dependency of dependenciesFor(id, manifest)) {
+      if (plannedSet.has(dependency)) dependents.get(dependency).push(id);
+    }
+  }
+  const ranks = new Map();
+  const rank = (id) => {
+    if (!ranks.has(id)) {
+      ranks.set(id, costOf(id) + Math.max(0, ...dependents.get(id).map(rank)));
+    }
+    return ranks.get(id);
+  };
+  for (const id of planned) rank(id);
+  return ranks;
+}
+
 export function validateExecutionManifest(manifest) {
   if (!manifest?.lanes || typeof manifest.lanes !== 'object') {
     throw new Error('proof lane manifest must define a lanes object');
@@ -1650,10 +1674,17 @@ export async function runExecutionPlan(
     }
   };
 
-  // Serial runs keep plan order. A parallel run admits the costliest lanes
-  // first so the long test bodies start while shorter work fills the gaps.
+  // Serial runs keep plan order. A parallel run admits the lanes heading the
+  // costliest critical paths first; lanes without a recorded cost lead, and
+  // lanes that will not execute add nothing to a chain.
+  const ranks = criticalPathRanks(planned, phases, manifest, (id) => (
+    records.get(id).state === 'pending' ? priorities.get(id) ?? Infinity : 0
+  ));
   const admissionOrder = jobs > 1
-    ? [...planned].sort((left, right) => (priorities.get(right) ?? Infinity) - (priorities.get(left) ?? Infinity))
+    ? [...planned].sort((left, right) => {
+        const difference = ranks.get(right) - ranks.get(left);
+        return Number.isNaN(difference) ? 0 : difference;
+      })
     : planned;
   let exclusiveLane = null;
 
