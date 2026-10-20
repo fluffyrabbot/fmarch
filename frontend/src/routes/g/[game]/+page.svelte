@@ -274,6 +274,9 @@
       clearTimeout(sampleTimer);
       sampleTimer = setTimeout(() => {
         if (Date.now() > gestureUntil || readerTrip?.destination) return;
+        // A settled gesture authorizes one checkpoint. Later layout or history
+        // restoration scrolls must not reuse the same reading intent.
+        gestureUntil = 0;
         const origin = deliberateReadingOrigin();
         if (!origin) return;
         readerThreadWindow = { aroundSeq: origin.id.slice("thread-post-".length) };
@@ -298,6 +301,7 @@
     for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
     const flushCheckpoint = () => {
       if (Date.now() > gestureUntil || readerTrip?.destination) return;
+      gestureUntil = 0;
       const origin = deliberateReadingOrigin();
       if (origin) checkpoints?.save({ source_seq: Number(origin.id.slice("thread-post-".length)), offset_px: origin.top });
     };

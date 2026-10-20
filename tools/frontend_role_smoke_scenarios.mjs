@@ -586,14 +586,12 @@ export const roles = Object.freeze([
     ]),
     visibleTestIds: [
       "host-console-bar",
-      "host-console-attention",
       "host-task-queue-summary",
       "host-task-queue",
       "host-task-day-event-resolve-event-cookie",
       "host-decision-canvas",
     ],
     overlapTestIds: [
-      "host-console-attention",
       "host-task-queue-summary",
       "host-decision-canvas",
     ],
