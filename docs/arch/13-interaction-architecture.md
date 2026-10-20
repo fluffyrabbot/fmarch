@@ -226,6 +226,13 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
   distinct roster and role cards rather than legacy co-located slot columns.
 - Proof lanes exercise player and host tasks rather than requiring legacy panel
   topology.
+- Recovery preserves the original action's viewport position within one pixel
+  as inline feedback collapses or a resolved task leaves the host queue. Host
+  feedback geometry is measured within the decision canvas; queue removal may
+  change the canvas's document position.
+- Reading checkpoints consume one settled reading gesture. Restoring history,
+  reconnecting, or adjusting layout never reuses that gesture to save a new
+  position. Scroll clearance follows the measured contextual game-bar height.
 
 ## Migration order
 

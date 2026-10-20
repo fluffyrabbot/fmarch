@@ -3834,6 +3834,12 @@ async function assertRouteStateScenario(page, { scenario, viewport, baseUrl }) {
     );
   }
   const dataSurface = await root.getAttribute("data-surface");
+  if (dataSurface === "player") {
+    const bar = await page.getByTestId("player-game-bar").boundingBox();
+    assert.ok(bar && bar.height <= 100, "player route-state game bar remains compact");
+    const message = (await page.getByTestId(scenario.statusTestId).innerText()).trim();
+    assert.equal((await root.innerText()).split(message).length - 1, 1, "route-state message appears once");
+  }
   const dataState = await root.getAttribute("data-state");
   if (dataSurface !== scenario.surface) {
     throw new Error(
@@ -4555,6 +4561,10 @@ async function proveSetupSeating(page) {
   const seat = page.getByTestId('host-setup-slot-slot_2');
   await seat.getByLabel('Player handle').fill('il');
   await seat.getByRole('button', {name:'Ilya · @ilya'}).click();
+  await page.waitForFunction(() => {
+    const seat = document.querySelector('[data-testid="host-setup-slot-slot_2"]');
+    return [...seat.querySelectorAll('input')].some(input => input.value === 'Ilya');
+  });
   assert.equal(await seat.getByLabel('Public game name').inputValue(), 'Ilya');
   await seat.getByLabel('Public game name').fill('Ilya North');
   assert.equal(sent.length, 0, 'choosing a handle must not assign a seat');

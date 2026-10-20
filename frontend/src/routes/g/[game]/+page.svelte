@@ -1208,6 +1208,7 @@
 {/if}
 
 <style>
+  .player-surface { align-content: start; }
   .reader-saved-position { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   :global(.player-role-card__name) {

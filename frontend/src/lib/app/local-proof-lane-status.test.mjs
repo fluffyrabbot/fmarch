@@ -479,7 +479,7 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
       status: "passed",
       evidence: staleConflictEvidence(staleActionConflictMessageLaneId),
     }),
-    "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    "passed: role URL true, Your action was not accepted because the phase is closed. Check the current phase before trying again.",
   );
   assert.equal(
     hardeningLaneStatus({
@@ -911,7 +911,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)[staleActionConflictMessageLaneId],
-    "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    "passed: role URL true, Your action was not accepted because the phase is closed. Check the current phase before trying again.",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-reconnect-recovery"],
