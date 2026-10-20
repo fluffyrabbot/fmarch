@@ -25,13 +25,13 @@
     if (status?.state === "interrupted" || (retryAvailable && status?.state === "reject")) retryButton?.focus({ preventScroll: true });
     else {
       const control = document.querySelector(returnSelector);
-      control?.focus({ preventScroll: true });
       // Keep the original action in place as the inline feedback collapses
       // and refreshed posts arrive above it.
       if (control && Number.isFinite(returnTop)) {
         await new Promise(requestAnimationFrame);
         window.scrollBy({ top: control.getBoundingClientRect().top - returnTop, behavior: "instant" });
       }
+      control?.focus({ preventScroll: true });
     }
   }
 </script>
