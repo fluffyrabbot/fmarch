@@ -1505,6 +1505,35 @@ test('parallel admission starts the costliest lanes first; serial runs keep plan
   }
 });
 
+test('parallel admission ranks a cheap focused lane by the acceptance chain it gates', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // All three need the one cargo slot, as Cargo-bound lanes do on the worker.
+  const cargo = [{ kind: 'lock', name: 'cargo' }];
+  const manifest = fixture({
+    long: lane(['long'], cargo),
+    focused: { ...lane(['focused'], cargo), phase: 'focused' },
+    middle: { ...lane(['middle'], cargo), depends_on: ['long'] },
+    acceptance: { ...lane(['acceptance']), phase: 'acceptance' },
+  });
+  const priorities = new Map([['long', 300], ['focused', 1], ['middle', 10], ['acceptance', 600]]);
+  const started = [];
+  const result = await runExecutionPlan(['long', 'focused', 'middle', 'acceptance'], manifest, {
+    jobs: 3,
+    root,
+    priorities,
+    spawn(file) {
+      started.push(file);
+      return childThatCloses(0, 5);
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  // Ranked by own cost the focused lane would queue behind `long` (300 s).
+  assert.equal(started[0], 'focused');
+  assert.deepEqual([...started].sort(), ['acceptance', 'focused', 'long', 'middle']);
+});
+
 test('lock amounts and exclusive mode count against capacity', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
