@@ -119,9 +119,9 @@ async function proveSourceContracts() {
       requiredSnippets: ["data-action={button.action}"],
     }),
     await proveSourceContract({
-      component: "PlayerCommandReceipt",
-      path: "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
-      requiredSnippets: ["<CommandRecovery", "status={currentStatus}"],
+      component: "CommandStatusLine",
+      path: "frontend/src/lib/components/gameplay/CommandStatusLine.svelte",
+      requiredSnippets: ["on:click={() => settle(onRetry)}", "data-testid={line.testId}"],
     }),
     await proveSourceContract({
       component: "HostTaskWorkspace",
@@ -211,8 +211,8 @@ async function proveAdminInteraction(bundle) {
 async function provePlayerInteraction(bundle) {
   const voteSheet = await bundle.renderPlayerVoteSheet();
   const unarmedVoteSheet = await bundle.renderPlayerVoteSheet({ selectedVoteAction: null });
-  const voteAck = await bundle.renderPlayerCommandReceiptVoteAck();
-  const postAck = await bundle.renderPlayerCommandReceiptPostAck();
+  const voteAck = await bundle.renderPlayerCommandStatusAck("submit_vote");
+  const postAck = await bundle.renderPlayerCommandStatusAck("submit_post");
   const invoked = [];
   const voteAction = "submit_vote";
   const postAction = "submit_post";
@@ -235,9 +235,10 @@ async function provePlayerInteraction(bundle) {
     false,
     "an unarmed vote picker exposes no dispatching vote control",
   );
-  assertIncludes(voteAck.html, 'data-testid="player-command-receipt-submit_vote"', "player vote ack row");
+  assertIncludes(voteAck.html, 'data-action-id="submit_vote"', "player vote ack line");
   assertIncludes(voteAck.html, 'data-state="ack"', "player vote ack state");
-  assertIncludes(postAck.html, 'data-testid="player-command-receipt-submit_post"', "player post ack row");
+  assertIncludes(voteAck.html, "Your vote for Slot 2 went through.", "player vote ack copy");
+  assertIncludes(postAck.html, 'data-action-id="submit_post"', "player post ack line");
   assertIncludes(postAck.html, 'data-state="ack"', "player post ack state");
   assert.equal(invoked[0], "submit_vote");
   assert.equal(invoked[1], "submit_post");
@@ -245,18 +246,10 @@ async function provePlayerInteraction(bundle) {
   assert.equal(postReceipts[0].state, "pending");
 
   return {
-    component: "VoteSheet/PlayerCommandReceipt",
+    component: "VoteSheet/CommandStatusLine",
     actions: [
-      {
-        action: invoked[0],
-        actionAttribute: "submit_vote",
-        visibleRowTestId: "player-command-receipt-submit_vote",
-      },
-      {
-        action: invoked[1],
-        actionAttribute: "submit_post",
-        visibleRowTestId: "player-command-receipt-submit_post",
-      },
+      { action: invoked[0], actionAttribute: "submit_vote" },
+      { action: invoked[1], actionAttribute: "submit_post" },
     ],
     statusTestId: "player-command-status",
     renderedPanelBytes: Buffer.byteLength(voteSheet.html),
@@ -427,7 +420,8 @@ import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.s
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
 import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
 import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
-import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
+import CommandStatusLine from "../src/lib/components/gameplay/CommandStatusLine.svelte";
+import { buildPlayerCommandStatusLine } from "../src/lib/components/player-command/player-command-status-line-model.mjs";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
 import { adminConfirmStatus } from "../src/routes/admin/admin-route-controller.mjs";
@@ -579,25 +573,16 @@ export function renderPlayerVoteSheet({ selectedVoteAction = "submit_vote" } = {
   });
 }
 
-export function renderPlayerCommandReceiptVoteAck() {
-  return render(PlayerCommandReceipt, {
+export function renderPlayerCommandStatusAck(action) {
+  return render(CommandStatusLine, {
     props: {
-      receipts: recordPlayerCommandReceipt([], "submit_vote", {
-        state: "ack",
-        message: "Ack: stream seqs 71",
-        commandTrace: playerCommandTrace("submit_vote"),
-      }),
-    },
-  });
-}
-
-export function renderPlayerCommandReceiptPostAck() {
-  return render(PlayerCommandReceipt, {
-    props: {
-      receipts: recordPlayerCommandReceipt([], "submit_post", {
-        state: "ack",
-        message: "Ack: stream seqs 72",
-        commandTrace: playerCommandTrace("submit_post"),
+      line: buildPlayerCommandStatusLine({
+        status: {
+          state: "ack",
+          message: "Ack: stream seqs 71",
+          commandTrace: playerCommandTrace(action),
+        },
+        voteCommands: [{ action: "submit_vote", voteTarget: { Slot: "slot-2" } }],
       }),
     },
   });

@@ -47,8 +47,8 @@ import {
   PLAYER_COMMAND_PANEL_CONTRACT,
 } from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
 import {
-  PLAYER_COMMAND_RECEIPT_CONTRACT,
-} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
+  PLAYER_COMMAND_STATUS_LINE_CONTRACT,
+} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
@@ -555,7 +555,7 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(staticContract.commandTraceContract, {
     boundary:
-      "Static model contract proves player command receipt rows carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
+      "Static model contract proves recorded player command receipts carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
     model: "command-trace-model",
     kind: COMMAND_TRACE_CONTRACT.kind,
     surfaces: [
@@ -777,26 +777,12 @@ test("static role contract artifact records shared nav focus and route state mat
     value: "Main thread as Slot 7",
     audienceLabel: "Everyone at the table reads this",
   });
-  assert.deepEqual(playerStaticRole.commandReceipt, {
-    component: "player-command-receipt",
-    summary: "1 recent player command receipt",
-    itemTestIds: ["player-command-receipt-submit_vote"],
-    currentStatusTestId: PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
-    commandTraces: [
-      {
-        actionId: "submit_vote",
-        statusTestId: "player-command-status",
-        trace: {
-          kind: COMMAND_TRACE_CONTRACT.kind,
-          surface: "player",
-          actionId: "submit_vote",
-          statusKey: "submit_vote",
-          dispatchKind: "submit_vote",
-          projectionRefreshKeys: ["votecount", "commandState"],
-        },
-      },
-    ],
+  assert.deepEqual(playerStaticRole.commandStatusLine, {
+    testId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
+    state: "pending",
+    text: playerStaticRole.commandStatusLine.text,
   });
+  assert.match(playerStaticRole.commandStatusLine.text, /^Sending your vote/u);
   assert.deepEqual(playerStaticRole.media, {
     component: PLAYER_THREAD_MEDIA_CONTRACT.component,
     preferredVariants: PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants,
@@ -1256,10 +1242,7 @@ test("route-state render artifact covers every forced board and role page state"
     deadlineValue: "Jun 19, 2026, 9:00 PM",
     deadlineState: "open",
     deadlineProjected: true,
-    commandReceiptTestId: "player-command-receipt",
-    commandReceiptEmptyTestId: null,
-    commandReceiptCurrentStatusTestId:
-      PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
+    commandStatusTestId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
     commandChannelContext: {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
       channelId: "main",
@@ -1508,20 +1491,11 @@ test("route-state render artifact covers every forced board and role page state"
   });
   assert.deepEqual(routeStateRender.feedbackRailMarkup.player, {
     role: "player",
-    render: "renderPlayerCommandReceipt",
-    component: "player-command-receipt",
-    testId: "player-command-receipt",
-    itemTestId: "player-command-receipt-submit_vote",
-    statusTestId: PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
+    render: "renderPlayerCommandStatusLine",
+    component: "command-status-line",
+    testId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
+    statusTestId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
     statusState: "reject",
-    commandTrace: {
-      kind: "command-trace",
-      surface: "player",
-      actionId: "submit_vote",
-      statusKey: "submit_vote",
-      dispatchKind: "submit_vote",
-      refreshKeys: "votecount,commandState",
-    },
     htmlBytes: routeStateRender.feedbackRailMarkup.player.htmlBytes,
   });
   assert.deepEqual(routeStateRender.feedbackRailMarkup.moderator, {
@@ -1905,7 +1879,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
     },
   });
   assert.deepEqual(hydratedHandlers.roles.player, {
-    component: "player-command-receipt",
+    component: "command-status-line",
     exposureKey: "__fmarchPlayerCommandDispatchBridgePlan",
     commands: {
       vote: {
@@ -1914,15 +1888,15 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "submit_vote",
           state: "ack",
-          message: "Ack: stream seqs 71",
-          testId: "player-command-receipt-submit_vote",
+          message: "Your vote for Slot 2 went through.",
+          testId: "player-command-status",
           statusTestId: "player-command-status",
         },
         reject: {
           actionId: "submit_vote",
           state: "reject",
-          message: "Reject PhaseLocked: reload and retry",
-          testId: "player-command-receipt-submit_vote",
+          message: "Your vote for Slot 2 didn't go through.",
+          testId: "player-command-status",
           statusTestId: "player-command-status",
         },
         ackRefreshKeys: ["votecount"],
@@ -1934,11 +1908,11 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "submit_post",
           state: "ack",
-          message: "Ack: stream seqs 72",
-          testId: "player-command-receipt-submit_post",
+          message: "Your post went through.",
+          testId: "player-command-status",
           statusTestId: "player-command-status",
         },
-        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes"],
+        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
         channelId: "private:role_pm:slot-7",
       },
     },
@@ -2174,8 +2148,8 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/gameplay/ComposeSheet.svelte",
       ],
       [
-        "PlayerCommandReceipt",
-        "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
+        "CommandStatusLine",
+        "frontend/src/lib/components/gameplay/CommandStatusLine.svelte",
       ],
       [
         "HostTaskWorkspace",
@@ -2217,18 +2191,10 @@ test("component interaction artifact records no-bind command component wiring", 
   }
   assert.equal(componentInteractions.interactions.admin.renderedAckBytes > 0, true);
   assert.deepEqual(componentInteractions.interactions.player, {
-    component: "VoteSheet/PlayerCommandReceipt",
+    component: "VoteSheet/CommandStatusLine",
     actions: [
-      {
-        action: "submit_vote",
-        actionAttribute: "submit_vote",
-        visibleRowTestId: "player-command-receipt-submit_vote",
-      },
-      {
-        action: "submit_post",
-        actionAttribute: "submit_post",
-        visibleRowTestId: "player-command-receipt-submit_post",
-      },
+      { action: "submit_vote", actionAttribute: "submit_vote" },
+      { action: "submit_post", actionAttribute: "submit_post" },
     ],
     statusTestId: "player-command-status",
     renderedPanelBytes:
@@ -2595,7 +2561,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       [
         "player-primary-action-zone",
         "player-primary-actions",
-        ["submit_vote", "submit_vote:no_lynch", "player-dock-reply"],
+        ["player-dock-vote", "player-dock-reply"],
       ],
     ],
   );
@@ -6490,11 +6456,9 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       "player composer acknowledgement screenshots",
     );
     assert.deepEqual(entry.commandResult.commandReceipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_vote",
       statusTestId: "player-command-status",
       state: "reject",
-      message: "Reject StreamConflict: reload and retry",
+      message: "Your vote for Juniper didn't go through: the game changed while it was on its way.",
       exportedReceipts: [
         {
           actionId: "submit_vote",
@@ -6530,17 +6494,15 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       ariaAtomic: "true",
     });
     assert.equal(entry.commandResult.postCommand.state, "ack");
-    assert.match(entry.commandResult.postCommand.message, /Ack: stream seqs 72/);
+    assert.equal(entry.commandResult.postCommand.message, "Your post went through.");
     assert.equal(
       entry.commandResult.postCommand.refreshedPostTestId,
       "thread-post-445",
     );
     assert.deepEqual(entry.commandResult.postCommandReceipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_post",
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Ack: stream seqs 72",
+      message: "Your post went through.",
       exportedReceipts: [
         {
           actionId: "submit_vote",
@@ -6650,11 +6612,9 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
       ariaAtomic: "true",
     });
     assert.deepEqual(entry.commandResult.receipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_post",
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Ack: stream seqs 172",
+      message: "Your post went through.",
       exportedReceipts: [
         {
           actionId: "submit_post",
@@ -6793,17 +6753,9 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
       htmlBytes: domFeedbackTraces.admin.htmlBytes,
     },
     player: {
-      component: "player-command-receipt",
-      rowTestId: "player-command-receipt-submit_vote",
+      component: "command-status-line",
       statusTestId: "player-command-status",
-      commandTrace: {
-        kind: "command-trace",
-        surface: "player",
-        actionId: "submit_vote",
-        statusKey: "submit_vote",
-        dispatchKind: "submit_vote",
-        refreshKeys: "votecount,commandState",
-      },
+      commandTrace: null,
       htmlBytes: domFeedbackTraces.player.htmlBytes,
     },
     moderator: {

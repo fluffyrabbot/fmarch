@@ -48,8 +48,8 @@ import {
   exposePlayerProjection,
 } from "../frontend/src/routes/g/[game]/player-route-browser-bridge.mjs";
 import {
-  buildPlayerCommandReceiptViewModel,
-} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
+  buildPlayerCommandStatusLine,
+} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
 import {
   buildPlayerPrivateQueueViewModel,
 } from "../frontend/src/lib/components/player-private-queue/player-private-queue-model.mjs";
@@ -341,7 +341,7 @@ async function provePlayerSurfaceAdapter() {
     body: "private role note",
   });
   assert.deepEqual(postCommand.refreshed, [
-    ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+    ["thread", "votecount", "commandState", "dayVoteOutcomes", "slotMentions"],
   ]);
   const threadPager = await provePlayerThreadPagerLifecycle();
 
@@ -520,8 +520,7 @@ async function provePlayerCommandSurfacePath({
   exposePlayerCommandStatus({ windowRef, commandStatus: result.commandStatus });
   exposePlayerCommandReceipts({ windowRef, commandReceipts: receipts });
   exposePlayerProjection({ windowRef, snapshot: result.snapshot });
-  const receiptView = buildPlayerCommandReceiptViewModel({ receipts });
-  const row = rowByAction(receiptView.items, action);
+  const row = statusLineFor(result.commandStatus, data, action);
 
   assert.equal(windowRef.__fmarchPlayerCommandDispatchBridgePlan, plan);
   assert.equal(row.state, "ack");
@@ -530,7 +529,7 @@ async function provePlayerCommandSurfacePath({
     action,
     plan,
     request: only(sent),
-    visible: visibleStatus(row),
+    visible: visibleLineStatus(row),
     refreshed: projectionStore.refreshed,
   };
 }
@@ -860,6 +859,19 @@ function rowByAction(items, actionId) {
   return row;
 }
 
+// The player's view of a command is the game-bar status line (RFC 0008,
+// decision 4); the raw message stays on the page's proof global.
+function statusLineFor(status, data, actionId) {
+  const line = buildPlayerCommandStatusLine({
+    status,
+    actionId,
+    voteCommands: data.composer?.voteCommands ?? [],
+    roster: data.commandState?.roster ?? [],
+  });
+  assert.notEqual(line, null, "a dispatched command shows a status line");
+  return line;
+}
+
 function visibleStatus(row) {
   return {
     actionId: row.actionId,
@@ -867,6 +879,16 @@ function visibleStatus(row) {
     message: row.message,
     testId: row.testId,
     statusTestId: row.statusTestId,
+  };
+}
+
+function visibleLineStatus(line) {
+  return {
+    actionId: line.actionId,
+    state: line.state,
+    message: line.text,
+    testId: line.testId,
+    statusTestId: line.testId,
   };
 }
 

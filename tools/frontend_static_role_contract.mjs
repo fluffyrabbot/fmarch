@@ -55,8 +55,8 @@ import {
   buildPlayerCommandPanelViewModel,
 } from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
 import {
-  buildPlayerCommandReceiptViewModel,
-} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
+  buildPlayerCommandStatusLine,
+} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
 import {
   buildPlayerPostureStripViewModel,
 } from "../frontend/src/lib/components/player-posture/player-posture-strip-model.mjs";
@@ -1291,8 +1291,8 @@ function proveCommandTraceContract() {
     "submit_vote",
     playerCommandPendingStatus("submit_vote"),
   );
-  const receipt = buildPlayerCommandReceiptViewModel({ receipts });
-  const traces = receipt.items.map((item) => item.commandTrace);
+  // Receipts stay in the page's proof global; the newest comes first.
+  const traces = [...receipts].reverse().map((receipt) => receipt.commandTrace);
 
   for (const trace of traces) {
     assert.equal(trace.kind, COMMAND_TRACE_CONTRACT.kind);
@@ -1303,7 +1303,7 @@ function proveCommandTraceContract() {
 
   return {
     boundary:
-      "Static model contract proves player command receipt rows carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
+      "Static model contract proves recorded player command receipts carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
     model: "command-trace-model",
     kind: COMMAND_TRACE_CONTRACT.kind,
     surfaces: traces.map((trace) => ({
@@ -1515,12 +1515,10 @@ async function provePlayerSurface() {
     channel: data.channel,
     player: data.player,
   });
-  const commandReceipt = buildPlayerCommandReceiptViewModel({
-    receipts: recordPlayerCommandReceipt(
-      [],
-      "submit_vote",
-      playerCommandPendingStatus(),
-    ),
+  const commandLine = buildPlayerCommandStatusLine({
+    status: playerCommandPendingStatus("submit_vote"),
+    voteCommands: data.composer.voteCommands ?? [],
+    roster: data.commandState?.roster ?? [],
   });
   const posture = buildPlayerPostureStripViewModel({
     phase: data.phase,
@@ -1624,9 +1622,9 @@ async function provePlayerSurface() {
   assert.equal(commandPanel.context.deadline.phaseLabel, data.phase.label);
   assert.equal(commandPanel.context.deadline.isProjected, true);
   assert.equal(commandPanel.votePicker.rows.length > 0, true);
-  assert.equal(commandReceipt.root.data.component, "player-command-receipt");
-  assert.equal(commandReceipt.items[0].testId, "player-command-receipt-submit_vote");
-  assert.equal(commandReceipt.items[0].statusTestId, "player-command-status");
+  assert.equal(commandLine.testId, "player-command-status");
+  assert.equal(commandLine.state, "pending");
+  assert.match(commandLine.text, /^Sending your vote/u);
   assert.deepEqual(
     posture.items.map((item) => [item.id, item.status.state]),
     [
@@ -1860,16 +1858,10 @@ async function provePlayerSurface() {
         ariaExpanded: privateDisclosure.items[0].ariaExpanded,
         detailTestId: privateDisclosure.items[0].detailTestId,
       },
-      commandReceipt: {
-        component: commandReceipt.root.data.component,
-        summary: commandReceipt.summary,
-        itemTestIds: commandReceipt.items.map((item) => item.testId),
-        currentStatusTestId: commandReceipt.items[0].statusTestId,
-        commandTraces: commandReceipt.items.map((item) => ({
-          actionId: item.actionId,
-          statusTestId: item.statusTestId,
-          trace: item.commandTrace,
-        })),
+      commandStatusLine: {
+        testId: commandLine.testId,
+        state: commandLine.state,
+        text: commandLine.text,
       },
       commandChannelContext: commandPanel.composer.channelContext,
       blockedSurfaces: data.shell.surfaces

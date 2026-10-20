@@ -16,8 +16,8 @@ import {
   projectHostConsoleState,
 } from "../frontend/src/lib/components/host-action/host-command-boundary.mjs";
 import {
-  buildPlayerCommandReceiptViewModel,
-} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
+  buildPlayerCommandStatusLine,
+} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
 import {
   adminConfirmStatus,
   adminPendingStatus,
@@ -227,10 +227,10 @@ async function provePlayerHandlers() {
   assert.equal(postAck.visible.state, "ack");
   assert.deepEqual(voteAck.refreshed, [["votecount"]]);
   assert.deepEqual(voteReject.refreshed, []);
-  assert.deepEqual(postAck.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
+  assert.deepEqual(postAck.refreshed, [["thread", "votecount", "dayVoteOutcomes", "slotMentions"]]);
 
   return {
-    component: "player-command-receipt",
+    component: "command-status-line",
     exposureKey: "__fmarchPlayerCommandDispatchBridgePlan",
     commands: {
       vote: {
@@ -307,10 +307,7 @@ async function provePlayerHandlerPath({
   exposePlayerCommandStatus({ windowRef, commandStatus });
   exposePlayerCommandReceipts({ windowRef, commandReceipts });
   exposePlayerProjection({ windowRef, snapshot });
-  const receiptView = buildPlayerCommandReceiptViewModel({
-    receipts: commandReceipts,
-  });
-  const visible = rowByAction(receiptView.items, action);
+  const visible = statusLineFor(commandStatus, data, action);
 
   assertPlayerCommand({ request: only(sent), action, data, composerBody });
   assert.equal(windowRef.__fmarchPlayerCommandDispatchBridgePlan, plan);
@@ -319,7 +316,7 @@ async function provePlayerHandlerPath({
 
   return {
     plan,
-    visible: visibleStatus(visible),
+    visible: visibleLineStatus(visible),
     refreshed: projectionStore.refreshed,
   };
 }
@@ -700,6 +697,19 @@ function rowByAction(items, actionId) {
   return row;
 }
 
+// The player's view of a command is the game-bar status line (RFC 0008,
+// decision 4); the raw message stays on the page's proof global.
+function statusLineFor(status, data, actionId) {
+  const line = buildPlayerCommandStatusLine({
+    status,
+    actionId,
+    voteCommands: data.composer?.voteCommands ?? [],
+    roster: data.commandState?.roster ?? [],
+  });
+  assert.notEqual(line, null, "a dispatched command shows a status line");
+  return line;
+}
+
 function visibleStatus(row) {
   return {
     actionId: row.actionId,
@@ -707,6 +717,16 @@ function visibleStatus(row) {
     message: row.message,
     testId: row.testId,
     statusTestId: row.statusTestId,
+  };
+}
+
+function visibleLineStatus(line) {
+  return {
+    actionId: line.actionId,
+    state: line.state,
+    message: line.text,
+    testId: line.testId,
+    statusTestId: line.testId,
   };
 }
 

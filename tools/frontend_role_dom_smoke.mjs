@@ -209,20 +209,17 @@ async function proveAdminFeedbackTrace(bundle) {
   };
 }
 
+// Command traces stay off player surfaces (RFC 0008, decision 4): the player
+// sees one status line, and traces live on the page's proof globals.
 async function provePlayerFeedbackTrace(bundle) {
-  const { html } = await bundle.renderPlayerCommandReceipt();
+  const { html } = await bundle.renderPlayerCommandStatusLine();
+  assert.match(html, /data-testid="player-command-status"/u, "player command status line");
+  assert.doesNotMatch(html, /data-command-(trace-kind|surface|status-key|dispatch-kind|refresh-keys)=/u,
+    "player status line must not carry command traces");
   return {
-    component: "player-command-receipt",
-    rowTestId: "player-command-receipt-submit_vote",
+    component: "command-status-line",
     statusTestId: "player-command-status",
-    commandTrace: assertCommandTraceAttributes(html, {
-      testId: "player-command-receipt-submit_vote",
-      surface: "player",
-      actionId: "submit_vote",
-      statusKey: "submit_vote",
-      dispatchKind: "submit_vote",
-      refreshKeys: "votecount,commandState",
-    }),
+    commandTrace: null,
     htmlBytes: Buffer.byteLength(html),
   };
 }

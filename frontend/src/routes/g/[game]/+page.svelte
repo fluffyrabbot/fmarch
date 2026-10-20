@@ -38,7 +38,8 @@
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
-  import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
+  import { buildPlayerCommandStatusLine } from "$lib/components/player-command/player-command-status-line-model.mjs";
+  import CommandStatusLine from "$lib/components/gameplay/CommandStatusLine.svelte";
   import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
@@ -141,6 +142,18 @@
   let commandRecoveryAttempts = {};
   $: confirmedRetryAvailable = playerCommandRetryAvailable(commandStatus, commandRecoveryAttempts);
   $: commandRecoveryRequired = commandInterrupted || confirmedRetryAvailable;
+  // A settled status the player put away stays away until the next command.
+  let dismissedCommandStatus = null;
+  $: commandLine = commandStatus === null || commandStatus === dismissedCommandStatus
+    ? null
+    : buildPlayerCommandStatusLine({
+        status: commandStatus,
+        actionId: commandReceipts.findLast((receipt) => receipt.current)?.actionId ?? null,
+        voteCommands: composer?.voteCommands ?? [],
+        roster: commandState?.roster ?? [],
+        retryAvailable: confirmedRetryAvailable,
+        retryEnabled: projectionCommandsReady && !commandPending,
+      });
   let commandRecoveryStorage = null;
   let commandRecoveryStorageAvailable = true;
   let thread = data.thread;
@@ -1032,6 +1045,13 @@
       {liveStatus}
       {player}
     />
+    <CommandStatusLine
+      slot="status"
+      line={commandLine}
+      onRetry={retryPlayerCommand}
+      onCancel={cancelPlayerCommandRecovery}
+      onDismiss={() => { dismissedCommandStatus = commandStatus; }}
+    />
     <ChannelTabs slot="channels" {channels} />
 
     {#if player.gameCompleted}
@@ -1185,18 +1205,6 @@
       </details>
     </ContextSheet>
 
-    {#if commandReceipts.length > 0}
-      <div class="player-command-feedback">
-        <PlayerCommandReceipt
-          receipts={commandReceipts}
-          currentStatus={commandStatus}
-          retryAvailable={confirmedRetryAvailable}
-          retryEnabled={projectionCommandsReady && !commandPending}
-          onRetry={retryPlayerCommand}
-          onCancel={cancelPlayerCommandRecovery}
-        />
-      </div>
-    {/if}
 
       <ActionDock
         slot="dock"
@@ -1213,13 +1221,6 @@
 <style>
   .reader-saved-position { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .player-command-feedback {
-    bottom: calc(82px + env(safe-area-inset-bottom));
-    inset-inline-end: max(14px, calc((100vw - 920px) / 2));
-    max-inline-size: min(360px, calc(100vw - 28px));
-    position: fixed;
-    z-index: 13;
-  }
 
   :global(.player-role-card__name) {
     color: var(--fm-ink);
@@ -1352,6 +1353,5 @@
     overflow-wrap: anywhere;
   }
   @media (max-width: 560px) {
-    .player-command-feedback { bottom: calc(130px + env(safe-area-inset-bottom)); }
   }
 </style>

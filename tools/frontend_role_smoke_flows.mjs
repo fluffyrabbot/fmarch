@@ -47,6 +47,8 @@ export const flowHookNames = Object.freeze([
   "playerLiveThreadEmit",
   "playerPrivateDisclosure",
   "playerPrivateAttention",
+  "playerVotePicker",
+  "playerInterruptedVote",
   "adminAuditDetail",
 ]);
 
@@ -1118,6 +1120,8 @@ export const commandFlows = Object.freeze({
       { type: "set-from-value", from: { id: "postCommandReceipt" }, resultPath: "postCommandReceipt" },
       { type: "hook", id: "votePicker", name: "playerVotePicker" },
       { type: "set-from-value", from: { id: "votePicker" }, resultPath: "votePicker" },
+      { type: "hook", id: "interruptedVote", name: "playerInterruptedVote" },
+      { type: "set-from-value", from: { id: "interruptedVote" }, resultPath: "interruptedVote" },
     ]),
   }),
 });

@@ -47,6 +47,7 @@ import {
   roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
 import { captureLegibility } from "./frontend_legibility.mjs";
+import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
 import {
   DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
   initializeReadingCheckpointClientsSequentially,
@@ -1320,6 +1321,8 @@ function resolveFlowHook(name) {
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
     playerVotePicker: (page, ctx) =>
       drivePlayerVotePicker(page, { commandRequests: ctx.commandRequests }),
+    playerInterruptedVote: (page, ctx) =>
+      provePlayerInterruptedVote(page, { baseUrl: ctx.baseUrl, routePath: ctx.role.path }),
     playerPrivateDisclosure: (page, ctx) =>
       drivePlayerPrivateDisclosure(page, {
         viewport: ctx.viewport,
@@ -2475,6 +2478,60 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
   }
 }
 
+// An interrupted vote (RFC 0008, decision 4 and slice 5 acceptance): one
+// game-bar line in the player's terms, restored after a reload within the game,
+// absent on other routes, and put away by Dismiss.
+async function provePlayerInterruptedVote(page, { baseUrl, routePath }) {
+  const actionId = "submit_vote:slot-3";
+  const expected = "Your vote for Rook may not have gone through.";
+  let aborted = 0;
+  const abortVote = async (route) => {
+    const command = route.request().postDataJSON()?.body?.body?.command;
+    if (aborted === 0 && command?.SubmitVote !== undefined) {
+      aborted += 1;
+      await route.abort("failed");
+      return;
+    }
+    await route.fallback();
+  };
+  await page.route("**/commands", abortVote);
+  try {
+    const confirm = await armPlayerVote(page, playerVoteOption(page, actionId));
+    await confirm.click();
+    const status = page.getByTestId("player-command-status");
+    const awaitInterrupted = async (label) => {
+      await page.waitForFunction(() =>
+        document.querySelector('[data-testid="player-command-status"]')?.dataset.state === "interrupted");
+      assert.equal(await page.getByTestId("player-command-status").count(), 1, `${label}: one status line`);
+      assert.equal((await status.innerText()).trim(), expected, `${label}: status line copy`);
+      await page.getByTestId(`command-recovery-${actionId}`).waitFor({ state: "visible" });
+      assert.equal(await page.getByTestId("player-command-receipt").count(), 0, `${label}: no receipt panel`);
+    };
+    await awaitInterrupted("interrupted vote");
+    const commandId = await page.getByTestId(`command-recovery-${actionId}`).getAttribute("data-command-id");
+
+    await reloadBrowserPage(page);
+    await awaitInterrupted("after reload");
+    assert.equal(
+      await page.getByTestId(`command-recovery-${actionId}`).getAttribute("data-command-id"),
+      commandId,
+      "reload keeps the original attempt",
+    );
+
+    await navigateBrowserPage(page, `${baseUrl}/`, { waitUntil: "networkidle" });
+    const elsewhere = await page.getByTestId("player-command-status").count();
+    assert.equal(elsewhere, 0, "the status line belongs to its game route");
+
+    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    await awaitInterrupted("back in the game");
+    await page.getByTestId(`command-recovery-cancel-${actionId}`).click();
+    await page.getByTestId("player-command-status").waitFor({ state: "detached" });
+    return { actionId, text: expected, survivedReload: true, otherRouteLines: elsewhere };
+  } finally {
+    await page.unroute("**/commands", abortVote);
+  }
+}
+
 async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mockState } = {}) {
   const actionId = "modkill_slot";
   await selectHostTask(page, "slot-lifecycle");
@@ -2610,11 +2667,9 @@ async function assertRailCommandActivity(page, { prefix, actionId, expectedState
   };
 }
 
+// The player's command feedback is one game-bar status line naming the intent;
+// raw messages and traces are read from the page's proof global.
 async function assertPlayerCommandReceipt(page, { actionId, expectedState }) {
-  await page.getByTestId("player-command-receipt").waitFor({ state: "visible" });
-  await page
-    .getByTestId(`player-command-receipt-${actionId}`)
-    .waitFor({ state: "visible" });
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -2624,20 +2679,22 @@ async function assertPlayerCommandReceipt(page, { actionId, expectedState }) {
     },
     { state: expectedState },
   );
+  assert.equal(await status.getAttribute("data-action-id"), actionId, "status line names its command");
   const exportedReceipts = await page.evaluate(
     () => window.__fmarchPlayerCommandReceipts ?? null,
   );
   const statusRegion = await assertStatusLiveRegion(status, {
-    label: `player command receipt ${actionId}`,
+    label: `player command status ${actionId}`,
     expectedState,
     expectedAriaLive: expectedState === "reject" ? "assertive" : "polite",
   });
+  const message = await status.innerText();
+  assert.doesNotMatch(message, /\b(Reject|Ack|receipt|command identity|stream seqs)\b/iu,
+    "player command status speaks about intent, not transport");
   return {
-    receiptTestId: "player-command-receipt",
-    receiptItemTestId: `player-command-receipt-${actionId}`,
     statusTestId: "player-command-status",
     state: await status.getAttribute("data-state"),
-    message: await status.innerText(),
+    message,
     exportedReceipts,
     statusRegion,
   };

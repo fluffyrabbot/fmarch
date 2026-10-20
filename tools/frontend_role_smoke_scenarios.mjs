@@ -391,9 +391,11 @@ export const roles = Object.freeze([
     interactionGeometryBudget: Object.freeze({
       feedback: Object.freeze({
         anchorSelector: '[data-testid="player-primary-action-zone"]',
-        targetSelector: '[data-testid="player-command-receipt-submit_vote"]',
+        targetSelector: '[data-testid="player-command-status"]',
         maxAnchorShiftPx: 1,
-        maxCombinedSpanViewportRatio: 0.9,
+        // The status line sits under the game bar and the dock at the bottom:
+        // both must stay on screen together, not beside each other.
+        maxCombinedSpanViewportRatio: 1,
         maxDocumentGrowthViewportRatio: 0.25,
       }),
     }),

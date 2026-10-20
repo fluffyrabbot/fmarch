@@ -1,5 +1,6 @@
 <main class="game-frame player-surface" data-testid="player-surface">
   <slot name="bar" />
+  <slot name="status" />
   <div class="game-frame__workspace">
     <slot name="channels" />
     <div class="game-frame__reading-lane">
