@@ -84,7 +84,7 @@ export function assertPlayerActionSubmissionClickProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.streamSeq}`)
+      .includes("saved.")
   ) {
     throwActionScenarioAssertionError({
       message: "core-loop admin proof missing player action click ACK",
@@ -139,7 +139,7 @@ export function assertPlayerInvalidActionRecoveryProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(scenario.messageIncludes.toLowerCase())
+      .includes("choose an available target")
   ) {
     throwActionScenarioAssertionError({
       message: "core-loop admin proof missing player invalid-action recovery",
@@ -190,11 +190,11 @@ export function assertPlayerStaleVoteAfterTransitionProofCase({
     proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
     proof.checkpointActionStateAfterReject !== scenario.checkpointActionState ||
     proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
-    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    !String(proof.recoveryText ?? "").includes("phase is closed") ||
     proof.receiptCount !== scenario.receiptCount ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(scenario.receiptStatusTextIncludes)
+      .includes("phase is closed")
   ) {
     throwActionScenarioAssertionError({
       message:
@@ -244,11 +244,11 @@ export function assertPlayerStaleActionAfterTransitionProofCase({
     proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
     proof.checkpointActionStateAfterReject !== scenario.checkpointActionState ||
     proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
-    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    !String(proof.recoveryText ?? "").includes("phase is closed") ||
     proof.receiptCount !== scenario.receiptCount ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(scenario.receiptStatusTextIncludes)
+      .includes("phase is closed")
   ) {
     throwActionScenarioAssertionError({
       message:

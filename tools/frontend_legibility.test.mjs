@@ -58,14 +58,15 @@ test("violations carry an excerpt around the match", () => {
   assert.match(violation.excerpt, /^….*slot_7 alone\.$/u);
 });
 
-test("report-mode evidence must prove a scan happened, not that it was clean", () => {
+test("legibility evidence requires a scan with no violations", () => {
   const evidence = {
     mode: LEGIBILITY_MODE,
     surface: "player",
     sampleCount: 12,
     violations: scanLegibility([sample("slot-2")], { surface: "player" }),
   };
-  assert.equal(legibilityEvidenceComplete(evidence, { surface: "player" }), true);
+  assert.equal(legibilityEvidenceComplete(evidence, { surface: "player" }), false);
+  assert.equal(legibilityEvidenceComplete({...evidence, violations: []}, {surface: "player"}), true);
   assert.equal(legibilityEvidenceComplete(evidence, { surface: "admin" }), false);
   assert.equal(legibilityEvidenceComplete({ ...evidence, sampleCount: 0 }), false);
   assert.equal(legibilityEvidenceComplete({ ...evidence, mode: "gate" }), false);

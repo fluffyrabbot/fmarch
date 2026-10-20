@@ -934,7 +934,7 @@ assert.equal(
   "private:mafia_day_chat",
 );
 assert.equal(session.verification.privateChannel.denied.status, 403);
-assert.equal(session.verification.privateChannel.denied.actionLabel, "Back to board");
+assert.equal(session.verification.privateChannel.denied.actionLabel, "Back to Games");
 assert.match(session.verification.privateChannel.denied.recoveredUrl, /\/$/);
 assert.equal(
   session.verification.privateChannel.stalePostAfterPhaseTransition.status,
@@ -954,7 +954,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.privateChannel.stalePostAfterPhaseTransition.receiptStatusText.includes(
-    "Ack",
+    "Saved.",
   ),
   true,
 );
@@ -4115,7 +4115,7 @@ assert.equal(
 );
 assert.equal(
   replacementStaleActionAfterResolve.receiptStatusText.includes(
-    replacementStaleActionAfterResolveCase.staleActionStateMessageFragment,
+    replacementStaleActionAfterResolveCase.recoveryStatusText,
   ),
   true,
 );

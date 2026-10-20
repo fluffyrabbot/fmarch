@@ -20,6 +20,7 @@ const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
 test("admin game selection includes setup games and prefers the requested workspace", () => {
   const selection = normalizeAdminGameSelection(gameIndexPage, "active-game");
   assert.equal(selection.status, "ready");
+  assert.equal(normalizeAdminGameSelection({ games: [{ game: "one", pack: "mafia_universe", status: "active", phase_id: "D01" }] }, "one").options[0].label, "Mafia Universe · active · Day 1");
   assert.equal(selection.selectedGame, "active-game");
   assert.deepEqual(
     selection.options.map((game) => [game.id, game.status, game.selected, game.href]),
@@ -37,6 +38,8 @@ test("admin route selects a live game without requiring a query parameter", asyn
     capabilities: [{ kind: "GlobalAdmin" }],
     gameIndexPage,
   });
+  assert.equal(data.operator.capability.kind, "GlobalAdmin");
+  assert.equal(data.surfaceHeader.capability.kind, "GlobalAdmin");
   assert.equal(data.gameSelection.selectedGame, "setup-game");
   assert.equal(data.shell.game, "setup-game");
   assert.equal(data.gameSetup[0].href, "/g/setup-game/setup");

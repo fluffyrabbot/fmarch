@@ -463,3 +463,14 @@ fn pack_required_ir_version_covers_versioned_policy_features() {
     });
     assert_versioned_pack_feature(value, 43, "night_resolution.action_chance");
 }
+
+#[test]
+fn prompt_kinds_require_player_readable_labels_and_descriptions() {
+    let raw = include_str!("../../../../packs/mafiascum/pack.json");
+    let mut value: serde_json::Value = serde_json::from_str(raw).unwrap();
+    value["host_prompt_kinds"]["skip_next_day"]["description"] = serde_json::json!("");
+    let error = super::validation::load_pack_from_json(&value.to_string()).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("host_prompt_kinds.skip_next_day"));
+}

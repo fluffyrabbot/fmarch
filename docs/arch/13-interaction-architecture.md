@@ -48,7 +48,7 @@ thread or action surfaces.
 
 The action dock remains reachable while reading:
 
-- legal vote shortcuts dispatch directly;
+- Vote opens a roster picker; selecting a player only selects a candidate, and a separate confirmation commits the vote;
 - Reply moves to the channel composer;
 - Quote seeds that same composer with a structured citation; it does not fork the thread;
 - Mention (`@`) typeahead lives inside that same composer and records a structured address, never parsed prose ([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md));
@@ -63,9 +63,18 @@ screens add whitespace rather than a permanently open command inspector. A live
 `PostCitationsChanged` delta updates “Quoted N times” on an already-loaded post
 when a later quoting post arrives or is hidden.
 
-Successful command feedback is brief. Interrupted and rejected commands remain
-persistent because they require a decision. Technical command traces stay in the
-activity disclosure.
+A successful command updates its projection and announces “Saved” without a
+persistent receipt card. Pending, interrupted, and rejected actions use one
+compact line inside the game bar, naming the attempted action and public player
+name. Retry retains the exact stored request identity, including across a reload
+in the same game; Dismiss clears the local recovery. Other games and routes do
+not display that recovery. Technical traces remain machine evidence.
+
+Player context separates role, submitted night action, messages, and history.
+The shared roster presenter supplies public names, seat ordinals, and historical
+occupancy labels across votes, mentions, quotations, outcomes, and publications.
+Engine identifiers and capability names belong in data attributes or explicitly
+marked host/admin technical drawers, never ordinary copy or accessible names.
 
 ## Addressed thread reading
 
@@ -99,6 +108,14 @@ task. Command feedback uses a shared status selector and each action reserves a
 stable status floor, so pending and recovery messages do not move neighboring
 controls.
 
+Routine deadline, phase, votecount, lifecycle, and endgame controls live in Tools.
+The queue contains pending prompts, replacement requests, expired deadlines,
+locked phases ready to resolve, and commands requiring recovery. An idle queue
+says “Nothing needs you right now”. Packs must declare a label and description
+for every prompt they produce; the canvas uses those labels and roster names.
+Deadline controls offer 24 hours, 48 hours, and a custom time. The confirmation
+states the consequence once. Red treatment is reserved for irreversible actions.
+
 A host link can select an authoritative roster seat with `?slot_id=<seat>`.
 The server loads that seat's current projection, and subsequent refreshes and
 invite issuance retain the selected seat. An absent or unassigned seat never
@@ -116,6 +133,23 @@ Program selection and attachment. An empty Program stage is valid for games
 without a Day Program. Review turns blocked readiness checks into correction
 links that select the stage where the problem can be fixed. Starting the game
 remains an explicit, consequence-previewed confirmation.
+
+Roster seating starts with public handle suggestions, followed by game-host-only
+identity resolution. The selected public name remains editable. The origin-topic
+signup import previews distinct public authors, excludes the host and already
+seated players, and requires one confirmation before assigning seats. A partial
+failure stops the batch and rereads candidates before another attempt. At 820px
+and below the stage list is vertical; headings use the game title.
+
+## Navigation and discovery
+
+Games, Community, Inbox, and Search form one primary navigation row. Authorized
+host and administrator links live in the account menu. Inside a game the game
+bar owns the menu and context, without a second global bar. Authorization uses
+typed capability values, never parsed presentation labels. Game cards show
+phase, deadline, seats, host, signup status, viewer relation, and the applicable
+Play, Host, and Read links. Error pages provide ordinary recovery guidance and
+do not echo server diagnostics or private channel paths.
 
 ## Public game publication
 
@@ -192,6 +226,13 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
   distinct roster and role cards rather than legacy co-located slot columns.
 - Proof lanes exercise player and host tasks rather than requiring legacy panel
   topology.
+- Recovery preserves the original action's viewport position within one pixel
+  as inline feedback collapses or a resolved task leaves the host queue. Host
+  feedback geometry is measured within the decision canvas; queue removal may
+  change the canvas's document position.
+- Reading checkpoints consume one settled reading gesture. Restoring history,
+  reconnecting, or adjusting layout never reuses that gesture to save a new
+  position. Scroll clearance follows the measured contextual game-bar height.
 
 ## Migration order
 

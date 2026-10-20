@@ -5,6 +5,7 @@ import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
 import {
   sessionContextLabel,
+  packLabel,
 } from "./presentation-copy.mjs";
 import { buildViewerPresentation } from "./viewer-presentation-model.mjs";
 
@@ -25,7 +26,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 64,
   stickyRailGapPx: 16,
-  surfaceOrder: Object.freeze(["board", "community", "search", "inbox", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "inbox", "search", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -79,7 +80,7 @@ export function buildAppShell({
   const surfaces = Object.freeze([
     surfaceItem({
       id: "board",
-      label: "Board",
+      label: "Games",
       href: "/",
       active: activeSurface === "board",
       allowed: true,
@@ -147,7 +148,7 @@ export function buildAppShell({
     phaseId: canonicalPhaseId(phase?.id),
     session,
     sessionLabel: session.viewerLabel,
-    surfaces,
+    surfaces: Object.freeze([...surfaces].sort((a,b) => ["board","community","inbox","search","player","moderator","admin"].indexOf(a.id) - ["board","community","inbox","search","player","moderator","admin"].indexOf(b.id))),
   });
 }
 
@@ -237,6 +238,10 @@ export function fixtureBoardGameIndexPage(game = "midsummer") {
         pack: "mafiascum",
         status: "active",
         phase_id: "D02",
+        deadline: 1781841600,
+        seats_filled: 7,
+        seats_total: 13,
+        host_name: "Rowan",
         updated_seq: 2,
         completed_seq: null,
       }),
@@ -245,6 +250,10 @@ export function fixtureBoardGameIndexPage(game = "midsummer") {
         pack: "mafia_universe",
         status: "completed",
         phase_id: "D01",
+        deadline: null,
+        seats_filled: 13,
+        seats_total: 13,
+        host_name: "Juniper",
         updated_seq: 1,
         completed_seq: 1,
       }),
@@ -264,7 +273,12 @@ function normalizeBoardGameIndexEntry(entry) {
   return Object.freeze({
     id,
     pack,
-    title: `${packLabel(pack)} game`,
+    title: entry.origin_topic?.title ?? `${packLabel(pack)} game`,
+    deadline: Number.isFinite(entry.deadline) ? new Date(entry.deadline * 1000).toISOString() : null,
+    seatsFilled: Number.isInteger(entry.seats_filled) ? entry.seats_filled : null,
+    seatsTotal: Number.isInteger(entry.seats_total) ? entry.seats_total : null,
+    hostName: entry.host_name ?? null,
+    signupLabel: status === 'completed' ? 'Signups closed' : phaseId ? 'Game in progress' : 'Preparing to start',
     status,
     statusLabel: status === "active" ? "Active" : "Completed",
     phaseId,
@@ -277,31 +291,16 @@ function normalizeBoardGameIndexEntry(entry) {
   });
 }
 
-function boardGameCard({ entry, principalId, capabilities }) {
-  const gameShell = buildAppShell({
-    game: entry.id,
-    activeSurface: "board",
-    principalId,
-    capabilities,
-  });
-  return Object.freeze({
-    ...entry,
-    actions: Object.freeze([
-      Object.freeze({
-        id: "public-thread",
-        label: "View public thread",
-        href: `/games/${encodeURIComponent(entry.id)}`,
-        allowed: true,
-        navigation: "link",
-        ariaDisabled: undefined,
-        blockedReason: null,
-        blockedLabel: null,
-        capabilityLabel: "Public",
-        className: "fm-touch-button",
-      }),
-      boardAction(gameShell, { surface: "player", label: "Play" }),
-      boardAction(gameShell, { surface: "moderator", label: "Moderate" }),
-    ]),
+function boardGameCard({ entry, capabilities }) {
+  const scoped = normalizeCapabilities(capabilities).filter(cap => cap.game === entry.id);
+  const playing = scoped.some(cap => cap.kind === 'SlotOccupant');
+  const hosting = scoped.some(cap => ['HostOf', 'CohostOf'].includes(cap.kind));
+  const actions = [];
+  if (playing) actions.push({id: 'player', label: 'Play', href: `/g/${encodeURIComponent(entry.id)}`});
+  if (hosting) actions.push({id: 'moderator', label: 'Host', href: `/g/${encodeURIComponent(entry.id)}/host`});
+  actions.push({id: 'public-thread', label: 'Read', href: `/games/${encodeURIComponent(entry.id)}`});
+  return Object.freeze({...entry, relation: playing ? "You're playing" : hosting ? "You're hosting" : null,
+    actions: Object.freeze(actions.map((action,index) => Object.freeze({...action, allowed: true, navigation: 'link', className: index === 0 ? 'fm-touch-button' : 'fm-touch-button fm-touch-button--secondary'}))),
   });
 }
 
@@ -312,13 +311,6 @@ function preferredBoardGame({ capabilities }) {
   return capabilityGame ?? null;
 }
 
-function packLabel(pack) {
-  return pack
-    .split(/[_-]/)
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-}
 
 function nonemptyString(...values) {
   return values.find((value) => typeof value === "string" && value.trim() !== "") ?? null;
@@ -336,7 +328,7 @@ export function buildShellKeyboardOrder({
   assertTestIdArray(forbiddenContentTestIds, "forbiddenContentTestIds");
 
   const linkedNavTestIds = shell.surfaces
-    .filter((surface) => surface.navigation === "link")
+    .filter((surface) => surface.navigation === "link" && surface.group === "primary" && !["player", "moderator"].includes(shell.activeSurface))
     .map((surface) => surface.testId);
   const blockedNavTestIds = shell.surfaces
     .filter((surface) => surface.navigation === "blocked")
@@ -349,6 +341,7 @@ export function buildShellKeyboardOrder({
     expectedOrder: Object.freeze([
       APP_SHELL_CONTRACT.skipLinkTestId,
       ...linkedNavTestIds,
+      "account-menu-toggle",
       ...contentTestIds,
     ]),
     forbiddenTestIds: Object.freeze([
@@ -380,10 +373,14 @@ export function buildRouteErrorData({
     error: Object.freeze({
       status: Number(status),
       title: errorTitle(status),
-      message: String(message ?? "The requested surface is unavailable."),
+      message: Number(status) === 403
+        ? "You do not have access to this page. Return to Games to choose an available game."
+        : Number(status) === 404
+          ? "This page could not be found. Return to Games to continue."
+          : "This page could not be loaded. Try again, or return to Games.",
       path: route.path,
       actionHref: "/",
-      actionLabel: "Back to board",
+      actionLabel: "Back to Games",
     }),
   });
 }
@@ -454,6 +451,7 @@ function surfaceSummary({ surface, game, capabilities }) {
   const access = resolveSurfaceAccess({ surface, game, capabilities });
   return {
     allowed: access.allowed,
+    capability: access.capability,
     capabilityLabel: access.capabilityLabel ?? access.required.join(" or "),
   };
 }

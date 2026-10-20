@@ -14,6 +14,20 @@
   export let onDispatch = () => {};
   export let initialConfirmationOpen = false;
 
+  function localInputTime(value) {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16) : '';
+  }
+  let customTime = action?.id === 'extend_deadline' ? localInputTime(action.payload?.extendsTo) : '';
+  $: customDeadline = action?.id === 'extend_deadline';
+  $: timestamp = customTime ? new Date(customTime).getTime() : NaN;
+  $: effectiveAction = customDeadline && timestamp !== Date.parse(action.payload?.extendsTo) ? {
+    ...action,
+    disabled: action.disabled === true || !Number.isFinite(timestamp),
+    outcomeLabel: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
+    confirmationText: Number.isFinite(timestamp) ? `${action.objectLabel}: set the deadline to ${new Date(timestamp).toLocaleString()}.` : `${action.objectLabel}: choose a deadline.`,
+    payload: {...action.payload, extendsTo: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null},
+  } : action;
   let controller;
   let controllerAction;
   let view;
@@ -21,16 +35,16 @@
   let confirmElement;
   let dispatchPromise = null;
 
-  $: if (action !== controllerAction) {
+  $: if (effectiveAction !== controllerAction) {
     const preserveConfirmation =
       controllerAction !== undefined &&
       shouldPreserveHostActionConfirmation(
         controllerAction,
-        action,
+        effectiveAction,
         view?.confirmation !== null,
       );
-    controllerAction = action;
-    controller = createHostActionController(action, (event) => {
+    controllerAction = effectiveAction;
+    controller = createHostActionController(effectiveAction, (event) => {
       dispatchPromise = Promise.resolve(onDispatch(event));
       return dispatchPromise;
     });
@@ -96,6 +110,9 @@
     data-component={view.root.data.component}
     data-action-id={view.root.data.actionId}
   >
+    {#if customDeadline}
+      <label class="fm-field"><span>New deadline</span><input type="datetime-local" bind:value={customTime} required /></label>
+    {/if}
     <button
       type="button"
       class={view.trigger.className}
@@ -109,7 +126,7 @@
       on:click={activate}
     >
       <span>{view.trigger.intent}</span>
-      {#if view.trigger.consequence}
+      {#if view.trigger.consequence && action?.payload?.kind !== "extend_deadline"}
         <small>{view.trigger.consequence}</small>
       {/if}
     </button>

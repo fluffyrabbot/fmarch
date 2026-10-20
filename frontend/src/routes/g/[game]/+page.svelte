@@ -38,8 +38,7 @@
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
-  import { buildPlayerCommandStatusLine } from "$lib/components/player-command/player-command-status-line-model.mjs";
-  import CommandStatusLine from "$lib/components/gameplay/CommandStatusLine.svelte";
+  import PlayerFeedback from "$lib/components/player-command/PlayerFeedback.svelte";
   import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
@@ -142,18 +141,6 @@
   let commandRecoveryAttempts = {};
   $: confirmedRetryAvailable = playerCommandRetryAvailable(commandStatus, commandRecoveryAttempts);
   $: commandRecoveryRequired = commandInterrupted || confirmedRetryAvailable;
-  // A settled status the player put away stays away until the next command.
-  let dismissedCommandStatus = null;
-  $: commandLine = commandStatus === null || commandStatus === dismissedCommandStatus
-    ? null
-    : buildPlayerCommandStatusLine({
-        status: commandStatus,
-        actionId: commandReceipts.findLast((receipt) => receipt.current)?.actionId ?? null,
-        voteCommands: composer?.voteCommands ?? [],
-        roster: commandState?.roster ?? [],
-        retryAvailable: confirmedRetryAvailable,
-        retryEnabled: projectionCommandsReady && !commandPending,
-      });
   let commandRecoveryStorage = null;
   let commandRecoveryStorageAvailable = true;
   let thread = data.thread;
@@ -287,6 +274,9 @@
       clearTimeout(sampleTimer);
       sampleTimer = setTimeout(() => {
         if (Date.now() > gestureUntil || readerTrip?.destination) return;
+        // A settled gesture authorizes one checkpoint. Later layout or history
+        // restoration scrolls must not reuse the same reading intent.
+        gestureUntil = 0;
         const origin = deliberateReadingOrigin();
         if (!origin) return;
         readerThreadWindow = { aroundSeq: origin.id.slice("thread-post-".length) };
@@ -311,6 +301,7 @@
     for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
     const flushCheckpoint = () => {
       if (Date.now() > gestureUntil || readerTrip?.destination) return;
+      gestureUntil = 0;
       const origin = deliberateReadingOrigin();
       if (origin) checkpoints?.save({ source_seq: Number(origin.id.slice("thread-post-".length)), offset_px: origin.top });
     };
@@ -767,7 +758,7 @@
           typeof window === "undefined" ? null : window,
         ),
       });
-      commandStatus = result.commandStatus;
+      commandStatus = { ...result.commandStatus, actionId: action, commandTrace: optimisticStatus.commandTrace };
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
         action,
@@ -1022,21 +1013,18 @@
 
 {#if playerForcedRouteState}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
-      {player.capabilityLabel}
-    </span>
+    <GameBar shell={data.shell} game={data.game} {phase} {player} />
     <RouteState view={playerForcedRouteState} />
   </main>
 {:else if playerSurfaceEmpty}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
-      {player.capabilityLabel}
-    </span>
+    <GameBar shell={data.shell} game={data.game} {phase} {player} />
     <RouteState view={playerEmptyState} />
   </main>
 {:else}
   <GameFrame>
     <GameBar
+        shell={data.shell}
       slot="bar"
       game={data.game}
       {phase}
@@ -1044,14 +1032,17 @@
       {votecount}
       {liveStatus}
       {player}
-    />
-    <CommandStatusLine
-      slot="status"
-      line={commandLine}
-      onRetry={retryPlayerCommand}
-      onCancel={cancelPlayerCommandRecovery}
-      onDismiss={() => { dismissedCommandStatus = commandStatus; }}
-    />
+    >
+      <PlayerFeedback
+        status={commandStatus}
+        attempt={commandRecoveryAttempts[commandStatus?.actionId ?? commandStatus?.commandTrace?.actionId]}
+        roster={commandState?.roster ?? []}
+        retryAvailable={confirmedRetryAvailable}
+        retryEnabled={projectionCommandsReady && !commandPending}
+        onRetry={retryPlayerCommand}
+        onDismiss={cancelPlayerCommandRecovery}
+      />
+    </GameBar>
     <ChannelTabs slot="channels" {channels} />
 
     {#if player.gameCompleted}
@@ -1067,8 +1058,8 @@
         data-testid="player-command-recovery-storage-warning"
         role="status"
       >
-        <strong>Reload recovery unavailable</strong>
-        <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
+        <strong>Posting and voting unavailable</strong>
+        <p>Allow browser storage, then reload to post or vote safely.</p>
       </section>
     {/if}
 
@@ -1144,8 +1135,7 @@
       >
         <strong>Player commands paused</strong>
         <p>
-          Authoritative game state is {projectionHealth?.state ?? "unavailable"}.
-          Controls return after a validated refresh.
+          Waiting for the current game state. You can read saved posts; posting and voting will return when the connection recovers.
         </p>
       </section>
     {/if}
@@ -1205,7 +1195,6 @@
       </details>
     </ContextSheet>
 
-
       <ActionDock
         slot="dock"
         view={playerActionView}
@@ -1219,9 +1208,9 @@
 {/if}
 
 <style>
+  .player-surface { align-content: start; }
   .reader-saved-position { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-
   :global(.player-role-card__name) {
     color: var(--fm-ink);
     display: block;
@@ -1353,5 +1342,6 @@
     overflow-wrap: anywhere;
   }
   @media (max-width: 560px) {
+
   }
 </style>

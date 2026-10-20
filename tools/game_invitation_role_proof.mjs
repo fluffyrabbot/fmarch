@@ -809,8 +809,8 @@ async function driveInviteLogin({
       );
     }
     const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes(game) && role !== "admin") {
-      throw new Error(`${role} invite URL did not render game ${game}`);
+    if (role !== "admin" && !new URL(page.url()).pathname.includes(`/${game}`)) {
+      throw new Error(`${role} invite URL did not reach game ${game}`);
     }
     return {
       role,
@@ -879,8 +879,8 @@ async function driveAccountLogin({
       );
     }
     const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes(game)) {
-      throw new Error(`account login did not render game ${game}`);
+    if (!new URL(page.url()).pathname.includes(`/${game}`)) {
+      throw new Error(`account login did not reach game ${game}`);
     }
     return {
       role: "hostAccount",
@@ -1783,7 +1783,7 @@ async function proveIdentityLifecycle({
     frontendBaseUrl,
     sessionToken: rotatedSessionToken,
     returnTo: hostReturnTo,
-    expectedText: game,
+    expectedGame: game,
   });
   const sessionRevocation = await revokeSession({
     apiBaseUrl,
@@ -1851,7 +1851,7 @@ async function proveIdentityLifecycle({
     frontendBaseUrl,
     sessionToken: accountLogin.sessionToken,
     returnTo: hostReturnTo,
-    expectedText: game,
+    expectedGame: game,
   });
   const browserLogoutLogin = await driveAccountLogin({
     frontendBaseUrl,
@@ -1935,7 +1935,7 @@ async function proveIdentityLifecycle({
       frontendBaseUrl,
       sessionToken: accountRecoveryLogin.sessionToken,
       returnTo: hostReturnTo,
-      expectedText: game,
+      expectedGame: game,
     });
     // The API generates recovery credentials during issuance, so pre-arm the
     // next recovery delivery for this exact account. The one-shot arm becomes
@@ -2005,7 +2005,7 @@ async function proveIdentityLifecycle({
       frontendBaseUrl,
       sessionToken: rotatedPasswordLogin.sessionToken,
       returnTo: hostReturnTo,
-      expectedText: game,
+      expectedGame: game,
     });
     const invalidRecoveryReject = await driveRejectedAccountRecovery({
       frontendBaseUrl,
@@ -2060,7 +2060,7 @@ async function proveIdentityLifecycle({
       frontendBaseUrl,
       sessionToken: recoveredPasswordLogin.sessionToken,
       returnTo: hostReturnTo,
-      expectedText: game,
+      expectedGame: game,
     });
     const credentialAttemptThrottling = await proveCredentialAttemptThrottling({
       frontendBaseUrl,
@@ -2676,13 +2676,13 @@ async function proveHostScopedInviteIssuance({
     frontendBaseUrl,
     sessionToken: player.sessionToken,
     returnTo: `/g/${game}`,
-    expectedText: game,
+    expectedGame: game,
   });
   await assertBrowserSessionRendersRole({
     frontendBaseUrl,
     sessionToken: hostSessionToken,
     returnTo: hostReturnTo,
-    expectedText: game,
+    expectedGame: game,
   });
   return {
     status: "passed",
@@ -3509,7 +3509,7 @@ async function assertBrowserSessionRendersRole({
   frontendBaseUrl,
   sessionToken,
   returnTo,
-  expectedText,
+  expectedGame,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   try {
@@ -3523,8 +3523,8 @@ async function assertBrowserSessionRendersRole({
       },
     ]);
     await page.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" });
-    const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes(expectedText)) {
+    const surface = page.getByTestId(returnTo.endsWith("/host") ? "host-console-surface" : "player-surface");
+    if (!new URL(page.url()).pathname.startsWith(`/g/${expectedGame}`) || !(await surface.isVisible())) {
       throw new Error("rotated browser session did not render the role surface");
     }
   } finally {
@@ -3676,8 +3676,7 @@ async function driveOverdueBrowserSessionRotation({
     }
     const winner = winners[0];
     const loser = losers[0];
-    const winnerText = await winner.page.locator("body").innerText();
-    if (!winnerText.includes(game)) {
+    if (!new URL(winner.page.url()).pathname.startsWith(`/g/${game}`) || !(await winner.page.getByTestId("host-console-surface").isVisible())) {
       throw new Error("rotated browser session did not render the role surface");
     }
     const loserRecovery = loser.page.getByTestId("route-error-surface");

@@ -33,14 +33,15 @@ test("player route layout keeps a stable reading lane with a fixed action dock",
   ]);
 });
 
-test("the command status line and reader navigation remain visible while commands stay gated", async () => {
+test("player feedback lives in the game bar while commands stay gated", async () => {
   const source = await readFile(new URL("./+page.svelte", import.meta.url), "utf8");
 
-  // The game bar always receives the line; gating commands must not hide what
-  // happened to the last one.
-  assert.match(source, /<CommandStatusLine\s+slot="status"\s+line=\{commandLine\}/u);
-  assert.doesNotMatch(source, /\{#if projectionCommandsReady[^}]*commandLine/u);
-  assert.doesNotMatch(source, /<PlayerCommandReceipt\b|player-command-feedback/u);
+  assert.match(source, /<GameBar[\s\S]*?<PlayerFeedback[\s\S]*?<\/GameBar>/);
+  assert.doesNotMatch(source, /player-command-feedback|<PlayerCommandReceipt/);
+  assert.doesNotMatch(
+    source,
+    /\{#if projectionCommandsReady[^}]*commandReceipts\.length/u,
+  );
   assert.doesNotMatch(source, /\{#if projectionCommandsReady\}\s*<ActionDock/u);
   assert.match(source, /commandsAvailable=\{projectionCommandsReady &&/u);
 });

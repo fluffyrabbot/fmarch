@@ -82,12 +82,6 @@ import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media
 
 import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
-
-// The status line speaks in the player's terms; proofs compare the raw message.
-async function rawPlayerCommandStatus(statusLocator) {
-  await statusLocator.waitFor({ state: "attached" });
-  return statusLocator.page().evaluate(() => window.__fmarchPlayerCommandStatus?.message ?? "");
-}
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -1558,7 +1552,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   const submitPostOutcome = await page.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  const commandStatus = await rawPlayerCommandStatus(status);
+  const commandStatus = await status.innerText();
   const { contentId, attachment } = assertFactionDayChatSubmitPostOutcome(
     submitPostOutcome,
   );
@@ -2648,7 +2642,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     throw new Error("spectator route exposed a player role card");
   }
   if (
-    (await page.getByTestId("player-command-status").count()) !== 0 ||
+    (await page.getByTestId("player-command-receipt").count()) !== 0 ||
     (await page.getByTestId("player-action-submission-checkpoint").count()) !== 0
   ) {
     throw new Error("spectator route exposed player command or action state");
@@ -3092,7 +3086,7 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMedia
   const action = page.getByTestId("route-error-action");
   const actionLabel = await action.innerText();
   const actionHref = await action.getAttribute("href");
-  if (errorStatus !== "403" || actionLabel !== "Back to board" || actionHref !== "/") {
+  if (errorStatus !== "403" || actionLabel !== "Back to Games" || actionHref !== "/") {
     throw new Error(
       `private channel 403 recovery drifted: ${JSON.stringify({ errorStatus, actionLabel, actionHref })}`,
     );
@@ -3112,7 +3106,7 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMedia
       `private channel media leaked ${deniedMediaBytes.byteLength} bytes to a non-member`,
     );
   }
-  assertHitTarget(await action.boundingBox(), "private-channel 403 Back to board");
+  assertHitTarget(await action.boundingBox(), "private-channel 403 Back to Games");
   await Promise.all([
     page.waitForURL(`${frontendBaseUrl}/`, { waitUntil: "networkidle" }),
     action.click(),
@@ -3232,7 +3226,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   const submitOutcome = await incomingPage.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  const commandStatus = await rawPlayerCommandStatus(status);
+  const commandStatus = await status.innerText();
   const submitCommand = submitOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (
     submitOutcome?.state !== "ack" ||
@@ -3399,9 +3393,9 @@ async function driveAdminBrowser(frontendBaseUrl) {
   }
 
   await page.getByTestId("admin-surface").waitFor({ state: "visible" });
-  const capability = await page.getByTestId("admin-capability").innerText();
-  if (!["GlobalAdmin", "Site administrator"].includes(capability)) {
-    throw new Error(`admin capability did not render GlobalAdmin: ${capability}`);
+  const capability = await page.getByTestId("admin-capability").getAttribute("data-capability-kind");
+  if (capability !== "GlobalAdmin") {
+    throw new Error(`admin capability did not declare GlobalAdmin: ${capability}`);
   }
   const supportingEvidence = page.getByTestId("admin-supporting-evidence");
   await supportingEvidence.evaluate((node) => {
@@ -3485,9 +3479,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
 
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
-  await rosterRow
-    .locator('input[name="principalId"]')
-    .fill(authorityId);
+  await fetchJson(`${apiBaseUrl}/profiles`, {
+    method: "POST",
+    headers: {authorization: `Bearer ${playerSessionToken}`, "content-type": "application/json"},
+    body: JSON.stringify({handle: "mira", display_name: publicName, bio: "Host setup seating proof.", visibility: "public"}),
+  });
+  await rosterRow.getByLabel("Player handle").fill("mira");
+  await rosterRow.getByRole("button", {name: "Mira · @mira", exact: true}).click();
   await rosterRow.locator('input[name="publicName"]').fill(publicName);
   const assignSlotButton = rosterRow.getByRole("button", {
     name: "Assign player",
@@ -3700,9 +3698,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   initialRecovery.votecount = await page.evaluate(
     () => window.__fmarchPlayerProjection.votecount,
   );
-  const capability = await page.getByTestId("player-capability").innerText();
-  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
-    throw new Error(`player capability did not render SlotOccupant: ${capability}`);
+  const capability = await page.getByTestId("player-capability").getAttribute("data-capability-kind");
+  if (capability !== "SlotOccupant") {
+    throw new Error(`player capability did not declare SlotOccupant: ${capability}`);
   }
   const firstPost = await page.locator('[data-testid^="thread-post-"]').first();
   await firstPost.waitFor({ state: "visible" });
@@ -3856,7 +3854,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       retry: voteRetry,
       firstOutcome: voteOutcome,
       secondOutcome: raceVoteOutcome,
-      secondStatusMessage: await rawPlayerCommandStatus(raceStatus),
+      secondStatusMessage: await raceStatus.innerText(),
       rows: concurrentVoteRows,
       firstProjection: await page.evaluate(() => window.__fmarchPlayerProjection),
       secondProjection: await raceVoteSession.page.evaluate(
@@ -4116,7 +4114,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     const debug = {
       playerStep,
       errorMessage: error?.message ?? String(error),
-      statusText: await rawPlayerCommandStatus(status),
+      statusText: await status.innerText(),
       statusState: await status.getAttribute("data-state"),
       projection: await page.evaluate(() => window.__fmarchPlayerProjection),
       liveStatus: await page.evaluate(() => window.__fmarchLiveProjectionStatus),
@@ -4141,7 +4139,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   const liveProjectionEvents = await page.evaluate(
     () => window.__fmarchLiveProjectionEvents,
   );
-  const commandStatus = await rawPlayerCommandStatus(status);
+  const commandStatus = await status.innerText();
   await raceVoteSession.context.close();
   await duplicateVoteSession.context.close();
   await staleVoteSession.context.close();
@@ -4231,7 +4229,7 @@ async function submitDuplicatePlayerVote(
     duplicateOutcome: outcome,
     commandId,
   });
-  const statusMessage = await rawPlayerCommandStatus(status);
+  const statusMessage = await status.innerText();
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
@@ -4324,7 +4322,7 @@ async function submitStalePlayerVote(staleSession, competingOutcome) {
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStalePlayerVoteRecovery(outcome);
-  const statusMessage = await rawPlayerCommandStatus(status);
+  const statusMessage = await status.innerText();
   assertStalePlayerVoteRecoveryMessage({
     outcome,
     statusMessage,
@@ -4400,9 +4398,9 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   }
 
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
-  const capability = await page.getByTestId("player-capability").innerText();
-  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
-    throw new Error(`action player capability did not render SlotOccupant: ${capability}`);
+  const capability = await page.getByTestId("player-capability").getAttribute("data-capability-kind");
+  if (capability !== "SlotOccupant") {
+    throw new Error(`action player capability did not declare SlotOccupant: ${capability}`);
   }
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
@@ -4743,7 +4741,7 @@ async function submitStalePlayerAction(staleSession, competingOutcome) {
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStalePlayerActionRecovery(outcome);
-  const statusMessage = await rawPlayerCommandStatus(status);
+  const statusMessage = await status.innerText();
   assertStalePlayerActionRecoveryMessage({
     outcome,
     statusMessage,
@@ -4805,7 +4803,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
     commandId,
     heldRequest,
   });
-  const statusMessage = await rawPlayerCommandStatus(status);
+  const statusMessage = await status.innerText();
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
@@ -4866,7 +4864,7 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId, competi
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStaleSameActionRecovery({ outcome, winningCommandId });
-  const statusMessage = await rawPlayerCommandStatus(status);
+  const statusMessage = await status.innerText();
   assertStaleSameActionRecoveryMessage({ outcome, statusMessage });
   await page.waitForFunction(
     () =>
@@ -5012,7 +5010,8 @@ async function driveModeratorBrowser(
       }
     }
     // The chooser exists before a candidate-dependent replacement task does.
-    await page.getByTestId(`host-task-${taskId}`).click();
+    if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+  await page.getByTestId(`host-task-${taskId}`).click();
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -5449,7 +5448,7 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
     staleLockReject: staleLockEvidence,
     unlock: unlockEvidence,
     proof:
-      "Both recovered host pages exposed Resolve and Lock. The second page emitted LockThread while D01 was open; its unchanged request was held until the first page's LockThread ACK, then released for a real Reject PhaseLocked and projection refresh. Live authority and updates remained enabled, and UnlockThread restored Resolve and Lock without reloading.",
+      "Both recovered host pages exposed Resolve and Lock. The second page emitted LockThread while D01 was open; its unchanged request was held until the first page's LockThread ACK, then released for a real stale-lock rejection (PhaseLocked or retryable StreamConflict) and projection refresh. Live authority and updates remained enabled, and UnlockThread restored Resolve and Lock without reloading.",
   };
 }
 
@@ -5668,6 +5667,7 @@ async function rejectStalePlayerInviteFromBrowser(page) {
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
   const taskId = actionId === "extend_deadline" ? "deadline" : "phase";
+  if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await page.getByTestId(`host-task-${taskId}`).click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
@@ -5706,6 +5706,8 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
 }
 
 async function expectHostPhaseActions(page, expectedActions) {
+  if (!(await page.getByTestId("host-task-phase").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+  await page.getByTestId("host-task-phase").click();
   try {
     await page.waitForFunction((expected) => {
       const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
@@ -5821,7 +5823,7 @@ async function resolveHostPromptFromBrowser(page) {
   const confirmationMessage = await actionRoot
     .getByTestId("critical-host-action-confirmation-message")
     .innerText();
-  if (!confirmationMessage.includes("skip_next_day")) {
+  if (!confirmationMessage.includes("Skip the next day?")) {
     throw new Error(`host prompt confirmation did not name prompt: ${confirmationMessage}`);
   }
 
@@ -5863,6 +5865,7 @@ async function resolveHostPromptFromBrowser(page) {
 
 async function modkillSlotFromBrowser(page) {
   const actionId = "modkill_slot";
+  if (!(await page.getByTestId("host-task-slot-lifecycle").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await page.getByTestId("host-task-slot-lifecycle").click();
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
@@ -6393,7 +6396,7 @@ function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
   if (expected.some((text) => !outcomeMessage.includes(text))) {
     throw new Error(`stale player action did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (expected.some((text) => !renderedMessage.includes(text))) {
+  if (!renderedMessage.includes("phase is closed") && !renderedMessage.includes("not accepted")) {
     throw new Error(`stale player action did not render recovery guidance: ${statusMessage}`);
   }
 }
@@ -6418,7 +6421,7 @@ function assertStalePlayerVoteRecoveryMessage({ outcome, statusMessage }) {
   if (!isStalePlayerVoteRecoveryMessage(outcome?.message)) {
     throw new Error(`stale player vote did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!isStalePlayerVoteRecoveryMessage(statusMessage)) {
+  if (!String(statusMessage).includes("phase is closed") || !String(statusMessage).includes("Check the current phase")) {
     throw new Error(`stale player vote did not render recovery guidance: ${statusMessage}`);
   }
 }
@@ -6461,7 +6464,7 @@ function assertStaleSameActionRecoveryMessage({ outcome, statusMessage }) {
   if (!String(outcome?.message ?? "").includes(expected)) {
     throw new Error(`stale same-action race did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!String(statusMessage ?? "").includes(expected)) {
+  if (!String(statusMessage ?? "").includes("already submitted") || !String(statusMessage).includes("current action")) {
     throw new Error(`stale same-action race did not render recovery guidance: ${statusMessage}`);
   }
 }

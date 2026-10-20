@@ -21,6 +21,8 @@ mod host_replacement_http;
 mod private_attention_http;
 #[path = "reading_checkpoint_http.rs"]
 mod reading_checkpoint_http;
+#[path = "setup_candidates_http.rs"]
+mod setup_candidates_http;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use content_reference::DEFAULT_POST_CITATION_LIMIT;
@@ -35,12 +37,11 @@ use wire::{
     GameIndexEntry, GameIndexPage, GameRosterSeat, GameThreadAuthor, HostConsoleAuthorityDelta,
     HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
     HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
-    HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
-    HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
-    HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
-    PostCitationsChangedDelta, PostKind, PostRef, PrivatePostCitationBatch, ProjectionDelta,
-    PublicGameThreadPage, PublicPostCitationBatch, Quotation, RejectCode, SlotMentionNotification,
-    ThreadPage, ThreadPost, ThreadPostsDelta,
+    HostPromptDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
+    HostTaskState, HostTaskUrgency, PlayerInvestigationResult, PlayerNotification,
+    PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef, PrivatePostCitationBatch,
+    ProjectionDelta, PublicGameThreadPage, PublicPostCitationBatch, Quotation, RejectCode,
+    SlotMentionNotification, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -112,6 +113,14 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             get(host_replacement_http::read),
         )
         .route("/games/{game}/setup-state", get(host_setup_state))
+        .route(
+            "/games/{game}/setup/signup-candidates",
+            get(setup_candidates_http::signups),
+        )
+        .route(
+            "/games/{game}/setup/candidate",
+            get(setup_candidates_http::candidate),
+        )
         .with_state(GameHttpState::new(state.pool.clone(), state.auth.clone()))
 }
 
@@ -1776,42 +1785,32 @@ fn resolve_pack_artifact(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct HostPrompt {
-    pub game: Uuid,
-    pub phase_id: domain::phase::PhaseId,
-    pub event_index: i32,
-    pub prompt_id: String,
-    pub kind: String,
-    pub subject_slot: Option<String>,
-    pub reason: String,
-    pub metadata: HostPromptMetadata,
-    pub status: String,
-    pub decision: Option<HostPromptRecordedDecision>,
-    pub public_resolution: Option<HostPromptPublicResolution>,
-    pub resolved_at: Option<i64>,
-}
+pub type HostPrompt = HostPromptDelta;
 
-impl TryFrom<projections::HostPromptRow> for HostPrompt {
-    type Error = wire::ProjectionAdapterError;
-
-    fn try_from(row: projections::HostPromptRow) -> Result<Self, Self::Error> {
-        let delta = HostPromptDelta::try_from(row)?;
-        Ok(HostPrompt {
-            game: delta.game,
-            phase_id: delta.phase_id,
-            event_index: delta.event_index,
-            prompt_id: delta.prompt_id,
-            kind: delta.kind,
-            subject_slot: delta.subject_slot,
-            reason: delta.reason,
-            metadata: delta.metadata,
-            status: delta.status,
-            decision: delta.decision,
-            public_resolution: delta.public_resolution,
-            resolved_at: delta.resolved_at,
-        })
+pub(super) async fn labeled_host_prompts(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<Vec<HostPromptDelta>, ApiError> {
+    let artifact = projections::game_pack_artifact(pool, game)
+        .await?
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownGame,
+            message: "Game not found.".into(),
+        })?;
+    let pack = resolve_pack_artifact(&artifact)?;
+    let mut prompts = projections::host_prompts(pool, game)
+        .await?
+        .into_iter()
+        .map(HostPromptDelta::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+    for prompt in &mut prompts {
+        if let Some(text) = pack.document().host_prompt_kinds.get(&prompt.kind) {
+            prompt.label = text.label.clone();
+            prompt.description = text.description.clone();
+        }
     }
+    Ok(prompts)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1824,6 +1823,7 @@ struct HostConsoleStateQuery {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostConsoleStateResponse {
+    pub title: String,
     pub game: Uuid,
     pub authority: HostConsoleAuthorityDelta,
     pub completed: bool,
@@ -2071,13 +2071,7 @@ async fn host_prompts(
     )
     .await?;
 
-    Ok(Json(
-        projections::host_prompts(&state.pool, game)
-            .await?
-            .into_iter()
-            .map(HostPrompt::try_from)
-            .collect::<Result<Vec<_>, _>>()?,
-    ))
+    Ok(Json(labeled_host_prompts(&state.pool, game).await?))
 }
 
 async fn host_console_state(
@@ -2299,7 +2293,15 @@ pub(super) async fn load_host_console_state(
         .collect();
 
     let roster = load_game_roster(pool, game).await?;
+    let title = if let Some(origin) = projections::game_origin_topic(pool, game).await? {
+        origin.title
+    } else if let Some(artifact) = projections::game_pack_artifact(pool, game).await? {
+        resolve_pack_artifact(&artifact)?.document().name.clone()
+    } else {
+        "Game".to_string()
+    };
     Ok(HostConsoleStateResponse {
+        title,
         game,
         authority,
         completed,

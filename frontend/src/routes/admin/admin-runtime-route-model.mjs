@@ -3,6 +3,7 @@ import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header
 import { resolveSurfaceAccess } from "../../lib/app/capabilities.mjs";
 import { loadAdminColdData, operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { canonicalPhaseId, phaseLabelFromId } from "../../lib/phase-id.mjs";
+import { packLabel } from "../../lib/app/presentation-copy.mjs";
 import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
 
 export async function buildAdminRuntimeRouteData({
@@ -25,9 +26,10 @@ export async function buildAdminRuntimeRouteData({
     principalId,
     capabilities,
   });
-  const surfaceHeader = adminSurfaceHeader(access.capabilityLabel);
+  const surfaceHeader = adminSurfaceHeader(access);
   const operator = Object.freeze({
     principalId,
+    capability: access.capability,
     capabilityLabel: access.capabilityLabel,
   });
   const communityAudit = capabilities.some((capability) => capability?.kind === "GlobalAdmin")
@@ -117,7 +119,7 @@ export async function buildAdminRuntimeRouteData({
       Object.freeze({
         id: "moderation",
         label: "Cross-game moderation",
-        value: "GlobalMod only",
+        value: "Platform moderators only",
       }),
     ]),
   });
@@ -213,6 +215,7 @@ export async function buildAdminRuntimeAuditDetailData({ audit, ...context }) {
       eyebrow: "Admin audit",
       title: selected?.label ?? "Audit unavailable",
       summary: selected?.boundaryDetail ?? "The requested live audit is not available.",
+      capability: overview.access.capability,
       capabilityLabel: overview.access.capabilityLabel,
       capabilityTestId: "admin-audit-detail-capability",
     }),
@@ -256,13 +259,14 @@ export function summarizeRecoveryGate(body) {
   });
 }
 
-function adminSurfaceHeader(capabilityLabel) {
+function adminSurfaceHeader(access) {
   return buildAppSurfaceHeaderViewModel({
     surface: "admin",
     eyebrow: "Admin",
     title: "Operations",
     summary: "Manage live games, access, recovery, and system health.",
-    capabilityLabel,
+    capability: access.capability,
+    capabilityLabel: access.capabilityLabel,
     capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
   });
 }
@@ -365,7 +369,7 @@ function normalizeAdminGameOption(entry) {
     id,
     pack,
     status,
-    label: `${pack} · ${status}${phase === null ? "" : ` · ${phaseLabelFromId(phase)}`}`,
+    label: `${entry.origin_topic?.title ?? packLabel(pack)} · ${status}${phase === null ? "" : ` · ${phaseLabelFromId(phase)}`}`,
   });
 }
 

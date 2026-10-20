@@ -90,6 +90,10 @@ try {
         "updated_seq",
         "completed_seq",
         "origin_topic",
+    "deadline",
+    "seats_filled",
+    "seats_total",
+    "host_name",
       ],
     },
     empty,
@@ -332,11 +336,19 @@ function assertPublicApiPage(page, expectedCount, hostPrincipalAlias) {
     "updated_seq",
     "completed_seq",
     "origin_topic",
+    "deadline",
+    "seats_filled",
+    "seats_total",
+    "host_name",
   ]);
   for (const game of page.games) {
     if (
       !["active", "completed"].includes(game.status) ||
       Object.keys(game).some((key) => !allowedKeys.has(key)) ||
+      !Number.isInteger(game.seats_total) || !Number.isInteger(game.seats_filled) ||
+      game.seats_filled < 0 || game.seats_filled > game.seats_total ||
+      (game.host_name !== null && typeof game.host_name !== "string") ||
+      (game.deadline !== null && !Number.isFinite(game.deadline)) ||
       JSON.stringify(game).includes(hostPrincipalAlias)
     ) {
       throw new Error(`public game index leaked or drifted: ${JSON.stringify(game)}`);

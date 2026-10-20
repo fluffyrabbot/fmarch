@@ -104,7 +104,7 @@ export function createReadingCheckpoint({ game, channel, principal, fetchImpl = 
 }
 
 export function deliberateReadingOrigin(documentRef = document) {
-  const header = documentRef.querySelector('[data-testid="app-shell-topbar"]');
+  const header = documentRef.querySelector('[data-testid="player-game-bar"]');
   const top = header?.getBoundingClientRect().bottom ?? 80;
   const posts = [...documentRef.querySelectorAll('article[id^="thread-post-"]')];
   const post = posts.find(post => {

@@ -12306,7 +12306,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           commandTrace: { projectionRefreshKeys: ["votecount", "commandState"] },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         commandStateBeforeClose: {
           currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
         },
@@ -12667,7 +12667,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             { action: "submit_action:factional_kill", disabled: false },
           ],
           receiptStatusText:
-            "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         },
         n02ActionTarget: "slot-3",
         n02ActionSubmission: {
@@ -13822,7 +13822,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         url: `/g/${game}/c/private%3Amafia_day_chat`,
         submitPost: { state: "ack", message: "Ack: stream seqs 43" },
       },
-      denied: { status: 403, actionLabel: "Back to board" },
+      denied: { status: 403, actionLabel: "Back to Games" },
       stalePostAfterPhaseTransition: {
         status: "passed",
         laneId: coreLoopPrivateChannelStalePostLaneId,
@@ -13846,7 +13846,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           serverEnvelope: { body: { kind: "Ack" } },
         },
-        receiptStatusText: "Ack: stream seqs 43",
+        receiptStatusText: "Saved.",
         commandStateAfterAck: {
           phase: { phaseId: "D01", locked: true },
           currentVote: null,
@@ -13914,7 +13914,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           privatePostBody:
             "Stale private-channel post after D01 phase closure fixture.",
           receiptCount: 1,
-          receiptStatusText: "Ack: stream seqs 43",
+          receiptStatusText: "Saved.",
           receiptRefreshKeys:
             "thread,votecount,commandState,dayVoteOutcomes",
         },
@@ -13947,7 +13947,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             },
           },
         },
-        receiptStatusText: "Reject GameAlreadyCompleted: game already completed",
+        receiptStatusText: "The game is complete. Your action was not accepted.",
         commandStateAfterReject: {
           gameCompleted: true,
           actions: [],
@@ -14071,7 +14071,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             gameCompleted: true,
           },
           receiptStatusText:
-            "Reject GameAlreadyCompleted: game already completed",
+            "The game is complete. Your action was not accepted.",
           receiptRefreshKeys: "commandState",
         },
       },
@@ -16278,7 +16278,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           commandTrace: { projectionRefreshKeys: ["commandState"] },
         },
         receiptStatusText:
-          `${replacementStaleActionAfterResolveCase.rejectionStatusText}: phase locked; ${replacementStaleActionAfterResolveCase.staleActionStateMessageFragment}, refresh and use ${replacementStaleActionAfterResolveCase.currentActionControlsMessageFragment}`,
+          `${replacementStaleActionAfterResolveCase.rejectionStatusText}. ${replacementStaleActionAfterResolveCase.recoveryStatusText}.`,
         apiCommandStateAfterReject: {
           actor_slot: replacementStaleActionAfterResolveCase.actorSlot,
           actor_alive: true,
@@ -16565,7 +16565,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           actionId: replacementCompletedPrivatePost.commandAction,
           state: "reject",
         },
-        receiptStatusText: replacementCompletedPrivatePost.commandMessage,
+        receiptStatusText: "The game is complete. Your action was not accepted.",
         commandStateAfterReject: {
           actorSlot: replacementCompletedPrivatePost.actorSlot,
           gameCompleted: true,
@@ -17285,7 +17285,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             ],
           },
         },
-        receiptStatusText: "Ack: stream seqs 42",
+        receiptStatusText: "Saved.",
         apiCommandStateAfterRetry: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -17354,7 +17354,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+          "Your night action was already submitted. Check your current action before changing it.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -17449,7 +17449,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -17540,7 +17540,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -18886,7 +18886,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Factional kill visible: false"));
   assert(markdown.includes("Direct factional kill: Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Private Channel Proof"));
-  assert(markdown.includes("Denied route: 403 Back to board"));
+  assert(markdown.includes("Denied route: 403 Back to Games"));
   assert(markdown.includes("## Replacement Console Proof"));
   assert(markdown.includes("Host-issued invite: Replacement invite issued"));
   assert(
@@ -24239,7 +24239,7 @@ function privateChannelRoleSurfaceFixture() {
       },
       privatePostBody: "Private role proof post",
       receiptCount: 1,
-      receiptStatusText: "Ack: stream seqs 701",
+      receiptStatusText: "Saved.",
       receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
     },
     stalePostAfterPhaseTransitionProof: {
@@ -24305,7 +24305,7 @@ function privateChannelRoleSurfaceFixture() {
       checkpointActionState: "disabled:phase locked",
       checkpointReceiptState: "reject:PhaseLocked",
       receiptStatusText:
-        "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+        "Your post was not accepted because the phase is closed. Check the current phase before trying again.",
       receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
       rawInviteTokensVisible: false,
     },
@@ -24369,7 +24369,7 @@ function privateChannelRoleSurfaceFixture() {
       checkpointActorSlot: "slot-7",
       checkpointTargetSlots: "slot_3",
       receiptStatusText:
-        "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls",
+        "Your night action was not accepted. Choose an available target.",
       receiptRefreshKeys: "notifications,investigationResults,commandState",
       legalActionVisible: true,
       rawInviteTokensVisible: false,
@@ -24447,7 +24447,7 @@ function privateChannelRoleSurfaceFixture() {
         snapshotAfterReload: completedPrivateRejectSnapshot,
         reloadedReconnectedSnapshotCommandState:
           completedPrivateRejectSnapshot.commandState,
-        receiptStatusText: staleCompletedPrivateScenario.commandMessage,
+        receiptStatusText: "The game is complete. Your action was not accepted.",
         receiptRefreshKeys:
           staleCompletedPrivateScenario.expectedRefreshKeys.join(","),
         rawInviteTokensVisible: false,

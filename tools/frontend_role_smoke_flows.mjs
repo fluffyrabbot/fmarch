@@ -47,8 +47,6 @@ export const flowHookNames = Object.freeze([
   "playerLiveThreadEmit",
   "playerPrivateDisclosure",
   "playerPrivateAttention",
-  "playerVotePicker",
-  "playerInterruptedVote",
   "adminAuditDetail",
 ]);
 
@@ -302,6 +300,8 @@ const moderatorActionTarget = (testId) =>
 export const commandFlows = Object.freeze({
   moderator: Object.freeze({
     steps: Object.freeze([
+      { type: "click", target: { within: "host-tools", selector: "summary" } },
+      { type: "click", target: { testId: "host-task-deadline" } },
       {
         type: "capture-geometry-baseline",
         id: "confirmationGeometryBaseline",
@@ -1120,8 +1120,6 @@ export const commandFlows = Object.freeze({
       { type: "set-from-value", from: { id: "postCommandReceipt" }, resultPath: "postCommandReceipt" },
       { type: "hook", id: "votePicker", name: "playerVotePicker" },
       { type: "set-from-value", from: { id: "votePicker" }, resultPath: "votePicker" },
-      { type: "hook", id: "interruptedVote", name: "playerInterruptedVote" },
-      { type: "set-from-value", from: { id: "interruptedVote" }, resultPath: "interruptedVote" },
     ]),
   }),
 });

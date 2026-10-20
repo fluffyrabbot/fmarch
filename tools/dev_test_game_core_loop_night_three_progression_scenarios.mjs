@@ -161,7 +161,7 @@ export function assertNightThreeProgressionBrowserProof({
     ],
     [
       String(proof?.n03ActionAfterSubmit?.receiptStatusText ?? "").includes(
-        "Ack",
+        "Saved.",
       ),
       "night three action receipt missing ack text",
     ],

@@ -234,6 +234,7 @@
                   src={item.src}
                   sizes={item.sizes}
                   alt={item.alt}
+                  data-legibility="author-content"
                   width={item.width}
                   height={item.height}
                   loading="lazy"
@@ -260,7 +261,7 @@
 
 <style>
   .player-surface__thread {
-    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size, 64px) + 16px);
+    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size, 64px) + var(--fm-game-bar-block-size, 0px) + 16px);
     display: grid;
     gap: 0;
     min-inline-size: 0;
@@ -321,14 +322,6 @@
     justify-content: space-between;
   }
 
-  .player-surface__post:has(.player-surface__post-actions) header {
-    padding-inline-end: 56px;
-  }
-
-  .player-surface__post:has(.player-surface__vote-author-button):has(.player-surface__quote-button) header {
-    padding-inline-end: 116px;
-  }
-
   .player-surface__post-identity {
     align-items: baseline;
     display: flex;
@@ -362,10 +355,7 @@
   .player-surface__post-actions {
     display: flex;
     gap: 6px;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-    position: absolute;
-    z-index: 1;
+    flex: 0 0 auto;
   }
 
   .player-surface__post-action {
@@ -493,6 +483,11 @@
   }
 
   @media (max-width: 560px) {
+    .player-surface__post {
+      gap: 8px;
+      padding-block: 6px 14px;
+    }
+
     .player-surface__post header {
       align-items: start;
     }

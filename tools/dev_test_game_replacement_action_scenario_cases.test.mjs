@@ -144,7 +144,8 @@ test("replacement stale action after resolve scenario carries shared command fac
     targetStatusAfterKill: "dead",
     staleActionId: "role_factional_kill",
     rejectionError: "PhaseLocked",
-    rejectionStatusText: "Reject PhaseLocked",
+    rejectionStatusText: "phase is closed",
+    recoveryStatusText: "Check the current phase",
     staleActionStateMessageFragment: "stale action state",
     currentActionControlsMessageFragment: "current action controls",
     outcomeSummary:

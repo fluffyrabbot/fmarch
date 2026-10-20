@@ -512,3 +512,74 @@ async fn replacement_command_rechecks_member_deactivation_after_lookup(pool: sql
     let response = get_as_dev_principal(&app, "host_h", path(game, "slot-7", "rowan")).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn setup_candidate_requires_game_host_and_preserves_public_profile_boundary(
+    pool: sqlx::PgPool,
+) {
+    let (app, game) = fixture(&pool).await;
+    profile(&pool, &app, "setup_public", true).await;
+    profile(&pool, &app, "setup_private", false).await;
+    for reader in ["cohost_c", "outgoing", "unrelated"] {
+        let response = get_as_dev_principal(
+            &app,
+            reader,
+            format!("/games/{game}/setup/candidate?handle=setup_public"),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let response = get_as_dev_principal(
+            &app,
+            reader,
+            format!("/games/{game}/setup/signup-candidates"),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/setup/candidate?handle=setup_private"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/setup/candidate?handle=setup_public"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let selected = body(response).await;
+    assert_eq!(
+        selected["principal_id"],
+        serde_json::to_value(PrincipalId::fixture("setup_public")).unwrap()
+    );
+    assert_eq!(selected["display_name"], "Display setup_public");
+    assert_eq!(selected["already_seated"], false);
+    expect_ack(
+        post_command(
+            app.clone(),
+            20,
+            "host_h",
+            wire::seat_persona! {
+                game, slot: "empty-slot".into(), user: "setup_public",
+            },
+        )
+        .await,
+    );
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/setup/candidate?handle=setup_public"),
+    )
+    .await;
+    assert_eq!(body(response).await["already_seated"], true);
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/setup/signup-candidates"),
+    )
+    .await;
+    assert_eq!(body(response).await, serde_json::json!([]));
+}

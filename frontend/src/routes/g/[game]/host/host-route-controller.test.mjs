@@ -1196,3 +1196,31 @@ test("retained replacement retry rejects changed identity, body and host authori
     assert.equal(sent, 0);
   }
 });
+
+test("deadline selection dispatches the chosen time without changing its authority or retry body", async () => {
+  const data = fixtureData();
+  const snapshot = buildHostProjectionInitialSnapshot(data);
+  const actions = buildHostDerivedState({ gameId: data.game.id, snapshot, nowSeconds: data.deadlineClock.nowSeconds }).criticalActions;
+  const at = "2026-06-25T18:30:00.000Z";
+  for (const id of ["extend_deadline", "extend_deadline_24h", "extend_deadline_48h"]) {
+    const current = actions.find(action => action.id === id);
+    const event = { actionId: id, payload: { ...current.payload, extendsTo: at } };
+    let sent;
+    await dispatchHostRouteAction({ event, data, projectionStore: fakeProjectionStore(snapshot),
+      sendHostActionCommandImpl: async request => { sent = request; return { state: "ack" }; },
+    });
+    assert.equal(sent.preparedCommand.ExtendDeadline.at, Date.parse(at) / 1000);
+    for (const mutation of [{ gameId: "another-game" }, { phaseId: "D02" }, { extendsTo: "invalid" }, { extra: true }]) {
+      await assert.rejects(dispatchHostRouteAction({ event: { ...event, payload: { ...event.payload, ...mutation } }, data,
+        projectionStore: fakeProjectionStore(snapshot), sendHostActionCommandImpl: async () => assert.fail("must not dispatch"),
+      }), /no longer authoritative/);
+    }
+    await assert.rejects(dispatchHostRouteAction({ event, data, projectionStore: fakeProjectionStore(snapshot),
+      preparedCommand: { ExtendDeadline: { ...sent.preparedCommand.ExtendDeadline, at: Date.parse(at) / 1000 + 60 } },
+      sendHostActionCommandImpl: async () => assert.fail("must not change a retained retry"),
+    }), /interrupted command body/);
+    await assert.rejects(dispatchHostRouteAction({ event, data, projectionStore: fakeProjectionStore({ ...snapshot, host: { ...snapshot.host, phase: { id: "D02", locked: false, state: "open" } } }),
+      sendHostActionCommandImpl: async () => assert.fail("must not dispatch after a phase change"),
+    }), /no longer authoritative/);
+  }
+});

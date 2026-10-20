@@ -9,10 +9,12 @@
   export let commandStatuses = {};
   export let commandContext = {};
   export let phase = {};
+  export let nowSeconds = null;
   export let replacement = {};
   export let hostPrompts = [];
   export let hostTasks = [];
   export let hostDayEvents = [];
+  export let roster = [];
   export let votecount = [];
   export let onDispatch = () => {};
   export let onRetry = () => {};
@@ -29,9 +31,11 @@
     hostPrompts,
     hostTasks,
     hostDayEvents,
+    roster,
     dayEventSelections,
     votecount,
     selectedTaskId: preferredTaskId,
+    nowSeconds,
   });
 
   function toggleDayEventWinner(eventId, slot) {
@@ -69,7 +73,7 @@
     </header>
     <p>{view.queue.summary}</p>
     <div class="host-task-workspace__task-list">
-      {#each view.tasks as task}
+      {#each view.decisions as task}
         <button
           type="button"
           class:host-task-workspace__task--selected={task.id === view.selectedTaskId}
@@ -88,6 +92,12 @@
         </button>
       {/each}
     </div>
+    <details class="host-tools" data-testid="host-tools">
+      <summary class="fm-touch-button fm-touch-button--secondary">Tools</summary>
+      {#each view.tools as tool}
+        <button class="fm-touch-button fm-touch-button--secondary" type="button" data-testid={tool.testId} data-task-id={tool.id} on:click={() => preferredTaskId = tool.id}>{tool.label}</button>
+      {/each}
+    </details>
   </nav>
 
   <section class="host-task-workspace__canvas" data-testid={view.canvas.testId}>
@@ -109,10 +119,9 @@
             <span data-state={task.state}>{task.state}</span>
           </header>
           <p class="host-task-workspace__intent">{task.intent}</p>
-          <div class="host-task-workspace__consequence">
-            <span>Consequence</span>
-            <strong>{task.consequence}</strong>
-          </div>
+          {#if task.kind !== 'deadline'}
+            <p class="host-task-workspace__consequence">{task.consequence}</p>
+          {/if}
 
           {#if task.dayEvent}
             <section
@@ -147,7 +156,7 @@
                           on:change={() =>
                             toggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
                         />
-                        <span>{seatLabel(participant.slot)}</span>
+                        <span>{participant.label}</span>
                       </label>
                     {/each}
                   </div>
@@ -195,11 +204,12 @@
         </article>
       {/each}
     {:else}
-      <p class="host-task-workspace__empty">No host decisions are available.</p>
+      <p class="host-task-workspace__empty">Nothing needs you right now</p>
     {/if}
 
     <details
       class="host-task-workspace__command-context fm-proof-disclosure"
+      data-legibility="technical"
       data-testid={view.commandContext.testId}
       data-game-id={view.commandContext.gameId}
       data-principal-id={view.commandContext.principalId}

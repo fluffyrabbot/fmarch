@@ -9,7 +9,7 @@ test("host lifecycle checkpoint points at the live host control row", () => {
   const checkpoint = buildHostLifecycleControlCheckpoint({
     phase: { id: "D02", label: "Day 2", state: "open", locked: false },
     replacement: { slotId: "slot-7", lifecycleLabel: "Alive" },
-    commandContext: { capabilityLabel: "HostOf(midsummer)" },
+    commandContext: { capability: {kind: "HostOf", game: "midsummer"} },
     actionGroups: [
       {
         id: "phase",
@@ -49,7 +49,7 @@ test("host lifecycle checkpoint fails closed when controls are unavailable", () 
   const checkpoint = buildHostLifecycleControlCheckpoint({
     phase: { id: "D02", state: "locked", locked: true },
     replacement: { slotId: "slot-7", lifecycleLabel: "Dead" },
-    commandContext: { capabilityLabel: "HostOf(midsummer)" },
+    commandContext: { capability: {kind: "HostOf", game: "midsummer"} },
     actionGroups: [
       {
         id: "phase",

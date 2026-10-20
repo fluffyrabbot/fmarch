@@ -41,7 +41,7 @@ const staleActionProofFixture = () => ({
       projectionRefreshKeys: ["notifications", "commandState"],
     },
   },
-  receiptStatusText: "Reject PhaseLocked: stale action state",
+  receiptStatusText: "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
   staleN01Phase: { phaseId: "N01" },
   commandStateAfterReject: {
     actorSlot: "slot_4",
@@ -75,7 +75,7 @@ const staleActionExpectation = {
     "dayVoteOutcomes",
   ],
   receiptRefreshKeys: ["commandState"],
-  receiptStatusFragments: ["Reject PhaseLocked", "stale action state"],
+  receiptStatusFragments: ["phase is closed", "Check the current phase"],
   stalePhaseId: "N01",
   browserCommandState: {
     actorSlot: "slot_4",

@@ -74,8 +74,7 @@ const CHECKS = Object.freeze([
     predicate: (evidence) =>
       evidence?.browser?.moderator?.phaseControls?.lock?.commandStatus?.state ===
         "ack" &&
-      evidence?.browser?.moderator?.phaseControls?.staleLockReject?.commandStatus
-        ?.error === "PhaseLocked" &&
+      isStaleHostLockRejection(evidence?.browser?.moderator?.phaseControls?.staleLockReject?.commandStatus) &&
       evidence?.browser?.moderator?.phaseControls?.unlock?.commandStatus?.state ===
         "ack",
   },
@@ -205,12 +204,7 @@ const CHECKS = Object.freeze([
       ) &&
       evidence?.browser?.playerAction?.staleActionRecovery?.outcome?.error ===
         "PhaseLocked" &&
-      evidence?.browser?.playerAction?.staleActionRecovery?.statusMessage?.includes(
-        "stale action state",
-      ) &&
-      evidence?.browser?.playerAction?.staleActionRecovery?.statusMessage?.includes(
-        "current action controls",
-      ),
+      isStalePlayerVoteRecoveryMessage(evidence?.browser?.playerAction?.staleActionRecovery?.statusMessage),
   },
   {
     id: "host-ops-workflow",
@@ -348,11 +342,16 @@ function spectatorRoomLifecyclePassed(room) {
   );
 }
 
+function isStaleHostLockRejection(status) {
+  return status?.state === "reject" && (status.error === "PhaseLocked" ||
+    (status.error === "StreamConflict" && status.retryable === true));
+}
+
 function isStalePlayerVoteRecoveryMessage(message) {
   const value = String(message ?? "");
   return (
-    value.includes("stale projection") ||
-    value.includes("stale vote state")
+    value.includes("phase is closed") &&
+    value.includes("Check the current phase")
   );
 }
 

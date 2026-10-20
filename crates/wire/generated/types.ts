@@ -258,7 +258,7 @@ day_events: Array<HostDayEventDelta>,
  */
 tasks: Array<HostTaskDelta>, };
 
-export type HostPromptDelta = { game: string, phase_id: PhaseId, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, metadata: HostPromptMetadata, status: string, decision: HostPromptRecordedDecision | null, public_resolution: HostPromptPublicResolution | null, resolved_at: bigint | null, };
+export type HostPromptDelta = { label: string, description: string, game: string, phase_id: PhaseId, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, metadata: HostPromptMetadata, status: string, decision: HostPromptRecordedDecision | null, public_resolution: HostPromptPublicResolution | null, resolved_at: bigint | null, };
 
 export type HostPromptsDelta = { game: string, prompts: Array<HostPromptDelta>, };
 
@@ -283,7 +283,7 @@ export type GameOriginTopic = { topic: string, title: string, href: string, };
 
 export type SpawnedGame = { game: string, pack: string, status: string, href: string, };
 
-export type GameIndexEntry = { game: string, pack: string, status: string, phase_id: PhaseId | null, updated_seq: bigint, completed_seq: bigint | null, origin_topic: GameOriginTopic | null, };
+export type GameIndexEntry = { deadline: bigint | null, seats_filled: bigint, seats_total: bigint, host_name: string | null, game: string, pack: string, status: string, phase_id: PhaseId | null, updated_seq: bigint, completed_seq: bigint | null, origin_topic: GameOriginTopic | null, };
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 

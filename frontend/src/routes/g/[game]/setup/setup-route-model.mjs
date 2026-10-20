@@ -54,16 +54,17 @@ export async function buildHostSetupRouteData({
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "host-setup",
-      eyebrow: gameId,
+      eyebrow: setupState.originTopic?.title ?? setupState.pack.name,
       title: "Host setup",
       summary: "Roster, roles, post policy, invites, and start readiness.",
-      capabilityLabel: access.capabilityLabel,
+      capability: access.capability,
+      capabilityLabel: "Game host",
       capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
     game: Object.freeze({
       id: gameId,
-      label: gameId,
+      label: setupState.originTopic?.title ?? setupState.pack.name,
     }),
     session: Object.freeze({
       principalId: principal,
@@ -349,7 +350,7 @@ function readinessCheck(id, label, ready) {
   });
 }
 
-function hostSetupFixtureState({ game }) {
+export function hostSetupFixtureState({ game }) {
   return Object.freeze({
     game,
     created: true,

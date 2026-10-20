@@ -63,7 +63,8 @@ export async function proveMainCitationContinuity({ page, pageUrl, game, sendCom
     assert.match(await quotation.innerText(), /Original post/);
     await quotation.locator("a").click();
     await page.getByTestId("route-error-panel").waitFor();
-    assert.match(await page.getByTestId("route-error-panel").innerText(), /Game state was not found/);
+    assert.equal(await page.getByTestId("route-error-surface").getAttribute("data-status"), "404");
+    assert.match(await page.getByTestId("route-error-panel").innerText(), /This page could not be found/);
     assert.equal(await page.getByTestId(`thread-post-${target}`).count(), 0);
   } finally {
     for (const seq of [target, ...evidence.quoters]) await setVisible(seq, true);

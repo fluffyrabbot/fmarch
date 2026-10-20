@@ -195,7 +195,7 @@ function nightThreeBrowserProofFixture() {
     n03ActionAfterSubmit: {
       commandState: { phase: { phaseId: "N03" } },
       buttons: [],
-      receiptStatusText: "Ack",
+      receiptStatusText: "Saved.",
     },
     hostBeforeResolveN03: {
       phase: { id: "N03", locked: false },

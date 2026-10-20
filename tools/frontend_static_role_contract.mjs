@@ -55,8 +55,8 @@ import {
   buildPlayerCommandPanelViewModel,
 } from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
 import {
-  buildPlayerCommandStatusLine,
-} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
+  buildPlayerCommandReceiptViewModel,
+} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
 import {
   buildPlayerPostureStripViewModel,
 } from "../frontend/src/lib/components/player-posture/player-posture-strip-model.mjs";
@@ -219,8 +219,8 @@ function proveBoardSurface() {
     [
       ["board", "link"],
       ["community", "link"],
-      ["search", "link"],
       ["inbox", "link"],
+      ["search", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
       ["admin", "blocked"],
@@ -229,9 +229,8 @@ function proveBoardSurface() {
   assert.deepEqual(
     data.board.games[0].actions.map((action) => [action.id, action.navigation]),
     [
-      ["public-thread", "link"],
       ["player", "link"],
-      ["moderator", "blocked"],
+      ["public-thread", "link"],
     ],
   );
   return {
@@ -776,7 +775,7 @@ function proveLinkAffordanceCoverage(roleSurfaces) {
 
 function proveNavFocusCoverage() {
   const coverage = navFocusCoverage.surfaces.map((surface) => {
-    assert.equal(surface.linkedNavTestIds.length > 0, true);
+    assert.equal(surface.expectedFocusOrder.includes("account-menu-toggle"), true);
     assert.equal(surface.blockedNavTestIds.length > 0, true);
     assert.equal(surface.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
     assert.equal(surface.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
@@ -785,7 +784,7 @@ function proveNavFocusCoverage() {
       APP_SHELL_CONTRACT.skipLinkTestId,
       `${surface.id} focus order must start with the shell skip link`,
     );
-    assertUnique(surface.linkedNavTestIds, `${surface.id} linked nav targets`);
+    assert.equal(new Set(surface.linkedNavTestIds).size, surface.linkedNavTestIds.length);
     assertUnique(surface.blockedNavTestIds, `${surface.id} blocked nav targets`);
     assert.deepEqual(
       surface.expectedFocusOrder.slice(1, 1 + surface.linkedNavTestIds.length),
@@ -1120,14 +1119,14 @@ async function proveConfirmationActionContract() {
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
         buttonLabel: "Review",
-        confirmLabel: "Delegate @cohost_c",
-        confirmMessage: "Delegate @cohost_c as cohost for this game",
+        confirmLabel: "Delegate Cohost C",
+        confirmMessage: "Delegate Cohost C as cohost for this game",
       },
     ],
     commandStatuses: {
       cohost: {
         state: "confirm",
-        message: "Delegate @cohost_c as cohost for this game",
+        message: "Delegate Cohost C as cohost for this game",
       },
     },
   });
@@ -1291,8 +1290,8 @@ function proveCommandTraceContract() {
     "submit_vote",
     playerCommandPendingStatus("submit_vote"),
   );
-  // Receipts stay in the page's proof global; the newest comes first.
-  const traces = [...receipts].reverse().map((receipt) => receipt.commandTrace);
+  const receipt = buildPlayerCommandReceiptViewModel({ receipts });
+  const traces = receipt.items.map((item) => item.commandTrace);
 
   for (const trace of traces) {
     assert.equal(trace.kind, COMMAND_TRACE_CONTRACT.kind);
@@ -1303,7 +1302,7 @@ function proveCommandTraceContract() {
 
   return {
     boundary:
-      "Static model contract proves recorded player command receipts carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
+      "Static model contract proves player command receipt rows carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
     model: "command-trace-model",
     kind: COMMAND_TRACE_CONTRACT.kind,
     surfaces: traces.map((trace) => ({
@@ -1515,10 +1514,12 @@ async function provePlayerSurface() {
     channel: data.channel,
     player: data.player,
   });
-  const commandLine = buildPlayerCommandStatusLine({
-    status: playerCommandPendingStatus("submit_vote"),
-    voteCommands: data.composer.voteCommands ?? [],
-    roster: data.commandState?.roster ?? [],
+  const commandReceipt = buildPlayerCommandReceiptViewModel({
+    receipts: recordPlayerCommandReceipt(
+      [],
+      "submit_vote",
+      playerCommandPendingStatus(),
+    ),
   });
   const posture = buildPlayerPostureStripViewModel({
     phase: data.phase,
@@ -1622,9 +1623,9 @@ async function provePlayerSurface() {
   assert.equal(commandPanel.context.deadline.phaseLabel, data.phase.label);
   assert.equal(commandPanel.context.deadline.isProjected, true);
   assert.equal(commandPanel.votePicker.rows.length > 0, true);
-  assert.equal(commandLine.testId, "player-command-status");
-  assert.equal(commandLine.state, "pending");
-  assert.match(commandLine.text, /^Sending your vote/u);
+  assert.equal(commandReceipt.root.data.component, "player-command-receipt");
+  assert.equal(commandReceipt.items[0].testId, "player-command-receipt-submit_vote");
+  assert.equal(commandReceipt.items[0].statusTestId, "player-command-status");
   assert.deepEqual(
     posture.items.map((item) => [item.id, item.status.state]),
     [
@@ -1858,10 +1859,16 @@ async function provePlayerSurface() {
         ariaExpanded: privateDisclosure.items[0].ariaExpanded,
         detailTestId: privateDisclosure.items[0].detailTestId,
       },
-      commandStatusLine: {
-        testId: commandLine.testId,
-        state: commandLine.state,
-        text: commandLine.text,
+      commandReceipt: {
+        component: commandReceipt.root.data.component,
+        summary: commandReceipt.summary,
+        itemTestIds: commandReceipt.items.map((item) => item.testId),
+        currentStatusTestId: commandReceipt.items[0].statusTestId,
+        commandTraces: commandReceipt.items.map((item) => ({
+          actionId: item.actionId,
+          statusTestId: item.statusTestId,
+          trace: item.commandTrace,
+        })),
       },
       commandChannelContext: commandPanel.composer.channelContext,
       blockedSurfaces: data.shell.surfaces
@@ -1955,7 +1962,7 @@ async function proveModeratorSurface() {
   assert.equal(controls.tasks.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
+    summary: "Technical details",
     label: "Technical access",
     value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
@@ -1985,7 +1992,7 @@ async function proveModeratorSurface() {
 
   const irreversibleAction = extendDeadlineAction;
   const hostAction = buildHostActionViewModel(irreversibleAction);
-  assert.equal(hostAction.trigger.data.danger, "true");
+  assert.equal(hostAction.trigger.data.danger, "false");
   const dispatched = [];
   const controller = createHostActionController(irreversibleAction, (event) => {
     dispatched.push(event);
@@ -2132,7 +2139,7 @@ async function proveModeratorSurface() {
       taskLandmarks: [
         {
           id: "attention",
-          testId: "host-console-attention",
+          testId: "host-console-bar",
           label: "Attention",
           value: `${controls.queue.attentionCount} tasks`,
           detail: controls.queue.summary,

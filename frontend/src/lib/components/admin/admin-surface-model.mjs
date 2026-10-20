@@ -68,10 +68,10 @@ export function buildAdminReadinessStripViewModel({
         value: operator.capabilityLabel
           ? humanizeCapabilityLabel(operator.capabilityLabel)
           : "No administrator access",
-        detail: operator.principalId ? `Signed in as @${operator.principalId}` : "Signed out",
+        detail: operator.principalId ? "Signed in" : "Signed out",
         status: Object.freeze({
-          state: isAdminAuthority(operator.capabilityLabel) ? "ack" : "reject",
-          message: isAdminAuthority(operator.capabilityLabel)
+          state: isAdminAuthority(operator.capability) ? "ack" : "reject",
+          message: isAdminAuthority(operator.capability)
             ? "Administrator access confirmed"
             : "Administrator access is unavailable",
         }),
@@ -510,8 +510,8 @@ function adminAuditRollupMessage(audit, state) {
   return "System checks are current";
 }
 
-function isAdminAuthority(capabilityLabel) {
-  return capabilityLabel === "GlobalAdmin" || capabilityLabel === "GlobalMod";
+function isAdminAuthority(capability) {
+  return capability?.kind === "GlobalAdmin" || capability?.kind === "GlobalMod";
 }
 
 function adminCommandActivityLabel(actionId) {

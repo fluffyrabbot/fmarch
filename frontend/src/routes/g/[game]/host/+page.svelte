@@ -9,6 +9,7 @@
   } from "$lib/app/app-route-state-model.mjs";
   import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
   import HostConsoleBar from "$lib/components/host-action/HostConsoleBar.svelte";
+  import { buildHostTaskWorkspaceViewModel } from "$lib/components/host-action/host-task-workspace.mjs";
   import HostTaskWorkspace from "$lib/components/host-action/HostTaskWorkspace.svelte";
   import HostReplacementChooser from "$lib/components/host-action/HostReplacementChooser.svelte";
   import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
@@ -75,6 +76,13 @@
 
   let dispatched = [];
   let commandOutcomes = [];
+  let hostClockSeconds = data.deadlineClock?.nowSeconds ?? Math.floor(Date.now() / 1000);
+  onMount(() => {
+    const startedAt = Date.now();
+    const initialSeconds = hostClockSeconds;
+    const timer = setInterval(() => { hostClockSeconds = initialSeconds + Math.floor((Date.now() - startedAt) / 1000); }, 30_000);
+    return () => clearInterval(timer);
+  });
   let commandStatuses = {};
   let commandRecoveryAttempts = {};
   let commandRecoveryStorage = null;
@@ -120,11 +128,13 @@
     phase: currentPhase,
     replacement: projection.replacement,
     votecountCount: votecount.length,
-    nowSeconds: data.deadlineClock?.nowSeconds,
+    nowSeconds: hostClockSeconds,
   });
-  $: hostAttentionCount = hostTasks.length + moderatorActionGroups.filter(
-    (group) => ["deadline", "replacement"].includes(group.id) && group.actions.length > 0,
-  ).length;
+  $: hostAttentionCount = buildHostTaskWorkspaceViewModel({
+    groups: moderatorActionGroups, commandStatuses, phase: currentPhase,
+    hostTasks, hostPrompts, hostDayEvents,
+    nowSeconds: hostClockSeconds,
+  }).queue.attentionCount;
   $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: currentPhase,
@@ -144,7 +154,7 @@
       gameId: data.game.id,
       snapshot,
       capabilityKind: data.access.capability?.kind,
-      nowSeconds: data.deadlineClock?.nowSeconds,
+      nowSeconds: hostClockSeconds,
     });
     projection = derived.projection;
     votecount = derived.votecount;
@@ -158,7 +168,7 @@
     gameId: data.game.id,
     snapshot: { host: projection, votecount, dayVoteOutcomes, hostPrompts },
     capabilityKind: data.access.capability?.kind,
-    nowSeconds: data.deadlineClock?.nowSeconds,
+    nowSeconds: hostClockSeconds,
     replacementCandidate,
     fixtureMode: data.fixtureMode === true,
   }).moderatorActionGroups;
@@ -497,6 +507,8 @@
   data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
 >
   <HostConsoleBar
+    shell={data.shell}
+    capability={data.access.capability}
     game={data.game}
     phase={currentPhase}
     capabilityLabel={data.access.capabilityLabel}
@@ -527,10 +539,12 @@
           {commandStatuses}
           commandContext={data.commandContext}
           phase={currentPhase}
+          nowSeconds={hostClockSeconds}
           replacement={projection.replacement ?? data.replacement}
           {hostPrompts}
           {hostTasks}
           {hostDayEvents}
+          roster={projection.roster ?? []}
           {votecount}
           onDispatch={handleDispatch}
           onRetry={retryHostCommand}
@@ -566,9 +580,10 @@
       <details
         class="host-console-critical-path__drawer"
         data-testid="host-supporting-evidence"
+        data-legibility="technical"
       >
         <summary>
-          <span>Evidence and activity</span>
+          <span>Technical details</span>
           <small>Receipts, game state, vote record, and lifecycle checks</small>
         </summary>
         <div class="host-console-critical-path__drawer-content">

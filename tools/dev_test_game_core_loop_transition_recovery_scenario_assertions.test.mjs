@@ -316,7 +316,7 @@ function liveStaleVoteRecoveryFixture() {
     },
     currentReceipt: { state: "reject" },
     receiptStatusText:
-      "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+      "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
     buttonsAfterReject: [
       { action: "submit_action:factional_kill", disabled: false },
     ],
@@ -375,7 +375,7 @@ function liveStaleActionRecoveryFixture() {
     },
     currentReceipt: { state: "reject" },
     receiptStatusText:
-      "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
     actionVisibleAfterRefresh: false,
   };
 }
@@ -463,9 +463,9 @@ function staleVoteProofFixture({ sourceRoleUrl, visitedRolePath }) {
     checkpointPhaseIdAfterReject: "N02",
     checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
     checkpointTargetSlotsAfterReject: "slot-3",
-    recoveryText: "Reject PhaseLocked",
+    recoveryText: "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: 1,
-    receiptStatusText: "stale vote state",
+    receiptStatusText: "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
   };
 }
 
@@ -504,8 +504,8 @@ function staleActionProofFixture({ sourceRoleUrl, visitedRolePath }) {
     checkpointPhaseIdAfterReject: "N02",
     checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
     checkpointTargetSlotsAfterReject: "slot-3",
-    recoveryText: "Reject PhaseLocked",
+    recoveryText: "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: 2,
-    receiptStatusText: "Reject PhaseLocked: phase locked",
+    receiptStatusText: "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
   };
 }

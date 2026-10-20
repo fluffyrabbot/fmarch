@@ -40,10 +40,10 @@ test("player action checkpoint points at the enabled action command", () => {
   assert.equal(checkpoint.root.data.selectedAction, "factional_kill");
   assert.equal(checkpoint.root.data.targetSlots, "slot-2");
   assert.equal(checkpoint.root.data.receiptState, "idle");
-  assert.equal(checkpoint.target.value, "factional_kill -> slot-2");
+  assert.equal(checkpoint.target.value, "Slot 2");
   assert.equal(
     checkpoint.recovery.value,
-    "Reject PhaseLocked: refresh command state and use current action controls.",
+    "Check the current phase before choosing an action.",
   );
   assert.equal(checkpoint.status.state, "ack");
 });

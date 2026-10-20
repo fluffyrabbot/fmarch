@@ -192,6 +192,7 @@ try {
 
   for (const [index, expectedAction] of criticalActions.entries()) {
     const task = page.getByTestId(`host-task-${expectedAction.taskId}`);
+    if (!(await task.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
     await task.click();
     await page
       .getByTestId(`moderator-control-${expectedAction.taskId}`)

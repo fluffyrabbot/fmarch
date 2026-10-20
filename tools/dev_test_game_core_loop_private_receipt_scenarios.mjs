@@ -491,7 +491,7 @@ export function assertPrivateChannelInvalidActionRecoveryProofCase({
     proof.checkpointReceiptState !== `reject:${scenario.commandError}` ||
     proof.checkpointActorSlot !== scenario.actorSlot ||
     proof.checkpointTargetSlots !== "slot_3" ||
-    !String(proof.receiptStatusText ?? "").includes(scenario.commandMessage) ||
+    !String(proof.receiptStatusText ?? "").includes("Choose an available target") ||
     !scenario.expectedRefreshKeys.every((key) =>
       String(proof.receiptRefreshKeys ?? "").split(",").includes(key),
     ) ||
@@ -560,7 +560,7 @@ export function assertPrivateChannelSubmitPostProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.ackSeq}`) ||
+      .includes("saved.") ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",")
   ) {
     throwPrivateChannelScenarioAssertionError({
@@ -617,7 +617,7 @@ export function assertLivePrivateChannelSubmitPostAckOutcome({
     command?.channel_id !== expectedChannelId ||
     command?.actor_slot !== expectedActorSlot ||
     command?.body !== postBody ||
-    !String(outcome?.receiptStatusText ?? "").includes("Ack") ||
+    !String(outcome?.receiptStatusText ?? "").includes("Saved.") ||
     !expectedRefreshKeys.every((key) =>
       outcome?.dispatchPlan?.projectionRefreshKeys?.includes(key),
     ) ||
@@ -694,7 +694,7 @@ export function livePrivateChannelSubmitPostAckProof({
     commandStatus: {
       ...outcome?.commandStatus,
       message:
-        outcome?.commandStatus?.message ?? outcome?.receiptStatusText,
+        outcome?.commandStatus?.message ?? `Ack: stream seqs ${ackSeqFromCommandStatus(outcome?.commandStatus)}`,
     },
     bridgePlan: {
       role: "player",
@@ -769,7 +769,7 @@ export function assertStalePrivateChannelPostPhaseLockedProofCase({
     proof.checkpointReceiptState !== scenario.expectedReceiptState ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(scenario.expectedReceiptStatusFragment) ||
+      .includes("phase is closed") ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
     proof.rawInviteTokensVisible !== false
   ) {
@@ -845,7 +845,7 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
     !outcome?.dispatchPlan?.projectionRefreshKeys?.includes("commandState") ||
     outcome?.currentReceipt?.actionId !== scenario.clickedAction ||
     outcome?.currentReceipt?.state !== "reject" ||
-    !String(outcome?.receiptStatusText ?? "").includes(scenario.commandMessage) ||
+    !String(outcome?.receiptStatusText ?? "").includes("game is complete") ||
     outcome?.commandStateAfterReject?.actorSlot !== expectedActorSlot ||
     outcome?.commandStateAfterReject?.gameCompleted !== true ||
     outcome?.commandStateAfterReject?.actions?.length !== 0 ||
@@ -1075,7 +1075,7 @@ export function assertStaleCompletedPrivatePostRecoveryProofCase({
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(scenario.expectedReceiptStatusFragment) ||
+      .includes("game is complete") ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
     proof.reloadedReconnectedSnapshotCommandState?.gameCompleted !== true
   ) {

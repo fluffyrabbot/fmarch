@@ -15,6 +15,10 @@ const ENTRY_KEYS = Object.freeze([
   "updated_seq",
   "completed_seq",
   "origin_topic",
+  "deadline",
+  "seats_filled",
+  "seats_total",
+  "host_name",
 ]);
 
 /**
@@ -95,11 +99,19 @@ function decodeGameIndexEntry(value) {
     !validPhaseId(value.phase_id) ||
     !positiveSafeInteger(value.updated_seq) ||
     !validCompletionSequence(value) ||
+    !(value.deadline === null || Number.isSafeInteger(value.deadline)) ||
+    !Number.isSafeInteger(value.seats_filled) || value.seats_filled < 0 ||
+    !Number.isSafeInteger(value.seats_total) || value.seats_total < value.seats_filled ||
+    !(value.host_name === null || (typeof value.host_name === "string" && value.host_name.trim().length > 0)) ||
     !validOriginTopic(value.origin_topic)
   ) {
     return null;
   }
   return Object.freeze({
+    deadline: value.deadline,
+    seats_filled: value.seats_filled,
+    seats_total: value.seats_total,
+    host_name: value.host_name,
     game: value.game,
     pack: value.pack,
     status: value.status,

@@ -119,9 +119,9 @@ async function proveSourceContracts() {
       requiredSnippets: ["data-action={button.action}"],
     }),
     await proveSourceContract({
-      component: "CommandStatusLine",
-      path: "frontend/src/lib/components/gameplay/CommandStatusLine.svelte",
-      requiredSnippets: ["on:click={() => settle(onRetry)}", "data-testid={line.testId}"],
+      component: "PlayerFeedback",
+      path: "frontend/src/lib/components/player-command/PlayerFeedback.svelte",
+      requiredSnippets: ["settle(onRetry)", "settle(onDismiss)", "playerFeedback({ status, attempt, roster })"],
     }),
     await proveSourceContract({
       component: "HostTaskWorkspace",
@@ -163,7 +163,7 @@ async function proveAdminInteraction(bundle) {
   invoked.push(item.commandAction, recoveryGateItem.action);
 
   assertIncludes(confirm.html, 'data-testid="admin-command-confirm-cohost"', "admin confirm button");
-  assertIncludes(confirm.html, "Delegate @cohost_c as cohost", "admin confirmation copy");
+  assertIncludes(confirm.html, "Delegate Cohost C as cohost", "admin confirmation copy");
   assertIncludes(
     recoveryConfirm.html,
     'action="?/checkRecoveryGate"',
@@ -211,8 +211,8 @@ async function proveAdminInteraction(bundle) {
 async function provePlayerInteraction(bundle) {
   const voteSheet = await bundle.renderPlayerVoteSheet();
   const unarmedVoteSheet = await bundle.renderPlayerVoteSheet({ selectedVoteAction: null });
-  const voteAck = await bundle.renderPlayerCommandStatusAck("submit_vote");
-  const postAck = await bundle.renderPlayerCommandStatusAck("submit_post");
+  const voteAck = await bundle.renderPlayerCommandReceiptVoteAck();
+  const postAck = await bundle.renderPlayerCommandReceiptPostAck();
   const invoked = [];
   const voteAction = "submit_vote";
   const postAction = "submit_post";
@@ -235,10 +235,9 @@ async function provePlayerInteraction(bundle) {
     false,
     "an unarmed vote picker exposes no dispatching vote control",
   );
-  assertIncludes(voteAck.html, 'data-action-id="submit_vote"', "player vote ack line");
+  assert.equal(voteAck.html.includes('data-testid="player-feedback"'), false, "resolved vote clears feedback");
   assertIncludes(voteAck.html, 'data-state="ack"', "player vote ack state");
-  assertIncludes(voteAck.html, "Your vote for Slot 2 went through.", "player vote ack copy");
-  assertIncludes(postAck.html, 'data-action-id="submit_post"', "player post ack line");
+  assert.equal(postAck.html.includes('data-testid="player-feedback"'), false, "resolved post clears feedback");
   assertIncludes(postAck.html, 'data-state="ack"', "player post ack state");
   assert.equal(invoked[0], "submit_vote");
   assert.equal(invoked[1], "submit_post");
@@ -246,10 +245,18 @@ async function provePlayerInteraction(bundle) {
   assert.equal(postReceipts[0].state, "pending");
 
   return {
-    component: "VoteSheet/CommandStatusLine",
+    component: "VoteSheet/PlayerFeedback",
     actions: [
-      { action: invoked[0], actionAttribute: "submit_vote" },
-      { action: invoked[1], actionAttribute: "submit_post" },
+      {
+        action: invoked[0],
+        actionAttribute: "submit_vote",
+        visibleRowTestId: null,
+      },
+      {
+        action: invoked[1],
+        actionAttribute: "submit_post",
+        visibleRowTestId: null,
+      },
     ],
     statusTestId: "player-command-status",
     renderedPanelBytes: Buffer.byteLength(voteSheet.html),
@@ -355,13 +362,13 @@ function adminCohostItem() {
   return {
     id: "cohost",
     label: "Add cohost",
-    value: "cohost_c",
+    value: "Cohost C",
     authority: "GlobalAdmin",
     boundary: "Command boundary",
     boundaryDetail: "Typed command dispatch",
     buttonLabel: "Add cohost",
     commandAction: "add_cohost",
-    confirmMessage: "Delegate cohost_c as cohost for this game",
+    confirmMessage: "Delegate Cohost C as cohost for this game",
   };
 }
 
@@ -420,8 +427,7 @@ import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.s
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
 import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
 import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
-import CommandStatusLine from "../src/lib/components/gameplay/CommandStatusLine.svelte";
-import { buildPlayerCommandStatusLine } from "../src/lib/components/player-command/player-command-status-line-model.mjs";
+import PlayerFeedback from "../src/lib/components/player-command/PlayerFeedback.svelte";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
 import { adminConfirmStatus } from "../src/routes/admin/admin-route-controller.mjs";
@@ -435,13 +441,13 @@ function adminCohostItem() {
   return {
     id: "cohost",
     label: "Add cohost",
-    value: "cohost_c",
+    value: "Cohost C",
     authority: "GlobalAdmin",
     boundary: "Command boundary",
     boundaryDetail: "Typed command dispatch",
     buttonLabel: "Add cohost",
     commandAction: "add_cohost",
-    confirmMessage: "Delegate cohost_c as cohost for this game",
+    confirmMessage: "Delegate Cohost C as cohost for this game",
   };
 }
 
@@ -573,17 +579,26 @@ export function renderPlayerVoteSheet({ selectedVoteAction = "submit_vote" } = {
   });
 }
 
-export function renderPlayerCommandStatusAck(action) {
-  return render(CommandStatusLine, {
+export function renderPlayerCommandReceiptVoteAck() {
+  return render(PlayerFeedback, {
     props: {
-      line: buildPlayerCommandStatusLine({
-        status: {
-          state: "ack",
-          message: "Ack: stream seqs 71",
-          commandTrace: playerCommandTrace(action),
-        },
-        voteCommands: [{ action: "submit_vote", voteTarget: { Slot: "slot-2" } }],
-      }),
+      status: {
+        state: "ack",
+        message: "Ack: stream seqs 71",
+        commandTrace: playerCommandTrace("submit_vote"),
+      },
+    },
+  });
+}
+
+export function renderPlayerCommandReceiptPostAck() {
+  return render(PlayerFeedback, {
+    props: {
+      status: {
+        state: "ack",
+        message: "Ack: stream seqs 72",
+        commandTrace: playerCommandTrace("submit_post"),
+      },
     },
   });
 }

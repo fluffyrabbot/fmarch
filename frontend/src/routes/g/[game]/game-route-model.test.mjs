@@ -95,6 +95,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     summary: "Day 2 is open.",
     capability: {
       visible: true,
+      kind: "SlotOccupant",
       label: "Playing midsummer",
       testId: "player-capability",
       className: "fm-capability-pill",

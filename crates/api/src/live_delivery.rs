@@ -31,8 +31,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, watch, Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 use wire::{
-    host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta,
-    HostPromptsDelta, LiveAudience, LiveProjectionDelta, LiveResyncRequired, LiveScope,
+    host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptsDelta,
+    LiveAudience, LiveProjectionDelta, LiveResyncRequired, LiveScope,
     PlayerInvestigationResultsDelta, PlayerNotificationsDelta, ProjectionDelta, RejectCode,
     ServerEnvelope, ServerMsg, SlotMentionsDelta, LIVE_HEARTBEAT_ENVELOPE_ID,
 };
@@ -1567,13 +1567,9 @@ async fn host_prompts_delta_for_ws(
     .await
     .map_err(live_assembly_api_error)?;
 
-    let prompts = projections::host_prompts(&state.pool, game)
+    let prompts = game_http::labeled_host_prompts(&state.pool, game)
         .await
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .map(HostPromptDelta::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+        .map_err(live_assembly_api_error)?;
     Ok(ProjectionDelta::HostPromptsChanged(HostPromptsDelta {
         game,
         prompts,

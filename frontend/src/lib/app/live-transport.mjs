@@ -38,7 +38,7 @@ export const LIVE_PROJECTION_MAX_QUEUED_FRAMES = 64;
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
   state: "connecting",
-  message: "Connecting live updates. Actions remain safe while we reconnect.",
+  message: "Connecting to the game…",
 });
 
 export const EMPTY_LIVE_PROJECTION_METRICS = Object.freeze({
@@ -1243,7 +1243,7 @@ export function liveProjectionStatusForEvent(
   if (message?.kind === "reconnecting") {
     return Object.freeze({
       state: "reconnecting",
-      message: "Reconnecting live updates. Actions remain safe.",
+      message: "Reconnecting to the game…",
     });
   }
   if (message?.kind === "reconnect" && message.state === "recovered") {

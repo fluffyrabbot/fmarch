@@ -2066,13 +2066,15 @@ export async function buildAdminRouteData({
         title: "Operations",
         summary:
           "Set up games, manage access, and review system health.",
-        capabilityLabel: access.capabilityLabel,
+        capability: access.capability,
+      capabilityLabel: access.capabilityLabel,
         capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
       }),
       access,
       operator: Object.freeze({
         principalId,
-        capabilityLabel: access.capabilityLabel,
+        capability: access.capability,
+      capabilityLabel: access.capabilityLabel,
       }),
       audit: Object.freeze([]),
     });
@@ -2101,12 +2103,14 @@ export async function buildAdminRouteData({
       title: "Operations",
       summary:
         "Set up games, manage access, and review system health.",
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
     operator: Object.freeze({
       principalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
     }),
     command: Object.freeze({
@@ -2149,13 +2153,13 @@ export async function buildAdminRouteData({
       Object.freeze({
         id: "cohost",
         label: "Cohost delegation",
-        value: "@cohost_c",
+        value: "Cohost C",
         authority: "HostOf(game)",
         boundary: "Command pipeline",
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
-        confirmLabel: "Delegate @cohost_c",
-        confirmMessage: "Delegate @cohost_c as cohost for this game",
+        confirmLabel: "Delegate Cohost C",
+        confirmMessage: "Delegate Cohost C as cohost for this game",
         buttonLabel: "Review",
       }),
     ]),
@@ -2275,7 +2279,7 @@ export async function buildAdminRouteData({
       Object.freeze({
         id: "moderation",
         label: "Cross-game moderation",
-        value: "GlobalMod only",
+        value: "Platform moderators only",
       }),
     ]),
   });

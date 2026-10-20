@@ -159,7 +159,7 @@ function dayFourVoteProofFixture() {
     setupSnapshotCommandState: { phase: { phaseId: "D04" } },
     currentVote: { hasVote: "true", text: "Current vote: No lynch" },
     receiptCount: 1,
-    receiptStatusText: "Ack: stream seqs 912",
+    receiptStatusText: "Saved.",
     receiptRefreshKeys: "votecount,commandState",
   };
 }

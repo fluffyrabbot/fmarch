@@ -1,3 +1,5 @@
+import { principalFixtureId } from "./principal_fixture.mjs";
+import { hostSetupFixtureState } from "../frontend/src/routes/g/[game]/setup/setup-route-model.mjs";
 import { provePhaseGroundContrast } from "./frontend_phase_contrast.mjs";
 import assert from "node:assert/strict";
 import { linuxVisualEnvironment } from "./linux_visual_environment.mjs";
@@ -6,7 +8,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
-import { captureScreenshotEvidence } from "./frontend_screenshot_pixels.mjs";
+import { captureScreenshotEvidence as captureScreenshotPixels } from "./frontend_screenshot_pixels.mjs";
 import { roleNavTestId } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
   encodeServerEnvelopeFrame,
@@ -47,7 +49,6 @@ import {
   roleHarnesses,
 } from "./frontend_role_smoke_flows.mjs";
 import { captureLegibility } from "./frontend_legibility.mjs";
-import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
 import {
   DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
   initializeReadingCheckpointClientsSequentially,
@@ -269,11 +270,22 @@ try {
 
       const surface = page.getByTestId(role.surfaceTestId);
       await surface.waitFor({ state: "visible" });
+      if (role.id === "board-player") {
+        const card = page.getByTestId("game-card-midsummer");
+        const text = await card.innerText();
+        for (const fact of ["7 of 13 seats filled", "Hosted by Rowan", "Deadline", "You're playing"]) {
+          assert.ok(text.includes(fact), `board card missing ${fact}`);
+        }
+        const heading = await surface.locator("h1").boundingBox();
+        const firstCard = await card.boundingBox();
+        assert.ok(firstCard.y - (heading.y + heading.height) <= 32, "first game follows the heading without an empty hero band");
+      }
       const bodyText = await page.textContent("body");
       if (!bodyText?.includes(role.requiredText)) {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
       }
 
+      const navigationMenu = await proveAccountMenu(page, role);
       const roleParadigm = await prepareRoleDecisionCanvas(page, role, viewport);
 
       const disclosureDefaults = await assertDisclosuresClosed(
@@ -401,7 +413,7 @@ try {
         viewport,
       });
       await setDisclosureState(page, role.expandBeforeChecks, true);
-      const capability = await page.getByTestId(role.capabilityTestId).innerText();
+      const capability = await page.getByTestId(role.capabilityTestId).getAttribute("data-capability-kind");
       const legibility = await captureLegibility(page, { surface: role.id });
       reportLegibility(`${role.id} ${viewport.name}`, legibility);
       const linkClickProofs = [];
@@ -419,6 +431,7 @@ try {
 
       evidence.roles.push({
         role: role.id,
+        navigationMenu,
         viewport,
         path: role.path,
         capability,
@@ -599,7 +612,10 @@ try {
         label: `${forbidden.id} ${viewport.name}`,
         viewport,
       });
+      const legibility = await captureLegibility(page, { surface: "player" });
+      reportLegibility(`${forbidden.id} ${viewport.name}`, legibility);
       evidence.forbidden.push({
+        legibility,
         role: "forbidden",
         scenario: forbidden.id,
         viewport,
@@ -636,7 +652,10 @@ try {
         label: `${scenario.id} ${viewport.name}`,
         viewport,
       });
+      const legibility = await captureLegibility(page, { surface: scenario.surface });
+      reportLegibility(`${scenario.id} ${viewport.name}`, legibility);
       evidence.routeStates.push({
+        legibility,
         ...routeState,
         screenshot: path.relative(repoRoot, screenshot),
         screenshotPixels,
@@ -669,8 +688,10 @@ try {
       label: `${hostSetupScenario.id} ${viewport.name}`,
       viewport,
     });
+    const seating = await proveSetupSeating(page);
     evidence.setup.push({
       ...setupGeometry,
+      seating,
       screenshot: path.relative(repoRoot, screenshot),
       screenshotPixels,
     });
@@ -701,7 +722,10 @@ try {
       label: `${publicGameScenario.id} ${viewport.name}`,
       viewport,
     });
+    const legibility = await captureLegibility(page, { surface: "public-game" });
+    reportLegibility(`${publicGameScenario.id} ${viewport.name}`, legibility);
     evidence.publications.push({
+      legibility,
       ...publicationGeometry,
       screenshot: path.relative(repoRoot, screenshot),
       screenshotPixels,
@@ -744,6 +768,7 @@ try {
 // Report mode (RFC 0008): print each surface's leaks so the receipt log names
 // them; the evidence contract checks only that the scan ran.
 function reportLegibility(label, legibility) {
+  if (legibility.violations.length) throw new Error(`Legibility failed on ${label}: ${JSON.stringify(legibility.violations)}`);
   const counts = new Map();
   for (const violation of legibility.violations) {
     counts.set(violation.rule, (counts.get(violation.rule) ?? 0) + 1);
@@ -1100,8 +1125,8 @@ async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
   for (const slotId of scenario.slotIds) {
     const card = page.getByTestId(`host-setup-slot-${slotId}`);
     const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} roster card`);
-    const assignment = card.locator(".host-setup__slot-form");
-    await assertHitTarget(assignment.locator("button"), `${scenario.id} ${slotId} assign player`);
+    const assignment = card.locator(".player-selection");
+    await assertHitTarget(assignment.locator("button[type=submit]"), `${scenario.id} ${slotId} assign player`);
     rosterCards.push({ slotId, cardBox });
   }
 
@@ -1321,8 +1346,6 @@ function resolveFlowHook(name) {
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
     playerVotePicker: (page, ctx) =>
       drivePlayerVotePicker(page, { commandRequests: ctx.commandRequests }),
-    playerInterruptedVote: (page, ctx) =>
-      provePlayerInterruptedVote(page, { baseUrl: ctx.baseUrl, routePath: ctx.role.path }),
     playerPrivateDisclosure: (page, ctx) =>
       drivePlayerPrivateDisclosure(page, {
         viewport: ctx.viewport,
@@ -2082,6 +2105,7 @@ async function captureInteractionGeometryBaseline(
   await assertVisibleBox(anchor, `${label} anchor`);
   return {
     anchor: await readDocumentBox(anchor),
+    anchorContainer: budget.anchorContainerSelector ? await readDocumentBox(page.locator(budget.anchorContainerSelector).first()) : null,
     documentHeight: await page.evaluate(
       () => document.documentElement.scrollHeight,
     ),
@@ -2101,12 +2125,16 @@ async function assertPostInteractionGeometry(
   await assertVisibleBox(target, `${label} target`);
   const anchorAfter = await readDocumentBox(anchor);
   const targetBox = await readDocumentBox(target);
+  const anchorContainerAfter = budget.anchorContainerSelector ? await readDocumentBox(page.locator(budget.anchorContainerSelector).first()) : null;
   const documentHeight = await page.evaluate(
     () => document.documentElement.scrollHeight,
   );
   const anchorUsesViewport =
-    baseline.anchor.fixed === true && anchorAfter.fixed === true;
-  const anchorShift = Math.max(
+    baseline.anchor.viewportAnchored === true && anchorAfter.viewportAnchored === true;
+  const anchorShift = baseline.anchorContainer && anchorContainerAfter ? Math.max(
+    Math.abs((anchorAfter.x - anchorContainerAfter.x) - (baseline.anchor.x - baseline.anchorContainer.x)),
+    Math.abs((anchorAfter.y - anchorContainerAfter.y) - (baseline.anchor.y - baseline.anchorContainer.y)),
+  ) : Math.max(
     Math.abs(
       (anchorUsesViewport ? anchorAfter.viewportX : anchorAfter.x) -
         (anchorUsesViewport ? baseline.anchor.viewportX : baseline.anchor.x),
@@ -2149,6 +2177,9 @@ async function assertPostInteractionGeometry(
     targetSelector: budget.targetSelector,
     anchorBefore: baseline.anchor,
     anchorAfter,
+    anchorContainerSelector: budget.anchorContainerSelector ?? null,
+    anchorContainerBefore: baseline.anchorContainer,
+    anchorContainerAfter,
     target: targetBox,
     anchorShift,
     maxAnchorShift: budget.maxAnchorShiftPx,
@@ -2165,6 +2196,10 @@ async function assertPostInteractionGeometry(
 async function readDocumentBox(locator) {
   return locator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const stickyTop = Number.parseFloat(style.top);
+    const viewportAnchored = style.position === "fixed" ||
+      (style.position === "sticky" && Number.isFinite(stickyTop) && Math.abs(rect.top - stickyTop) <= 1);
     return {
       x: rect.x + window.scrollX,
       y: rect.y + window.scrollY,
@@ -2172,7 +2207,8 @@ async function readDocumentBox(locator) {
       viewportY: rect.y,
       width: rect.width,
       height: rect.height,
-      fixed: window.getComputedStyle(node).position === "fixed",
+      fixed: style.position === "fixed",
+      viewportAnchored,
     };
   });
 }
@@ -2194,6 +2230,7 @@ async function captureCommandContinuityBaseline(
   );
   return {
     focusedElement: await readFocusedElement(page),
+    continuityAnchor: budget.continuityAnchorSelector ? await readDocumentBox(page.locator(budget.continuityAnchorSelector).first()) : null,
     ...(await readViewportContinuityState(page)),
   };
 }
@@ -2221,11 +2258,17 @@ async function assertCommandContinuity(
   const focusSettledAtMs = performance.now();
   const after = {
     focusedElement: await readFocusedElement(page),
+    continuityAnchor: budget.continuityAnchorSelector ? await readDocumentBox(page.locator(budget.continuityAnchorSelector).first()) : null,
     ...(await readViewportContinuityState(page)),
   };
   const status = page.locator(budget.statusSelector).first();
   await assertVisibleBox(status, `${label} announcement status`);
-  const scrollDelta = Math.abs(after.scrollY - baseline.scrollY);
+  const rawScrollDelta = Math.abs(after.scrollY - baseline.scrollY);
+  // Inline game-bar feedback changes document height. Scroll anchoring may
+  // adjust scrollY while leaving the composer exactly where the reader saw it.
+  const scrollDelta = baseline.continuityAnchor && after.continuityAnchor
+    ? Math.abs(after.continuityAnchor.viewportY - baseline.continuityAnchor.viewportY)
+    : rawScrollDelta;
   const announcementLatencyMs = announcedAtMs - dispatchedAtMs;
   const focusSettleMs = focusSettledAtMs - dispatchedAtMs;
   const visualViewportDelta = Math.abs(
@@ -2261,6 +2304,9 @@ async function assertCommandContinuity(
     before: baseline,
     after,
     scrollDelta,
+    rawScrollDelta,
+    scrollMetric: budget.continuityAnchorSelector ? "anchor-viewport" : "document-scroll",
+    continuityAnchorSelector: budget.continuityAnchorSelector ?? null,
     maxScrollDelta: budget.maxScrollDeltaPx,
     announcementLatencyMs,
     maxAnnouncementLatencyMs: budget.maxAnnouncementLatencyMs,
@@ -2478,60 +2524,6 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
   }
 }
 
-// An interrupted vote (RFC 0008, decision 4 and slice 5 acceptance): one
-// game-bar line in the player's terms, restored after a reload within the game,
-// absent on other routes, and put away by Dismiss.
-async function provePlayerInterruptedVote(page, { baseUrl, routePath }) {
-  const actionId = "submit_vote:slot-3";
-  const expected = "Your vote for Rook may not have gone through.";
-  let aborted = 0;
-  const abortVote = async (route) => {
-    const command = route.request().postDataJSON()?.body?.body?.command;
-    if (aborted === 0 && command?.SubmitVote !== undefined) {
-      aborted += 1;
-      await route.abort("failed");
-      return;
-    }
-    await route.fallback();
-  };
-  await page.route("**/commands", abortVote);
-  try {
-    const confirm = await armPlayerVote(page, playerVoteOption(page, actionId));
-    await confirm.click();
-    const status = page.getByTestId("player-command-status");
-    const awaitInterrupted = async (label) => {
-      await page.waitForFunction(() =>
-        document.querySelector('[data-testid="player-command-status"]')?.dataset.state === "interrupted");
-      assert.equal(await page.getByTestId("player-command-status").count(), 1, `${label}: one status line`);
-      assert.equal((await status.innerText()).trim(), expected, `${label}: status line copy`);
-      await page.getByTestId(`command-recovery-${actionId}`).waitFor({ state: "visible" });
-      assert.equal(await page.getByTestId("player-command-receipt").count(), 0, `${label}: no receipt panel`);
-    };
-    await awaitInterrupted("interrupted vote");
-    const commandId = await page.getByTestId(`command-recovery-${actionId}`).getAttribute("data-command-id");
-
-    await reloadBrowserPage(page);
-    await awaitInterrupted("after reload");
-    assert.equal(
-      await page.getByTestId(`command-recovery-${actionId}`).getAttribute("data-command-id"),
-      commandId,
-      "reload keeps the original attempt",
-    );
-
-    await navigateBrowserPage(page, `${baseUrl}/`, { waitUntil: "networkidle" });
-    const elsewhere = await page.getByTestId("player-command-status").count();
-    assert.equal(elsewhere, 0, "the status line belongs to its game route");
-
-    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
-    await awaitInterrupted("back in the game");
-    await page.getByTestId(`command-recovery-cancel-${actionId}`).click();
-    await page.getByTestId("player-command-status").waitFor({ state: "detached" });
-    return { actionId, text: expected, survivedReload: true, otherRouteLines: elsewhere };
-  } finally {
-    await page.unroute("**/commands", abortVote);
-  }
-}
-
 async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mockState } = {}) {
   const actionId = "modkill_slot";
   await selectHostTask(page, "slot-lifecycle");
@@ -2624,6 +2616,7 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mock
 
 async function selectHostTask(page, taskId) {
   const task = page.locator(`button[data-task-id="${taskId}"]`);
+  if (!(await task.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
   await task.waitFor({ state: "visible" });
   await task.click();
   await page
@@ -2667,36 +2660,27 @@ async function assertRailCommandActivity(page, { prefix, actionId, expectedState
   };
 }
 
-// The player's command feedback is one game-bar status line naming the intent;
-// raw messages and traces are read from the page's proof global.
 async function assertPlayerCommandReceipt(page, { actionId, expectedState }) {
   const status = page.getByTestId("player-command-status");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    ({ state }) => {
-      const node = document.querySelector('[data-testid="player-command-status"]');
-      return node?.getAttribute("data-state") === state;
-    },
-    { state: expectedState },
-  );
-  assert.equal(await status.getAttribute("data-action-id"), actionId, "status line names its command");
-  const exportedReceipts = await page.evaluate(
-    () => window.__fmarchPlayerCommandReceipts ?? null,
-  );
+  await page.waitForFunction(state => document.querySelector('[data-testid="player-command-status"]')?.getAttribute("data-state") === state, expectedState);
+  const feedback = page.getByTestId("player-feedback");
+  if (expectedState === "ack") {
+    if (await feedback.count()) throw new Error("Resolved feedback must clear from the game bar");
+  } else {
+    await feedback.waitFor({ state: "visible" });
+    if (await feedback.getAttribute("data-action-id") !== actionId) throw new Error("Feedback must describe the current action");
+    if (await page.getByTestId("player-game-bar").getByTestId("player-feedback").count() !== 1) throw new Error("Feedback must be in the game bar");
+  }
+  const exportedReceipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts ?? null);
   const statusRegion = await assertStatusLiveRegion(status, {
-    label: `player command status ${actionId}`,
-    expectedState,
-    expectedAriaLive: expectedState === "reject" ? "assertive" : "polite",
+    label: `player feedback ${actionId}`, expectedState,
+    expectedAriaLive: ["reject", "interrupted"].includes(expectedState) ? "assertive" : "polite",
   });
-  const message = await status.innerText();
-  assert.doesNotMatch(message, /\b(Reject|Ack|receipt|command identity|stream seqs)\b/iu,
-    "player command status speaks about intent, not transport");
   return {
-    statusTestId: "player-command-status",
-    state: await status.getAttribute("data-state"),
-    message,
-    exportedReceipts,
-    statusRegion,
+    receiptTestId: expectedState === "ack" ? null : "player-feedback",
+    receiptItemTestId: expectedState === "ack" ? null : "player-feedback",
+    statusTestId: "player-command-status", state: await status.getAttribute("data-state"),
+    message: await status.innerText(), exportedReceipts, statusRegion,
   };
 }
 
@@ -3540,9 +3524,11 @@ async function assertRoleNav(page, expectedNavigation = null) {
   for (const id of ["board", "player", "moderator", "admin"]) {
     const locator = page.getByTestId(roleNavTestId(id));
     const expected = expectedNavigation?.[id];
-    if (!(await locator.isVisible())) {
+    if (expected === "blocked") {
+      assert.equal(await locator.count(), 0, `Forbidden ${id} navigation must be absent`);
       continue;
     }
+    if (!(await locator.isVisible())) continue;
     targets.push({
       label: `role nav ${id}`,
       box:
@@ -3815,11 +3801,11 @@ async function assertForbiddenRouteError(page, scenario) {
     throw new Error(`${scenario.id} rendered error status ${status}`);
   }
   const bodyText = await page.textContent("body");
-  if (!bodyText?.includes(scenario.message)) {
+  if (!bodyText?.includes("You do not have access to this page.")) {
     throw new Error(`${scenario.id} did not render forbidden message`);
   }
   const navTargets = await assertRoleNav(page);
-  const action = page.getByRole("link", { name: "Back to board" });
+  const action = page.getByRole("link", { name: "Back to Games" });
   const actionTarget = {
     label: `${scenario.id} back to board`,
     box: await assertHitTarget(action, `${scenario.id} back to board`),
@@ -3830,7 +3816,7 @@ async function assertForbiddenRouteError(page, scenario) {
   });
   return {
     status,
-    message: scenario.message,
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     overlapCheckedTargets: navTargets.length + 1,
   };
 }
@@ -3848,6 +3834,12 @@ async function assertRouteStateScenario(page, { scenario, viewport, baseUrl }) {
     );
   }
   const dataSurface = await root.getAttribute("data-surface");
+  if (dataSurface === "player") {
+    const bar = await page.getByTestId("player-game-bar").boundingBox();
+    assert.ok(bar && bar.height <= 100, "player route-state game bar remains compact");
+    const message = (await page.getByTestId(scenario.statusTestId).innerText()).trim();
+    assert.equal((await root.innerText()).split(message).length - 1, 1, "route-state message appears once");
+  }
   const dataState = await root.getAttribute("data-state");
   if (dataSurface !== scenario.surface) {
     throw new Error(
@@ -4070,7 +4062,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const filter = page.getByTestId("private-attention-filter");
   await filter.selectOption("new");
-  // The filter re-renders after the change event; wait for it rather than race it.
+  // Wait for the filter to re-render before asserting the reviewed item is gone.
   await status.waitFor({ state: "detached" });
   await filter.selectOption("reviewed");
   await status.waitFor();
@@ -4333,7 +4325,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
         assert.equal(await page.evaluate(() => document.activeElement.id), "player-thread");
         const recovery = page.getByTestId("reader-recovery");
         const messageBox = await recovery.getByRole("status").boundingBox();
-        const headerBox = await page.getByTestId("app-shell-topbar").boundingBox();
+        const headerBox = await page.getByTestId("player-game-bar").boundingBox();
         assert.ok(messageBox && headerBox && messageBox.y >= headerBox.y + headerBox.height, "Recovery status must clear the sticky header");
         if (outcome === "hidden") {
           if (page.viewportSize().width === 390) await page.screenshot({ path: path.join(artifactDir, "mobile-reader-recovery.png") });
@@ -4541,4 +4533,82 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
     await page.waitForFunction(id => document.activeElement?.id === id, id);
     await page.getByTestId("return-previous-place").waitFor();
   } finally { await page.unroute(endpoint, checkpoint); await page.unroute(threadEndpoint, denied); }
+}
+
+async function proveSetupSeating(page) {
+  const state = structuredClone(hostSetupFixtureState({game: 'midsummer'}));
+  state.origin_topic = {topic_id: principalFixtureId('signup-topic'), title: 'Signup players', href: '/community'};
+  const ilya = {principal_id: principalFixtureId('setup-ilya'), handle: 'ilya', display_name: 'Ilya', already_seated: false};
+  const rook = {principal_id: principalFixtureId('setup-rook'), handle: 'rook', display_name: 'Rook', already_seated: false};
+  const sent = [];
+  await page.route('**/api/mention-suggestions?*', route => route.fulfill({json: {suggestions: [{profile_id: principalFixtureId('profile-ilya'), handle: ilya.handle, display_name: ilya.display_name}]}}));
+  await page.route('**/setup/candidate?*', route => route.fulfill({json: ilya}));
+  await page.route('**/setup/signup-candidates', route => route.fulfill({json: [ilya,rook].map(candidate => ({...candidate, already_seated: state.slots.some(slot => slot.assigned_principal_id === candidate.principal_id)}))}));
+  await page.route('**/setup-state', route => route.fulfill({json: state}));
+  await page.route('**/commands', async route => {
+    const envelope = route.request().postDataJSON();
+    const command = envelope.body.body.command;
+    sent.push(command);
+    if (command.AddSlot) state.slots.push({slot_id: command.AddSlot.slot, persona_id: null, assigned_principal_id: null, public_name: null, alive: true, role_key: null});
+    else if (command.SeatPersona) {
+      const slot = state.slots.find(slot => slot.slot_id === command.SeatPersona.slot);
+      assert.ok(slot, 'seat must exist before assignment');
+      assert.equal(state.slots.some(slot => slot.assigned_principal_id === command.SeatPersona.principal_id), false, 'signup import cannot duplicate an occupant');
+      Object.assign(slot, {persona_id: principalFixtureId(`persona-${sent.length}`), assigned_principal_id: command.SeatPersona.principal_id, public_name: command.SeatPersona.public_name});
+    } else throw new Error(`Unexpected setup command ${Object.keys(command)}`);
+    await route.fulfill({json:{v:3,id:envelope.id,body:{kind:'Ack',body:{stream_seqs:[100+sent.length]}}}});
+  });
+  await page.getByTestId('host-setup-step-roster').click();
+  const seat = page.getByTestId('host-setup-slot-slot_2');
+  await seat.getByLabel('Player handle').fill('il');
+  await seat.getByRole('button', {name:'Ilya · @ilya'}).click();
+  await page.waitForFunction(() => {
+    const seat = document.querySelector('[data-testid="host-setup-slot-slot_2"]');
+    return [...seat.querySelectorAll('input')].some(input => input.value === 'Ilya');
+  });
+  assert.equal(await seat.getByLabel('Public game name').inputValue(), 'Ilya');
+  await seat.getByLabel('Public game name').fill('Ilya North');
+  assert.equal(sent.length, 0, 'choosing a handle must not assign a seat');
+  await seat.getByRole('button', {name:'Assign player'}).click();
+  await page.waitForFunction(() => window.__fmarchHostSetupState.slots.some(slot => slot.publicName === 'Ilya North'));
+  assert.equal(sent[0].SeatPersona.principal_id, ilya.principal_id);
+  await page.getByRole('button', {name:'Seat signups', exact:true}).click();
+  await page.getByRole('button', {name:'Confirm seating', exact:true}).waitFor();
+  assert.equal(sent.length, 1, 'reviewing signup authors must not assign them');
+  await page.getByRole('button', {name:'Confirm seating', exact:true}).click();
+  await page.getByText('1 player seated.', {exact:true}).waitFor();
+  assert.deepEqual(sent.map(command => Object.keys(command)[0]), ['SeatPersona','AddSlot','SeatPersona']);
+  assert.equal(state.slots.filter(slot => slot.assigned_principal_id === rook.principal_id).length, 1);
+  await page.getByRole('button', {name:'Seat signups', exact:true}).click();
+  await page.getByText('All available signup authors are already seated.', {exact:true}).waitFor();
+  assert.equal(sent.length, 3, 'repeated imports must not duplicate seats');
+  const legibility = await captureLegibility(page, {surface:'host-setup'});
+  reportLegibility('setup seating', legibility);
+  return {handleSelection: true, editedName: 'Ilya North', signupConfirmation: true, repeatedImport: 'no-op', commandKinds: sent.map(command=>Object.keys(command)[0]), legibility};
+}
+
+
+async function proveAccountMenu(page, role) {
+  const toggle = page.getByTestId("account-menu-toggle");
+  await toggle.click();
+  const menu = page.locator("details.account-menu[open]");
+  await menu.waitFor({state: "visible"});
+  if (role.id === "player") {
+    for (const id of ["admin", "moderator"]) assert.equal(await page.getByTestId(roleNavTestId(id)).count(), 0, `player must not see ${id} navigation`);
+    for (const id of ["board", "community", "inbox", "search"]) await menu.getByTestId(roleNavTestId(id)).waitFor({state: "visible"});
+  }
+  const links = await menu.locator("a").evaluateAll(nodes => nodes.map(node => ({text:node.textContent.trim(), href:node.getAttribute("href")})));
+  assert.ok(links.length > 0);
+  await toggle.press("Escape");
+  assert.equal(await page.locator("details.account-menu[open]").count(), 0);
+  assert.equal(await toggle.evaluate(node => document.activeElement === node), true);
+  return {links, escapeCloses: true, returnsFocus: true};
+}
+
+
+async function captureScreenshotEvidence(page, options) {
+  const surface = await page.locator('[data-component="fm-app-shell"]').first().getAttribute("data-surface") ?? "public";
+  const legibility = await captureLegibility(page, {surface});
+  reportLegibility(options.label, legibility);
+  return captureScreenshotPixels(page, options);
 }

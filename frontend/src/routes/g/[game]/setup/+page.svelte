@@ -1,4 +1,6 @@
 <script>
+  import SetupPlayer from "./SetupPlayer.svelte";
+  import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
@@ -35,6 +37,49 @@
   let readiness = data.readiness;
   let pendingStartFormData = null;
   let preferredStageId = null;
+  let signupCandidates = null;
+  let signupMessage = '';
+  let importingSignups = false;
+  $: nextSeatNumber = Math.max(0, ...setupState.slots.map(slot => Number(slot.slotId.match(/(\d+)$/)?.[1] ?? 0))) + 1;
+
+  async function reviewSignups() {
+    signupMessage = 'Loading signups…';
+    try {
+      const response = await fetch(`/api/gameplay/games/${encodeURIComponent(data.game.id)}/setup/signup-candidates`);
+      if (!response.ok) throw new Error();
+      signupCandidates = (await response.json()).filter(candidate => !candidate.already_seated);
+      signupMessage = signupCandidates.length ? '' : 'All available signup authors are already seated.';
+    } catch { signupMessage = 'Could not load signups. Try again.'; }
+  }
+
+  async function seatSignups() {
+    importingSignups = true;
+    let seated = 0;
+    try {
+      // Re-read both seats and candidates after a partial import or another tab's work.
+      const refreshed = await refreshSetupState({ data, fetchImpl: fetch });
+      setupState = refreshed.setupState;
+      readiness = refreshed.readiness;
+      const response = await fetch(`/api/gameplay/games/${encodeURIComponent(data.game.id)}/setup/signup-candidates`);
+      if (!response.ok) throw new Error();
+      const available = new Set((await response.json()).filter(c => !c.already_seated).map(c => c.principal_id));
+      for (const candidate of signupCandidates.filter(c => available.has(c.principal_id))) {
+        let slotId = setupState.slots.find(slot => !slot.personaId)?.slotId;
+        if (!slotId) {
+          slotId = `slot_${nextSeatNumber}`;
+          const add = new FormData(); add.set('slotId', slotId);
+          if ((await submitSetupCommand('add-slot', add))?.state !== 'ack' || !setupState.slots.some(slot => slot.slotId === slotId)) throw new Error();
+        }
+        const assign = new FormData();
+        assign.set('slotId', slotId); assign.set('principalId', candidate.principal_id); assign.set('publicName', candidate.display_name);
+        if ((await submitSetupCommand('assign-slot', assign))?.state !== 'ack' || !setupState.slots.some(slot => slot.slotId === slotId && slot.assignedPrincipalId === candidate.principal_id)) throw new Error();
+        seated += 1;
+      }
+      signupCandidates = null;
+      signupMessage = `${seated} ${seated === 1 ? "player" : "players"} seated.`;
+    } catch { signupCandidates = null; signupMessage = `${seated} ${seated === 1 ? "player" : "players"} seated. Import stopped; review signups again to continue.`; }
+    finally { importingSignups = false; }
+  }
 
   $: forcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
@@ -125,7 +170,7 @@
     commandStatuses = recordSetupCommandStatus(
       commandStatuses,
       "start-game",
-      setupConfirmStatus("start-game", `Start ${data.game.id} at ${pendingStartFormData.get("phase")}`),
+      setupConfirmStatus("start-game", `Start ${data.game.label} at ${pendingStartFormData.get("phase")}`),
     );
   }
 
@@ -202,6 +247,7 @@
           plan,
         });
       }
+      return outcome;
     } catch (error) {
       const finalStatus = setupRejectStatus(error);
       commandStatuses = recordSetupCommandStatus(
@@ -287,9 +333,8 @@
               </header>
               <p>The pack defines the available roles and valid opening phases.</p>
               <dl class="host-setup__facts" data-testid="host-setup-pack">
-                <div><dt>Game</dt><dd>{setupState.game}</dd></div>
+                <div><dt>Game</dt><dd>{data.game.label}</dd></div>
                 <div><dt>Pack</dt><dd>{setupState.pack.name}</dd></div>
-                <div><dt>Pack key</dt><dd>{setupState.pack.key}</dd></div>
                 <div><dt>Opening phases</dt><dd>{setupState.pack.startPhaseOptions.join(", ")}</dd></div>
               </dl>
             {:else if stage.id === "roster"}
@@ -297,16 +342,28 @@
                 <div><p class="fm-eyebrow">Stage 2</p><h2>Seat the roster</h2></div>
                 <span data-state={stage.state}>{stage.statusLabel}</span>
               </header>
-              <p>Add the required slots and bind each seat to one exact player principal.</p>
+              <p>Add seats and choose each player by handle.</p>
               <form
                 class="host-setup__inline-form"
                 data-testid="host-setup-add-slot-form"
                 on:submit={(event) => handleSetupSubmit(event, "add-slot")}
               >
-                <input type="hidden" name="slotId" value={`slot_${setupState.slots.length + 1}`} />
-                <p>The next seat will be added as Slot {setupState.slots.length + 1}.</p>
+                <input type="hidden" name="slotId" value={`slot_${nextSeatNumber}`} />
+                <p>The next seat will be added as Seat {nextSeatNumber}.</p>
                 <button class="fm-touch-button" type="submit">Add next seat</button>
               </form>
+              {#if setupState.originTopic}
+                <section aria-label="Signup players">
+                  <button class="fm-touch-button" type="button" disabled={importingSignups} on:click={reviewSignups}>Seat signups</button>
+                  <p role="status">{signupMessage}</p>
+                  {#if signupCandidates?.length}
+                    <p>Seat these {signupCandidates.length} players from {setupState.originTopic.title}?</p>
+                    <ul>{#each signupCandidates as candidate}<li>{candidate.display_name} · @{candidate.handle}</li>{/each}</ul>
+                    <button class="fm-touch-button" type="button" disabled={importingSignups} on:click={seatSignups}>{importingSignups ? 'Seating players…' : 'Confirm seating'}</button>
+                    <button class="fm-touch-button fm-touch-button--secondary" type="button" disabled={importingSignups} on:click={() => signupCandidates = null}>Cancel</button>
+                  {/if}
+                </section>
+              {/if}
               <div class="host-setup__card-list" data-testid="host-setup-roster">
                 {#each setupState.slots as slot}
                   <article
@@ -315,29 +372,12 @@
                     data-testid={`host-setup-slot-${slot.slotId}`}
                   >
                     <div class="host-setup__slot-summary">
-                      <div><p class="fm-eyebrow">Seat</p><h3>{slot.slotId.replace(/^slot[-_]?/i, "Slot ")}</h3></div>
+                      <div><p class="fm-eyebrow">Seat</p><h3>{seatLabel(slot.slotId, { name: slot.publicName })}</h3></div>
                       <span class="host-setup__slot-state" data-state={slot.personaId ? "ready" : "blocked"}>
                         {slot.personaId ? "seated" : "needs player"}
                       </span>
                     </div>
-                    <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-slot")}>
-                      <input type="hidden" name="slotId" value={slot.slotId} />
-                      <label class="fm-field">
-                        <span>Principal ID</span>
-                        <input
-                          name="principalId"
-                          type="text"
-                          required
-                          spellcheck="false"
-                          value={slot.assignedPrincipalId ?? ""}
-                        />
-                      </label>
-                      <label class="fm-field">
-                        <span>Public game name</span>
-                        <input name="publicName" required value={slot.publicName ?? ""} />
-                      </label>
-                      <button class="fm-touch-button fm-touch-button--secondary" type="submit">Assign player</button>
-                    </form>
+                    <SetupPlayer game={data.game.id} {slot} disabled={importingSignups || commandStatuses["assign-slot"]?.state === "pending"} onSubmit={(event) => handleSetupSubmit(event, "assign-slot")} />
                   </article>
                 {/each}
               </div>
@@ -352,7 +392,7 @@
                     <input type="hidden" name="expectedOccupantPrincipalId" value={target.expectedOccupantPrincipalId} />
                     <span>{target.targetLabel}</span>
                     <label class="fm-field">
-                      <span>Account ID</span>
+                      <span>Sign-in account or email</span>
                       <input name="accountId" type="text" autocomplete="username" required />
                     </label>
                     <button class="fm-touch-button fm-touch-button--secondary" type="submit">Issue invite</button>
@@ -364,14 +404,14 @@
                     <p data-testid="host-setup-player-invite-delivery">Delivery: {form.playerInvite.deliveryStatus}</p>
                   {/if}
                   {#if form.playerInvite.loginUrl}
-                    <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">{form.playerInvite.loginUrl}</a>
+                    <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">Open player invitation</a>
                   {:else if form.playerInvite.currentOccupantPrincipalId}
                     <form method="POST" action="?/issuePlayerInvite">
                       <input type="hidden" name="principalId" value={form.playerInvite.currentOccupantPrincipalId} />
                       <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
                       <input type="hidden" name="expectedOccupantPrincipalId" value={form.playerInvite.currentOccupantPrincipalId} />
                       <label class="fm-field">
-                        <span>Account ID</span>
+                        <span>Sign-in account or email</span>
                         <input name="accountId" type="text" autocomplete="username" required />
                       </label>
                       <button class="fm-touch-button" type="submit">Issue current player invite</button>
@@ -434,7 +474,7 @@
                   {#each programOptions as option}
                     <article class="host-setup__role-card" data-testid={`host-setup-program-${option.id}-${option.version}`}>
                       <div>
-                        <p class="fm-eyebrow">{option.id} · v{option.version}</p>
+                        <p class="fm-eyebrow">{option.displayName} · v{option.version}</p>
                         <h3>{option.displayName}</h3>
                       </div>
                       <p>{option.eventCount} event{option.eventCount === 1 ? "" : "s"}</p>
@@ -824,14 +864,12 @@
     }
 
     .host-setup__step-list {
-      display: flex;
-      margin-inline: -16px;
-      overflow-x: auto;
-      padding-inline: 16px;
+      display: grid;
+      grid-template-columns: 1fr;
     }
 
     .host-setup__step-list button {
-      flex: 0 0 150px;
+      width: 100%;
     }
 
     .host-setup__facts {

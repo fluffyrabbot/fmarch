@@ -166,7 +166,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
       snapshotAfterReload: completedPrivateRejectSnapshot,
       reloadedReconnectedSnapshotCommandState:
         completedPrivateRejectSnapshot.commandState,
-      receiptStatusText: staleScenario.commandMessage,
+      receiptStatusText: "The game is complete. Your action was not accepted.",
       receiptRefreshKeys: staleScenario.expectedRefreshKeys.join(","),
       rawInviteTokensVisible: false,
     },
@@ -449,7 +449,7 @@ test("stale private-channel PhaseLocked assertion covers refreshed private post 
     checkpointPhaseId: scenario.expectedPhaseId,
     checkpointActionState: scenario.expectedActionState,
     checkpointReceiptState: scenario.expectedReceiptState,
-    receiptStatusText: scenario.expectedReceiptStatusFragment,
+    receiptStatusText: "Your post was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptRefreshKeys: scenario.expectedRefreshKeys.join(","),
     rawInviteTokensVisible: false,
   };
@@ -511,7 +511,7 @@ test("private-channel SubmitPost ACK assertion covers projected private post", (
     },
     privatePostBody: scenario.postBody,
     receiptCount: 1,
-    receiptStatusText: `Ack: stream seqs ${scenario.ackSeq}`,
+    receiptStatusText: "Saved.",
     receiptRefreshKeys: scenario.expectedRefreshKeys.join(","),
   };
 
@@ -559,7 +559,7 @@ test("live private-channel SubmitPost ACK outcome assertion covers refresh evide
         },
       },
     },
-    receiptStatusText: "Ack: stream seqs 43",
+    receiptStatusText: "Saved.",
     dispatchPlan: {
       projectionRefreshKeys: [
         "thread",
@@ -663,7 +663,7 @@ test("live completed private-channel reject outcome assertion covers reload clos
     },
     dispatchPlan: { projectionRefreshKeys: ["commandState"] },
     currentReceipt: { actionId: "submit_post", state: "reject" },
-    receiptStatusText: scenario.commandMessage,
+    receiptStatusText: "The game is complete. Your action was not accepted.",
     commandStateAfterReject: {
       actorSlot: "slot-7",
       gameCompleted: true,

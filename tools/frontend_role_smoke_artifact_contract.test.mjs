@@ -47,8 +47,8 @@ import {
   PLAYER_COMMAND_PANEL_CONTRACT,
 } from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
 import {
-  PLAYER_COMMAND_STATUS_LINE_CONTRACT,
-} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
+  PLAYER_COMMAND_RECEIPT_CONTRACT,
+} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
@@ -555,7 +555,7 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(staticContract.commandTraceContract, {
     boundary:
-      "Static model contract proves recorded player command receipts carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
+      "Static model contract proves player command receipt rows carry shared command traces that bind action ids to status keys, dispatch kinds, and projection refresh keys. Browser smoke is still required to prove hydrated click-to-dispatch interaction.",
     model: "command-trace-model",
     kind: COMMAND_TRACE_CONTRACT.kind,
     surfaces: [
@@ -777,12 +777,26 @@ test("static role contract artifact records shared nav focus and route state mat
     value: "Main thread as Slot 7",
     audienceLabel: "Everyone at the table reads this",
   });
-  assert.deepEqual(playerStaticRole.commandStatusLine, {
-    testId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
-    state: "pending",
-    text: playerStaticRole.commandStatusLine.text,
+  assert.deepEqual(playerStaticRole.commandReceipt, {
+    component: "player-command-receipt",
+    summary: "1 recent player command receipt",
+    itemTestIds: ["player-command-receipt-submit_vote"],
+    currentStatusTestId: PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
+    commandTraces: [
+      {
+        actionId: "submit_vote",
+        statusTestId: "player-command-status",
+        trace: {
+          kind: COMMAND_TRACE_CONTRACT.kind,
+          surface: "player",
+          actionId: "submit_vote",
+          statusKey: "submit_vote",
+          dispatchKind: "submit_vote",
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+      },
+    ],
   });
-  assert.match(playerStaticRole.commandStatusLine.text, /^Sending your vote/u);
   assert.deepEqual(playerStaticRole.media, {
     component: PLAYER_THREAD_MEDIA_CONTRACT.component,
     preferredVariants: PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants,
@@ -841,7 +855,7 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(moderatorStaticRole.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
+    summary: "Technical details",
     label: "Technical access",
     value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
@@ -964,7 +978,7 @@ test("static role contract artifact records shared nav focus and route state mat
         "critical-host-action-trigger",
         true,
         "confirm-cancel",
-        "true",
+        "false",
       ],
       [
         "extend_deadline_24h",
@@ -1242,7 +1256,10 @@ test("route-state render artifact covers every forced board and role page state"
     deadlineValue: "Jun 19, 2026, 9:00 PM",
     deadlineState: "open",
     deadlineProjected: true,
-    commandStatusTestId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
+    commandReceiptTestId: "player-command-receipt",
+    commandReceiptEmptyTestId: null,
+    commandReceiptCurrentStatusTestId:
+      PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     commandChannelContext: {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
       channelId: "main",
@@ -1358,7 +1375,7 @@ test("route-state render artifact covers every forced board and role page state"
     activeNavTestId: roleNavTestId("player"),
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     htmlBytes: routeStateRender.errorSurface.htmlBytes,
   });
   assert.equal(routeStateRender.errorSurface.htmlBytes > 0, true);
@@ -1491,11 +1508,20 @@ test("route-state render artifact covers every forced board and role page state"
   });
   assert.deepEqual(routeStateRender.feedbackRailMarkup.player, {
     role: "player",
-    render: "renderPlayerCommandStatusLine",
-    component: "command-status-line",
-    testId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
-    statusTestId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
+    render: "renderPlayerCommandReceipt",
+    component: "player-feedback",
+    testId: "player-feedback",
+    itemTestId: "player-feedback",
+    statusTestId: PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     statusState: "reject",
+    commandTrace: {
+      kind: "command-trace",
+      surface: "player",
+      actionId: "submit_vote",
+      statusKey: "submit_vote",
+      dispatchKind: "submit_vote",
+      refreshKeys: "votecount,commandState",
+    },
     htmlBytes: routeStateRender.feedbackRailMarkup.player.htmlBytes,
   });
   assert.deepEqual(routeStateRender.feedbackRailMarkup.moderator, {
@@ -1879,7 +1905,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
     },
   });
   assert.deepEqual(hydratedHandlers.roles.player, {
-    component: "command-status-line",
+    component: "player-command-receipt",
     exposureKey: "__fmarchPlayerCommandDispatchBridgePlan",
     commands: {
       vote: {
@@ -1888,15 +1914,15 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "submit_vote",
           state: "ack",
-          message: "Your vote for Slot 2 went through.",
-          testId: "player-command-status",
+          message: "Ack: stream seqs 71",
+          testId: "player-command-receipt-submit_vote",
           statusTestId: "player-command-status",
         },
         reject: {
           actionId: "submit_vote",
           state: "reject",
-          message: "Your vote for Slot 2 didn't go through.",
-          testId: "player-command-status",
+          message: "Reject PhaseLocked: reload and retry",
+          testId: "player-command-receipt-submit_vote",
           statusTestId: "player-command-status",
         },
         ackRefreshKeys: ["votecount"],
@@ -1908,11 +1934,11 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
         ack: {
           actionId: "submit_post",
           state: "ack",
-          message: "Your post went through.",
-          testId: "player-command-status",
+          message: "Ack: stream seqs 72",
+          testId: "player-command-receipt-submit_post",
           statusTestId: "player-command-status",
         },
-        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
+        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes"],
         channelId: "private:role_pm:slot-7",
       },
     },
@@ -2148,8 +2174,8 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/gameplay/ComposeSheet.svelte",
       ],
       [
-        "CommandStatusLine",
-        "frontend/src/lib/components/gameplay/CommandStatusLine.svelte",
+        "PlayerFeedback",
+        "frontend/src/lib/components/player-command/PlayerFeedback.svelte",
       ],
       [
         "HostTaskWorkspace",
@@ -2191,10 +2217,18 @@ test("component interaction artifact records no-bind command component wiring", 
   }
   assert.equal(componentInteractions.interactions.admin.renderedAckBytes > 0, true);
   assert.deepEqual(componentInteractions.interactions.player, {
-    component: "VoteSheet/CommandStatusLine",
+    component: "VoteSheet/PlayerFeedback",
     actions: [
-      { action: "submit_vote", actionAttribute: "submit_vote" },
-      { action: "submit_post", actionAttribute: "submit_post" },
+      {
+        action: "submit_vote",
+        actionAttribute: "submit_vote",
+        visibleRowTestId: null,
+      },
+      {
+        action: "submit_post",
+        actionAttribute: "submit_post",
+        visibleRowTestId: null,
+      },
     ],
     statusTestId: "player-command-status",
     renderedPanelBytes:
@@ -4114,7 +4148,7 @@ test("in-app browser replay help records condensed external proof commands", asy
   assert.deepEqual(replayHelp.fixture.routeErrorScenario, {
     id: "route-error-back-to-board-click",
     targetTestId: "route-error-action",
-    expectedText: "Back to board",
+    expectedText: "Back to Games",
     errorSurface: {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
@@ -4159,7 +4193,7 @@ test("in-app browser replay help records condensed external proof commands", asy
     `returned browser-run plannedInteractions includes ${EXPECTED_COUNTS.plannedInteractions} admin/player/moderator/error interactions`,
     `returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
     "all returned reserved status floors render at least 44px before promotion",
-    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
+    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to Games click/focus evidence",
     "returned role-smoke.json has status passed with referenced role-smoke screenshots",
     "bundle import writes imported role-smoke as imported-passed",
     "browser acceptance boundary marks in-app-file-browser-run proven",
@@ -6238,6 +6272,14 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.equal(phaseEvidence.withinBudget, true);
         assert.equal(phaseEvidence.anchorSelector, phaseBudget.anchorSelector);
         assert.equal(phaseEvidence.targetSelector, phaseBudget.targetSelector);
+        if (phaseBudget.anchorContainerSelector) {
+          assert.equal(phaseEvidence.anchorContainerSelector, phaseBudget.anchorContainerSelector);
+          assert.equal(phaseEvidence.anchorShift, Math.max(
+            Math.abs((phaseEvidence.anchorAfter.x - phaseEvidence.anchorContainerAfter.x) - (phaseEvidence.anchorBefore.x - phaseEvidence.anchorContainerBefore.x)),
+            Math.abs((phaseEvidence.anchorAfter.y - phaseEvidence.anchorContainerAfter.y) - (phaseEvidence.anchorBefore.y - phaseEvidence.anchorContainerBefore.y)),
+          ));
+        }
+
         assert.equal(
           phaseEvidence.anchorShift <= phaseEvidence.maxAnchorShift,
           true,
@@ -6271,6 +6313,11 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.notEqual(continuity.before.focusedElement, null);
         assert.notEqual(continuity.after.focusedElement, null);
         assert.equal(continuity.scrollDelta <= continuity.maxScrollDelta, true);
+        if (continuityBudget.continuityAnchorSelector) {
+          assert.equal(continuity.scrollMetric, "anchor-viewport");
+          assert.equal(continuity.continuityAnchorSelector, continuityBudget.continuityAnchorSelector);
+          assert.equal(continuity.scrollDelta, Math.abs(continuity.after.continuityAnchor.viewportY - continuity.before.continuityAnchor.viewportY));
+        }
         assert.equal(
           continuity.announcementLatencyMs <=
             continuity.maxAnnouncementLatencyMs,
@@ -6456,9 +6503,11 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       "player composer acknowledgement screenshots",
     );
     assert.deepEqual(entry.commandResult.commandReceipt, {
+      receiptTestId: "player-command-receipt",
+      receiptItemTestId: "player-command-receipt-submit_vote",
       statusTestId: "player-command-status",
       state: "reject",
-      message: "Your vote for Juniper didn't go through: the game changed while it was on its way.",
+      message: "Reject StreamConflict: reload and retry",
       exportedReceipts: [
         {
           actionId: "submit_vote",
@@ -6494,15 +6543,17 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       ariaAtomic: "true",
     });
     assert.equal(entry.commandResult.postCommand.state, "ack");
-    assert.equal(entry.commandResult.postCommand.message, "Your post went through.");
+    assert.match(entry.commandResult.postCommand.message, /Ack: stream seqs 72/);
     assert.equal(
       entry.commandResult.postCommand.refreshedPostTestId,
       "thread-post-445",
     );
     assert.deepEqual(entry.commandResult.postCommandReceipt, {
+      receiptTestId: "player-command-receipt",
+      receiptItemTestId: "player-command-receipt-submit_post",
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Your post went through.",
+      message: "Ack: stream seqs 72",
       exportedReceipts: [
         {
           actionId: "submit_vote",
@@ -6612,9 +6663,11 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
       ariaAtomic: "true",
     });
     assert.deepEqual(entry.commandResult.receipt, {
+      receiptTestId: "player-command-receipt",
+      receiptItemTestId: "player-command-receipt-submit_post",
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Your post went through.",
+      message: "Ack: stream seqs 172",
       exportedReceipts: [
         {
           actionId: "submit_post",
@@ -6650,8 +6703,8 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
             "app-shell-skip-link",
             "role-nav-board",
             "role-nav-community",
-            "role-nav-search",
             "role-nav-inbox",
+            "role-nav-search",
             "role-nav-player",
             "player-channel-main",
             "player-channel-private:role_pm:slot-7",
@@ -6725,7 +6778,7 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
     activeNavTestId: roleNavTestId("player"),
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     touchTargets: {
       count: domErrorSurface.touchTargets.count,
       minPx: domErrorSurface.touchTargets.minPx,
@@ -6753,9 +6806,17 @@ async function assertRoleDomFallbackEvidence(roleSmoke) {
       htmlBytes: domFeedbackTraces.admin.htmlBytes,
     },
     player: {
-      component: "command-status-line",
+      component: "player-command-receipt",
+      rowTestId: "player-command-receipt-submit_vote",
       statusTestId: "player-command-status",
-      commandTrace: null,
+      commandTrace: {
+        kind: "command-trace",
+        surface: "player",
+        actionId: "submit_vote",
+        statusKey: "submit_vote",
+        dispatchKind: "submit_vote",
+        refreshKeys: "votecount,commandState",
+      },
       htmlBytes: domFeedbackTraces.player.htmlBytes,
     },
     moderator: {
@@ -7105,6 +7166,7 @@ function shellNavCoverageSummary(entry) {
 }
 
 function shellNavCoverageExpected({ id, render, navigation }) {
+  navigation = Object.fromEntries(Object.entries(navigation).map(([key, value]) => [key, key === "player" || value === "blocked" ? "absent" : value]));
   return {
     id,
     render,

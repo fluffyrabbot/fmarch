@@ -102,7 +102,7 @@ export function nightFourNoActionSurfaceFixture({
         text: "Current vote: No lynch",
       },
       receiptCount: 1,
-      receiptStatusText: `Ack: stream seqs ${voteCase.streamSeq}`,
+      receiptStatusText: "Saved.",
       receiptRefreshKeys: voteCase.expectedReceiptRefreshKeys,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,

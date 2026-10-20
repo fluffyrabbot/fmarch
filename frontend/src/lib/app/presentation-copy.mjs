@@ -85,3 +85,11 @@ function humanizeSingleCapability(value) {
       return kind.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
   }
 }
+
+export function packLabel(pack) {
+  return pack
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}

@@ -100,7 +100,7 @@ export function dayThreeVoteResolutionSurfaceFixture({
         text: "Current vote Goon A · S4",
       },
       receiptCount: 1,
-      receiptStatusText: `Ack: stream seqs ${voteCase.streamSeq}`,
+      receiptStatusText: "Saved.",
       receiptRefreshKeys: voteCase.expectedReceiptRefreshKeys,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,

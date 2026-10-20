@@ -139,7 +139,7 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
       setupSnapshotCommandState: { phase: { phaseId: "D03" } },
       currentVote: { hasVote: "true", text: "Rowan · S4" },
       receiptCount: 1,
-      receiptStatusText: "Ack: stream seqs 907",
+      receiptStatusText: "Saved.",
       receiptRefreshKeys: "votecount,commandState",
     },
     hostResolutionProof: {

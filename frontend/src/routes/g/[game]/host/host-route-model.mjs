@@ -52,7 +52,7 @@ export function buildHostConsoleRouteData({
   principalId,
   coldLoad = null,
   fixtureMode = false,
-  nowSeconds = Math.floor(Date.now() / 1000),
+  nowSeconds = fixtureMode ? 1781806740 : Math.floor(Date.now() / 1000),
 }) {
   const gameId = normalizeGame(game);
   const commandPrincipalId = normalizePrincipal(principalId);
@@ -87,6 +87,7 @@ export function buildHostConsoleRouteData({
   ).length;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
+    roster: hostProjection.roster,
     phase: hostProjection.phase,
     replacement: hostProjection.replacement,
     completed: hostProjection.completed,
@@ -110,6 +111,7 @@ export function buildHostConsoleRouteData({
     commandContext: {
       gameId,
       principalId: commandPrincipalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     },
@@ -125,19 +127,20 @@ export function buildHostConsoleRouteData({
     }),
     game: Object.freeze({
       id: gameId,
-      label: gameId,
+      label: coldLoad.hostConsoleState?.title ?? (fixtureMode ? "Midsummer Invitational" : "Game"),
     }),
     session: Object.freeze({
       principalId: commandPrincipalId,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "moderator",
-      eyebrow: gameId,
+      eyebrow: coldLoad.hostConsoleState?.title ?? "Game",
       title: "Host console",
       summary: hostConsoleSummary({
         phase: hostProjection.phase,
         replacement: hostProjection.replacement,
       }),
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
@@ -149,6 +152,7 @@ export function buildHostConsoleRouteData({
     commandContext: Object.freeze({
       gameId,
       principalId: commandPrincipalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     }),
@@ -451,6 +455,8 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
     Object.freeze({
       prompt_id: "D01:skip_next_day:slot_1",
       kind: "skip_next_day",
+      label: "Skip the next day?",
+      description: "A Beloved Princess died. Decide whether the next day should be skipped.",
       reason: "beloved_princess_death",
       status: "pending",
       phase_id: "D01",

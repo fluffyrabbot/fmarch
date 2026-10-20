@@ -390,12 +390,10 @@ export const roles = Object.freeze([
     }),
     interactionGeometryBudget: Object.freeze({
       feedback: Object.freeze({
-        anchorSelector: '[data-testid="player-primary-action-zone"]',
-        targetSelector: '[data-testid="player-command-status"]',
+        anchorSelector: '[data-testid="player-game-bar"]',
+        targetSelector: '[data-testid="player-feedback"]',
         maxAnchorShiftPx: 1,
-        // The status line sits under the game bar and the dock at the bottom:
-        // both must stay on screen together, not beside each other.
-        maxCombinedSpanViewportRatio: 1,
+        maxCombinedSpanViewportRatio: 0.9,
         maxDocumentGrowthViewportRatio: 0.25,
       }),
     }),
@@ -404,6 +402,7 @@ export const roles = Object.freeze([
         '[data-testid="command-recovery-retry-submit_post"]',
       afterFocusSelector:
         '[data-testid="player-composer"] [data-action="submit_post"]',
+      continuityAnchorSelector: '[data-testid="player-composer"] [data-action="submit_post"]',
       statusSelector: '[data-testid="player-command-status"]',
       maxScrollDeltaPx: 1,
       maxAnnouncementLatencyMs: 500,
@@ -508,7 +507,7 @@ export const roles = Object.freeze([
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
     mobileViewportBudget: Object.freeze({
       primaryActionSelector:
-        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 2.5,
     }),
@@ -525,6 +524,7 @@ export const roles = Object.freeze([
       feedback: Object.freeze({
         anchorSelector:
           '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        anchorContainerSelector: '[data-testid="host-decision-canvas"]',
         targetSelector: '[data-testid="host-command-status-extend_deadline"]',
         maxAnchorShiftPx: 1,
         maxCombinedSpanViewportRatio: 0.5,
@@ -537,6 +537,7 @@ export const roles = Object.freeze([
       afterFocusSelector:
         '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       statusSelector: '[data-testid="host-command-status-extend_deadline"]',
+      continuityAnchorSelector: '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       maxScrollDeltaPx: 1,
       maxAnnouncementLatencyMs: 500,
       maxFocusSettleMs: 500,
@@ -587,24 +588,22 @@ export const roles = Object.freeze([
     ]),
     visibleTestIds: [
       "host-console-bar",
-      "host-console-attention",
       "host-task-queue-summary",
       "host-task-queue",
       "host-task-day-event-resolve-event-cookie",
       "host-decision-canvas",
     ],
     overlapTestIds: [
-      "host-console-attention",
+      "host-console-bar",
       "host-task-queue-summary",
       "host-decision-canvas",
     ],
     statusRegions: [],
     touchSelectors: [
-      '[data-testid="host-task-deadline"]',
       '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       '[data-testid="host-task-day-event-resolve-event-cookie"]',
       '[data-testid="host-task-replacement"]',
-      '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="host-console-votecount-row-slot-2"]',
       '[data-testid="host-supporting-evidence"] > summary',
       '[data-testid="host-invite-workflows"] > summary',
@@ -614,9 +613,7 @@ export const roles = Object.freeze([
         testId: "moderator-primary-action-zone",
         zone: "moderator-primary-actions",
         targetSelectors: Object.freeze([
-          '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-extend_deadline_24h"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-extend_deadline_48h"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
         ]),
       }),
     ]),
@@ -807,7 +804,7 @@ function roleFocusScenario({ shell, expectedAfterNav = [] }) {
 }
 
 function routeStateFocusScenario({ role, actionTestId }) {
-  const linkedNavTestIds = navTestIds(role.nav, "link");
+  const linkedNavTestIds = role.focus.expectedOrder.filter(id => id.startsWith("role-nav-"));
   return Object.freeze({
     skipLinkTestId: role.focus.skipLinkTestId,
     mainTargetTestId: role.focus.mainTargetTestId,
@@ -815,6 +812,7 @@ function routeStateFocusScenario({ role, actionTestId }) {
     expectedOrder: Object.freeze([
       role.focus.skipLinkTestId,
       ...linkedNavTestIds,
+      "account-menu-toggle",
       actionTestId,
     ]),
     forbiddenTestIds: Object.freeze(navTestIds(role.nav, "blocked")),
@@ -828,7 +826,7 @@ function navFocusCoverageForScenario({ id, path, nav, focus }) {
     navigation: nav,
     skipLinkTestId: focus.skipLinkTestId,
     mainTargetTestId: focus.mainTargetTestId,
-    linkedNavTestIds: Object.freeze(navTestIds(nav, "link")),
+    linkedNavTestIds: Object.freeze(focus.expectedOrder.filter(id => id.startsWith("role-nav-"))),
     blockedNavTestIds: Object.freeze(navTestIds(nav, "blocked")),
     expectedFocusOrder: focus.expectedOrder,
     forbiddenFocusTestIds: focus.forbiddenTestIds,

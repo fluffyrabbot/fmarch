@@ -31,7 +31,7 @@ export function buildHostLifecycleControlCheckpoint({
   const enabled = lifecycleActionIds.length > 0;
   const disabledReason = enabled
     ? ""
-    : lifecycleDisabledReason({ lifecycleLabel, capabilityLabel: commandContext.capabilityLabel });
+    : lifecycleDisabledReason({ lifecycleLabel, capability: commandContext.capability });
   const actionState = enabled
     ? `enabled:${lifecycleActionIds.join(",")}`
     : `disabled:${disabledReason}`;
@@ -113,9 +113,9 @@ function phaseAffordanceLabel(actionIds) {
   return affordances.length === 0 ? "none" : affordances.join(",");
 }
 
-function lifecycleDisabledReason({ lifecycleLabel, capabilityLabel }) {
-  if (!/^HostOf\(/.test(String(capabilityLabel ?? ""))) {
-    return "requires HostOf capability";
+function lifecycleDisabledReason({ lifecycleLabel, capability }) {
+  if (capability?.kind !== "HostOf") {
+    return "only the host can change player status";
   }
   if (/dead|modkill/i.test(lifecycleLabel)) {
     return "slot lifecycle is terminal";

@@ -43,7 +43,8 @@ export async function proveThemes({ browser, baseUrl, artifactDir, proveContrast
             evidence.push({ themeId, contrast: await proveContrast(page) });
           }
           // Same-document route teardown must drop the game phase.
-          await page.locator('.fm-app-shell__brand').click();
+          await page.getByTestId("account-menu-toggle").click();
+          await page.getByTestId("role-nav-board").click();
           await page.waitForURL(`${baseUrl}/`);
           await page.waitForFunction(() => {
             const shell = document.querySelector('[data-component="fm-app-shell"]');

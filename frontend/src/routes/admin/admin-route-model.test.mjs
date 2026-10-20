@@ -406,6 +406,7 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
       "Set up games, manage access, and review system health.",
     capability: {
       visible: true,
+      kind: "GlobalAdmin",
       label: "Site administrator",
       testId: "admin-capability",
       className: "fm-capability-pill",
@@ -444,7 +445,7 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     "Create game midsummer from pack mafiascum",
   );
   assert.match(data.gameSetup[2].boundaryDetail, /host-gated/);
-  assert.equal(data.gameSetup[2].confirmLabel, "Delegate @cohost_c");
+  assert.equal(data.gameSetup[2].confirmLabel, "Delegate Cohost C");
   assert.equal(
     data.audit[0].href,
     "/games/midsummer/operator/proof-runs",

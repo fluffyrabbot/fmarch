@@ -33,6 +33,8 @@
   async function settle(callback) {
     const actionId = status.actionId;
     const scrollY = typeof window === "undefined" ? 0 : window.scrollY;
+    const returnSelector = `[data-command-recovery-return="${CSS.escape(actionId)}"]`;
+    const returnTop = document.querySelector(returnSelector)?.getBoundingClientRect().top;
     await callback(actionId);
     await tick();
     if (typeof document === "undefined") {
@@ -42,13 +44,17 @@
       `[data-testid="command-recovery-${CSS.escape(actionId)}"]`,
     );
     if (recoveryStillVisible) {
-      retryButton?.focus();
+      retryButton?.focus({ preventScroll: true });
       return;
     }
-    document.querySelector(
-      `[data-command-recovery-return="${CSS.escape(actionId)}"]`,
-    )?.focus({ preventScroll: true });
-    window.scrollTo(0, scrollY);
+    await new Promise(requestAnimationFrame);
+    const control = document.querySelector(returnSelector);
+    if (control && Number.isFinite(returnTop)) {
+      window.scrollBy({ top: control.getBoundingClientRect().top - returnTop, behavior: "instant" });
+    } else {
+      window.scrollTo({ top: scrollY, behavior: "instant" });
+    }
+    control?.focus({ preventScroll: true });
   }
 </script>
 

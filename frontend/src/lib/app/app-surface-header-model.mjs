@@ -16,6 +16,7 @@ export function buildAppSurfaceHeaderViewModel({
   title,
   summary = null,
   capabilityLabel = null,
+  capability = null,
   capabilityTestId = null,
   liveStatusTestId = null,
   className = APP_SURFACE_HEADER_CONTRACT.defaultClassName,
@@ -42,6 +43,7 @@ export function buildAppSurfaceHeaderViewModel({
         ? Object.freeze({ visible: false })
         : Object.freeze({
             visible: true,
+            ...(capability ? {kind: capability.kind} : {}),
             label: humanizeCapabilityLabel(requiredText(capabilityLabel, "capabilityLabel")),
             testId: capabilityTestId,
             className: APP_SURFACE_HEADER_CONTRACT.capabilityClassName,

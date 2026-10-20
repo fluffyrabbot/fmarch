@@ -90,8 +90,8 @@ test("app shell builds role navigation from resolved capabilities", () => {
     [
       ["board", true, "role-nav-board", 44],
       ["community", true, "role-nav-community", 44],
-      ["search", true, "role-nav-search", 44],
       ["inbox", true, "role-nav-inbox", 44],
+      ["search", true, "role-nav-search", 44],
       ["player", true, "role-nav-player", 44],
       ["moderator", false, "role-nav-moderator", 44],
       ["admin", false, "role-nav-admin", 44],
@@ -100,8 +100,8 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(roleNavTestId("moderator"), "role-nav-moderator");
   assert.equal(shell.surfaces[1].href, "/community");
   assert.equal(shell.surfaces[1].navigation, "link");
-  assert.equal(shell.surfaces[2].href, "/search");
-  assert.equal(shell.surfaces[3].href, "/inbox");
+  assert.equal(shell.surfaces[2].href, "/inbox");
+  assert.equal(shell.surfaces[3].href, "/search");
   assert.equal(shell.surfaces[4].href, "/g/midsummer");
   assert.equal(shell.surfaces[5].navigation, "blocked");
   assert.equal(shell.surfaces[5].ariaDisabled, "true");
@@ -191,10 +191,7 @@ test("board route is an app surface with capability-gated role actions", () => {
   });
   assert.equal(data.board.games[0].actions[0].href, "/games/midsummer");
   assert.equal(data.board.games[0].actions[0].navigation, "link");
-  assert.equal(data.board.games[0].actions[1].href, "/g/midsummer");
-  assert.equal(data.board.games[0].actions[1].navigation, "blocked");
-  assert.equal(data.board.games[0].actions[2].href, "/moderation");
-  assert.equal(data.board.games[0].actions[2].navigation, "link");
+  assert.equal(data.board.games[0].actions.length, 1);
   assert.equal(BOARD_ROUTE_CONTRACT.surfaceTestId, "board-surface");
   assert.equal(BOARD_ROUTE_CONTRACT.requiredText, "Games");
   assert.equal(workbenchActionTestId("player"), "workbench-action-player");
@@ -211,12 +208,11 @@ test("board actions block denied role transitions without links", () => {
   assert.deepEqual(
     data.board.games[0].actions.map((action) => [action.id, action.navigation]),
     [
-      ["public-thread", "link"],
       ["player", "link"],
-      ["moderator", "blocked"],
+      ["public-thread", "link"],
     ],
   );
-  assert.equal(data.board.games[0].actions[2].ariaDisabled, "true");
+  assert.equal(data.board.games[0].actions.some(action => action.id === "moderator"), false);
 });
 
 test("a public board does not present an arbitrary listed game as viewer context", () => {
@@ -245,16 +241,8 @@ test("shared shell keyboard order starts with skip link before allowed role navi
 
   assert.equal(focus.skipLinkTestId, APP_SHELL_CONTRACT.skipLinkTestId);
   assert.equal(focus.mainTargetTestId, APP_SHELL_CONTRACT.mainTargetTestId);
-  assert.deepEqual(focus.linkedNavTestIds, ["role-nav-board", "role-nav-community", "role-nav-search", "role-nav-inbox", "role-nav-player"]);
-  assert.deepEqual(focus.expectedOrder, [
-    "app-shell-skip-link",
-    "role-nav-board",
-    "role-nav-community",
-    "role-nav-search",
-    "role-nav-inbox",
-    "role-nav-player",
-    "player-command-submit",
-  ]);
+  assert.deepEqual(focus.linkedNavTestIds, []);
+  assert.deepEqual(focus.expectedOrder, ["app-shell-skip-link", "account-menu-toggle", "player-command-submit"]);
   assert.deepEqual(focus.forbiddenTestIds, [
     "role-nav-moderator",
     "role-nav-admin",
@@ -323,7 +311,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
   assert.equal(hostError.error.actionHref, "/");
   assert.equal(
     hostError.error.message,
-    "Host console for midsummer requires HostOf(midsummer).",
+    "You do not have access to this page. Return to Games to choose an available game.",
   );
 
   const adminError = buildRouteErrorData({
@@ -418,7 +406,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
   assert.equal(pending.title, "Loading game surface");
   assert.equal(
     pending.message,
-    "Fetching thread, channel, votecount, deadline, and private projection state.",
+    "Loading posts, votes, and your game information.",
   );
   assert.equal(pending.activeNavTestId, "role-nav-player");
   assert.equal(pending.sessionViewer, "Your account");

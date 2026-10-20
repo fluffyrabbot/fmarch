@@ -128,9 +128,6 @@ import {
   playerVoteOptionForTarget,
   withdrawPlayerVote,
 } from "./player_vote_picker_driver.mjs";
-import {
-  playerCommandStatusMessage,
-} from "./player_command_proof_reads.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -1358,8 +1355,10 @@ async function bootstrapSeededGameThroughSetup(card) {
     await sendCommand("host_h", {
       CreateGame: { game: bootstrapGame, pack: "mafiascum" },
     });
+    const setupProfiles = new Map();
     for (const row of uiBootstrapSetupRoster) {
       await ensureLocalAccount({ principalId: row.user });
+      setupProfiles.set(row.user, await ensureSetupPublicProfile(row.user));
     }
     const bootstrapSession = await createAccountLoginCredential({
       principalId: "host_h",
@@ -1382,6 +1381,8 @@ async function bootstrapSeededGameThroughSetup(card) {
       roster: uiBootstrapSetupRoster.map((row) => ({
         ...row,
         user: authorityPrincipalId(row.user),
+        handle: setupProfiles.get(row.user).handle,
+        displayName: setupProfiles.get(row.user).display_name,
       })),
     });
     return preserveFixturePrincipalAliases({ ...scenario, game: bootstrapGame });
@@ -1519,9 +1520,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
   const assignedPrincipalId = "setup-extra-player";
   const assignedAuthorityPrincipalId = authorityPrincipalId(assignedPrincipalId);
-  // The setup form accepts an exact principal identifier; seed that identity
-  // so the authoritative assignment command can bind it to the slot.
   await ensureLocalAccount({ principalId: assignedPrincipalId });
+  const assignedProfile = await ensureSetupPublicProfile(assignedPrincipalId);
   const setupSession = await createAccountLoginCredential({
     principalId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
@@ -1626,9 +1626,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     ).filter((slot) => slot.slotId === addedSlotId).length;
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
-    await rosterRow
-      .locator('input[name="principalId"]')
-      .fill(assignedAuthorityPrincipalId);
+    await rosterRow.getByLabel("Player handle").fill(assignedProfile.handle);
+    await rosterRow.getByRole("button", {name: `${assignedProfile.display_name} · @${assignedProfile.handle}`, exact: true}).click();
     await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
@@ -2626,7 +2625,9 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   const rejectedVoteReceipt = await staleVotePage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const rejectedVoteReceiptText = await playerCommandStatusMessage(staleVotePage);
+  const rejectedVoteReceiptText = await staleVotePage
+    .getByTestId("player-command-status")
+    .innerText();
   const rejectedVoteDispatchPlan = await staleVotePage.evaluate(
     () => window.__fmarchPlayerCommandDispatchBridgePlan,
   );
@@ -2672,7 +2673,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
     rejectedVoteReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "commandState",
     ) !== true ||
-    !rejectedVoteReceiptText.includes("Reject PhaseLocked") ||
+    !rejectedVoteReceiptText.includes("phase is closed") ||
     !isStaleVotePhaseLockedMessage(rejectedVote.message) ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
@@ -5157,7 +5158,7 @@ async function verifySeededD02VoteNightTransition({
       n02ActionAfterSubmit.buttons.some(
         (button) => button.action === "submit_action:factional_kill",
       ) ||
-      !n02ActionAfterSubmit.receiptStatusText.includes("Ack") ||
+      !n02ActionAfterSubmit.receiptStatusText.includes("Saved.") ||
       resolveN02.commandStatus?.state !== "ack" ||
       hostAfterResolveN02.phase?.id !== "N02" ||
       hostAfterResolveN02.phase?.locked !== true ||
@@ -6568,7 +6569,9 @@ async function submitStaleD02VoteAfterTransition({ page, voteTarget }) {
   const currentReceipt = await page.evaluate(
     () => window.__fmarchPlayerProjection?.currentReceipt ?? null,
   );
-  const receiptStatusText = await playerCommandStatusMessage(page);
+  const receiptStatusText = await page
+    .getByTestId("player-command-status")
+    .innerText();
   const buttonsAfterReject = await playerCommandButtons(page);
   const currentVoteAfterReject = await playerCurrentVoteSnapshot(page);
   return {
@@ -7533,7 +7536,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   const currentReceipt = await page.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await playerCommandStatusMessage(page);
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -7799,8 +7802,8 @@ async function submitConcurrentActionRace({
     ),
   ]);
   const [liveReceiptStatusText, concurrentReceiptStatusText] = await Promise.all([
-    playerCommandStatusMessage(actionPage),
-    playerCommandStatusMessage(concurrentActionPage),
+    actionPage.getByTestId("player-command-status").innerText(),
+    concurrentActionPage.getByTestId("player-command-status").innerText(),
   ]);
   const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
@@ -7990,7 +7993,9 @@ async function submitActionIdempotentRetry({
   const currentReceipt = await staleActionRetryPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await playerCommandStatusMessage(staleActionRetryPage);
+  const receiptStatusText = await staleActionRetryPage
+    .getByTestId("player-command-status")
+    .innerText();
   const apiCommandStateAfterRetry = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8017,7 +8022,7 @@ async function submitActionIdempotentRetry({
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
     ) === true ||
-    !receiptStatusText.includes("Ack") ||
+    !receiptStatusText.includes("Saved.") ||
     commandStateAfterRetry?.actorSlot !== "slot_4" ||
     commandStateAfterRetry?.actorAlive !== true ||
     commandStateAfterRetry?.actorStatus !== "alive" ||
@@ -8103,7 +8108,9 @@ async function submitStaleSameActionRecovery({
   const currentReceipt = await staleSameActionPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await playerCommandStatusMessage(staleSameActionPage);
+  const receiptStatusText = await staleSameActionPage
+    .getByTestId("player-command-status")
+    .innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8131,8 +8138,8 @@ async function submitStaleSameActionRecovery({
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
     ) === true ||
-    !receiptStatusText.includes("Reject ActionAlreadySubmitted") ||
-    !receiptStatusText.includes("refresh and use current controls") ||
+    !receiptStatusText.includes("already submitted") ||
+    !receiptStatusText.includes("Check your current action") ||
     commandStateAfterReject?.actorSlot !== "slot_4" ||
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
@@ -8218,7 +8225,9 @@ async function submitStaleActionConflict({
   const currentReceipt = await staleActionPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await playerCommandStatusMessage(staleActionPage);
+  const receiptStatusText = await staleActionPage
+    .getByTestId("player-command-status")
+    .innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8509,7 +8518,7 @@ async function verifySeededPrivateChannel({
   const action = deniedPage.getByTestId("route-error-action");
   const actionLabel = await action.innerText();
   const actionHref = await action.getAttribute("href");
-  if (status !== 403 || actionLabel !== "Back to board" || actionHref !== "/") {
+  if (status !== 403 || actionLabel !== "Back to Games" || actionHref !== "/") {
     throw new Error(
       `private channel 403 recovery drifted: ${JSON.stringify({ status, actionLabel, actionHref })}`,
     );
@@ -8550,7 +8559,7 @@ async function verifySeededPrivateChannel({
     stalePostAfterPhaseTransition,
     completedGameRecovery,
     proof:
-      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, the denied player role URL rendered the 403 Back to board recovery for the same channel, a disposable private-channel role URL proved stale SubmitPost recovery after host phase resolution, and another disposable private-channel role URL proved completed-game stale SubmitPost recovery plus reload closure.",
+      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, the denied player role URL rendered the 403 Back to Games recovery for the same channel, a disposable private-channel role URL proved stale SubmitPost recovery after host phase resolution, and another disposable private-channel role URL proved completed-game stale SubmitPost recovery plus reload closure.",
   };
 }
 
@@ -8766,7 +8775,9 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       postBody,
       expectedState: "ack",
     });
-    const receiptStatusText = await playerCommandStatusMessage(playerEntry.page);
+    const receiptStatusText = await playerEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     await playerEntry.page.waitForFunction(
       ({ expectedBody }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
@@ -9013,7 +9024,9 @@ async function verifyCompletedPrivateChannelRecovery({
         (receipt) => receipt.current === true,
       ),
     );
-    const receiptStatusText = await playerCommandStatusMessage(playerEntry.page);
+    const receiptStatusText = await playerEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     const threadPostBodiesAfterReject = await playerEntry.page.evaluate(() =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).map(
         (post) => post.body,
@@ -12342,7 +12355,9 @@ async function playerProjectionSnapshot(
     );
   }
   if (receiptStatusText) {
-    snapshot.receiptStatusText = await playerCommandStatusMessage(page);
+    snapshot.receiptStatusText = await page
+      .getByTestId("player-command-status")
+      .innerText();
   }
   if (notifications) {
     snapshot.notifications = await page.evaluate(
@@ -15074,7 +15089,7 @@ async function verifyReplacementStalePrivateChannel({
     staleRoute.status !== 403 ||
     staleRoute.responseStatus !== 403 ||
     !staleRoute.message.includes("requires scoped channel capability") ||
-    staleRoute.actionLabel !== "Back to board" ||
+    staleRoute.actionLabel !== "Back to Games" ||
     staleRoute.actionHref !== "/" ||
     rowanRoute.channelContextId !== factionDayChatChannel ||
     rowanRoute.actorSlot !== "slot-7" ||
@@ -22666,7 +22681,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
+    const receiptStatusText = await replacementEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     const rowanPrivateIsolationAfterAck = await replacementEntry.page.evaluate(() => {
       const notifications = window.__fmarchPlayerProjection?.notifications ?? [];
       const investigationResults =
@@ -22914,7 +22931,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
       currentReceipt?.actionId !== scenario.commandAction ||
       currentReceipt?.state !== "ack" ||
-      !receiptStatusText.includes("Ack") ||
+      !receiptStatusText.includes("Saved.") ||
       commandStateAfterAck?.actorSlot !== scenario.actorSlot ||
       commandStateAfterAck?.actorStatus !== "alive" ||
       commandStateAfterAck?.phase?.phaseId !== "D01" ||
@@ -23302,7 +23319,9 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
+    const receiptStatusText = await replacementEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
@@ -25072,7 +25091,9 @@ async function verifyStaleReplacementActionAfterResolve({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
+    const receiptStatusText = await replacementEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
@@ -25174,7 +25195,7 @@ async function verifyStaleReplacementActionAfterResolve({
       currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
         true ||
       !receiptStatusText.includes(scenario.rejectionStatusText) ||
-      !receiptStatusText.includes(scenario.staleActionStateMessageFragment) ||
+      !receiptStatusText.includes(scenario.recoveryStatusText) ||
       commandStateAfterReject?.actorSlot !== scenario.actorSlot ||
       commandStateAfterReject?.actorAlive !== true ||
       commandStateAfterReject?.actorStatus !== "alive" ||
@@ -27049,4 +27070,22 @@ function lastServerOutputLine() {
     .map((line) => line.trim())
     .filter(Boolean);
   return lines.at(-1) ?? "";
+}
+
+
+async function ensureSetupPublicProfile(principalId) {
+  const token = await mintLocalProofSession({principalId, globalCapabilities: []});
+  const headers = {authorization: `Bearer ${token}`, "content-type": "application/json"};
+  const response = await fetch(`${apiBaseUrl}/profiles/me/editor`, {headers});
+  if (response.ok) {
+    const existing = await response.json();
+    if (existing.visibility === "public") return existing;
+    return fetchJson(`${apiBaseUrl}/profiles/me`, {method: "PUT", headers, body: JSON.stringify({display_name: existing.display_name, bio: existing.bio, visibility: "public", expected_revision: existing.revision})});
+  }
+  if (response.status !== 404) throw new Error(`Cannot read setup member profile: ${response.status}`);
+  return fetchJson(`${apiBaseUrl}/profiles`, {method: "POST", headers, body: JSON.stringify({
+    handle: principalId.replace(/[^a-z0-9]/g, ""),
+    display_name: principalId.split(/[-_]/).map(word => word[0].toUpperCase()+word.slice(1)).join(" "),
+    bio: "Setup acceptance participant.", visibility: "public",
+  })});
 }

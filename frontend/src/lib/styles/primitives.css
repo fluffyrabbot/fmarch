@@ -256,7 +256,7 @@
   min-inline-size: 0;
   padding-block-start: 14px;
   scroll-margin-block-start: calc(
-    var(--fm-app-topbar-block-size, 64px) + var(--fm-app-sticky-rail-gap, 16px)
+    var(--fm-app-topbar-block-size, 64px) + var(--fm-game-bar-block-size, 0px) + var(--fm-app-sticky-rail-gap, 16px)
   );
 }
 

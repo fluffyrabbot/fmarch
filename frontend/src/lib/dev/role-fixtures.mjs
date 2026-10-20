@@ -116,7 +116,7 @@ export const mockStateProjections = Object.freeze({
               intent: "beloved_princess_death",
               consequence: "resolve pack-defined skip_next_day policy",
               phase_id: "D01",
-              subject_slot: "slot_1",
+              subject_slot: "slot-1",
               source_id: "D01:skip_next_day:slot_1",
               allowed_commands: [
                 {
@@ -158,7 +158,9 @@ export const mockStateProjections = Object.freeze({
             event_index: 0,
             prompt_id: "D01:skip_next_day:slot_1",
             kind: "skip_next_day",
-            subject_slot: "slot_1",
+            label: "Skip the next day?",
+            description: "A Beloved Princess died. Decide whether the next day should be skipped.",
+            subject_slot: "slot-1",
             reason: "beloved_princess_death",
             metadata: {},
             status: "pending",

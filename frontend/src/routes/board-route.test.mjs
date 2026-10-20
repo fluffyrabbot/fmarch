@@ -20,6 +20,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
       return Response.json({
         games: [
           {
+            deadline: null, seats_filled: 7, seats_total: 13, host_name: "Rowan",
             game: FIRST_GAME,
             pack: "mafiascum",
             status: "active",
@@ -29,6 +30,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
             origin_topic: null,
           },
           {
+            deadline: null, seats_filled: 13, seats_total: 13, host_name: "Rowan",
             game: SECOND_GAME,
             pack: "mafia_universe",
             status: "completed",
@@ -56,9 +58,9 @@ test("board load opts into the root-owned shell with an API-backed public index"
     ],
   );
   assert.equal(data.board.games[0].actions[0].href, `/games/${FIRST_GAME}`);
-  assert.equal(data.board.games[0].actions[1].href, `/g/${FIRST_GAME}`);
+  assert.equal(data.board.games[0].actions.length, 1);
   assert.equal(data.board.games[1].actions[0].navigation, "link");
-  assert.equal(data.board.games[1].actions[1].navigation, "blocked");
+  assert.equal(data.board.games[1].actions.length, 1);
   assert.equal(data.board.olderHref, null);
   assert.equal(data.routeState, null);
 });
@@ -240,6 +242,7 @@ test("the board surface renders a read-only degraded status with safe retry cont
 
 function gameEntry(overrides = {}) {
   return {
+    deadline: null, seats_filled: 7, seats_total: 13, host_name: "Rowan",
     game: FIRST_GAME,
     pack: "mafiascum",
     status: "active",

@@ -59,7 +59,7 @@ export function playerActionSubmissionAckCheckpointPassed(surface) {
     proof.checkpointActionStateAfterAck === scenario.checkpointActionState &&
     proof.receiptCount === 1 &&
     String(proof.receiptStatusText ?? "").includes(
-      `Ack: stream seqs ${scenario.streamSeq}`,
+      "Saved.",
     )
   );
 }
@@ -243,7 +243,7 @@ export function staleDayTwoVoteAfterTransitionRecoveryScenario() {
     checkpointActionState: "enabled:submit_action:factional_kill",
     checkpointTargetSlots: "slot-3",
     receiptCount: 1,
-    receiptStatusTextIncludes: "stale vote state",
+    receiptStatusTextIncludes: "phase is closed",
   };
 }
 
@@ -265,6 +265,6 @@ export function staleNightOneActionAfterTransitionRecoveryScenario() {
     checkpointActionState: "enabled:submit_action:factional_kill",
     checkpointTargetSlots: "slot-3",
     receiptCount: 2,
-    receiptStatusTextIncludes: "reject phaselocked: phase locked",
+    receiptStatusTextIncludes: "phase is closed",
   };
 }

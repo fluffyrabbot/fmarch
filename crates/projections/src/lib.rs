@@ -96,9 +96,11 @@ pub use reading_checkpoints::{reading_checkpoint, set_reading_checkpoint};
 mod effect_projection;
 mod game_origin;
 mod replacement_candidates;
+mod setup_candidates;
 pub use replacement_candidates::{
     host_replacement_candidate, replacement_principal_is_active, HostReplacementCandidateRow,
 };
+pub use setup_candidates::{setup_candidates, SetupCandidate};
 mod moderation_writes;
 mod posting_budget;
 mod private_channel_projection;
@@ -589,6 +591,15 @@ pub struct GameIndexRow {
     pub updated_seq: i64,
     pub completed_seq: Option<i64>,
     pub origin_topic: Option<GameOriginTopicRow>,
+    pub overview: GameOverview,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameOverview {
+    pub deadline: Option<i64>,
+    pub seats_filled: i64,
+    pub seats_total: i64,
+    pub host_name: Option<String>,
 }
 
 /// Stable keyset cursor for the public game index.
@@ -7309,12 +7320,10 @@ pub async fn game_roster(
     pool: &PgPool,
     game_id: Uuid,
 ) -> Result<Vec<RosterSeatRow>, ProjectionError> {
-    let slots = sqlx::query(
-        "SELECT slot_id, alive, status FROM slot_state WHERE game_id = $1",
-    )
-    .bind(game_id)
-    .fetch_all(pool)
-    .await?;
+    let slots = sqlx::query("SELECT slot_id, alive, status FROM slot_state WHERE game_id = $1")
+        .bind(game_id)
+        .fetch_all(pool)
+        .await?;
     let epochs = sqlx::query(
         "SELECT slot_id, persona_id, began_seq, ended_seq FROM slot_occupancy_epoch \
          WHERE game_id = $1 ORDER BY slot_id, began_seq, occupancy_id",
@@ -7371,7 +7380,10 @@ pub async fn game_roster(
         seat.occupancies.push(RosterOccupancyRow {
             began_seq: row.get("began_seq"),
             ended_seq: row.get("ended_seq"),
-            names: names_by_persona.get(&persona_id).cloned().unwrap_or_default(),
+            names: names_by_persona
+                .get(&persona_id)
+                .cloned()
+                .unwrap_or_default(),
         });
     }
 
@@ -7844,6 +7856,7 @@ pub async fn game_index(
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
                 origin_topic: None,
+                overview: GameOverview::default(),
             })
         })
         .collect::<Result<_, ProjectionError>>()?;
@@ -7913,6 +7926,7 @@ pub async fn operator_game_index(
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
                 origin_topic: None,
+                overview: GameOverview::default(),
             })
         })
         .collect::<Result<_, ProjectionError>>()?;
@@ -7953,6 +7967,7 @@ pub async fn public_game_by_id(
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
                 origin_topic: None,
+                overview: GameOverview::default(),
             })
         })
         .transpose()?;

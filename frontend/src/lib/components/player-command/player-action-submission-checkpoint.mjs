@@ -84,7 +84,7 @@ export function buildPlayerActionSubmissionCheckpoint({
     actionState: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.actionStateTestId,
       label: "Action state",
-      value: actionState,
+      value: legalAction === null ? "Not available" : "Available",
     }),
     target: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.targetTestId,
@@ -92,25 +92,25 @@ export function buildPlayerActionSubmissionCheckpoint({
       value:
         selectedAction === ""
           ? "none"
-          : `${selectedAction} -> ${targetSlots.join(",") || "no target"}`,
+          : targetSlots.map((slot) => seatNames(commandState?.roster).label(slot)).join(", ") || "No target needed",
     }),
     receipt: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.receiptTestId,
-      label: "Receipt state",
-      value: receiptState,
+      label: "Submission",
+      value: commandStatus?.state === "ack" ? "Sent" : commandStatus?.state === "pending" ? "Sending…" : commandStatus?.state === "interrupted" ? "Not yet confirmed" : commandStatus?.state === "reject" ? "Not accepted" : "Not submitted",
     }),
     recovery: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.recoveryTestId,
-      label: "Stale recovery",
-      value: "Reject PhaseLocked: refresh command state and use current action controls.",
+      label: "When the phase changes",
+      value: "Check the current phase before choosing an action.",
     }),
     status: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.statusTestId,
       state: legalAction === null ? "pending" : "ack",
       message:
         legalAction === null
-          ? `Player action unavailable: ${actionDisabledReason({ commandState, player })}`
-          : "Player action submission is reachable from this role URL",
+          ? `Your night action is unavailable: ${actionDisabledReason({ commandState, player })}.`
+          : "You can choose your night action.",
     }),
   });
 }
@@ -120,10 +120,10 @@ function actionDisabledReason({ commandState, player }) {
     return "game complete";
   }
   if (player.alive === false || commandState?.actorAlive === false) {
-    return "actor is not alive";
+    return "you are no longer alive";
   }
   if (commandState?.phase?.locked === true) {
     return "phase locked";
   }
-  return "no legal action available";
+  return "no action is available now";
 }

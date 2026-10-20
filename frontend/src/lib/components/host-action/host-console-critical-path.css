@@ -307,6 +307,9 @@
 }
 
 .host-console-bar {
+  position: sticky;
+  top: 0;
+  z-index: 11;
   align-items: center;
   background: var(--fm-raised-veil);
   border-block-end: 1px solid var(--fm-line);
@@ -622,12 +625,12 @@
 @media (max-width: 760px) {
   .host-console-bar {
     gap: 8px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     min-block-size: 60px;
     padding-block: 6px;
   }
 
-  .host-console-bar dl > div:not(:first-child) {
+  .host-console-bar dl > div:first-child {
     display: none;
   }
 

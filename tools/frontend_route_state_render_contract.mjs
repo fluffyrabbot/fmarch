@@ -14,8 +14,8 @@ import {
   PLAYER_COMMAND_PANEL_CONTRACT,
 } from "../frontend/src/lib/components/player-command/player-command-panel-model.mjs";
 import {
-  PLAYER_COMMAND_STATUS_LINE_CONTRACT,
-} from "../frontend/src/lib/components/player-command/player-command-status-line-model.mjs";
+  PLAYER_COMMAND_RECEIPT_CONTRACT,
+} from "../frontend/src/lib/components/player-command/player-command-receipt-model.mjs";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
@@ -310,7 +310,7 @@ function proveSingleRootShell(shellNavCoverage) {
 
 async function proveRenderedFeedbackRailMarkup(bundle) {
   const admin = await proveRenderedAdminCommandActivity(bundle);
-  const player = await proveRenderedPlayerCommandStatusLine(bundle);
+  const player = await proveRenderedPlayerCommandReceipt(bundle);
   const moderator = await proveRenderedModeratorCommandActivity(bundle);
 
   return {
@@ -362,65 +362,27 @@ async function proveRenderedAdminCommandActivity(bundle) {
   };
 }
 
-async function proveRenderedPlayerCommandStatusLine(bundle) {
-  const html = (await bundle.renderPlayerCommandStatusLine()).html;
-  const statusTestId = PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId;
-  assertIncludes(html, `data-testid="${statusTestId}"`, "player command status line");
-  assertIncludes(html, 'data-state="reject"', "player command status reject");
-  assertIncludes(html, 'aria-live="assertive"', "player command rejection is announced");
-  assert.match(
-    html,
-    /Your vote didn(?:'|&#39;|&apos;)t go through: the phase has closed\./u,
-    "player command rejection speaks about the vote",
-  );
-  const retryableStatus = {
-    actionId: "submit_vote", commandId: "retained-vote-id", state: "reject",
-    error: "StreamConflict", retryable: true, message: "Reject StreamConflict",
-  };
-  const retry = (await bundle.renderPlayerCommandStatusLine({
-    status: retryableStatus, retryAvailable: true,
-  })).html;
-  assertIncludes(retry, 'data-testid="command-recovery-retry-submit_vote"', "retained rejection retry control");
-  assertIncludes(retry, 'data-testid="command-recovery-cancel-submit_vote"', "retained rejection dismiss control");
-  assertIncludes(retry, 'data-command-id="retained-vote-id"', "retained retry identity");
-  assertIncludes(retry, 'data-outcome="confirmed-rejection"', "confirmed rejection semantics");
-  assertIncludes(retry, ">Retry<", "retry label");
-  for (const scenario of [
-    { status: retryableStatus },
-    { status: { ...retryableStatus, retryable: false }, retryAvailable: true },
-    { status: { ...retryableStatus, state: "ack" }, retryAvailable: true },
-  ]) {
-    const unavailable = (await bundle.renderPlayerCommandStatusLine(scenario)).html;
-    assert.ok(!unavailable.includes('data-testid="command-recovery-retry-submit_vote"'),
-      "confirmed recovery requires a retained retryable rejection");
-  }
-  const unknown = (await bundle.renderPlayerCommandStatusLine({
-    status: { ...retryableStatus, state: "interrupted", interruption: "connection_lost",
-      message: "Connection lost before confirmation. The command may still have reached the server." },
-  })).html;
-  assertIncludes(unknown, 'data-outcome="unknown"', "unknown outcome semantics");
-  assertIncludes(unknown, "Your vote may not have gone through.", "unknown outcome copy");
-  const unavailableRetry = (await bundle.renderPlayerCommandStatusLine({
-    status: retryableStatus, retryAvailable: true, retryEnabled: false,
-  })).html;
-  assert.match(unavailableRetry, /<button[^>]*data-testid="command-recovery-retry-submit_vote"[^>]*disabled/s,
-    "retry waits for recovered authority and projection health");
-  for (const [label, rendered] of [["reject", html], ["retry", retry], ["unknown", unknown]]) {
-    assert.doesNotMatch(
-      rendered.replace(/<[^>]*>/gu, " "),
-      /\b(Reject|receipt|command identity|command ID|StreamConflict|PhaseLocked)\b/iu,
-      `player ${label} status line shows transport copy`,
-    );
-  }
-  return {
-    role: "player",
-    render: "renderPlayerCommandStatusLine",
-    component: "command-status-line",
-    testId: statusTestId,
-    statusTestId,
-    statusState: "reject",
-    htmlBytes: Buffer.byteLength(html),
-  };
+async function proveRenderedPlayerCommandReceipt(bundle) {
+  const { html } = await bundle.renderPlayerCommandReceipt();
+  assertIncludes(html, 'data-component="player-feedback"', "player game-bar feedback");
+  assertIncludes(html, "phase is closed", "actionable rejection");
+  assertExcludes(html, "command receipt", "technical receipt copy");
+  const retryable = { actionId: "submit_vote", commandId: "retained-vote-id", state: "reject", error: "StreamConflict", retryable: true };
+  const retry = (await bundle.renderPlayerCommandReceipt({ status: retryable, retryAvailable: true })).html;
+  assertIncludes(retry, 'data-testid="command-recovery-retry-submit_vote"', "retry retained attempt");
+  assertIncludes(retry, 'data-command-id="retained-vote-id"', "same request identity");
+  assertIncludes(retry, 'data-outcome="confirmed-rejection"', "known rejection");
+  assertIncludes(retry, "Dismiss", "dismiss feedback");
+  const ack = (await bundle.renderPlayerCommandReceipt({ status: { ...retryable, state: "ack" } })).html;
+  assertExcludes(ack, 'data-testid="player-feedback"', "resolved feedback clears");
+  assertIncludes(ack, 'aria-live="polite"', "successful save announced");
+  const unknown = (await bundle.renderPlayerCommandReceipt({ status: { ...retryable, state: "interrupted", interruption: "connection_lost" } })).html;
+  assertIncludes(unknown, "may not have gone through", "unknown outcome");
+  const trace = assertCommandTraceAttributes(html, {
+    testId: "player-feedback", surface: "player", actionId: "submit_vote",
+    statusKey: "submit_vote", dispatchKind: "submit_vote", refreshKeys: "votecount,commandState",
+  });
+  return { role: "player", render: "renderPlayerCommandReceipt", component: "player-feedback", testId: "player-feedback", itemTestId: "player-feedback", statusTestId: "player-command-status", statusState: "reject", commandTrace: trace, htmlBytes: Buffer.byteLength(html) };
 }
 
 async function proveRenderedModeratorCommandActivity(bundle) {
@@ -742,10 +704,10 @@ async function proveRenderedRouteErrorSurface(bundle) {
   assertIncludes(html, "Access blocked", "route error title");
   assertIncludes(
     html,
-    "Channel private:role_pm:slot-7 is not visible.",
+    "You do not have access to this page. Return to Games to choose an available game.",
     "route error message",
   );
-  assertIncludes(html, "/g/midsummer/c/private%3Arole_pm%3Aslot-7", "route error path");
+  assert.equal(html.includes("private%3Arole_pm%3Aslot-7"), false, "error page must not expose internal channel paths");
   assertIncludes(
     html,
     `data-testid="${APP_SHELL_CONTRACT.sessionTestId}"`,
@@ -756,17 +718,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
     `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}">Your account`,
     "route error session viewer",
   );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionCapabilityTestId}">ChannelMember + SlotOccupant`,
-    "route error session capabilities",
-  );
-  assert.notEqual(playerNavTag, null, "route error player nav missing");
-  assert.equal(
-    playerNavTag.includes('aria-current="page"'),
-    true,
-    "route error player nav is not active",
-  );
+  assert.equal(playerNavTag, null, "obsolete player role tab must be absent");
 
   return {
     role: "player",
@@ -780,7 +732,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
     activeNavTestId: roleNavTestId("player"),
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     htmlBytes: Buffer.byteLength(html),
   };
 }
@@ -821,15 +773,10 @@ async function proveRenderedRouteLoadingSurface(bundle) {
   assertIncludes(html, "Loading game surface", "route loading title");
   assertIncludes(
     html,
-    "Fetching thread, channel, votecount, deadline, and private projection state.",
+    "Loading posts, votes, and your game information.",
     "route loading message",
   );
-  assert.notEqual(playerNavTag, null, "route loading player nav missing");
-  assert.equal(
-    playerNavTag.includes('aria-current="page"'),
-    true,
-    "route loading player nav is not active",
-  );
+  assert.equal(playerNavTag, null, "obsolete player role tab must be absent");
 
   return {
     role: "player",
@@ -890,7 +837,7 @@ async function proveRenderedNavigationPendingLayer(bundle) {
   assertIncludes(html, "Loading game surface", "navigation pending title");
   assertIncludes(
     html,
-    "Fetching thread, channel, votecount, deadline, and private projection state.",
+    "Loading posts, votes, and your game information.",
     "navigation pending message",
   );
   assert.equal(
@@ -1172,10 +1119,10 @@ async function proveRenderedModeratorHostPromptConfirmation(bundle) {
     'data-testid="critical-host-action-confirmation-message"',
     "host prompt confirmation message",
   );
-  assertIncludes(html, "Resolve skip_next_day", "host prompt confirmation prompt label");
+  assertIncludes(html, "Skip the next day?", "host prompt confirmation prompt label");
   assertIncludes(
     html,
-    "acknowledge prompt and apply pack policy",
+    "A Beloved Princess died. Decide whether the next day should be skipped.",
     "host prompt confirmation outcome",
   );
   assertIncludes(
@@ -1654,7 +1601,10 @@ async function proveRenderedPlayerSurface(bundle) {
     deadlineValue: "Jun 19, 2026, 9:00 PM",
     deadlineState: "open",
     deadlineProjected: true,
-    commandStatusTestId: PLAYER_COMMAND_STATUS_LINE_CONTRACT.testId,
+    commandReceiptTestId: "player-command-receipt",
+    commandReceiptEmptyTestId: null,
+    commandReceiptCurrentStatusTestId:
+      PLAYER_COMMAND_RECEIPT_CONTRACT.currentStatusTestId,
     commandChannelContext: {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
       channelId: "main",
@@ -1802,7 +1752,7 @@ async function proveRenderedModeratorSurface(bundle) {
   );
   assertIncludes(
     html,
-    `Hosting as @${renderFixturePrincipalIds.hostH}`,
+    "Technical details",
     "moderator command authority summary",
   );
   assertIncludes(html, "Technical access", "moderator command authority label");
@@ -1960,11 +1910,7 @@ function assertRenderedScenario({ html, scenario, view }) {
   assertAppShellSkipLink(html, scenario.id);
   assertAppShellTopbar(html, scenario.id);
   assertAppShellSession(html, scenario.id);
-  assertIncludes(
-    html,
-    `aria-label="${APP_SHELL_CONTRACT.navLabel}"`,
-    `${scenario.id} shell nav label`,
-  );
+  assertIncludes(html, 'aria-label="Account navigation"', `${scenario.id} account navigation`);
   assertIncludes(
     html,
     `data-surface="${scenario.surface}"`,
@@ -2048,97 +1994,20 @@ function assertAppShellSkipLink(html, label) {
 }
 
 function assertAppShellTopbar(html, label) {
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.topbarTestId}"`,
-    `${label} shell topbar`,
-  );
-  assertIncludes(
-    html,
-    `data-topbar-mode="${APP_SHELL_CONTRACT.topbarMode}"`,
-    `${label} shell sticky topbar mode`,
-  );
-  assertIncludes(
-    html,
-    `data-sticky-top-px="${APP_SHELL_CONTRACT.topbarStickyTopPx}"`,
-    `${label} shell sticky topbar offset`,
-  );
-  assertIncludes(
-    html,
-    `data-block-size-px="${APP_SHELL_CONTRACT.topbarBlockSizePx}"`,
-    `${label} shell sticky topbar block size`,
-  );
+  const bars = ['app-shell-topbar', 'player-game-bar', 'host-console-bar'].filter(id => html.includes(`data-testid="${id}"`));
+  assert.equal(bars.length, 1, `${label} must have exactly one navigation bar`);
 }
 
 function assertAppShellSession(html, label) {
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionTestId}"`,
-    `${label} shell session capsule`,
-  );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}"`,
-    `${label} shell session viewer`,
-  );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionGameTestId}"`,
-    `${label} shell session game`,
-  );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionCapabilityTestId}"`,
-    `${label} shell session capabilities`,
-  );
-  assertIncludes(
-    html,
-    "data-capability-count=",
-    `${label} shell session capability count`,
-  );
+  assertIncludes(html, 'data-testid="account-menu-toggle"', `${label} account menu`);
+  assertIncludes(html, `data-testid="${APP_SHELL_CONTRACT.sessionTestId}"`, `${label} account link`);
 }
 
-function assertRenderedRoleNav({ html, scenario }) {
+function assertRenderedRoleNav({html, scenario}) {
   for (const [surface, navigation] of Object.entries(scenario.nav)) {
-    assertIncludes(
-      html,
-      `data-testid="${roleNavTestId(surface)}"`,
-      `${scenario.id} ${surface} nav test id`,
-    );
-    assertIncludes(
-      html,
-      `data-min-touch-target-px="${APP_SHELL_CONTRACT.minTouchTargetPx}"`,
-      `${scenario.id} ${surface} nav touch floor`,
-    );
-    assertIncludes(
-      html,
-      `data-allowed="${navigation === "link"}"`,
-      `${scenario.id} ${surface} nav allowed state`,
-    );
-    if (surface === scenario.surface) {
-      assertIncludes(
-        html,
-        'aria-current="page"',
-        `${scenario.id} active role nav`,
-      );
-    }
-    if (navigation === "blocked") {
-      assertIncludes(
-        html,
-        "data-blocked-reason=",
-        `${scenario.id} blocked role reason`,
-      );
-      assertIncludes(
-        html,
-        'aria-disabled="true"',
-        `${scenario.id} blocked role aria-disabled`,
-      );
-      assertIncludes(
-        html,
-        'class="fm-sr-only"',
-        `${scenario.id} blocked role accessible reason class`,
-      );
-    }
+    const tag = tagWithTestId(html, roleNavTestId(surface));
+    if (navigation === 'blocked' || surface === 'player') assert.equal(tag, null, `${scenario.id} ${surface} must be absent`);
+    else assert.notEqual(tag, null, `${scenario.id} ${surface} link missing`);
   }
 }
 
@@ -2149,49 +2018,15 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
   );
   assert.equal(shellComponentCount, 1, `${id} rendered duplicate app shells`);
   assertAppShellSession(html, id);
-  const navItems = APP_SHELL_CONTRACT.surfaceOrder.map((surface) => {
+  const navItems = APP_SHELL_CONTRACT.surfaceOrder.map(surface => {
     const testId = roleNavTestId(surface);
     const tag = tagWithTestId(html, testId);
-    assert.notEqual(tag, null, `${id} ${surface} shell nav item missing`);
-    assertIncludes(
-      tag,
-      `data-min-touch-target-px="${APP_SHELL_CONTRACT.minTouchTargetPx}"`,
-      `${id} ${surface} shell nav touch floor`,
-    );
+    const absent = expectedNav[surface] === 'blocked' || surface === 'player';
+    if (absent) { assert.equal(tag, null, `${id} forbidden ${surface} nav`); return {surface, testId, expected: 'absent', rendered: 'absent', tagName: null}; }
+    assert.notEqual(tag, null, `${id} ${surface} link missing`);
     const rendered = renderedShellNavigation(tag);
-    assert.equal(
-      rendered.navigation,
-      expectedNav[surface],
-      `${id} ${surface} shell nav mismatch`,
-    );
-    if (rendered.navigation === "blocked") {
-      assertIncludes(
-        html,
-        `<small class="fm-sr-only">${navBlockedLabel(surface)}</small>`,
-        `${id} ${surface} shell nav accessible blocked reason`,
-      );
-      assert.match(
-        String(rendered.blockedReason ?? ""),
-        /^Requires /,
-        `${id} ${surface} shell nav capability grammar in data attribute`,
-      );
-      assertExcludes(
-        tag,
-        "title=",
-        `${id} ${surface} shell nav tooltip dependency`,
-      );
-    }
-    return {
-      surface,
-      testId,
-      expected: expectedNav[surface],
-      rendered: rendered.navigation,
-      tagName: rendered.tagName,
-      ...(rendered.href === null ? {} : { href: rendered.href }),
-      ...(rendered.blockedReason === null
-        ? {}
-        : { blockedReason: rendered.blockedReason }),
-    };
+    assert.equal(rendered.navigation, 'link');
+    return {surface, testId, expected: 'link', rendered: 'link', tagName: rendered.tagName, href: rendered.href};
   });
 
   return {
@@ -2259,29 +2094,11 @@ function countOccurrences(value, needle) {
 }
 
 function renderedShellNavigation(tag) {
-  const tagName = tag.match(/^<([a-z0-9:-]+)/iu)?.[1] ?? "unknown";
-  const href = attributeValue(tag, "href");
-  const allowed = attributeValue(tag, "data-allowed");
-  if (allowed === "true") {
-    assert.equal(tagName, "a", `allowed shell nav item should render as link: ${tag}`);
-    assert.notEqual(href, null, `allowed shell nav item missing href: ${tag}`);
-    return { tagName, href, navigation: "link" };
-  }
-  if (allowed === "false") {
-    assert.equal(
-      tag.includes('aria-disabled="true"'),
-      true,
-      `blocked shell nav item missing aria-disabled: ${tag}`,
-    );
-    const blockedReason = attributeValue(tag, "data-blocked-reason");
-    assert.notEqual(
-      blockedReason,
-      null,
-      `blocked shell nav item missing blocked reason: ${tag}`,
-    );
-    return { tagName, href, navigation: "blocked", blockedReason };
-  }
-  throw new Error(`unknown shell nav allowed state in ${tag}`);
+  const tagName = tag.match(/^<([a-z0-9:-]+)/iu)?.[1] ?? 'unknown';
+  const href = attributeValue(tag, 'href');
+  assert.equal(tagName, 'a', 'Navigation must be a link; denied links are absent');
+  assert.notEqual(href, null);
+  return {tagName, href, navigation: 'link'};
 }
 
 function assertIncludes(haystack, needle, label) {
@@ -2413,8 +2230,7 @@ import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
 import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
 import PlayerEndgameSummary from "../src/lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
 import { buildPlayerEndgameSummaryViewModel } from "../src/lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
-import CommandStatusLine from "../src/lib/components/gameplay/CommandStatusLine.svelte";
-import { buildPlayerCommandStatusLine } from "../src/lib/components/player-command/player-command-status-line-model.mjs";
+import PlayerFeedback from "../src/lib/components/player-command/PlayerFeedback.svelte";
 import PlayerPrivateQueue from "../src/lib/components/player-private-queue/PlayerPrivateQueue.svelte";
 import PlayerThread from "../src/lib/components/player-thread/PlayerThread.svelte";
 import {
@@ -2422,7 +2238,10 @@ import {
   buildAdminRouteData,
 } from "../src/routes/admin/admin-route-model.mjs";
 import { adminConfirmStatus } from "../src/routes/admin/admin-route-controller.mjs";
-import { playerCommandTrace } from "../src/routes/g/[game]/player-route-controller.mjs";
+import {
+  playerCommandTrace,
+  recordPlayerCommandReceipt,
+} from "../src/routes/g/[game]/player-route-controller.mjs";
 import { hostConfirmationCommandTrace } from "../src/lib/components/host-action/host-action-contract.mjs";
 import {
   buildGameRouteData,
@@ -2554,7 +2373,7 @@ export async function renderRouteErrorSurface() {
   setPage({
     status: 403,
     error: {
-      message: "Channel private:role_pm:slot-7 is not visible.",
+      message: "You do not have access to this page. Return to Games to choose an available game.",
     },
     url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
     data: {
@@ -2798,7 +2617,7 @@ export async function renderAdminCommandActivity() {
   });
 }
 
-export async function renderPlayerCommandStatusLine(recovery = null) {
+export async function renderPlayerCommandReceipt(recovery = null) {
   const status = recovery?.status ?? {
     actionId: "submit_vote",
     state: "reject",
@@ -2806,13 +2625,12 @@ export async function renderPlayerCommandStatusLine(recovery = null) {
     message: "Reject PhaseLocked: reload and retry",
     commandTrace: playerCommandTrace("submit_vote"),
   };
-  return render(CommandStatusLine, {
+  return render(PlayerFeedback, {
     props: {
-      line: buildPlayerCommandStatusLine({
-        status,
-        retryAvailable: recovery?.retryAvailable ?? false,
-        retryEnabled: recovery?.retryEnabled ?? true,
-      }),
+      status,
+      attempt: { commandId: status.commandId, command: { SubmitVote: { target: { Slot: "slot-2" } } } },
+      retryAvailable: recovery?.retryAvailable ?? false,
+      retryEnabled: recovery?.retryEnabled ?? true,
     },
   });
 }
@@ -3200,7 +3018,7 @@ function renderAppStoresSource() {
 const pageState = writable({
   status: 403,
   error: {
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
   },
   url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
   data: {

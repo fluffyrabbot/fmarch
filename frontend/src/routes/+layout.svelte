@@ -56,7 +56,7 @@
 {/if}
 {#if previewReady}
 {#if presentedLayoutShell}
-  <AppShell shell={presentedLayoutShell}>
+  <AppShell shell={{...presentedLayoutShell, gameBarOwned: presentedLayoutShell.activeSurface === "player" || /^\/g\/[^/]+\/host$/.test($page.url.pathname), gameTitle: (directRouteData ?? pageRouteData)?.game?.label}}>
     <AppNavigationPending
       path={pendingPath}
       principalId={appSession.principalId}

@@ -32,7 +32,7 @@ test("app route pages render surfaces only under the root-owned app shell", asyn
     /applyViewerPresentationToShell\(layoutShell,/u,
     "the root shell must present an explicit viewer profile rather than a raw principal",
   );
-  assert.match(rootLayout, /<AppShell shell=\{presentedLayoutShell\}>/u);
+  assert.match(rootLayout, /<AppShell shell=\{\{\.\.\.presentedLayoutShell/u);
 
   for (const routePage of appRoutePages) {
     const source = await readWorkspaceFile(routePage);

@@ -176,12 +176,6 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import { castPlayerVote, openPlayerVotePicker } from "./player_vote_picker_driver.mjs";
-import {
-  playerCommandReceiptCountText,
-  playerCommandReceiptRefreshKeys,
-  playerCommandStatusMessage,
-  waitForPlayerCommandReceipt,
-} from "./player_command_proof_reads.mjs";
 
 const proofRunPath = path.resolve(
   repoRoot,
@@ -1667,13 +1661,10 @@ async function proveDayThreePlayerVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = await waitForPlayerCommandReceipt(page, "submit_vote");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(voteReceipt);
-    const receiptCount = Number.parseInt(
-      await playerCommandReceiptCountText(page),
-      10,
-    );
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("Day 3 player vote proof leaked an invite URL token");
@@ -2416,13 +2407,10 @@ async function proveDayFourNoLynchVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = await waitForPlayerCommandReceipt(page, "submit_vote:no_lynch");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(voteReceipt);
-    const receiptCount = Number.parseInt(
-      await playerCommandReceiptCountText(page),
-      10,
-    );
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("Day 4 no-lynch vote proof leaked an invite URL token");
@@ -2627,13 +2615,10 @@ async function proveDayFiveNoLynchVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = await waitForPlayerCommandReceipt(page, "submit_vote:no_lynch");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(voteReceipt);
-    const receiptCount = Number.parseInt(
-      await playerCommandReceiptCountText(page),
-      10,
-    );
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("Day 5 no-lynch vote proof leaked an invite URL token");
@@ -5027,8 +5012,8 @@ async function collectPlayerStaleCommandProof({
   const recoveryText = await page
     .getByTestId("player-action-submission-recovery")
     .innerText();
-  const receiptCountText = await playerCommandReceiptCountText(page);
-  const receiptStatusText = await playerCommandStatusMessage(page);
+  const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const command = commandRequests.at(-1)?.[commandSelector] ?? null;
   return {
     status: "passed",
@@ -5387,8 +5372,8 @@ async function provePlayerActionInvalidRecovery({
     const receiptState = await checkpoint.getAttribute("data-receipt-state");
     const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
     const targetSlotsAfterReject = await checkpoint.getAttribute("data-target-slots");
-    const receiptCountText = await playerCommandReceiptCountText(page);
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("player invalid action proof leaked an invite URL token");
@@ -8327,8 +8312,8 @@ async function provePlayerActionSubmissionClick({
     const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
   const receiptState = await checkpoint.getAttribute("data-receipt-state");
   const actionStateAfterAck = await checkpoint.getAttribute("data-action-state");
-  const receiptCountText = await playerCommandReceiptCountText(page);
-  const receiptStatusText = await playerCommandStatusMessage(page);
+  const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
   return {
     status: "passed",
@@ -8436,10 +8421,12 @@ async function provePrivateChannelRoleSurface({
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const receiptCountText = await playerCommandReceiptCountText(page);
-    const receiptStatusText = await playerCommandStatusMessage(page);
-    const submitPostReceipt = await waitForPlayerCommandReceipt(page, "submit_post");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(submitPostReceipt);
+    const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
+    const receiptStatusText = await page
+      .getByTestId("player-command-status")
+      .innerText();
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful post retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("private channel role proof leaked an invite URL token");
@@ -8578,7 +8565,10 @@ async function provePrivateChannelInvalidActionRecovery({
       scenario.expectedPhaseId,
       { timeout: 15000 },
     );
-    const invalidActionReceipt = await waitForPlayerCommandReceipt(page, `${scenario.clickedAction}`);
+    const invalidActionReceipt = page.getByTestId(
+      "player-feedback",
+    );
+    await invalidActionReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
     const bridgePlan = await page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
@@ -8591,8 +8581,10 @@ async function provePrivateChannelInvalidActionRecovery({
     const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
     const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
     const checkpointTargetSlots = await checkpoint.getAttribute("data-target-slots");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(invalidActionReceipt);
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    const receiptRefreshKeys = await invalidActionReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const commandPanelChannelIdAfterReject =
       await commandPanel.getAttribute("data-channel-id");
     const channelContextChannelIdAfterReject =
@@ -8692,7 +8684,8 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
       null,
       { timeout: 15000 },
     );
-    const stalePostReceipt = await waitForPlayerCommandReceipt(page, "submit_post");
+    const stalePostReceipt = page.getByTestId("player-feedback");
+    await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
     const bridgePlan = await page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
@@ -8703,8 +8696,10 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
     const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
     const checkpointActionState = await checkpoint.getAttribute("data-action-state");
     const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(stalePostReceipt);
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    const receiptRefreshKeys = await stalePostReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const currentThreadText = await page.getByText(
       scenario.currentThreadBody,
     ).innerText();
@@ -8940,14 +8935,19 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       },
       { timeout: 15000 },
     );
-    const stalePostReceipt = await waitForPlayerCommandReceipt(page, `${scenario.clickedAction}`);
+    const stalePostReceipt = page.getByTestId(
+      "player-feedback",
+    );
+    await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
     const bridgePlan = await page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
-    const receiptRefreshKeys = playerCommandReceiptRefreshKeys(stalePostReceipt);
-    const receiptStatusText = await playerCommandStatusMessage(page);
+    const receiptRefreshKeys = await stalePostReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const snapshotAfterReject = await collectCompletedPrivateChannelSnapshot(page);
     await page.reload({ waitUntil: "networkidle" });
     await page.getByTestId("player-surface").waitFor({

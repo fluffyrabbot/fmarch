@@ -1,4 +1,7 @@
 <script>
+  import AccountMenu from "$lib/app/AccountMenu.svelte";
+  export let shell = null;
+  export let capability = null;
   export let game;
   export let phase = {};
   export let capabilityLabel = "";
@@ -12,7 +15,7 @@
   <div>
     <span>{game.label}</span>
     <h1>Host · {phase?.label ?? "Awaiting first phase"}</h1>
-    <span class="fm-sr-only" data-testid="host-console-capability">{capabilityLabel}</span>
+    <span class="fm-sr-only" data-testid="host-console-capability" data-capability-kind={capability?.kind}>Hosting this game</span>
   </div>
   <dl>
     <div data-testid="host-console-attention"><dt>Attention</dt><dd>{attentionCount} tasks</dd></div>
@@ -23,4 +26,5 @@
       {liveStatus.state === "connecting" ? "Reconnecting…" : liveStatus.message}
     </p>
   {/if}
+  {#if shell}<AccountMenu {shell} includeNavigation />{/if}
 </header>

@@ -162,19 +162,6 @@ Command traces remain in the host and admin "Technical details" drawers only.
 *Rationale:* doc 13 already says technical traces belong in the activity
 disclosure; the panel violated that and covered the thread on phones.
 
-Slice 5 settles the details. The line sits in its own sticky slot directly
-under the game bar rather than inside it, because the bar scrolls away and a
-vote cast from the picker at the foot of the page must see its outcome. It
-names the intent from the command and the roster ("your vote for Ilya", "your
-post", "your night action") and gives each known rejection a player reason;
-an unknown one says only that it didn't go through. A settled line shows
-until the next command or Dismiss. Retry appears only for an interruption or
-a rejection whose exact attempt is retained. Proofs read raw messages,
-receipts and traces from the page's proof globals. The night action card's
-diagnostic rows (actor, action state, receipt state, stale recovery) move to
-slice 8 with the capability text: both are proof readouts on a player
-surface, and live proofs read them through the same checkpoint attributes.
-
 ### 5. Player context states only what the player can act on
 
 The More sheet has three sections: Your role (the role card, or "Your role
@@ -285,6 +272,21 @@ consolidation does not churn the live proofs; slice 3 changes the wording in
 slice removes its violations, and slice 9 makes the guard failing. Slices 6, 7
 and 8 touch disjoint paths and may run in parallel once their dependency has
 landed; slices 3 → 4 → 5 share the player route and run in order.
+
+### Implementation checkpoint
+
+All delivery slices are implemented. Interruption feedback lives in the game
+bar and preserves the exact retry request and visible action position. Setup
+resolves handles through a host-authorized lookup, previews signup seating once,
+and refreshes candidates and the roster before importing. Contextual navigation
+and board facts replace the overlapping role tabs. The host queue contains only
+decisions and recovery work; routine actions live in Tools.
+
+Canonical Linux acceptance covers Chromium, Firefox and WebKit role journeys,
+host setup and signup import, API authorization, live-stack recovery, legibility,
+and reviewed Chromium visual baselines. The interaction architecture records the
+shipped behavior; `product.game.legible-surfaces` is complete. Native Safari and
+real-device acceptance remain separate from the Linux browser proof.
 
 ### Slice acceptance
 

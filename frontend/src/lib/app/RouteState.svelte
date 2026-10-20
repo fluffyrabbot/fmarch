@@ -13,7 +13,7 @@
   <div class="fm-route-state__copy">
     <p class="fm-eyebrow">{view.surface}</p>
     <h2>{view.title}</h2>
-    <p>{view.message}</p>
+    {#if view.message !== view.status.message}<p>{view.message}</p>{/if}
   </div>
 
   <AppStatus

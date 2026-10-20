@@ -260,7 +260,7 @@
     display: grid;
     gap: 16px;
     padding-block-start: 22px;
-    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + 16px);
+    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + var(--fm-game-bar-block-size, 0px) + 16px);
   }
 
   .vote-sheet header {
@@ -327,7 +327,7 @@
   .vote-picker__option,
   .vote-picker__confirmation button,
   .vote-picker__unvote button {
-    scroll-margin-block: calc(var(--fm-app-topbar-block-size) + 16px)
+    scroll-margin-block: calc(var(--fm-app-topbar-block-size) + var(--fm-game-bar-block-size, 0px) + 16px)
       calc(96px + env(safe-area-inset-bottom));
   }
 

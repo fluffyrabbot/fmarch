@@ -228,7 +228,7 @@
     display: grid;
     gap: 14px;
     padding-block-start: 22px;
-    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + 16px);
+    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + var(--fm-game-bar-block-size, 0px) + 16px);
   }
 
   .compose-sheet header {

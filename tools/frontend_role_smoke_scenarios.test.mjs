@@ -240,32 +240,22 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
   assert.deepEqual(
     boardScenario.actions.map((action) => [action.testId, action.navigation]),
     [
-      ["game-action-midsummer-public-thread", "link"],
       ["game-action-midsummer-player", "link"],
-      ["game-action-midsummer-moderator", "blocked"],
+      ["game-action-midsummer-public-thread", "link"],
       ["game-action-solstice-public-thread", "link"],
-      ["game-action-solstice-player", "blocked"],
-      ["game-action-solstice-moderator", "blocked"],
     ],
   );
   assert.deepEqual(
     boardScenario.actions
       .filter((action) => action.navigation === "link")
       .map((action) => action.hrefPath),
-    ["/games/midsummer", "/g/midsummer", "/games/solstice"],
+    ["/g/midsummer", "/games/midsummer", "/games/solstice"],
   );
   assert.deepEqual(
     boardScenario.actions
       .filter((action) => action.navigation === "blocked")
       .map((action) => [action.testId, action.blockedReason]),
-    [
-      [
-        "game-action-midsummer-moderator",
-        "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)",
-      ],
-      ["game-action-solstice-player", "Requires SlotOccupant(solstice) or ChannelMember(solstice) or DeadViewer(solstice) or SpectatorOf(solstice)"],
-      ["game-action-solstice-moderator", "Requires GlobalAdmin(solstice) or GlobalMod(solstice) or HostOf(solstice) or CohostOf(solstice)"],
-    ],
+    [],
   );
   assertFocusScenario(boardScenario.focus, "board");
   assertFocusMatchesNav(boardScenario.focus, boardScenario.nav, "board");
@@ -358,7 +348,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
           [
             "moderator-primary-action-zone",
             "moderator-primary-actions",
-            3,
+            1,
           ],
         ],
       ],
@@ -380,7 +370,7 @@ test("role smoke pins collapsed support and mobile first-viewport budgets", () =
     },
     moderator: {
       primaryActionSelector:
-        '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 2.5,
     },
@@ -448,9 +438,7 @@ test("nav focus coverage is shared across static and browser smoke evidence", ()
     );
     assert.deepEqual(
       coverage.linkedNavTestIds,
-      Object.entries(scenario.nav)
-        .filter(([, navigation]) => navigation === "link")
-        .map(([surface]) => roleNavTestId(surface)),
+      scenario.focus.expectedOrder.filter(id => id.startsWith("role-nav-")),
     );
     assert.deepEqual(
       coverage.blockedNavTestIds,
@@ -577,9 +565,8 @@ function assertFocusScenario(focus, label) {
 }
 
 function assertFocusMatchesNav(focus, nav, label) {
-  const linkedNav = Object.entries(nav)
-    .filter(([, navigation]) => navigation === "link")
-    .map(([surface]) => roleNavTestId(surface));
+  const linkedNav = focus.linkedNavTestIds ?? focus.expectedOrder.filter(id => id.startsWith('role-nav-'));
+  for (const testId of linkedNav) assert.equal(nav[testId.replace('role-nav-', '')], 'link');
   const blockedNav = Object.entries(nav)
     .filter(([, navigation]) => navigation === "blocked")
     .map(([surface]) => roleNavTestId(surface));

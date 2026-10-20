@@ -1,13 +1,13 @@
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
-import { seatLabel } from "../../app/seat-presenter.mjs";
+import { seatLabel, seatNames } from "../../app/seat-presenter.mjs";
 import {
   FIXTURE_PRINCIPAL_IDS,
   canonicalPrincipalId,
 } from "../../principal-id.mjs";
 
 export const EXTEND_DEADLINE_PRESETS = Object.freeze([
-  Object.freeze({ id: "extend_deadline_24h", label: "Extend +24h", hours: 24 }),
-  Object.freeze({ id: "extend_deadline_48h", label: "Extend +48h", hours: 48 }),
+  Object.freeze({ id: "extend_deadline_24h", label: "Extend 24h", hours: 24 }),
+  Object.freeze({ id: "extend_deadline_48h", label: "Extend 48h", hours: 48 }),
 ]);
 
 const HOST_ACTION_FIXTURE_DEADLINE_SECONDS = 1781841600;
@@ -31,6 +31,7 @@ export function buildHostConsoleCriticalActions(
   gameId,
   {
     hostPrompts = [],
+    roster = [],
     phase = null,
     replacement = null,
     completed = false,
@@ -79,7 +80,7 @@ export function buildHostConsoleCriticalActions(
     }),
     ...hostPrompts
       .filter((prompt) => prompt.status === "pending")
-      .flatMap((prompt) => buildHostPromptActions(gameId, prompt)),
+      .flatMap((prompt) => buildHostPromptActions(gameId, prompt, seatNames(roster))),
   ];
   return Object.freeze(
     actions.filter((action) =>
@@ -138,12 +139,13 @@ function buildExtendDeadlineActions(gameId, phase, nowSeconds) {
   return Object.freeze([
     freezeHostAction({
       id: "extend_deadline",
-      label: `${verb} deadline`,
+      label: "Set time…",
       objectLabel: target.objectLabel,
       outcomeLabel: `${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)}`,
       confirmationText:
         `${verb} ${target.objectLabel}: ${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)} for ${target.objectLabel}.`,
-      irreversible: true,
+      requiresConfirmation: true,
+      irreversible: false,
       payload: {
         kind: "extend_deadline",
         gameId,
@@ -169,7 +171,7 @@ function buildExtendDeadlinePresetAction(gameId, target, preset) {
     objectLabel: target.objectLabel,
     outcomeLabel,
     confirmationText:
-      `${verb} ${target.objectLabel} by ${preset.hours} hours: ${outcomeLabel} for ${target.objectLabel}.`,
+      `${target.objectLabel}: ${outcomeLabel}.`,
     requiresConfirmation: true,
     payload: {
       kind: "extend_deadline",
@@ -222,7 +224,7 @@ function formatDeadlinePacific(epochSeconds) {
   return `${day} at ${time} PT`;
 }
 
-function buildHostPromptActions(gameId, prompt) {
+function buildHostPromptActions(gameId, prompt, names) {
   if (isNoMajorityRevotePrompt(prompt)) {
     return noMajorityRevotePolicyActions.map((policy) =>
       freezeHostAction({
@@ -246,11 +248,11 @@ function buildHostPromptActions(gameId, prompt) {
     return hostPromptSlotChoices(prompt).map((slot) =>
       freezeHostAction({
         id: `resolve_host_prompt-${stableActionId(prompt.id)}-${stableActionId(slot)}`,
-        label: `Eliminate ${slot}`,
+        label: `Eliminate ${names.label(slot)}`,
         objectLabel: prompt.label,
-        outcomeLabel: `select ${slot} from the tied contenders`,
+        outcomeLabel: `select ${names.label(slot)} from the tied contenders`,
         confirmationText:
-          `Eliminate ${slot} for ${prompt.label}: select ${slot} from the tied contenders for ${prompt.label}.`,
+          `Eliminate ${names.label(slot)} from the tied contenders. ${prompt.label}`,
         irreversible: true,
         payload: {
           kind: "resolve_host_prompt",
@@ -266,9 +268,9 @@ function buildHostPromptActions(gameId, prompt) {
       id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
       label: "Resolve prompt",
       objectLabel: prompt.label,
-      outcomeLabel: "acknowledge prompt and apply pack policy",
+      outcomeLabel: prompt.value ?? "Apply this decision.",
       confirmationText:
-        `Resolve ${prompt.label}: acknowledge prompt and apply pack policy for ${prompt.label}.`,
+        `${prompt.label} ${prompt.value ?? "Apply this decision."}`,
       irreversible: true,
       payload: {
         kind: "resolve_host_prompt",
