@@ -220,6 +220,8 @@ test('postgres-admin serializes database create/drop while lane bodies overlap',
   t.after(() => rm(root, { recursive: true, force: true }));
   const running = new Set();
   let maximumRunning = 0;
+  let overlap;
+  const bodiesOverlap = new Promise((resolve) => { overlap = resolve; });
   let administering = 0;
   let maximumAdministering = 0;
   const administer = async () => {
@@ -253,10 +255,15 @@ test('postgres-admin serializes database create/drop while lane bodies overlap',
       child.kill = () => true;
       running.add(file);
       maximumRunning = Math.max(maximumRunning, running.size);
-      setTimeout(() => {
+      // Each body stays open until both overlap (or a generous deadline
+      // passes), so a loaded host cannot finish one before the other starts.
+      const close = () => {
         running.delete(file);
         child.emit('close', 0, null);
-      }, 40);
+      };
+      const deadline = setTimeout(close, 2000);
+      bodiesOverlap.then(() => { clearTimeout(deadline); setTimeout(close, 5); });
+      if (running.size === 2) overlap();
       return child;
     },
     log: () => {},
