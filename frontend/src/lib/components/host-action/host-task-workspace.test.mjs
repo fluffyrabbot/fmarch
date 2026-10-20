@@ -203,3 +203,19 @@ test("DayEvent tasks hydrate typed participants and build one selected-winner co
   });
   assert.equal(task.diagnostics.protocol, "ResolveDayEvent");
 });
+
+
+test("idle host has no decisions while deadline and phase tools remain available", () => {
+  const view = buildHostTaskWorkspaceViewModel({ groups, phase: { deadline: 200, locked: false }, nowSeconds: 100 });
+  assert.equal(view.queue.attentionCount, 0);
+  assert.equal(view.queue.summary, "Nothing needs you right now");
+  assert.equal(view.selectedTask, null);
+  assert.deepEqual(view.tools.map(task => task.id), ["deadline", "phase"]);
+});
+
+test("expired deadlines and a locked phase needing resolution enter the queue", () => {
+  const dueGroups = groups.map(group => group.id === "phase" ? { ...group, actions: [{ id: "resolve_phase", payload: { kind: "resolve_phase" } }] } : group);
+  const view = buildHostTaskWorkspaceViewModel({ groups: dueGroups, phase: { deadline: 100, locked: true }, nowSeconds: 100 });
+  assert.deepEqual(view.decisions.map(task => task.id), ["deadline", "phase"]);
+  assert.equal(view.tools.length, 0);
+});

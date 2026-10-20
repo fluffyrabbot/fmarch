@@ -41,6 +41,7 @@ export function buildHostTaskWorkspaceViewModel({
   dayEventSelections = {},
   votecount = [],
   selectedTaskId = null,
+  nowSeconds = null,
 } = {}) {
   const promptGroup = groups.find((group) => group.id === "host-prompts") ?? null;
   const groupTasks = groups
@@ -69,7 +70,14 @@ export function buildHostTaskWorkspaceViewModel({
   );
   const tasks = [...groupTasks, ...instanceTasks]
     .sort((left, right) => left.rank - right.rank || left.sourceIndex - right.sourceIndex);
-  const decisions = tasks.filter(task => task.kind === 'engine_host_prompt' || task.kind === 'day_event_resolve' || task.state === 'interrupted' || (task.kind === 'replacement' && task.actions.length > 0));
+  const deadlineDue = Number.isFinite(nowSeconds) && Number.isFinite(phase?.deadline) && phase.deadline <= nowSeconds;
+  const decisions = tasks.filter(task =>
+    task.kind === "engine_host_prompt" || task.kind === "day_event_resolve" ||
+    task.state === "interrupted" || task.state === "blocked" ||
+    (task.kind === "replacement" && task.actions.length > 0) ||
+    (task.kind === "deadline" && deadlineDue && task.actions.length > 0) ||
+    (task.kind === "phase" && (phase?.locked === true || phase?.state === "locked") && task.actions.some(action => action.config.payload?.kind === "resolve_phase")));
+
   const tools = tasks.filter(task => !decisions.includes(task));
   const resolvedSelectedId = tasks.some((task) => task.id === selectedTaskId)
     ? selectedTaskId

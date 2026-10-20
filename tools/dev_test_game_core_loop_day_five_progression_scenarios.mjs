@@ -350,7 +350,7 @@ export function assertDayFiveNoLynchVoteProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${voteCase.streamSeq}`) ||
+      .includes("saved.") ||
     proof.receiptRefreshKeys !== voteCase.expectedRefreshKeys.join(",")
   ) {
     throwDayFiveProgressionAssertionError({
@@ -473,12 +473,12 @@ export function assertStaleDayFiveVoteRecoveryProofCase({
     proof.checkpointPhaseIdAfterReject !== staleCase.refreshedPhaseId ||
     proof.checkpointActionStateAfterReject !== staleCase.checkpointActionState ||
     proof.checkpointTargetSlotsAfterReject !== staleCase.checkpointTargetSlots ||
-    !String(proof.recoveryText ?? "").includes(`Reject ${staleCase.error}`) ||
-    !String(proof.recoveryText ?? "").includes("refresh") ||
+    !String(proof.recoveryText ?? "").includes("phase is closed") ||
+    !String(proof.recoveryText ?? "").includes("Check the current phase") ||
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(`reject ${staleCase.error.toLowerCase()}`)
+      .includes("phase is closed")
   ) {
     throwDayFiveProgressionAssertionError({
       message: "core-loop admin proof missing stale Day 5 vote recovery",

@@ -185,7 +185,7 @@ export function assertDayThreePlayerVoteProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes(`ack: stream seqs ${voteCase.streamSeq}`) ||
+      .includes("saved.") ||
     proof.receiptRefreshKeys !== voteCase.expectedReceiptRefreshKeys
   ) {
     throwVoteResolutionAssertionError({

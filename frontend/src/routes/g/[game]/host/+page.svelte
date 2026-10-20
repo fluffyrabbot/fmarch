@@ -9,6 +9,7 @@
   } from "$lib/app/app-route-state-model.mjs";
   import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
   import HostConsoleBar from "$lib/components/host-action/HostConsoleBar.svelte";
+  import { buildHostTaskWorkspaceViewModel } from "$lib/components/host-action/host-task-workspace.mjs";
   import HostTaskWorkspace from "$lib/components/host-action/HostTaskWorkspace.svelte";
   import HostReplacementChooser from "$lib/components/host-action/HostReplacementChooser.svelte";
   import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
@@ -122,7 +123,11 @@
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
-  $: hostAttentionCount = hostTasks.length + (moderatorActionGroups.some(group => group.id === 'replacement' && group.actions.length > 0) ? 1 : 0);
+  $: hostAttentionCount = buildHostTaskWorkspaceViewModel({
+    groups: moderatorActionGroups, commandStatuses, phase: currentPhase,
+    hostTasks, hostPrompts, hostDayEvents,
+    nowSeconds: data.deadlineClock?.nowSeconds,
+  }).queue.attentionCount;
   $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: currentPhase,
@@ -527,6 +532,7 @@
           {commandStatuses}
           commandContext={data.commandContext}
           phase={currentPhase}
+          nowSeconds={data.deadlineClock?.nowSeconds}
           replacement={projection.replacement ?? data.replacement}
           {hostPrompts}
           {hostTasks}

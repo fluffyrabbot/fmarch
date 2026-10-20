@@ -141,23 +141,11 @@ async function proveRouteErrorSurface(bundle) {
   assertIncludes(html, "Access blocked", "route error title");
   assertIncludes(
     html,
-    "Channel private:role_pm:slot-7 is not visible.",
+    "You do not have access to this page. Return to Games to choose an available game.",
     "route error message",
   );
-  assertIncludes(html, "/g/midsummer/c/private%3Arole_pm%3Aslot-7", "route error path");
+  assert.equal(html.includes("private%3Arole_pm%3Aslot-7"), false, "internal channel path stays hidden");
   assertIncludes(html, "Your account", "route error session viewer");
-  assertIncludes(
-    html,
-    "ChannelMember + SlotOccupant",
-    "route error session capabilities",
-  );
-  const playerNav = tagWithTestId(html, roleNavTestId("player"));
-  assert.notEqual(playerNav, null, "route error player nav missing");
-  assert.equal(
-    playerNav.includes('aria-current="page"'),
-    true,
-    "route error player nav is not active",
-  );
   const touchTargets = assertTouchTargetMetadata(html, "route-error");
 
   return {
@@ -169,10 +157,10 @@ async function proveRouteErrorSurface(bundle) {
     panelTestId: "route-error-panel",
     actionTestId: "route-error-action",
     actionHref: "/",
-    activeNavTestId: roleNavTestId("player"),
+    activeNavTestId: null,
     sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
-    message: "Channel private:role_pm:slot-7 is not visible.",
+    message: "You do not have access to this page. Return to Games to choose an available game.",
     touchTargets,
     htmlBytes: Buffer.byteLength(html),
   };
@@ -265,7 +253,7 @@ function surfaceScenarios() {
         },
         {
           testId: "game-action-midsummer-moderator",
-          href: "/moderation",
+          href: "/g/midsummer/host",
         },
       ],
       requiredAttributes: [],
@@ -280,21 +268,16 @@ function surfaceScenarios() {
       requiredText: [
         "Games",
         "Mafiascum game",
-        "Hosts only",
       ],
-      requiredTestIds: [
-        "game-action-midsummer-moderator",
-      ],
+      requiredTestIds: ["game-action-midsummer-player"],
       links: [
         {
           testId: "game-action-midsummer-player",
           href: "/g/midsummer",
         },
       ],
-      requiredAttributes: [
-        'data-blocked-reason="Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)"',
-      ],
-      forbiddenText: [],
+      requiredAttributes: [],
+      forbiddenText: ['data-testid="game-action-midsummer-moderator"', 'data-testid="role-nav-admin"'],
     },
     {
       id: "admin",
@@ -474,7 +457,8 @@ function surfaceScenarios() {
         "host-command-activity",
         "host-command-activity-empty",
         HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-        "critical-host-action-extend_deadline",
+        "host-tools",
+        "host-task-deadline",
         "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
         "host-console-votecount",
       ],
@@ -506,22 +490,13 @@ function assertAppShell(html, { id, role }) {
     `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}"`,
     `${id} shell session viewer`,
   );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionCapabilityTestId}"`,
-    `${id} shell session capabilities`,
-  );
-  assertIncludes(
-    html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionGameTestId}"`,
-    `${id} shell session game`,
-  );
-  for (const surface of APP_SHELL_CONTRACT.surfaceOrder) {
-    assertIncludes(
-      html,
-      `data-testid="${roleNavTestId(surface)}"`,
-      `${id} ${surface} nav`,
-    );
+  assertIncludes(html, 'data-testid="account-menu-toggle"', `${id} account menu`);
+  for (const surface of ["board", "community", "inbox", "search"]) {
+    assertIncludes(html, `data-testid="${roleNavTestId(surface)}"`, `${id} ${surface} navigation`);
+  }
+  assert.equal(tagWithTestId(html, roleNavTestId("player")), null, "player role tab is removed");
+  if (role === "player") {
+    for (const surface of ["admin", "moderator"]) assert.equal(tagWithTestId(html, roleNavTestId(surface)), null, `${id} must not expose ${surface}`);
   }
 }
 

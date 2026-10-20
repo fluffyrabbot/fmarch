@@ -220,7 +220,7 @@ function dayFiveVoteProof({ game, baseRoleUrl }) {
     setupSnapshotCommandState: { phase: { phaseId: "D05" } },
     currentVote: { hasVote: "true", text: "Current vote: No lynch" },
     receiptCount: 1,
-    receiptStatusText: "Ack: stream seqs 918",
+    receiptStatusText: "Saved.",
     receiptRefreshKeys: "votecount,commandState",
   };
 }
@@ -295,8 +295,8 @@ function staleDayFiveVoteProof({ game, baseRoleUrl }) {
     checkpointPhaseIdAfterReject: "N05",
     checkpointActionStateAfterReject: "disabled:no legal action available",
     checkpointTargetSlotsAfterReject: "",
-    recoveryText: "Reject PhaseLocked: refresh and use current vote controls.",
+    recoveryText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: 1,
-    receiptStatusText: "Reject PhaseLocked",
+    receiptStatusText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
   };
 }

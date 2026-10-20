@@ -399,7 +399,7 @@ export function playerActionSubmissionClickProofFixture({
     checkpointReceiptState: `ack:${scenario.streamSeq}`,
     checkpointActionStateAfterAck: scenario.checkpointActionState,
     receiptCount: 1,
-    receiptStatusText: `Ack: stream seqs ${scenario.streamSeq}`,
+    receiptStatusText: "Saved.",
   };
 }
 

@@ -424,10 +424,10 @@ export function assertRevoteProgressionBrowserProof({
     [
       String(
         proof?.d03R2StaleContinuePolicyRecovery?.activityStatusText ?? "",
-      ).includes("Reject PromptAlreadyResolved") &&
+      ).includes("needs refreshed game state") &&
         String(
           proof?.d03R2StaleContinuePolicyRecovery?.activityStatusText ?? "",
-        ).includes("host prompt selection is stale"),
+        ).includes("Reload and try again"),
       "stale continue policy receipt text mismatch",
     ],
     [

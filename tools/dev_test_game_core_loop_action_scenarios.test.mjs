@@ -164,7 +164,7 @@ test("player action submission assertion covers factional kill ACK", () => {
     checkpointReceiptState: `ack:${scenario.streamSeq}`,
     checkpointActionStateAfterAck: scenario.checkpointActionState,
     receiptCount: 1,
-    receiptStatusText: `Ack: stream seqs ${scenario.streamSeq}`,
+    receiptStatusText: "Saved.",
   };
 
   assert.doesNotThrow(() =>
@@ -212,7 +212,7 @@ test("player action submission checkpoint rows are scenario-owned", () => {
       playerRoleSurface: {
         playerActionSubmissionClickProof: {
           ...proof,
-          receiptStatusText: "Ack: stream seqs 500",
+          receiptStatusText: "Your action is being sent…",
         },
       },
     }),
@@ -256,7 +256,7 @@ test("player invalid-action recovery assertion covers InvalidTarget refresh", ()
     checkpointActionStateAfterReject: scenario.checkpointActionState,
     checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
     receiptCount: 1,
-    receiptStatusText: scenario.messageIncludes,
+    receiptStatusText: "Your night action was not accepted. Choose an available target.",
   };
 
   assert.doesNotThrow(() =>
@@ -318,9 +318,9 @@ test("player stale vote recovery assertion covers PhaseLocked transition reject"
     checkpointPhaseIdAfterReject: scenario.refreshedPhaseId,
     checkpointActionStateAfterReject: scenario.checkpointActionState,
     checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
-    recoveryText: "Reject PhaseLocked",
+    recoveryText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: scenario.receiptCount,
-    receiptStatusText: scenario.receiptStatusTextIncludes,
+    receiptStatusText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
   };
 
   assert.doesNotThrow(() =>
@@ -379,9 +379,9 @@ test("player stale action recovery assertion covers PhaseLocked transition rejec
     checkpointPhaseIdAfterReject: scenario.refreshedPhaseId,
     checkpointActionStateAfterReject: scenario.checkpointActionState,
     checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
-    recoveryText: "Reject PhaseLocked",
+    recoveryText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: scenario.receiptCount,
-    receiptStatusText: scenario.receiptStatusTextIncludes,
+    receiptStatusText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
   };
 
   assert.doesNotThrow(() =>

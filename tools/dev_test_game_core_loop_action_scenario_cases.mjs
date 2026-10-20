@@ -59,7 +59,7 @@ export function playerActionSubmissionAckCheckpointPassed(surface) {
     proof.checkpointActionStateAfterAck === scenario.checkpointActionState &&
     proof.receiptCount === 1 &&
     String(proof.receiptStatusText ?? "").includes(
-      `Ack: stream seqs ${scenario.streamSeq}`,
+      "Saved.",
     )
   );
 }

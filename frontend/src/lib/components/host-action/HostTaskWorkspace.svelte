@@ -9,6 +9,7 @@
   export let commandStatuses = {};
   export let commandContext = {};
   export let phase = {};
+  export let nowSeconds = null;
   export let replacement = {};
   export let hostPrompts = [];
   export let hostTasks = [];
@@ -34,6 +35,7 @@
     dayEventSelections,
     votecount,
     selectedTaskId: preferredTaskId,
+    nowSeconds,
   });
 
   function toggleDayEventWinner(eventId, slot) {

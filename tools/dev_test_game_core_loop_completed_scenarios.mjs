@@ -549,7 +549,7 @@ export function assertStaleCompletedGamePlayerCommandRecoveryProofCase({
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject gamealreadycompleted")
+      .includes("game is complete")
   ) {
     throwCompletedScenarioAssertionError({
       message: `core-loop admin proof missing stale completed-game ${scenario.commandKind} recovery`,

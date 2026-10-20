@@ -30,6 +30,7 @@ function rejectionMessage(error, intent) {
     case "PhaseLocked": return `${intent} was not accepted because the phase is closed. Check the current phase before trying again.`;
     case "NotYourSlot": return "You no longer occupy this seat. Your action was not accepted.";
     case "RateLimited": return `${intent} was not accepted. Wait a moment before trying again.`;
+    case "GameAlreadyCompleted":
     case "GameCompleted": return "The game is complete. Your action was not accepted.";
     case "InvalidTarget": return `${intent} was not accepted. Choose an available target.`;
     default: return `${intent} could not be completed. Check the game and try again.`;

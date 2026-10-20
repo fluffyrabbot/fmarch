@@ -169,7 +169,7 @@ function playerActionSubmissionProof({ game, sourceRoleUrl, visitedRolePath }) {
     checkpointReceiptState: `ack:${scenario.streamSeq}`,
     checkpointActionStateAfterAck: scenario.checkpointActionState,
     receiptCount: 1,
-    receiptStatusText: `Ack: stream seqs ${scenario.streamSeq}`,
+    receiptStatusText: "Saved.",
   };
 }
 
@@ -211,6 +211,6 @@ function playerInvalidActionProof({ game, sourceRoleUrl, visitedRolePath }) {
     checkpointActionStateAfterReject: scenario.checkpointActionState,
     checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
     receiptCount: 1,
-    receiptStatusText: scenario.messageIncludes,
+    receiptStatusText: "Your night action was not accepted. Choose an available target.",
   };
 }
