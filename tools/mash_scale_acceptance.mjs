@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 import { assertMashScaleAcceptance } from "./mash_scale_acceptance_contract.mjs";
 import {
   applicationDatabaseEnvironment,
@@ -38,7 +38,7 @@ try {
     migrationUrl: scratch.url,
     env: process.env,
   });
-  await run("cargo", proofCargoArgs({
+  await run(...proofBinarySpawn({
     laneId: proofLane,
     target: "api/bin/audit_mash_scale_acceptance",
     quiet: true,

@@ -10,6 +10,13 @@ use social::{
 };
 use sqlx::PgPool;
 
+/// The proof runner pins each lane's binaries and exports their paths at run
+/// time; plain `cargo test` falls back to Cargo's compile-time path.
+fn profile_index_admin_binary() -> String {
+    std::env::var("CARGO_BIN_EXE_fmarch-profile-index-admin")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_fmarch-profile-index-admin").to_string())
+}
+
 static PROFILE_INDEX_ENV_LOCK: Mutex<()> = Mutex::new(());
 const APPLICATION_DATABASE_PASSWORD: &str = "profile-index-admin-application-proof";
 const KEY_ADMIN_DATABASE_PASSWORD: &str = "profile-index-admin-key-authority-proof";
@@ -111,7 +118,7 @@ fn run_admin(
     operation: &str,
     execute: bool,
 ) -> std::process::Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_fmarch-profile-index-admin"));
+    let mut command = Command::new(profile_index_admin_binary());
     command
         .env_clear()
         .args([

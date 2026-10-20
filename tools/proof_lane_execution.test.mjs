@@ -15,6 +15,7 @@ import {
   defaultPreemptionSignalPath,
   disposableDatabaseName,
   expandHardDependencies,
+  lockClaims,
   prepareLaneInvocation,
   readPreemptedRunReceiptPath,
   runExecutionPlan,
@@ -214,17 +215,26 @@ test('compatible lanes overlap while a shared lock serializes atomically', async
   assert.equal(maximum, 1);
 });
 
-test('Postgres provisioning claims the administrative capacity for the whole conservative lane', async (t) => {
+test('postgres-admin serializes database create/drop while lane bodies overlap', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const active = new Set();
-  let maximum = 0;
+  const running = new Set();
+  let maximumRunning = 0;
+  let administering = 0;
+  let maximumAdministering = 0;
+  const administer = async () => {
+    administering += 1;
+    maximumAdministering = Math.max(maximumAdministering, administering);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    administering -= 1;
+  };
   const provider = {
     async acquire({ laneId }) {
+      await administer();
       return {
         database: `fmarch_proof_test_${laneId}`,
         url: `postgres://local/fmarch_proof_test_${laneId}`,
-        async release() {},
+        async release() { await administer(); },
       };
     },
   };
@@ -232,25 +242,29 @@ test('Postgres provisioning claims the administrative capacity for the whole con
     first: lane(['first'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
     second: lane(['second'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
   }, { 'postgres-admin': 1 });
+  const claims = {};
   const result = await runExecutionPlan(['first', 'second'], manifest, {
     jobs: 2,
     root,
     databaseProvider: provider,
+    onStart(laneId, details) { claims[laneId] = details.claims; },
     spawn(file) {
       const child = new EventEmitter();
       child.kill = () => true;
-      active.add(file);
-      maximum = Math.max(maximum, active.size);
+      running.add(file);
+      maximumRunning = Math.max(maximumRunning, running.size);
       setTimeout(() => {
-        active.delete(file);
+        running.delete(file);
         child.emit('close', 0, null);
-      }, 8);
+      }, 40);
       return child;
     },
     log: () => {},
   });
   assert.equal(result.success, true);
-  assert.equal(maximum, 1);
+  assert.deepEqual(claims, { first: {}, second: {} });
+  assert.equal(maximumAdministering, 1, 'create/drop must never race on the shared cluster');
+  assert.equal(maximumRunning, 2, 'isolated database lanes run their bodies concurrently');
 });
 
 test('real timing lanes exclude browser work even when Cargo and browser prerequisites are reused', async (t) => {
@@ -355,16 +369,21 @@ test('a failed prerequisite blocks its consumer while an already started indepen
   assert.deepEqual(started.sort(), ['independent', 'producer']);
   assert.equal(result.receipt.lanes.consumer.state, 'blocked');
   assert.equal(result.receipt.lanes.independent.state, 'passed');
-  assert.deepEqual(
-    Object.keys(result.receipt.lanes.independent.timing),
-    ['resource_setup_seconds', 'command_execution_seconds', 'cleanup_seconds'],
-  );
+  const { timing } = result.receipt.lanes.independent;
+  assert.deepEqual(Object.keys(timing), [
+    'build_execution_seconds', 'run_lock_wait_seconds',
+    'resource_setup_seconds', 'command_execution_seconds', 'cleanup_seconds',
+  ]);
+  // A lane without prebuild has only a run phase.
+  assert.equal(timing.build_execution_seconds, null);
+  assert.equal(timing.run_lock_wait_seconds, null);
+  assert.equal(result.receipt.lanes.independent.phases, null);
   assert.ok(
-    Object.values(result.receipt.lanes.independent.timing)
+    [timing.resource_setup_seconds, timing.command_execution_seconds, timing.cleanup_seconds]
       .every((seconds) => Number.isFinite(seconds) && seconds >= 0),
   );
   const receipt = JSON.parse(await readFile(result.run.receiptPath, 'utf8'));
-  assert.equal(receipt.schema, 3);
+  assert.equal(receipt.schema, 4);
   assert.equal(receipt.state, 'failed');
 });
 
@@ -847,7 +866,7 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
   assert.equal(released.length, 5);
 });
 
-test('a multi-database lane holds one postgres-admin admission and records every lease', async (t) => {
+test('a multi-database lane provisions under one postgres-admin admission and records every lease', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
   const acquired = [];
@@ -878,7 +897,8 @@ test('a multi-database lane holds one postgres-admin admission and records every
     log: () => {},
   });
   assert.equal(result.success, true);
-  assert.deepEqual(claims, { 'postgres-admin': 1 });
+  // postgres-admin is scoped to provisioning, never a lane-long claim.
+  assert.deepEqual(claims, {});
   assert.deepEqual(acquired, [
     'fmarch_proof_pair_database_migration_url',
     'fmarch_proof_pair_database_restore_migration_url',
@@ -1284,3 +1304,279 @@ test('theme failure blocks both real broad browser lanes even with keep-going', 
   assert.equal(result.success, false);
   for (const id of ids.slice(1)) assert.equal(result.receipt.lanes[id].state, 'blocked');
 });
+
+function prebuildLane(argv, resources = [], prebuild = 'cargo-test', extra = {}) {
+  const base = lane(argv, [{ kind: 'lock', name: 'cargo-target', scope: 'build' }, ...resources], { prebuild, ...extra });
+  return prebuild === 'cargo-builds'
+    ? { ...base, cargo_inputs: { builds: [{ target: 'server/bin/server', profile: 'dev' }] } }
+    : base;
+}
+
+function phaseOf(args) {
+  return args.includes('build-tests') || args.includes('build-binaries') ? 'build' : 'run';
+}
+
+test('prebuild lanes hold the Cargo lock only while compiling and run without it', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    first: prebuildLane(['cargo', 'test', '-p', 'first', '--lib']),
+    second: prebuildLane(['cargo', 'test', '-p', 'second', '--lib']),
+  }, { 'cargo-target': 1 });
+  const active = { build: new Set(), run: new Set() };
+  const overlaps = [];
+  const spawned = [];
+  const result = await runExecutionPlan(['first', 'second'], manifest, {
+    jobs: 2,
+    root,
+    spawn(file, args, options) {
+      const laneId = options.env.FMARCH_PROOF_LANE_ID;
+      const phase = phaseOf(args);
+      spawned.push({ laneId, phase, file, args, env: options.env });
+      active[phase].add(laneId);
+      if (active.build.size > 1) overlaps.push('two builds');
+      if (active.build.size > 0 && active.run.size > 0) overlaps.push('build beside run');
+      const child = new EventEmitter();
+      child.kill = () => true;
+      setTimeout(() => {
+        active[phase].delete(laneId);
+        child.emit('close', 0, null);
+      }, phase === 'build' ? 10 : 40);
+      return child;
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.ok(!overlaps.includes('two builds'), 'cargo-target must serialize the build phases');
+  assert.ok(overlaps.includes('build beside run'), 'a run phase must not block the next build');
+  const runs = spawned.filter((entry) => entry.phase === 'run');
+  for (const entry of runs) {
+    assert.deepEqual(entry.args.slice(0, 2), ['tools/proof_prebuild.mjs', 'run-tests']);
+    assert.match(entry.env.PATH, /run-phase-tools/);
+    assert.equal(entry.env.FMARCH_PROOF_PREBUILT_PLAN, undefined);
+    const shim = await readFile(join(entry.env.PATH.split(':')[0], 'cargo'), 'utf8');
+    assert.match(shim, /exit 97/);
+  }
+  for (const id of ['first', 'second']) {
+    const record = result.receipt.lanes[id];
+    assert.equal(record.state, 'passed');
+    assert.deepEqual(record.phases.build.claims, { 'cargo-target': 1 });
+    assert.deepEqual(record.phases.run.claims, {});
+    assert.match(record.phases.build.command, /proof_prebuild\.mjs build-tests --plan .*prebuild-plan\.json -- -p/);
+    assert.ok(record.timing.build_execution_seconds >= 0);
+    assert.ok(record.timing.run_lock_wait_seconds >= 0);
+    assert.ok(record.seconds >= record.timing.command_execution_seconds);
+    assert.equal(record.command, `cargo test -p ${id} --lib`);
+  }
+});
+
+test('a cargo-builds run phase resolves binaries through its plan, never PATH Cargo', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const live = prebuildLane(['npm', 'run', 'live'], [{ kind: 'lock', name: 'browser' }], 'cargo-builds');
+  const manifest = fixture({ live }, { 'cargo-target': 1, browser: 1 });
+  const spawned = [];
+  const result = await runExecutionPlan(['live'], manifest, {
+    root,
+    spawn(file, args, options) {
+      spawned.push({ file, args, env: options.env, claimsPhase: phaseOf(args) });
+      return childThatCloses(0);
+    },
+    onStart(_id, details) { spawned.push({ start: details }); },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(spawned[0].start, { command: 'npm run live', run: spawned[0].start.run, phase: 'build', claims: { 'cargo-target': 1 } });
+  assert.deepEqual(spawned[1].args.slice(0, 4), ['tools/proof_prebuild.mjs', 'build-binaries', '--plan', join(result.run.laneDirectory('live'), 'prebuild-plan.json')]);
+  assert.deepEqual([spawned[2].file, ...spawned[2].args], ['npm', 'run', 'live']);
+  assert.equal(spawned[2].env.FMARCH_PROOF_PREBUILT_PLAN, join(result.run.laneDirectory('live'), 'prebuild-plan.json'));
+  assert.deepEqual(result.receipt.lanes.live.phases.run.claims, { browser: 1 });
+});
+
+test('a failed build phase never starts the run phase and releases its locks', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const broken = prebuildLane(['cargo', 'test', '-p', 'broken', '--lib']);
+  const after = lane(['after'], [{ kind: 'lock', name: 'cargo-target' }]);
+  const manifest = fixture({ broken, after }, { 'cargo-target': 1 });
+  const spawned = [];
+  const result = await runExecutionPlan(['broken', 'after'], manifest, {
+    jobs: 2,
+    keepGoing: true,
+    root,
+    spawn(file, args) {
+      spawned.push(phaseOf(args) === 'build' ? 'broken:build' : file);
+      return childThatCloses(phaseOf(args) === 'build' ? 101 : 0);
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, false);
+  assert.deepEqual(spawned.sort(), ['after', 'broken:build']);
+  const record = result.receipt.lanes.broken;
+  assert.equal(record.state, 'failed');
+  assert.equal(record.failed_phase, 'build');
+  assert.equal(record.exit_code, 101);
+  assert.equal(record.spawn_error, null, 'a compile failure is an ordinary red, not infrastructure');
+  assert.equal(record.phases.run, undefined);
+  assert.equal(result.receipt.lanes.after.state, 'passed');
+});
+
+test('a run phase waits for its run-scoped lock without spending its timeout', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const holder = lane(['holder'], [{ kind: 'lock', name: 'browser' }]);
+  const waiter = prebuildLane(['npm', 'run', 'waiter'], [{ kind: 'lock', name: 'browser' }], 'cargo-builds');
+  waiter.execution.timeout_seconds = 1;
+  const manifest = fixture({ holder, waiter }, { 'cargo-target': 1, browser: 1 });
+  const order = [];
+  const result = await runExecutionPlan(['holder', 'waiter'], manifest, {
+    jobs: 2,
+    root,
+    spawn(file, args) {
+      const name = file === 'holder' ? 'holder' : `waiter:${phaseOf(args)}`;
+      order.push(`${name}:start`);
+      const child = new EventEmitter();
+      child.kill = () => true;
+      setTimeout(() => {
+        order.push(`${name}:end`);
+        child.emit('close', 0, null);
+      }, name === 'holder' ? 1_200 : 5);
+      return child;
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true, JSON.stringify(result.receipt.lanes.waiter));
+  assert.ok(order.indexOf('waiter:run:start') > order.indexOf('holder:end'));
+  assert.ok(order.indexOf('waiter:build:end') < order.indexOf('holder:end'), 'the build phase needs no browser');
+  assert.ok(result.receipt.lanes.waiter.timing.run_lock_wait_seconds >= 1);
+});
+
+test('an exclusive lane runs with nothing beside it', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    a: lane(['a']),
+    timing: lane(['timing'], [], { exclusive: true }),
+    b: lane(['b']),
+  });
+  const active = new Set();
+  const overlapped = [];
+  const result = await runExecutionPlan(['a', 'timing', 'b'], manifest, {
+    jobs: 3,
+    root,
+    spawn(file) {
+      active.add(file);
+      if (active.has('timing') && active.size > 1) overlapped.push([...active].sort().join('+'));
+      const child = new EventEmitter();
+      child.kill = () => true;
+      setTimeout(() => {
+        active.delete(file);
+        child.emit('close', 0, null);
+      }, 10);
+      return child;
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(overlapped, []);
+});
+
+test('parallel admission starts the costliest lanes first; serial runs keep plan order', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({ short: lane(['short']), long: lane(['long']), middle: lane(['middle']) });
+  const priorities = new Map([['short', 1], ['long', 600], ['middle', 60]]);
+  for (const [jobs, expected] of [[1, ['short', 'long', 'middle']], [2, ['long', 'middle', 'short']]]) {
+    const started = [];
+    const result = await runExecutionPlan(['short', 'long', 'middle'], manifest, {
+      jobs,
+      root,
+      runId: `priority-${jobs}`,
+      priorities,
+      spawn(file) {
+        started.push(file);
+        return childThatCloses(0, 5);
+      },
+      log: () => {},
+    });
+    assert.equal(result.success, true);
+    assert.deepEqual(started, expected);
+  }
+});
+
+test('lock amounts and exclusive mode count against capacity', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    themes: lane(['themes'], [{ kind: 'lock', name: 'browser', amount: 3 }]),
+    pair: lane(['pair'], [{ kind: 'lock', name: 'browser', amount: 2 }]),
+    one: lane(['one'], [{ kind: 'lock', name: 'browser' }]),
+    build: lane(['build'], [{ kind: 'lock', name: 'browser', mode: 'exclusive' }]),
+  }, { browser: 3 });
+  const active = new Map();
+  let maximum = 0;
+  const weights = { themes: 3, pair: 2, one: 1, build: 3 };
+  const result = await runExecutionPlan(['themes', 'pair', 'one', 'build'], manifest, {
+    jobs: 4,
+    root,
+    spawn(file) {
+      active.set(file, weights[file]);
+      maximum = Math.max(maximum, [...active.values()].reduce((sum, value) => sum + value, 0));
+      const child = new EventEmitter();
+      child.kill = () => true;
+      setTimeout(() => {
+        active.delete(file);
+        child.emit('close', 0, null);
+      }, 10);
+      return child;
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.equal(maximum, 3);
+});
+
+test('phase, mode and amount declarations fail closed', () => {
+  const capacities = { 'cargo-target': 1, browser: 2, 'postgres-admin': 1 };
+  const cargoTest = ['cargo', 'test', '-p', 'x', '--lib'];
+  const cases = [
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target', scope: 'build' }]), /build-scoped but the lane declares no prebuild/],
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target' }], { prebuild: 'cargo-test' }), /must hold cargo-target in its build scope/],
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target', scope: 'build' }, { kind: 'lock', name: 'cargo-target' }], { prebuild: 'cargo-test' }), /may not also hold cargo-target in its run phase/],
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target', scope: 'build' }], { prebuild: 'cargo-test', exclusive: true }), /may not combine prebuild with exclusive/],
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target', scope: 'during' }]), /invalid scope during/],
+    [lane(['x'], [{ kind: 'lock', name: 'browser', amount: 3 }]), /amount exceeds its capacity/],
+    [lane(['x'], [{ kind: 'lock', name: 'browser', amount: 2, mode: 'exclusive' }]), /may not combine amount with exclusive/],
+    [lane(['x'], [{ kind: 'lock', name: 'browser', mode: 'shared-ish' }]), /invalid mode/],
+    [lane(['x'], [{ kind: 'lock', name: 'browser', slots: 2 }]), /unknown field slots/],
+    [lane(['x'], [{ kind: 'lock', name: 'postgres-admin' }]), /may not claim postgres-admin/],
+    [lane(['x'], [], { exclusive: 'yes' }), /exclusive must be a boolean/],
+    [lane(['x'], [{ kind: 'lock', name: 'cargo-target', scope: 'build' }], { prebuild: 'cargo-test' }), /exactly one `cargo test`/],
+    [lane(['cargo', 'test', '-p', 'x'], [{ kind: 'lock', name: 'cargo-target', scope: 'build' }], { prebuild: 'cargo-test' }), /explicit --lib\/--bin\/--test/],
+    [lane(['npm', 'run', 'x'], [{ kind: 'lock', name: 'cargo-target', scope: 'build' }], { prebuild: 'cargo-builds' }), /must be an object/],
+    [lane(cargoTest, [{ kind: 'lock', name: 'cargo-target', scope: 'build' }], { prebuild: 'nextest' }), /unknown prebuild nextest/],
+  ];
+  for (const [candidate, pattern] of cases) {
+    assert.throws(() => validateExecutionManifest(fixture({ candidate }, capacities)), pattern);
+  }
+});
+
+test('the real manifest splits every cargo test lane and keeps timing lanes exclusive', () => {
+  const manifest = loadManifest();
+  for (const [id, entry] of Object.entries(manifest.lanes)) {
+    const argv = entry.execution.argv;
+    const runsCargoTest = argv.some((value, index) => value === 'cargo' && argv[index + 1] === 'test');
+    if (runsCargoTest) assert.equal(entry.execution.prebuild, 'cargo-test', `${id} must prebuild its tests`);
+    const runClaims = Object.keys(lockClaimsForTest(id, entry, manifest));
+    if (entry.execution.prebuild) assert.ok(!runClaims.includes('cargo-target'), `${id} run phase must not hold cargo-target`);
+  }
+  for (const id of ['test:capacity-overload', 'test:mash-scale-acceptance']) {
+    assert.equal(manifest.lanes[id].execution.exclusive, true, `${id} measures the host and must run alone`);
+  }
+  assert.equal(manifest.runner.lock_capacities['cargo-target'], 1);
+  assert.equal(manifest.runner.lock_capacities['postgres-admin'], 1);
+});
+
+function lockClaimsForTest(id, entry, manifest) {
+  return Object.fromEntries(lockClaims(id, entry, manifest.runner.lock_capacities, 'run'));
+}

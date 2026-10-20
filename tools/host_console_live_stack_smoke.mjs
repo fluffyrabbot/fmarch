@@ -80,7 +80,7 @@ import {
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -451,7 +451,7 @@ try {
         process.env.FMARCH_SHUTDOWN_DRAIN_TIMEOUT_MS ?? "185000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     });
-  server = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
+  server = spawn(...proofBinarySpawn({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: runtimeEnvironment,
     stdio: ["ignore", "pipe", "pipe"],
@@ -4582,8 +4582,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   // This harness owns the disposable database and the canonical heavy lane.
   // Replay is an explicit operator process; HTTP only reads stored traces.
   const { stdout: auditJson } = await execFileAsync(
-    "cargo",
-    proofCargoArgs({ laneId: proofLane, target: "operator_proof/bin/audit_resolution", quiet: true, args: [actionGame] }),
+    ...proofBinarySpawn({ laneId: proofLane, target: "operator_proof/bin/audit_resolution", quiet: true, args: [actionGame] }),
     { cwd: repoRoot, env: runtimeEnvironment, timeout: 180_000, maxBuffer: 16 * 1024 * 1024 },
   );
   const resolutionAudit = JSON.parse(auditJson);

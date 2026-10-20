@@ -183,7 +183,7 @@ function sameStringArray(left, right) {
 }
 
 export function planReceiptResume(receipt, manifest, context) {
-  if (receipt?.schema !== 3) throw new Error('resume requires a schema-3 proof receipt');
+  if (receipt?.schema !== 4) throw new Error('resume requires a schema-4 proof receipt');
   const expected = receipt.context ?? {};
   for (const field of [
     'commit',
@@ -1182,6 +1182,9 @@ async function main(argv) {
     context ??= currentProofContext();
     const execution = await runExecutionPlan(ordered, manifest, {
       jobs: args.jobs,
+      // Recorded costs (runtime observations over the tracked baseline) let a
+      // parallel run start its longest lanes first.
+      priorities: new Map(Object.entries(timings.lanes).map(([id, entry]) => [id, entry?.seconds ?? Infinity])),
       keepGoing: args.keepGoing,
       skippedLaneIds,
       quarantinedLaneIds,

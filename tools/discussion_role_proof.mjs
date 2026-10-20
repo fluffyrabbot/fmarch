@@ -15,7 +15,7 @@ import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migr
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 const proofLane = "test:dev-test-game-discussion";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -1119,7 +1119,7 @@ async function startApi(applicationUrl, { port = null, postingBudget = {} } = {}
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  server = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
+  server = spawn(...proofBinarySpawn({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl, env: { ...process.env, ...postingBudget } }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: process.env.RUST_LOG ?? "warn" }),
     stdio: ["ignore", "pipe", "pipe"],

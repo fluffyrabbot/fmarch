@@ -32,7 +32,7 @@ import {
   startIdentityDeliveryProviderFixture,
 } from "./identity_delivery_provider_fixture.mjs";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 const proofLane = "test:auth-invite-role-proof";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -4231,7 +4231,7 @@ async function startApi(applicationUrl, deliveryProviderCapability) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  server = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
+  server = spawn(...proofBinarySpawn({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),

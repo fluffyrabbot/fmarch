@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
-import { lockedProofCargoInvocation } from "./proof_cargo_builds.mjs";
+import { proofBinaryPath } from "./proof_cargo_builds.mjs";
 
 const proofLane = "test:database-tls-boundary";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -84,10 +84,9 @@ try {
   await run(pgCtl, ["-D", dataDir, "-l", logPath, "-w", "start"]);
   postgresRunning = true;
 
-  const schemaGateBuild = lockedProofCargoInvocation({
-    cwd: repoRoot, laneId: proofLane, target: "server/bin/fmarch-schema-gate", profile: "release", command: "build",
+  const schemaGate = await proofBinaryPath({
+    cwd: repoRoot, laneId: proofLane, target: "server/bin/fmarch-schema-gate", profile: "release",
   });
-  await run(schemaGateBuild.command, schemaGateBuild.args);
 
   const ownerPassword = "database-tls-owner-proof-password";
   const applicationPassword = "database-tls-application-proof-password";
@@ -104,7 +103,6 @@ try {
     port,
     database: "postgres",
   });
-  const releaseDir = path.join(repoRoot, "target", "release");
   await runFmarchMigrations({
     cwd: repoRoot,
     proofLane,
@@ -116,7 +114,7 @@ try {
       ...DATABASE_ONE_SHOT_TIMEOUT_VARIABLES,
     }),
   });
-  await run(path.join(releaseDir, "fmarch-schema-gate"), [], {
+  await run(schemaGate, [], {
     env: isolatedEnvironment({
       DATABASE_URL: applicationUrl,
       FMARCH_SCHEMA_GATE_TIMEOUT_MS: "10000",

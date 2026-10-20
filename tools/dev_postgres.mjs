@@ -146,8 +146,12 @@ export function socketDirectory(dataDir) {
   return path.join(path.dirname(path.resolve(dataDir)), "sockets");
 }
 
+// Proof lanes run concurrently against this one cluster, each with its own
+// pooled databases (SQLx parent pools, live servers); 100 clients is too few.
+export const DEV_POSTGRES_MAX_CONNECTIONS = 400;
+
 export function pgCtlStartOptions(config) {
-  return `-p ${config.port} -h ${config.host} -k ${quotePostgresArg(config.socketDir)}`;
+  return `-p ${config.port} -h ${config.host} -k ${quotePostgresArg(config.socketDir)} -c max_connections=${DEV_POSTGRES_MAX_CONNECTIONS}`;
 }
 
 export function quotePostgresArg(value) {

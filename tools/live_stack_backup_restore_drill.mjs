@@ -16,7 +16,7 @@ import {
   fixturePrincipalTransport,
 } from "./principal_fixture.mjs";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 const proofLane = "test:live-stack-backup-restore-drill";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.resolve(
@@ -611,7 +611,7 @@ async function startApi(applicationUrl, label) {
       ? path.join(artifactDir, `media-store-${label}`)
       : path.resolve(repoRoot, configuredMediaRoot);
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  const child = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), {
+  const child = spawn(...proofBinarySpawn({ laneId: proofLane, target: "server/bin/server" }), {
     cwd: repoRoot,
     env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),

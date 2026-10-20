@@ -11,7 +11,7 @@ import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migr
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
-import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 const proofLane = "test:dev-test-game-community-subscriptions";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -556,7 +556,7 @@ async function startApi(applicationUrl) {
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", proofCargoArgs({ laneId: proofLane, target: "server/bin/server" }), { cwd: root, env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: "warn" }), stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn(...proofBinarySpawn({ laneId: proofLane, target: "server/bin/server" }), { cwd: root, env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: "warn" }), stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

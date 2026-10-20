@@ -57,9 +57,15 @@ macOS behavior.
 
 ## Ownership and admission
 
-The Linux workflow is `heavy` and runs the declared repository DAG with
-two compatible lanes, while Cargo, database administration and browser resource
-claims retain their individual capacity-one constraints. It acquires the same
+The Linux workflow is `heavy` and runs the declared repository DAG with up to
+six compatible lanes (`runner.max_parallel`). Cargo compilation stays
+capacity-one: a lane with `execution.prebuild` holds `cargo-target` only while
+`tools/proof_prebuild.mjs` compiles its tests or harness binaries, then runs
+the hard-linked executables without Cargo (a refusing `cargo` shadows the real
+one in that run phase). `postgres-admin` is held only while a lane database is
+created or dropped. Browser and frontend-worktree claims keep capacity one. The
+real-timing lanes (capacity-overload, mash-scale) are exclusive and run alone.
+It acquires the same
 `/tmp/closure-heavy-rust-build.lock` as MeSH. The fleet admits one heavy job; a
 manual contender exits 75 without starting its command. Unregistered Cargo
 process detection remains enabled.

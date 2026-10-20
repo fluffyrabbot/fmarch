@@ -7,7 +7,7 @@
 import { spawn as spawnChild } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,11 +20,18 @@ import {
   dropDisposableDatabase,
   startRepoLocalPostgres,
 } from './dev_postgres.mjs';
+import { PREBUILT_PLAN_ENV } from './proof_cargo_builds.mjs';
+import { prebuildInvocations, runPhaseCargoShim, validatePrebuild } from './proof_prebuild.mjs';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const PROOF_RUNS_DIR = join(REPO_ROOT, 'target', 'proof-lanes', 'runs');
 const RESOURCE_KINDS = new Set(['lock', 'artifact-dir', 'artifact-input', 'postgres']);
 const EXECUTION_CLASSES = new Set(['hermetic', 'cargo', 'postgres', 'browser', 'container', 'hosted']);
+// A lock is held for one phase of a lane. Lanes without `execution.prebuild`
+// have only a run phase; a prebuild lane's build phase holds its build-scope
+// locks while Cargo compiles and releases them before its run phase begins.
+const LOCK_SCOPES = new Set(['build', 'run']);
+const LOCK_MODES = new Set(['shared', 'exclusive']);
 const DEFAULT_CLEANUP_TIMEOUT_MS = 30_000;
 const DEFAULT_TERMINATION_GRACE_MS = 5_000;
 const RESERVED_ENV = new Set([
@@ -33,6 +40,7 @@ const RESERVED_ENV = new Set([
   'FMARCH_PROOF_LANE_ID',
   'FMARCH_PROOF_LANE_DIR',
   'FMARCH_PROOF_ARTIFACT_DIR',
+  PREBUILT_PLAN_ENV,
 ]);
 
 // Terminal lane states that mean the lane was never proven in this run. A
@@ -181,6 +189,8 @@ function laneExecution(laneId, lane) {
     argv: declared.argv,
     env: declared.env ?? {},
     resources: declared.resources,
+    prebuild: declared.prebuild ?? null,
+    exclusive: declared.exclusive === true,
   };
 }
 
@@ -189,26 +199,32 @@ function laneLabel(laneId, lane) {
   return execution.argv.map((part) => String(part)).join(' ');
 }
 
-function lockClaims(laneId, lane, capacities) {
+function lockAmount(resource, capacities) {
+  return resource.mode === 'exclusive' ? capacities[resource.name] : resource.amount ?? 1;
+}
+
+// The locks one phase of a lane holds. Database create/drop is not a lane
+// claim: the runner serializes it through `postgres-admin` only while the
+// administrative statements run (see `postgresAdminScope`), because CREATE
+// DATABASE from a shared template must not race, while lane-isolated
+// databases are independent once they exist.
+export function lockClaims(laneId, lane, capacities, scope = 'run') {
   const execution = laneExecution(laneId, lane);
   const claims = new Map();
-  let needsPostgresAdmin = false;
   for (const resource of execution.resources) {
-    if (resource.kind === 'lock') {
-      claims.set(resource.name, (claims.get(resource.name) ?? 0) + 1);
-    }
-    // Database create/drop is an administrative operation against the shared
-    // repo-local cluster.  Keep that whole first-generation database lane
-    // serialized until profiling proves that provisioning and test bodies can
-    // be safely decoupled.
-    if (resource.kind === 'postgres' && capacities['postgres-admin']) {
-      needsPostgresAdmin = true;
-    }
-  }
-  if (needsPostgresAdmin) {
-    claims.set('postgres-admin', (claims.get('postgres-admin') ?? 0) + 1);
+    if (resource.kind !== 'lock' || (resource.scope ?? 'run') !== scope) continue;
+    claims.set(resource.name, (claims.get(resource.name) ?? 0) + lockAmount(resource, capacities));
   }
   return claims;
+}
+
+function lanePhases(laneId, lane) {
+  return laneExecution(laneId, lane).prebuild ? ['build', 'run'] : ['run'];
+}
+
+function needsPostgresAdmin(execution, capacities) {
+  return Boolean(capacities['postgres-admin']) &&
+    execution.resources.some((resource) => resource.kind === 'postgres');
 }
 
 function dependenciesFor(laneId, manifest) {
@@ -318,6 +334,32 @@ export function validateExecutionManifest(manifest) {
         if (!capacities[resource.name]) {
           throw new Error(`proof lane ${laneId} claims unknown lock ${resource.name}`);
         }
+        for (const key of Object.keys(resource)) {
+          if (!['kind', 'name', 'scope', 'mode', 'amount'].includes(key)) {
+            throw new Error(`proof lane ${laneId} lock ${resource.name} has unknown field ${key}`);
+          }
+        }
+        if (resource.scope !== undefined && !LOCK_SCOPES.has(resource.scope)) {
+          throw new Error(`proof lane ${laneId} lock ${resource.name} has invalid scope ${resource.scope}`);
+        }
+        if (resource.scope === 'build' && !execution.prebuild) {
+          throw new Error(`proof lane ${laneId} lock ${resource.name} is build-scoped but the lane declares no prebuild`);
+        }
+        if (resource.mode !== undefined && !LOCK_MODES.has(resource.mode)) {
+          throw new Error(`proof lane ${laneId} lock ${resource.name} has invalid mode ${resource.mode}`);
+        }
+        if (resource.amount !== undefined) {
+          if (resource.mode === 'exclusive') {
+            throw new Error(`proof lane ${laneId} lock ${resource.name} may not combine amount with exclusive mode`);
+          }
+          positiveInteger(resource.amount, `proof lane ${laneId} lock ${resource.name} amount`);
+          if (resource.amount > capacities[resource.name]) {
+            throw new Error(`proof lane ${laneId} lock ${resource.name} amount exceeds its capacity`);
+          }
+        }
+        if (resource.name === 'postgres-admin') {
+          throw new Error(`proof lane ${laneId} may not claim postgres-admin; the runner scopes it to database provisioning`);
+        }
       }
       if (resource.kind === 'artifact-dir') {
         if (!validEnvironmentName(resource.env)) {
@@ -353,6 +395,22 @@ export function validateExecutionManifest(manifest) {
           throw new Error(`proof lane ${laneId} hard-codes DATABASE_URL despite runner-owned Postgres`);
         }
       }
+    }
+    validatePrebuild(laneId, lane);
+    if (execution.prebuild) {
+      const buildLocks = execution.resources.filter((resource) => resource.kind === 'lock' && resource.scope === 'build');
+      if (!buildLocks.some((resource) => resource.name === 'cargo-target')) {
+        throw new Error(`proof lane ${laneId} prebuild must hold cargo-target in its build scope`);
+      }
+      if (execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'cargo-target' && resource.scope !== 'build')) {
+        throw new Error(`proof lane ${laneId} prebuild may not also hold cargo-target in its run phase`);
+      }
+      if (execution.exclusive) {
+        throw new Error(`proof lane ${laneId} may not combine prebuild with exclusive execution`);
+      }
+    }
+    if (lane.execution.exclusive !== undefined && typeof lane.execution.exclusive !== 'boolean') {
+      throw new Error(`proof lane ${laneId} execution exclusive must be a boolean`);
     }
     for (const key of Object.keys(execution.env)) {
       if (!validEnvironmentName(key)) {
@@ -638,6 +696,9 @@ export async function prepareLaneInvocation({
   cleanupTimeoutMs = DEFAULT_CLEANUP_TIMEOUT_MS,
   setTimeoutFn = globalThis.setTimeout,
   clearTimeoutFn = globalThis.clearTimeout,
+  // Serializes database create/drop against the shared cluster; the runner
+  // passes a postgres-admin lock scope, direct callers may run unscoped.
+  postgresAdminScope = async (operation) => await operation(),
 } = {}) {
   const lane = manifest?.lanes?.[laneId];
   if (!lane) throw new Error(`unknown proof lane ${laneId}`);
@@ -658,6 +719,11 @@ export async function prepareLaneInvocation({
   };
   const resources = [];
   const databases = [];
+  const postgresResources = execution.resources.filter((resource) => resource.kind === 'postgres');
+  const releaseAll = async (options) => {
+    if (resources.length === 0) return;
+    await postgresAdminScope(async () => await releaseLeases(resources, options), options.signal);
+  };
   try {
     for (const resource of execution.resources) {
       if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('proof lane preparation aborted');
@@ -670,12 +736,19 @@ export async function prepareLaneInvocation({
         }
         assertInsideRun(run, source, `artifact input ${resource.from}`);
         childEnv[resource.env] = source;
-      } else if (resource.kind === 'postgres') {
-        const lease = await databaseProvider.acquire({ run, laneId, resource, signal });
-        resources.push(lease);
-        databases.push({ urlEnv: resource.url_env, lease });
-        childEnv[resource.url_env] = lease.url;
       }
+    }
+    if (postgresResources.length > 0) {
+      // One administrative admission covers every database the lane owns.
+      await postgresAdminScope(async () => {
+        for (const resource of postgresResources) {
+          if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('proof lane preparation aborted');
+          const lease = await databaseProvider.acquire({ run, laneId, resource, signal });
+          resources.push(lease);
+          databases.push({ urlEnv: resource.url_env, lease });
+          childEnv[resource.url_env] = lease.url;
+        }
+      }, signal);
     }
   } catch (error) {
     if (resources.length === 0) throw error;
@@ -688,7 +761,7 @@ export async function prepareLaneInvocation({
     });
     try {
       await awaitAbortable(
-        () => releaseLeases(resources, { success: false, signal: cleanupScope.signal }),
+        () => releaseAll({ success: false, signal: cleanupScope.signal }),
         cleanupScope.signal,
       );
     } catch (cleanupError) {
@@ -724,7 +797,7 @@ export async function prepareLaneInvocation({
     database: databases[0]?.lease ?? null,
     databases,
     async releaseResources({ success, signal }) {
-      await releaseLeases(resources, { success, signal });
+      await releaseAll({ success, signal });
     },
   };
 }
@@ -960,10 +1033,14 @@ function serializableLane(record) {
     finished_at: record.finishedAt ?? null,
     seconds: record.seconds ?? null,
     timing: {
+      build_execution_seconds: record.buildSeconds ?? null,
+      run_lock_wait_seconds: record.runLockWaitSeconds ?? null,
       resource_setup_seconds: record.resourceSetupSeconds ?? null,
       command_execution_seconds: record.commandExecutionSeconds ?? null,
       cleanup_seconds: record.cleanupSeconds ?? null,
     },
+    phases: record.phases ?? null,
+    failed_phase: record.failedPhase ?? null,
     status: record.status ?? null,
     exit_code: record.exitCode ?? null,
     signal: record.signal ?? null,
@@ -1010,6 +1087,8 @@ export async function runExecutionPlan(
     keepGoing = false,
     skippedLaneIds = new Set(),
     quarantinedLaneIds = new Set(),
+    // Recorded lane cost in seconds; a parallel run admits costlier lanes first.
+    priorities = new Map(),
     preemptionSignalPath = defaultPreemptionSignalPath(root),
     onStart = () => {},
     onResult = () => {},
@@ -1055,7 +1134,7 @@ export async function runExecutionPlan(
     }),
   );
   const receipt = {
-    schema: 3,
+    schema: 4,
     id: run.id,
     state: 'running',
     started_at: new Date(now()).toISOString(),
@@ -1190,26 +1269,129 @@ export async function runExecutionPlan(
     failureSeen = true;
   };
 
-  const start = async (laneId, claims, externalLocks) => {
+  // ---- Lock admission ---------------------------------------------------
+  // In-process counts are a fast path; the cross-run lock directories are the
+  // arbiter, so two waiters can never both hold a slot.
+  const releaseWaiters = new Set();
+  const notifyRelease = () => {
+    const waiters = [...releaseWaiters];
+    releaseWaiters.clear();
+    for (const wake of waiters) wake();
+  };
+  const nextRelease = (signal) => new Promise((resolveWait) => {
+    const done = () => {
+      clearTimeout(timer);
+      releaseWaiters.delete(done);
+      signal?.removeEventListener('abort', done);
+      resolveWait();
+    };
+    // Another runner process releases without notifying this one; poll too.
+    const timer = setTimeout(done, 50);
+    releaseWaiters.add(done);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+  const acquireHeld = async (claims, laneId) => {
+    const external = await crossRunLocks.acquire(claims, laneId);
+    if (!external) return null;
+    claim(claims, used);
+    let released = false;
+    return {
+      claims,
+      async release() {
+        if (released) return;
+        released = true;
+        release(claims, used);
+        try {
+          await external.release();
+        } finally {
+          notifyRelease();
+        }
+      },
+    };
+  };
+  const waitForClaims = async (claims, laneId, signal) => {
+    while (true) {
+      if (signal?.aborted) throw abortReason(signal, `proof lane ${laneId} lock wait aborted`);
+      if (hasCapacity(claims, used, capacities)) {
+        const held = await acquireHeld(claims, laneId);
+        if (held) return held;
+      }
+      await nextRelease(signal);
+    }
+  };
+  const postgresAdminClaims = new Map([['postgres-admin', 1]]);
+  const postgresAdminScope = (laneId) => async (operation, signal) => {
+    if (!capacities['postgres-admin']) return await operation();
+    const held = await waitForClaims(postgresAdminClaims, laneId, signal ?? runnerAbort.signal);
+    try {
+      return await operation();
+    } finally {
+      await held.release();
+    }
+  };
+  let runPhaseToolsDir = null;
+  const runPhaseTools = async () => {
+    if (runPhaseToolsDir) return runPhaseToolsDir;
+    const directory = assertInsideRun(run, join(run.runDir, 'run-phase-tools'), 'run-phase tools directory');
+    await mkdir(directory, { recursive: true });
+    const shim = join(directory, 'cargo');
+    await writeFile(shim, runPhaseCargoShim());
+    await chmod(shim, 0o755);
+    runPhaseToolsDir = directory;
+    return directory;
+  };
+
+  const childPassed = (result) =>
+    result.exitCode === 0 && !result.spawnError && !result.timedOut && !result.groupTerminatedAfterLeaderExit;
+  const runChild = async (laneId, { file, args, cwd, env: childEnv, timeoutSeconds }) => {
+    const started = now();
+    const detached = process.platform !== 'win32';
+    const child = spawn(file, args, { cwd, env: childEnv, stdio: 'inherit', detached });
+    const childMonitor = observeChildResult(child, {
+      timeoutSeconds,
+      setTimeoutFn,
+      clearTimeoutFn,
+      terminate: (signal) => terminateChildProcess(child, signal, detached),
+      groupIsAlive: () => processGroupIsAlive(child, detached),
+      terminationGraceMilliseconds,
+    });
+    const activeProcess = {
+      requestTermination: (reason) => childMonitor.requestTermination(reason),
+    };
+    activeProcesses.set(laneId, activeProcess);
+    if (interruptedSignal) activeProcess.requestTermination('external');
+    const result = await childMonitor.result;
+    activeProcesses.delete(laneId);
+    return { ...result, seconds: Math.round((now() - started) / 100) / 10 };
+  };
+
+  const start = async (laneId, initialHold) => {
     const record = records.get(laneId);
-    const execution = laneExecution(laneId, manifest.lanes[laneId]);
+    const lane = manifest.lanes[laneId];
+    const execution = laneExecution(laneId, lane);
+    let hold = initialHold;
+    const releaseHold = async () => {
+      const current = hold;
+      hold = null;
+      if (current) await current.release();
+    };
     const preparationAbort = new AbortController();
     const abortPreparationForRunner = () => {
       if (!preparationAbort.signal.aborted) preparationAbort.abort(runnerAbort.signal.reason);
     };
     if (runnerAbort.signal.aborted) abortPreparationForRunner();
     else runnerAbort.signal.addEventListener('abort', abortPreparationForRunner, { once: true });
-    const deadlineStartedAt = Date.now();
+    // The lane budget covers its own work: compilation, setup, and the run.
+    // Time spent waiting for a run-phase lock is added back.
+    let budgetStartedAt = Date.now();
+    const remainingSeconds = () =>
+      Math.max(0.001, (budgetStartedAt + execution.timeoutSeconds * 1_000 - Date.now()) / 1_000);
     let preparationTimedOut = false;
-    const preparationDeadline = globalThis.setTimeout(() => {
-      if (preparationAbort.signal.aborted) return;
-      preparationTimedOut = true;
-      preparationAbort.abort(new Error(`proof lane ${laneId} preparation timed out after ${execution.timeoutSeconds}s`));
-    }, execution.timeoutSeconds * 1_000);
-    activePreparations.set(laneId, preparationAbort);
+    let preparationDeadline = null;
     let invocation;
     let resourcesReleased = false;
-    const resourceSetupStarted = now();
+    let prebuiltDir = null;
+    let resourceSetupStarted = now();
     const fail = (error) => {
       record.status = 1;
       const detail = error?.message ?? String(error);
@@ -1251,12 +1433,103 @@ export async function runExecutionPlan(
         record.cleanupSeconds = elapsedSeconds(cleanupStarted, now());
       }
     };
-    claim(claims, used);
     record.state = 'running';
     record.startedAt = new Date(now()).toISOString();
     try {
       await refreshReceipt();
-      onStart(laneId, { command: record.command, run, claims: Object.fromEntries(claims) });
+      onStart(laneId, {
+        command: record.command,
+        run,
+        phase: execution.prebuild ? 'build' : 'run',
+        claims: Object.fromEntries(initialHold.claims),
+      });
+      let runArgv = execution.argv;
+      const runPhaseEnv = {};
+      if (execution.prebuild) {
+        const laneDir = assertInsideRun(run, run.laneDirectory(laneId), `lane ${laneId} directory`);
+        await mkdir(laneDir, { recursive: true });
+        const planPath = join(laneDir, 'prebuild-plan.json');
+        prebuiltDir = join(laneDir, 'prebuilt');
+        const invocations = prebuildInvocations(laneId, lane, { planPath });
+        runArgv = invocations.run;
+        record.laneDir = laneDir;
+        const buildCommand = invocations.build.join(' ');
+        record.phases = {
+          build: {
+            command: buildCommand,
+            claims: Object.fromEntries(initialHold.claims),
+            started_at: new Date(now()).toISOString(),
+          },
+        };
+        await refreshReceipt();
+        await appendFile(join(laneDir, 'lane.log'), `[build] ${buildCommand}\n`);
+        log(`\n[proof ${run.id}] ${laneId} (build): ${buildCommand}`);
+        if (interruptedSignal) throw new Error(`proof runner interrupted by ${interruptedSignal}`);
+        const built = await runChild(laneId, {
+          file: invocations.build[0],
+          args: invocations.build.slice(1),
+          cwd: run.root,
+          env: {
+            ...env,
+            ...execution.env,
+            FMARCH_PROOF_RUN_ID: run.id,
+            FMARCH_PROOF_RUN_DIR: run.runDir,
+            FMARCH_PROOF_LANE_ID: laneId,
+            FMARCH_PROOF_LANE_DIR: laneDir,
+          },
+          timeoutSeconds: remainingSeconds(),
+        });
+        Object.assign(record.phases.build, {
+          finished_at: new Date(now()).toISOString(),
+          seconds: built.seconds,
+          exit_code: built.exitCode,
+          signal: built.signal,
+          timed_out: built.timedOut,
+        });
+        record.buildSeconds = built.seconds;
+        // Cargo is done: let the next lane compile while this one runs.
+        await releaseHold();
+        await refreshReceipt();
+        if (!childPassed(built) || interruptedSignal) {
+          record.seconds = built.seconds;
+          record.exitCode = built.exitCode;
+          record.signal = built.signal;
+          record.timedOut = built.timedOut;
+          record.spawnError = built.spawnError;
+          record.groupTerminatedAfterLeaderExit = built.groupTerminatedAfterLeaderExit;
+          if (built.groupTerminatedAfterLeaderExit) {
+            record.spawnError = 'child process group outlived a successful leader and was terminated';
+          }
+          record.failedPhase = 'build';
+          record.status = 1;
+          if (interruptedSignal) {
+            record.interruptedBy = interruptedSignal;
+            record.spawnError ??= `proof runner interrupted by ${interruptedSignal}`;
+          }
+          applyTerminalStatus(record, laneId);
+          await appendFile(join(laneDir, 'lane.log'), `${record.state} in build after ${built.seconds}s\n`);
+          return;
+        }
+        const runClaims = lockClaims(laneId, lane, capacities, 'run');
+        const waitStarted = Date.now();
+        hold = await waitForClaims(runClaims, laneId, runnerAbort.signal);
+        const waited = Date.now() - waitStarted;
+        budgetStartedAt += waited;
+        record.runLockWaitSeconds = elapsedSeconds(0, waited);
+        record.phases.run = { command: runArgv.join(' '), claims: Object.fromEntries(runClaims) };
+        const tools = await runPhaseTools();
+        // Nothing in the run phase may compile: a refusing `cargo` shadows
+        // the real one, and harnesses resolve binaries through the plan.
+        runPhaseEnv.PATH = `${tools}${env.PATH ? `:${env.PATH}` : ''}`;
+        if (execution.prebuild === 'cargo-builds') runPhaseEnv[PREBUILT_PLAN_ENV] = planPath;
+      }
+      resourceSetupStarted = now();
+      preparationDeadline = globalThis.setTimeout(() => {
+        if (preparationAbort.signal.aborted) return;
+        preparationTimedOut = true;
+        preparationAbort.abort(new Error(`proof lane ${laneId} preparation timed out after ${execution.timeoutSeconds}s`));
+      }, remainingSeconds() * 1_000);
+      activePreparations.set(laneId, preparationAbort);
       invocation = await prepareLaneInvocation({
         laneId,
         manifest,
@@ -1269,6 +1542,7 @@ export async function runExecutionPlan(
         cleanupTimeoutMs,
         setTimeoutFn,
         clearTimeoutFn,
+        postgresAdminScope: postgresAdminScope(laneId),
       });
       record.resourceSetupSeconds = elapsedSeconds(resourceSetupStarted, now());
       globalThis.clearTimeout(preparationDeadline);
@@ -1285,34 +1559,20 @@ export async function runExecutionPlan(
       // A crash during the child process must still leave an exact diagnostic
       // directory/database identity in the receipt.
       await refreshReceipt();
-      await appendFile(join(invocation.laneDir, 'lane.log'), `${record.command}\n`);
-      log(`\n[proof ${run.id}] ${laneId}: ${record.command}`);
+      const runCommand = runArgv.join(' ');
+      await appendFile(join(invocation.laneDir, 'lane.log'), execution.prebuild ? `[run] ${runCommand}\n` : `${record.command}\n`);
+      log(`\n[proof ${run.id}] ${laneId}${execution.prebuild ? ' (run)' : ''}: ${execution.prebuild ? runCommand : record.command}`);
       if (interruptedSignal) throw new Error(`proof runner interrupted by ${interruptedSignal}`);
-      const started = now();
-      const detached = process.platform !== 'win32';
-      const child = spawn(invocation.file, invocation.args, {
+      const processResult = await runChild(laneId, {
+        file: runArgv[0],
+        args: runArgv.slice(1),
         cwd: invocation.cwd,
-        env: invocation.env,
-        stdio: 'inherit',
-        detached,
+        env: { ...invocation.env, ...runPhaseEnv },
+        timeoutSeconds: remainingSeconds(),
       });
-      const childMonitor = observeChildResult(child, {
-        timeoutSeconds: Math.max(0.001, (deadlineStartedAt + execution.timeoutSeconds * 1_000 - Date.now()) / 1_000),
-        setTimeoutFn,
-        clearTimeoutFn,
-        terminate: (signal) => terminateChildProcess(child, signal, detached),
-        groupIsAlive: () => processGroupIsAlive(child, detached),
-        terminationGraceMilliseconds,
-      });
-      const activeProcess = {
-        requestTermination: (reason) => childMonitor.requestTermination(reason),
-      };
-      activeProcesses.set(laneId, activeProcess);
-      if (interruptedSignal) activeProcess.requestTermination('external');
-      const processResult = await childMonitor.result;
-      activeProcesses.delete(laneId);
-      record.seconds = Math.round((now() - started) / 100) / 10;
-      record.commandExecutionSeconds = record.seconds;
+      record.commandExecutionSeconds = processResult.seconds;
+      record.seconds = Math.round(((record.buildSeconds ?? 0) + processResult.seconds) * 10) / 10;
+      if (record.phases?.run) record.phases.run.seconds = processResult.seconds;
       record.exitCode = processResult.exitCode;
       record.signal = processResult.signal;
       record.timedOut = processResult.timedOut;
@@ -1321,7 +1581,8 @@ export async function runExecutionPlan(
       if (processResult.groupTerminatedAfterLeaderExit) {
         record.spawnError = 'child process group outlived a successful leader and was terminated';
       }
-      record.status = processResult.exitCode === 0 && !processResult.spawnError && !processResult.timedOut && !processResult.groupTerminatedAfterLeaderExit ? 0 : 1;
+      record.status = childPassed(processResult) ? 0 : 1;
+      if (record.status !== 0 && execution.prebuild) record.failedPhase = 'run';
       if (interruptedSignal) {
         record.interruptedBy = interruptedSignal;
         record.status = 1;
@@ -1350,14 +1611,17 @@ export async function runExecutionPlan(
       activePreparations.delete(laneId);
       activeProcesses.delete(laneId);
       await releaseInvocation(false);
+      if (prebuiltDir) {
+        // The links only pin executables for this run phase; the plan stays.
+        await rm(prebuiltDir, { recursive: true, force: true }).catch(() => {});
+      }
       try {
-        await externalLocks.release();
+        await releaseHold();
       } catch (error) {
         fail(new Error(`cross-run lock cleanup failed: ${error?.message ?? error}`));
       }
       record.finishedAt ??= new Date(now()).toISOString();
       if (interruptedSignal) record.interruptedBy ??= interruptedSignal;
-      release(claims, used);
       await refreshReceipt();
       onResult(laneId, {
         seconds: record.seconds ?? 0,
@@ -1368,6 +1632,8 @@ export async function runExecutionPlan(
         database: record.database ?? null,
         databases: record.databases ?? [],
         timing: {
+          build_execution_seconds: record.buildSeconds ?? null,
+          run_lock_wait_seconds: record.runLockWaitSeconds ?? null,
           resource_setup_seconds: record.resourceSetupSeconds ?? null,
           command_execution_seconds: record.commandExecutionSeconds ?? null,
           cleanup_seconds: record.cleanupSeconds ?? null,
@@ -1375,6 +1641,13 @@ export async function runExecutionPlan(
       });
     }
   };
+
+  // Serial runs keep plan order. A parallel run admits the costliest lanes
+  // first so the long test bodies start while shorter work fills the gaps.
+  const admissionOrder = jobs > 1
+    ? [...planned].sort((left, right) => (priorities.get(right) ?? Infinity) - (priorities.get(left) ?? Infinity))
+    : planned;
+  let exclusiveLane = null;
 
   try {
   while (true) {
@@ -1410,17 +1683,20 @@ export async function runExecutionPlan(
     let startedAny = false;
     let waitingForCrossRunLock = false;
     if (!admissionHalted) {
-      for (const laneId of planned) {
-        if (running.size >= jobs) break;
+      for (const laneId of admissionOrder) {
+        if (running.size >= jobs || exclusiveLane) break;
         const record = records.get(laneId);
         if (record.state !== 'pending') continue;
         if (phases[laneId] === 2 && !focused.every((id) => records.get(id)?.state === 'passed')) continue;
         if (!dependenciesFor(laneId, manifest).every((dependency) => records.get(dependency)?.state === 'passed')) continue;
-        const claims = lockClaims(laneId, manifest.lanes[laneId], capacities);
+        const execution = laneExecution(laneId, manifest.lanes[laneId]);
+        // An exclusive lane measures the host; it runs with nothing beside it.
+        if (execution.exclusive && running.size > 0) continue;
+        const claims = lockClaims(laneId, manifest.lanes[laneId], capacities, lanePhases(laneId, manifest.lanes[laneId])[0]);
         if (!hasCapacity(claims, used, capacities)) continue;
-        let externalLocks;
+        let held;
         try {
-          externalLocks = await crossRunLocks.acquire(claims, laneId);
+          held = await acquireHeld(claims, laneId);
         } catch (error) {
           record.state = 'failed';
           record.status = 1;
@@ -1429,20 +1705,24 @@ export async function runExecutionPlan(
           await refreshReceipt();
           continue;
         }
-        if (!externalLocks) {
+        if (!held) {
           waitingForCrossRunLock = true;
           continue;
         }
-        const promise = start(laneId, claims, externalLocks).finally(() => running.delete(laneId));
+        if (execution.exclusive) exclusiveLane = laneId;
+        const promise = start(laneId, held).finally(() => {
+          running.delete(laneId);
+          if (exclusiveLane === laneId) exclusiveLane = null;
+        });
         running.set(laneId, promise);
         startedAny = true;
       }
     }
 
     if (running.size > 0) {
-      // Let all immediately compatible lanes start before waiting.  When no
-      // lane started in this pass, capacity or dependencies require a finish.
-      if (!startedAny || running.size >= jobs) await Promise.race(running.values());
+      // Let all immediately compatible lanes start before waiting. Otherwise
+      // wait for a lane to finish or to release a lock it no longer needs.
+      if (!startedAny || running.size >= jobs) await Promise.race([...running.values(), nextRelease()]);
       else await Promise.resolve();
       continue;
     }
