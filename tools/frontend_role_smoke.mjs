@@ -270,6 +270,16 @@ try {
 
       const surface = page.getByTestId(role.surfaceTestId);
       await surface.waitFor({ state: "visible" });
+      if (role.id === "board-player") {
+        const card = page.getByTestId("game-card-midsummer");
+        const text = await card.innerText();
+        for (const fact of ["7 of 13 seats filled", "Hosted by Rowan", "Deadline", "You're playing"]) {
+          assert.ok(text.includes(fact), `board card missing ${fact}`);
+        }
+        const heading = await surface.locator("h1").boundingBox();
+        const firstCard = await card.boundingBox();
+        assert.ok(firstCard.y - (heading.y + heading.height) <= 32, "first game follows the heading without an empty hero band");
+      }
       const bodyText = await page.textContent("body");
       if (!bodyText?.includes(role.requiredText)) {
         throw new Error(`${role.id} ${viewport.name} did not render ${role.requiredText}`);
