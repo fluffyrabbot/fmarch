@@ -25,9 +25,10 @@ export async function buildAdminRuntimeRouteData({
     principalId,
     capabilities,
   });
-  const surfaceHeader = adminSurfaceHeader(access.capabilityLabel);
+  const surfaceHeader = adminSurfaceHeader(access);
   const operator = Object.freeze({
     principalId,
+    capability: access.capability,
     capabilityLabel: access.capabilityLabel,
   });
   const communityAudit = capabilities.some((capability) => capability?.kind === "GlobalAdmin")
@@ -213,6 +214,7 @@ export async function buildAdminRuntimeAuditDetailData({ audit, ...context }) {
       eyebrow: "Admin audit",
       title: selected?.label ?? "Audit unavailable",
       summary: selected?.boundaryDetail ?? "The requested live audit is not available.",
+      capability: overview.access.capability,
       capabilityLabel: overview.access.capabilityLabel,
       capabilityTestId: "admin-audit-detail-capability",
     }),
@@ -256,13 +258,14 @@ export function summarizeRecoveryGate(body) {
   });
 }
 
-function adminSurfaceHeader(capabilityLabel) {
+function adminSurfaceHeader(access) {
   return buildAppSurfaceHeaderViewModel({
     surface: "admin",
     eyebrow: "Admin",
     title: "Operations",
     summary: "Manage live games, access, recovery, and system health.",
-    capabilityLabel,
+    capability: access.capability,
+    capabilityLabel: access.capabilityLabel,
     capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
   });
 }

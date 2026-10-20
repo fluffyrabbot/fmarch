@@ -188,6 +188,10 @@ test("page order, request scope, uniqueness, and continuation cursor are bound",
 
 function gameEntry(overrides = {}) {
   return {
+    deadline: null,
+    seats_filled: 7,
+    seats_total: 13,
+    host_name: "Rowan",
     game: FIRST_GAME,
     pack: "mafiascum",
     status: "active",
@@ -207,3 +211,11 @@ function originTopic(overrides = {}) {
     ...overrides,
   };
 }
+
+ test("game overview facts survive decoding and reject inconsistent counts", () => {
+  const entry = gameEntry({ deadline: 1800000000 });
+  assert.deepEqual(decodeGameIndexPage({ games: [entry], next_cursor: null }).games[0], entry);
+  for (const facts of [{ seats_filled: -1 }, { seats_total: 6 }, { seats_total: 1.5 }, { deadline: "tomorrow" }, { host_name: "" }]) {
+    assert.equal(decodeGameIndexPage({ games: [gameEntry(facts)], next_cursor: null }), null);
+  }
+});

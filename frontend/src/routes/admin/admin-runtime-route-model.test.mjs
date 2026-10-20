@@ -37,6 +37,8 @@ test("admin route selects a live game without requiring a query parameter", asyn
     capabilities: [{ kind: "GlobalAdmin" }],
     gameIndexPage,
   });
+  assert.equal(data.operator.capability.kind, "GlobalAdmin");
+  assert.equal(data.surfaceHeader.capability.kind, "GlobalAdmin");
   assert.equal(data.gameSelection.selectedGame, "setup-game");
   assert.equal(data.shell.game, "setup-game");
   assert.equal(data.gameSetup[0].href, "/g/setup-game/setup");

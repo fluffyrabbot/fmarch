@@ -3393,9 +3393,9 @@ async function driveAdminBrowser(frontendBaseUrl) {
   }
 
   await page.getByTestId("admin-surface").waitFor({ state: "visible" });
-  const capability = await page.getByTestId("admin-capability").innerText();
-  if (!["GlobalAdmin", "Site administrator"].includes(capability)) {
-    throw new Error(`admin capability did not render GlobalAdmin: ${capability}`);
+  const capability = await page.getByTestId("admin-capability").getAttribute("data-capability-kind");
+  if (capability !== "GlobalAdmin") {
+    throw new Error(`admin capability did not declare GlobalAdmin: ${capability}`);
   }
   const supportingEvidence = page.getByTestId("admin-supporting-evidence");
   await supportingEvidence.evaluate((node) => {
@@ -3698,9 +3698,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   initialRecovery.votecount = await page.evaluate(
     () => window.__fmarchPlayerProjection.votecount,
   );
-  const capability = await page.getByTestId("player-capability").innerText();
-  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
-    throw new Error(`player capability did not render SlotOccupant: ${capability}`);
+  const capability = await page.getByTestId("player-capability").getAttribute("data-capability-kind");
+  if (capability !== "SlotOccupant") {
+    throw new Error(`player capability did not declare SlotOccupant: ${capability}`);
   }
   const firstPost = await page.locator('[data-testid^="thread-post-"]').first();
   await firstPost.waitFor({ state: "visible" });
@@ -4398,9 +4398,9 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   }
 
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
-  const capability = await page.getByTestId("player-capability").innerText();
-  if (!/^SLOTOCCUPANT\([^)]+\)$/iu.test(capability)) {
-    throw new Error(`action player capability did not render SlotOccupant: ${capability}`);
+  const capability = await page.getByTestId("player-capability").getAttribute("data-capability-kind");
+  if (capability !== "SlotOccupant") {
+    throw new Error(`action player capability did not declare SlotOccupant: ${capability}`);
   }
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
