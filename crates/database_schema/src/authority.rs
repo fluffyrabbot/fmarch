@@ -903,6 +903,57 @@ pub async fn reconcile_database_authority(
     verify_catalog_manifest_on(&mut connection).await?;
     verify_guard_manifest_on(&mut connection).await?;
 
+    // Login roles, role memberships and parameter ACLs live in catalogs the
+    // whole cluster shares, but advisory locks are scoped to one database:
+    // reconcilers of two databases on one cluster (concurrent proof lanes,
+    // per-test databases) can still race on the same catalog tuple. The
+    // reconciliation is idempotent, so a lost race rolls back and retries.
+    let mut attempt = 0;
+    loop {
+        match reconcile_authority_transaction(
+            &mut connection,
+            application_password,
+            key_admin_password,
+        )
+        .await
+        {
+            Err(DatabaseAuthorityError::Storage(error))
+                if attempt < SHARED_CATALOG_RETRIES && shared_catalog_conflict(&error) =>
+            {
+                attempt += 1;
+                sqlx::query("SELECT pg_catalog.pg_sleep($1)")
+                    .bind(0.025 * f64::from(attempt))
+                    .execute(&mut *connection)
+                    .await?;
+            }
+            result => return result,
+        }
+    }
+}
+
+const SHARED_CATALOG_RETRIES: u32 = 20;
+
+/// A concurrent update of a cluster-shared catalog row: another database's
+/// reconciler won the same `pg_authid`/`pg_auth_members`/ACL tuple.
+fn shared_catalog_conflict(error: &sqlx::Error) -> bool {
+    let Some(error) = error.as_database_error() else {
+        return false;
+    };
+    match error.code().as_deref() {
+        Some("XX000") => error.message().contains("tuple concurrently"),
+        Some("23505") => error
+            .constraint()
+            .is_some_and(|name| name.starts_with("pg_")),
+        Some("40P01") => true,
+        _ => false,
+    }
+}
+
+async fn reconcile_authority_transaction(
+    connection: &mut PgConnection,
+    application_password: &str,
+    key_admin_password: &str,
+) -> Result<(), DatabaseAuthorityError> {
     let mut tx = connection.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(5065787916851041842)")
         .execute(&mut *tx)
