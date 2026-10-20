@@ -15417,10 +15417,10 @@ test("session card and markdown include role credential URLs and tokens", async 
             votecountRows: [{ target: "slot-3", count: 1 }],
             votecountActions: ["publish_votecount"],
             closedStatus: { state: "closed" },
-            staleBody: "Official votecount for D02\n- slot-3: 1",
+            staleBody: "Official votecount for D02\n- player-seed · S3: 1",
           },
           expectedBody: "Official votecount for D02\n\nNo active ballots.",
-          staleBody: "Official votecount for D02\n- slot-3: 1",
+          staleBody: "Official votecount for D02\n- player-seed · S3: 1",
           publish: {
             state: "ack",
             requestEnvelope: {
@@ -15467,6 +15467,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       concurrentVoteRace: {
         status: "passed",
         targetSlot: "slot-3",
+        targetLabel: "player-seed · S3",
         target: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
         playerCommandStateBeforeVote: {
           voteTargets: [
@@ -16640,7 +16641,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           votecountActions: ["publish_votecount"],
           closedStatus: { state: "closed" },
         },
-        staleBody: "Official votecount for D02\n- slot-3: 2",
+        staleBody: "Official votecount for D02\n- player-seed · S3: 2",
         changeVote: { state: "ack" },
         apiVotecountAfterChange: [
           {
@@ -16656,7 +16657,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           { phaseId: "D02", target: "no_lynch", count: 1 },
           { phaseId: "D02", target: "slot-3", count: 1 },
         ],
-        expectedBody: "Official votecount for D02\n- no_lynch: 1\n- slot-3: 1",
+        expectedBody: "Official votecount for D02\n- No lynch: 1\n- player-seed · S3: 1",
         publish: {
           commandStatus: {
             state: "ack",
@@ -16691,7 +16692,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       hostVotecountPublication: {
         status: "passed",
-        expectedBody: "Official votecount for D02\n- slot-3: 2",
+        expectedBody: "Official votecount for D02\n- player-seed · S3: 2",
         publish: {
           commandStatus: {
             state: "ack",
@@ -16707,11 +16708,11 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         playerThreadPost: {
-          body: "Official votecount for D02\n- slot-3: 2",
+          body: "Official votecount for D02\n- player-seed · S3: 2",
           author: { kind: "host_narrator" },
         },
         apiThreadPost: {
-          body: "Official votecount for D02\n- slot-3: 2",
+          body: "Official votecount for D02\n- player-seed · S3: 2",
           author: { kind: "host_narrator" },
         },
         activityStatusText: "Ack: stream seqs 47",
@@ -16726,7 +16727,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         targetSlot: "slot_5",
         targetCount: 3,
         expectedRows: [{ phaseId: "D01", target: "slot_5", count: 3 }],
-        expectedBody: "Official votecount for D01\n- slot_5: 3",
+        expectedBody: "Official votecount for D01\n- player-goon-b · S5: 3",
         firstOutcome: { state: "ack" },
         secondOutcome: { state: "reject", error: "InvalidTarget" },
         ackRaceRole: "first",

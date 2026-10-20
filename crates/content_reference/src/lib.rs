@@ -330,29 +330,47 @@ pub struct SlotMentionCandidate {
     pub len: usize,
 }
 
-/// The seats that could read the posting channel when the post was decided.
+/// The seats that could read the posting channel when the post was decided,
+/// each under the name its current occupant goes by.
 ///
-/// Adapters build this from slot state and private-channel membership; the
-/// mention decision stays pure. Hosts and cohosts read every channel but hold
-/// no seat, so they never appear here — a mention addresses a slot or nothing.
+/// Adapters build this from slot state, open occupancies and private-channel
+/// membership; the mention decision stays pure. Hosts and cohosts read every
+/// channel but hold no seat, and an empty seat has nobody to read it, so
+/// neither appears here — a mention addresses an occupied slot or nothing.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChannelAudience {
-    pub readable_slots: Vec<String>,
+    pub seats: Vec<AudienceSeat>,
+}
+
+/// One readable seat and the persona name a mention of it is written as
+/// (RFC 0008 slice 3b). The name is presentation for the span check only; the
+/// decided mention still records the slot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudienceSeat {
+    pub slot_id: String,
+    pub public_name: String,
 }
 
 impl ChannelAudience {
-    pub fn new(readable_slots: impl IntoIterator<Item = String>) -> Self {
+    pub fn new(seats: impl IntoIterator<Item = AudienceSeat>) -> Self {
         Self {
-            readable_slots: readable_slots.into_iter().collect(),
+            seats: seats.into_iter().collect(),
         }
     }
 
-    fn admits(&self, slot_id: &str) -> bool {
-        self.readable_slots.iter().any(|slot| slot == slot_id)
+    fn name_of(&self, slot_id: &str) -> Option<&str> {
+        self.seats
+            .iter()
+            .find(|seat| seat.slot_id == slot_id)
+            .map(|seat| seat.public_name.as_str())
     }
 }
 
 /// Decide the slot mentions a new game post may carry.
+///
+/// A mention is written as the addressed seat's current persona name
+/// (`@Ilya`), so the body reads the way the thread names people; the decided
+/// fact is still the slot, which is what survives replacement and rename.
 ///
 /// The two-sided check RFC 0007 §4 requires — the slot exists in this game and
 /// can read the channel being posted to — is one membership test against
@@ -377,9 +395,9 @@ pub fn decide_slot_mentions(
     for candidate in candidates {
         // Target before span: an unreadable seat is refused on the same
         // evidence whether or not the claimed span happens to be well formed.
-        if !audience.admits(&candidate.slot_id) {
+        let Some(public_name) = audience.name_of(&candidate.slot_id) else {
             return Err(ContentReferenceReject::UnknownMentionTarget);
-        }
+        };
         let end = candidate.offset.saturating_add(candidate.len);
         if end > body.len()
             || !body.is_char_boundary(candidate.offset)
@@ -390,7 +408,7 @@ pub fn decide_slot_mentions(
         let span_text = &body[candidate.offset..end];
         span_text
             .strip_prefix('@')
-            .filter(|remainder| *remainder == candidate.slot_id.as_str())
+            .filter(|remainder| *remainder == public_name)
             .ok_or(ContentReferenceReject::InvalidMentionSpan)?;
         if candidate.offset < previous_end {
             return Err(ContentReferenceReject::InvalidMentionSpan);
@@ -561,8 +579,22 @@ mod tests {
         assert_eq!(mentions_payload(&[]), None);
     }
 
+    /// Seats S1..S4 are occupied by Mira, Lark, Wren and Rook.
     fn audience(slots: &[&str]) -> ChannelAudience {
-        ChannelAudience::new(slots.iter().map(|slot| slot.to_string()))
+        ChannelAudience::new(slots.iter().map(|slot| AudienceSeat {
+            slot_id: slot.to_string(),
+            public_name: name(slot).to_string(),
+        }))
+    }
+
+    fn name(slot: &str) -> &'static str {
+        match slot {
+            "S1" => "Mira",
+            "S2" => "Lark",
+            "S3" => "Wren",
+            "S4" => "Rook",
+            _ => "Stranger",
+        }
     }
 
     fn slot_candidate(slot_id: &str, offset: usize, len: usize) -> SlotMentionCandidate {
@@ -584,17 +616,52 @@ mod tests {
     #[test]
     fn slot_happy_path_stores_slot_and_span() {
         let decided = decide_slot_mentions(
-            "@S1 you flipped",
+            "@Mira you flipped",
             &audience(&["S1", "S2"]),
-            &[slot_candidate("S1", 0, 3)],
+            &[slot_candidate("S1", 0, 5)],
         )
         .unwrap();
         assert_eq!(
             decided,
             vec![SlotMention {
                 slot_id: "S1".to_string(),
-                span: MentionSpan { offset: 0, len: 3 },
+                span: MentionSpan { offset: 0, len: 5 },
             }]
+        );
+    }
+
+    /// A name is free text: spaces and non-ASCII letters are part of the span.
+    #[test]
+    fn a_persona_name_with_spaces_and_accents_is_one_span() {
+        let audience = ChannelAudience::new([AudienceSeat {
+            slot_id: "S5".to_string(),
+            public_name: "Goon Ä".to_string(),
+        }]);
+        let body = "hi @Goon Ä, claim";
+        assert_eq!(
+            decide_slot_mentions(body, &audience, &[slot_candidate("S5", 3, "@Goon Ä".len())]),
+            Ok(vec![SlotMention {
+                slot_id: "S5".to_string(),
+                span: MentionSpan {
+                    offset: 3,
+                    len: "@Goon Ä".len()
+                },
+            }]),
+        );
+    }
+
+    /// The slot id is no longer how a seat is written: `@S1` is refused for a
+    /// seat whose occupant is Mira, as is another seat's name.
+    #[test]
+    fn the_span_must_read_as_the_seats_current_name() {
+        let roster = audience(&["S1", "S2"]);
+        assert_eq!(
+            decide_slot_mentions("@S1 hi", &roster, &[slot_candidate("S1", 0, 3)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        assert_eq!(
+            decide_slot_mentions("@Lark hi", &roster, &[slot_candidate("S1", 0, 5)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
         );
     }
 
@@ -603,10 +670,14 @@ mod tests {
     #[test]
     fn slot_self_mention_is_accepted() {
         assert_eq!(
-            decide_slot_mentions("@S1 me", &audience(&["S1"]), &[slot_candidate("S1", 0, 3)]),
+            decide_slot_mentions(
+                "@Mira me",
+                &audience(&["S1"]),
+                &[slot_candidate("S1", 0, 5)]
+            ),
             Ok(vec![SlotMention {
                 slot_id: "S1".to_string(),
-                span: MentionSpan { offset: 0, len: 3 },
+                span: MentionSpan { offset: 0, len: 5 },
             }]),
         );
     }
@@ -617,8 +688,8 @@ mod tests {
     #[test]
     fn foreign_and_non_member_slots_reject_indistinguishably() {
         let scumchat = audience(&["S1", "S4"]);
-        let foreign = decide_slot_mentions("@S9 hi", &scumchat, &[slot_candidate("S9", 0, 3)]);
-        let non_member = decide_slot_mentions("@S2 hi", &scumchat, &[slot_candidate("S2", 0, 3)]);
+        let foreign = decide_slot_mentions("@Ghost hi", &scumchat, &[slot_candidate("S9", 0, 6)]);
+        let non_member = decide_slot_mentions("@Lark hi", &scumchat, &[slot_candidate("S2", 0, 5)]);
         assert_eq!(foreign, Err(ContentReferenceReject::UnknownMentionTarget));
         assert_eq!(foreign, non_member);
         assert_eq!(
@@ -639,15 +710,18 @@ mod tests {
 
     #[test]
     fn slot_over_cap_rejects() {
-        let roster: Vec<String> = (0..=MAX_MENTIONS_PER_POST)
-            .map(|index| format!("S{index}"))
+        let seats: Vec<AudienceSeat> = (0..=MAX_MENTIONS_PER_POST)
+            .map(|index| AudienceSeat {
+                slot_id: format!("S{index}"),
+                public_name: format!("P{index}"),
+            })
             .collect();
-        let candidates: Vec<SlotMentionCandidate> = roster
+        let candidates: Vec<SlotMentionCandidate> = seats
             .iter()
-            .map(|slot_id| slot_candidate(slot_id, 0, 3))
+            .map(|seat| slot_candidate(&seat.slot_id, 0, 3))
             .collect();
         assert_eq!(
-            decide_slot_mentions("@S0", &ChannelAudience::new(roster), &candidates),
+            decide_slot_mentions("@P0", &ChannelAudience::new(seats), &candidates),
             Err(ContentReferenceReject::TooManyMentions),
         );
     }
@@ -657,22 +731,22 @@ mod tests {
         let roster = audience(&["S1", "S2"]);
         // Out of range.
         assert_eq!(
-            decide_slot_mentions("hi", &roster, &[slot_candidate("S1", 0, 3)]),
+            decide_slot_mentions("hi", &roster, &[slot_candidate("S1", 0, 5)]),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
         // Does not start with '@'.
         assert_eq!(
-            decide_slot_mentions("S1 hi", &roster, &[slot_candidate("S1", 0, 2)]),
+            decide_slot_mentions("Mira hi", &roster, &[slot_candidate("S1", 0, 4)]),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
         // Span text disagrees with the claimed slot.
         assert_eq!(
-            decide_slot_mentions("@S1", &roster, &[slot_candidate("S2", 0, 3)]),
+            decide_slot_mentions("@Mira", &roster, &[slot_candidate("S2", 0, 5)]),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
         // Mid-character boundary.
         assert_eq!(
-            decide_slot_mentions("é@S1", &roster, &[slot_candidate("S1", 1, 3)]),
+            decide_slot_mentions("é@Mira", &roster, &[slot_candidate("S1", 1, 5)]),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
     }
@@ -683,27 +757,27 @@ mod tests {
         // Overlapping spans.
         assert_eq!(
             decide_slot_mentions(
-                "@S1 x",
+                "@Mira x",
                 &roster,
-                &[slot_candidate("S1", 0, 3), slot_candidate("S2", 0, 3)],
+                &[slot_candidate("S1", 0, 5), slot_candidate("S2", 0, 5)],
             ),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
         // Descending spans.
         assert_eq!(
             decide_slot_mentions(
-                "@S1 @S2",
+                "@Mira @Lark",
                 &roster,
-                &[slot_candidate("S2", 4, 3), slot_candidate("S1", 0, 3)],
+                &[slot_candidate("S2", 6, 5), slot_candidate("S1", 0, 5)],
             ),
             Err(ContentReferenceReject::InvalidMentionSpan),
         );
         // Duplicate target.
         assert_eq!(
             decide_slot_mentions(
-                "@S1 @S1",
+                "@Mira @Mira",
                 &roster,
-                &[slot_candidate("S1", 0, 3), slot_candidate("S1", 4, 3)],
+                &[slot_candidate("S1", 0, 5), slot_candidate("S1", 6, 5)],
             ),
             Err(ContentReferenceReject::DuplicateSlotMention),
         );

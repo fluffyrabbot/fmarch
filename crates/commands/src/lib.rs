@@ -19,7 +19,7 @@
 //! [`caps::CapabilitySet`] and asks `grants(required)`. Inner code never
 //! re-derives authority (confused-deputy defense, doc 06).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::pending;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -2595,8 +2595,9 @@ async fn decide_game_quotations(
     content_reference::decide_quotations(&thread, &quotations).map_err(quotation_reject)
 }
 
-/// Resolve the seats that could read the posting channel, then let the pure
-/// decision admit the claims. RFC 0007 §4 makes a slot mention a two-sided
+/// Resolve the occupied seats that could read the posting channel, under the
+/// names a mention of them is written as, then let the pure decision admit
+/// the claims. RFC 0007 §4 makes a slot mention a two-sided
 /// check — a read of the addressed seat plus a write of a new post — and both
 /// sides are answered by one membership test, because a seat absent from this
 /// game is absent from every channel's audience.
@@ -2611,7 +2612,13 @@ async fn decide_game_mentions(
         return Ok(Vec::new());
     }
     let audience = content_reference::ChannelAudience::new(
-        projections::channel_audience_slots(&mut **tx, game, channel_id).await?,
+        projections::channel_audience(&mut **tx, game, channel_id)
+            .await?
+            .into_iter()
+            .map(|seat| content_reference::AudienceSeat {
+                slot_id: seat.slot_id,
+                public_name: seat.public_name,
+            }),
     );
     content_reference::decide_slot_mentions(body, &audience, &candidates)
         .map_err(slot_mention_reject)
@@ -2850,7 +2857,12 @@ async fn publish_votecount(
         .into_iter()
         .filter(|row| row.phase_id == phase)
         .collect::<Vec<_>>();
-    let body = official_votecount_body(phase.as_str(), &rows);
+    let names = projections::slot_occupancy(&mut **tx, game)
+        .await?
+        .into_iter()
+        .map(|seat| (seat.slot_id, seat.public_name))
+        .collect::<HashMap<_, _>>();
+    let body = official_votecount_body(phase.as_str(), &rows, &names);
     if official_votecount_already_published(tx, game, phase.as_str(), &body).await? {
         return Err(Reject::InvalidTarget);
     }
@@ -2892,7 +2904,16 @@ async fn official_votecount_already_published(
     Ok(count > 0)
 }
 
-fn official_votecount_body(phase: &str, rows: &[projections::VoteCountRow]) -> String {
+/// The official votecount post. Candidates read the way every game surface
+/// names a seat (RFC 0008): the occupant's current persona name and a seat tag
+/// (`Ilya · S2`), "Slot 2" for an empty seat, and "No lynch". This must stay
+/// byte-identical to `seatLabel` in `frontend/src/lib/app/seat-presenter.mjs`,
+/// which the live proofs use to predict the body.
+fn official_votecount_body(
+    phase: &str,
+    rows: &[projections::VoteCountRow],
+    names: &HashMap<String, String>,
+) -> String {
     let mut body = format!("Official votecount for {phase}");
     if rows.is_empty() {
         body.push_str("\n\nNo active ballots.");
@@ -2900,9 +2921,56 @@ fn official_votecount_body(phase: &str, rows: &[projections::VoteCountRow]) -> S
     }
 
     for row in rows {
-        body.push_str(&format!("\n- {}: {}", row.candidate_slot, row.count));
+        let candidate = if row.candidate_slot == "no_lynch" {
+            "No lynch".to_string()
+        } else {
+            seat_label(
+                &row.candidate_slot,
+                names.get(&row.candidate_slot).map(String::as_str),
+            )
+        };
+        body.push_str(&format!("\n- {candidate}: {}", row.count));
     }
     body
+}
+
+/// A seat as players read it: `Name · S7` when occupied, otherwise its
+/// ordinal (`Slot 7`), otherwise the raw id.
+fn seat_label(slot_id: &str, name: Option<&str>) -> String {
+    let ordinal = {
+        let digits = slot_id.bytes().rev().take_while(u8::is_ascii_digit).count();
+        (digits > 0).then(|| &slot_id[slot_id.len() - digits..])
+    };
+    if let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) {
+        return match ordinal {
+            Some(ordinal) => format!("{name} · S{ordinal}"),
+            None => name.to_string(),
+        };
+    }
+    let trimmed = slot_id.trim();
+    if trimmed.is_empty() {
+        return "Unknown seat".to_string();
+    }
+    let unprefixed = trimmed
+        .get(..4)
+        .filter(|prefix| prefix.eq_ignore_ascii_case("slot"))
+        .map(|_| {
+            let rest = &trimmed[4..];
+            rest.strip_prefix(['-', '_']).unwrap_or(rest)
+        })
+        .filter(|rest| !rest.is_empty());
+    if let Some(rest) = unprefixed {
+        let words = rest
+            .split(['-', '_'])
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        return format!("Slot {words}");
+    }
+    match ordinal {
+        Some(ordinal) => format!("Slot {ordinal}"),
+        None => trimmed.to_string(),
+    }
 }
 
 async fn extend_deadline(
@@ -4983,31 +5051,40 @@ mod tests {
 
     #[test]
     fn official_votecount_body_is_projection_derived_and_deterministic() {
-        let rows = vec![
-            projections::VoteCountRow {
-                game_id: Uuid::nil(),
-                phase_id: domain::phase::PhaseId::parse("D01")
-                    .expect("static test phase id is canonical"),
-                candidate_slot: "slot_2".to_string(),
-                count: 4,
-            },
-            projections::VoteCountRow {
-                game_id: Uuid::nil(),
-                phase_id: domain::phase::PhaseId::parse("D01")
-                    .expect("static test phase id is canonical"),
-                candidate_slot: "no_lynch".to_string(),
-                count: 1,
-            },
-        ];
+        let row = |candidate: &str, count| projections::VoteCountRow {
+            game_id: Uuid::nil(),
+            phase_id: domain::phase::PhaseId::parse("D01")
+                .expect("static test phase id is canonical"),
+            candidate_slot: candidate.to_string(),
+            count,
+        };
+        let rows = vec![row("slot_2", 4), row("slot-9", 2), row("no_lynch", 1)];
+        let names = HashMap::from([("slot_2".to_string(), "Ilya".to_string())]);
 
         assert_eq!(
-            official_votecount_body("D01", &rows),
-            "Official votecount for D01\n- slot_2: 4\n- no_lynch: 1"
+            official_votecount_body("D01", &rows, &names),
+            "Official votecount for D01\n- Ilya · S2: 4\n- Slot 9: 2\n- No lynch: 1"
         );
         assert_eq!(
-            official_votecount_body("D02", &[]),
+            official_votecount_body("D02", &[], &names),
             "Official votecount for D02\n\nNo active ballots."
         );
+    }
+
+    /// Mirrors `seat-presenter.test.mjs` so server-written bodies read exactly
+    /// as the client names seats.
+    #[test]
+    fn seat_labels_match_the_client_presenter() {
+        for slot in ["slot-7", "slot_7", "Slot7", "slot7"] {
+            assert_eq!(seat_label(slot, None), "Slot 7");
+        }
+        assert_eq!(seat_label("p12", None), "Slot 12");
+        assert_eq!(seat_label("slot-a_b", None), "Slot a b");
+        assert_eq!(seat_label("narrator", None), "narrator");
+        assert_eq!(seat_label("", None), "Unknown seat");
+        assert_eq!(seat_label("slot-7", Some(" Mira ")), "Mira · S7");
+        assert_eq!(seat_label("narrator", Some("Mira")), "Mira");
+        assert_eq!(seat_label("slot-7", Some("  ")), "Slot 7");
     }
 
     #[test]

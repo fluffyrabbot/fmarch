@@ -695,7 +695,11 @@ async fn channel_mention_targets(
     }
     let mut targets = Vec::with_capacity(channels.len());
     for channel_id in channels {
-        let slots = projections::channel_audience_slots(pool, game, &channel_id).await?;
+        let slots = projections::channel_audience(pool, game, &channel_id)
+            .await?
+            .into_iter()
+            .map(|seat| seat.slot_id)
+            .collect();
         targets.push(ChannelMentionTargets { channel_id, slots });
     }
     Ok(targets)

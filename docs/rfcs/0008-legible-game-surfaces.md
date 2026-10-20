@@ -101,6 +101,18 @@ current name is the open occupancy's last name. No other client code derives a
 name, and server `slot_label` is deleted once slice 3 lands. Revealed roles stay
 with the endgame summary, which already owns reveal policy.
 
+Two kinds of post body carry a name, because there the body is the record
+(slice 3b). A game mention is written `@<current persona name>`: the composer
+offers the channel's occupied seats by name or seat tag and inserts the name,
+and the server decides the span against the addressed seat's current
+`game_persona_public` name. The decided mention still records the slot, so it
+survives rename and replacement, and its chip renders through the presenter.
+An empty seat has no name and cannot be mentioned. Bodies written before 3b
+keep their `@slot` spans and render the same way. The official votecount body
+names each candidate by the presenter's rule at publish time (`- Ilya · S2: 4`,
+`- No lynch: 1`); `seat_label` in `crates/commands` mirrors `seatLabel`, and a
+unit test pins it to the presenter's cases.
+
 The host console's live channel sends `HostConsoleRosterChanged` with the whole
 roster whenever it differs from the previous snapshot.
 

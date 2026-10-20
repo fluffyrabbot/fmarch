@@ -1,4 +1,5 @@
 import { hasInvalidTargetRequestEvidence, hasInvalidTargetRequestThenLegalAction } from "./live_stack/invalid_target_request_scenario.mjs";
+import { seatTag } from "../frontend/src/lib/app/seat-presenter.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -4684,7 +4685,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             Number(row.count) >= 1,
         ) === true &&
         hardening.deadCurrentVote?.staleHostPublishAfterClear?.setup?.staleBody?.includes(
-          `- ${hardening.deadCurrentVote?.target?.slotId}:`,
+          ` · ${seatTag(hardening.deadCurrentVote?.target?.slotId)}:`,
         ) === true &&
         hardening.deadCurrentVote?.staleHostPublishAfterClear?.publish?.state ===
           "ack" &&
@@ -4823,7 +4824,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
               Number(row.count) === hardening.concurrentVoteRace?.apiProjection?.count,
           ) === true &&
           hardening.staleHostPublishAfterChange?.staleBody ===
-            `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetSlot}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
+            `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetLabel}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
           hardening.staleHostPublishAfterChange?.changeVote?.state === "ack" &&
           hardening.staleHostPublishAfterChange?.currentRows?.some(
             (row) =>
@@ -4885,7 +4886,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.hostVotecountPublication?.apiThreadPost?.author?.kind ===
           "host_narrator" &&
         hardening.hostVotecountPublication?.expectedBody ===
-          `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetSlot}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
+          `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetLabel}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
         hardening.hostVotecountPublication?.activityStatusText?.includes(
           "Ack: stream seqs",
         ) === true,
@@ -4908,7 +4909,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentHostPublishRace?.targetSlot === "slot_5" &&
         hardening.concurrentHostPublishRace?.targetCount === 3 &&
         hardening.concurrentHostPublishRace?.expectedBody ===
-          "Official votecount for D01\n- slot_5: 3" &&
+          "Official votecount for D01\n- player-goon-b · S5: 3" &&
         hardening.concurrentHostPublishRace?.ack?.state === "ack" &&
         hardening.concurrentHostPublishRace?.ack?.serverEnvelope?.body?.kind ===
           "Ack" &&

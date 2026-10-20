@@ -19,6 +19,7 @@ import {
   mergeThreadPage,
   playerForbiddenMessage,
   threadPageStatusForResult,
+  playerMentionRoster,
 } from "./game-route-model.mjs";
 
 function buildGameRouteData(input) {
@@ -130,10 +131,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     capabilityLabel: "SlotOccupant or ChannelMember(main)",
     href: "/g/midsummer",
   });
-  assert.equal(data.thread.posts[1].body, "@slot-2 \u2014 ##vote slot-2");
+  assert.equal(data.thread.posts[1].body, "@Ilya \u2014 ##vote slot-2");
   assert.deepEqual(
     data.thread.posts[1].mentions,
-    [{ slot_id: "slot-2", offset: 0, len: 7 }],
+    [{ slot_id: "slot-2", offset: 0, len: 5 }],
     "the fixture post carries a decided slot address, not prose to be re-parsed",
   );
   assert.equal(data.composer.defaultBody, "");
@@ -1180,4 +1181,24 @@ test("normal-player preview starts with its own authoritative fixture actor", ()
   assert.deepEqual(data.notifications, []);
   assert.deepEqual(data.investigationResults, []);
   assert.equal(data.shell.phaseId, "D02");
+});
+
+test("the composer mentions seats by their occupant's current persona name", () => {
+  const roster = [
+    {
+      slot_id: "slot-2",
+      alive: true,
+      status: "alive",
+      occupancies: [{ began_seq: 3, ended_seq: null, names: [{ effective_seq: 2, public_name: "Ilya" }] }],
+    },
+    { slot_id: "slot-3", alive: true, status: "alive", occupancies: [] },
+  ];
+  const commandState = {
+    roster,
+    mentionTargets: [{ channelId: "main", slots: ["slot-2", "slot-3"] }],
+  };
+  assert.deepEqual(playerMentionRoster(commandState, "main"), [
+    { slotId: "slot-2", name: "Ilya", label: "Ilya · S2" },
+  ], "an empty seat has no name to write, so it is not offered");
+  assert.deepEqual(playerMentionRoster(commandState, "scum"), []);
 });

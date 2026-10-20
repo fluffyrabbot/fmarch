@@ -48,6 +48,7 @@ import {
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 import { buildPlayerRouteLayoutViewModel } from "./player-route-layout.mjs";
 import { seatNames, voteTargetLabel } from "../../../lib/app/seat-presenter.mjs";
+import { mentionSeat } from "../../../lib/app/slot-mention-model.mjs";
 
 export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "player-surface",
@@ -468,12 +469,22 @@ export function buildPlayerComposerView(
 /// The seats `@` may address in the channel being posted to. An unknown
 /// channel has an empty roster rather than a fallback one: suggesting a seat
 /// the write model would refuse is worse than suggesting nothing.
+/**
+ * The seats a post in this channel may mention, each under its occupant's
+ * current persona name. A seat the roster cannot name is not offered, because
+ * the server would refuse a mention of it.
+ */
 export function playerMentionRoster(commandState, channelId) {
   const targets = Array.isArray(commandState?.mentionTargets)
     ? commandState.mentionTargets
     : [];
   const match = targets.find((entry) => entry?.channelId === channelId);
-  return Object.freeze(Array.isArray(match?.slots) ? [...match.slots] : []);
+  const names = seatNames(commandState?.roster);
+  return Object.freeze(
+    (Array.isArray(match?.slots) ? match.slots : [])
+      .map((slotId) => mentionSeat(slotId, names.name(slotId), names.label(slotId)))
+      .filter((seat) => seat !== null),
+  );
 }
 
 export function buildPlayerDayEventCommands(commandState) {
@@ -815,12 +826,12 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       Object.freeze({
         seq: 443,
         author: Object.freeze({ kind: "slot", slotId: "slot-7" }),
-        body: "@slot-2 \u2014 ##vote slot-2",
+        body: "@Ilya \u2014 ##vote slot-2",
         meta: "1 min ago",
         // A decided slot address over an immutable span of this body. The
         // renderer walks the list; it never re-reads the prose for `@`.
         mentions: Object.freeze([
-          Object.freeze({ slot_id: "slot-2", offset: 0, len: 7 }),
+          Object.freeze({ slot_id: "slot-2", offset: 0, len: 5 }),
         ]),
       }),
     ]),

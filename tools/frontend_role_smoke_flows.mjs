@@ -922,7 +922,7 @@ export const commandFlows = Object.freeze({
       {
         type: "fill",
         target: { testId: "player-composer-body" },
-        value: "@slot-2",
+        value: "@Il",
       },
       {
         type: "wait-visible",
@@ -937,7 +937,7 @@ export const commandFlows = Object.freeze({
       {
         type: "fill",
         target: { within: "player-composer", selector: "textarea" },
-        value: "@slot-2 Browser smoke player post",
+        value: "@Ilya Browser smoke player post",
       },
       {
         type: "capture-geometry-baseline",

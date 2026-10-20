@@ -143,5 +143,5 @@ test("player browser fixtures supply every private v3 projection", async () => {
   assert.ok(thread, "mention flow requires post 443 in the authoritative thread fixture");
   assert.equal(schema.validateGameplayThreadPageResponse(thread.body, { game: "midsummer" }), true);
   assert.deepEqual(thread.body.posts.find((post) => post.source_seq === 443).mentions,
-    [{ slot_id: "slot-2", offset: 0, len: 7 }]);
+    [{ slot_id: "slot-2", offset: 0, len: 5 }]);
 });

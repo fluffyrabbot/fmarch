@@ -8,14 +8,22 @@
  * they share nothing that names a target.
  *
  * The composer's `@` sources the already-loaded channel roster: no round trip,
- * no profile corpus, and no seat the write model would refuse.
+ * no profile corpus, and no seat the write model would refuse. A seat is
+ * written as its occupant's current persona name (`@Ilya`), which is what the
+ * server checks the span against (RFC 0008 slice 3b); the decided mention
+ * still records the slot.
  */
 import { buildDecidedMentionSegments } from "./mention-model.mjs";
+import { seatTag } from "./seat-presenter.mjs";
 
 export const MAX_MENTIONS_PER_POST = 8;
 
-/** Slot ids are the seat labels the thread already prints, e.g. `slot_7`. */
+/** Slot ids as the wire carries them, e.g. `slot_7`. */
 const SLOT_CHARACTER = /[a-z0-9_-]/iu;
+/** What an `@` fragment may contain while the author types a persona name. */
+const NAME_CHARACTER = /[\p{L}\p{N}_'.-]/u;
+/** A mention ends where the name does, not inside a longer word. */
+const WORD_CHARACTER = /[\p{L}\p{N}_]/u;
 
 const encoder = new TextEncoder();
 
@@ -42,26 +50,39 @@ export function buildSlotMentionSegments(body, mentions) {
 }
 
 /**
+ * A mentionable seat: its slot, the occupant's current persona name (what the
+ * author types and the server checks), and the label suggestions show.
+ */
+export function mentionSeat(slotId, name, label = name) {
+  const normalized = normalizeSlotId(slotId);
+  const persona = typeof name === "string" ? name.trim() : "";
+  return normalized === null || persona === ""
+    ? null
+    : Object.freeze({ slotId: normalized, name: persona, label: String(label ?? persona) });
+}
+
+/**
  * Re-derive spans for the seats the author selected. Each seat claims its first
- * standalone `@slot` occurrence; a seat the author deleted from the body simply
+ * standalone `@Name` occurrence; a seat the author deleted from the body simply
  * stops being a mention, which is the honest outcome because the decision is
  * the fact, not the prose.
  */
-export function deriveSlotMentionSpans(body, slotIds) {
+export function deriveSlotMentionSpans(body, seats) {
   const text = typeof body === "string" ? body : "";
   const unique = [];
-  for (const raw of Array.isArray(slotIds) ? slotIds : []) {
-    const slotId = normalizeSlotId(raw);
-    if (slotId !== null && !unique.includes(slotId)) unique.push(slotId);
+  for (const seat of Array.isArray(seats) ? seats : []) {
+    if (seat?.slotId && seat?.name && !unique.some((entry) => entry.slotId === seat.slotId)) {
+      unique.push(seat);
+    }
   }
   const found = [];
-  for (const slotId of unique) {
-    const index = standaloneSlotMentionIndex(text, slotId);
+  for (const seat of unique) {
+    const index = standaloneMentionIndex(text, seat.name);
     if (index === -1) continue;
     found.push({
-      slot_id: slotId,
+      slot_id: seat.slotId,
       offset: byteLength(text.slice(0, index)),
-      len: byteLength(`@${slotId}`),
+      len: byteLength(`@${seat.name}`),
     });
   }
   return Object.freeze(
@@ -82,39 +103,49 @@ export function slotMentionQueryAtCaret(body, caret) {
     ? Math.max(0, Math.min(caret, text.length))
     : text.length;
   let start = position;
-  while (start > 0 && SLOT_CHARACTER.test(text[start - 1])) start -= 1;
+  while (start > 0 && NAME_CHARACTER.test(text[start - 1])) start -= 1;
   if (start === 0 || text[start - 1] !== "@") return null;
-  if (start > 1 && SLOT_CHARACTER.test(text[start - 2])) return null;
+  if (start > 1 && NAME_CHARACTER.test(text[start - 2])) return null;
   const fragment = text.slice(start, position).toLowerCase();
   return fragment.length === 0 ? null : { start: start - 1, end: position, fragment };
 }
 
 /**
- * Bounded suggestions from the channel's own roster. The author's seat is
- * offered like any other: self-mention is accepted and simply delivers nothing,
- * so hiding it would be a lie about what the write model does.
+ * Bounded suggestions from the channel's own roster, matched on the persona
+ * name or the seat tag (`@s2`). The author's seat is offered like any other:
+ * self-mention is accepted and simply delivers nothing, so hiding it would be
+ * a lie about what the write model does.
  */
 export function slotMentionSuggestions(roster, query, limit = 6) {
   if (query === null || query === undefined) return Object.freeze([]);
   const fragment = String(query.fragment ?? "").toLowerCase();
-  const seats = (Array.isArray(roster) ? roster : [])
-    .map(normalizeSlotId)
-    .filter((slotId) => slotId !== null);
-  const unique = [...new Set(seats)];
+  const seen = new Set();
+  const matches = [];
+  for (const seat of Array.isArray(roster) ? roster : []) {
+    if (!seat?.slotId || !seat?.name || seen.has(seat.slotId)) continue;
+    seen.add(seat.slotId);
+    const words = seat.name.toLowerCase().split(/\s+/u);
+    const tag = seatTag(seat.slotId)?.toLowerCase() ?? "";
+    if (
+      seat.name.toLowerCase().startsWith(fragment) ||
+      words.some((word) => word.startsWith(fragment)) ||
+      (tag !== "" && tag.startsWith(fragment))
+    ) {
+      matches.push(seat);
+    }
+  }
   return Object.freeze(
-    unique
-      .filter((slotId) => slotId.toLowerCase().startsWith(fragment))
-      .sort()
+    matches
+      .sort((left, right) => left.name.localeCompare(right.name))
       .slice(0, Math.max(0, limit)),
   );
 }
 
-/** Replace the `@` fragment under the caret with the chosen seat. */
-export function applySlotMentionSelection(body, query, slotId) {
+/** Replace the `@` fragment under the caret with the chosen seat's name. */
+export function applySlotMentionSelection(body, query, seat) {
   const text = typeof body === "string" ? body : "";
-  const normalized = normalizeSlotId(slotId);
-  if (query === null || normalized === null) return { body: text, caret: text.length };
-  const inserted = `@${normalized} `;
+  if (query === null || !seat?.name) return { body: text, caret: text.length };
+  const inserted = `@${seat.name} `;
   return {
     body: `${text.slice(0, query.start)}${inserted}${text.slice(query.end)}`,
     caret: query.start + inserted.length,
@@ -128,26 +159,28 @@ export function applySlotMentionSelection(body, query, slotId) {
  * rather than mis-anchor.
  */
 export function submittedSlotMentionsPayload(body, attachedSlotIds, roster) {
-  const addressable = new Set(
-    (Array.isArray(roster) ? roster : []).map(normalizeSlotId).filter(Boolean),
+  const attached = new Set(
+    (Array.isArray(attachedSlotIds) ? attachedSlotIds : [])
+      .map(normalizeSlotId)
+      .filter(Boolean),
   );
-  const claimed = (Array.isArray(attachedSlotIds) ? attachedSlotIds : [])
-    .map(normalizeSlotId)
-    .filter((slotId) => slotId !== null && addressable.has(slotId));
+  const claimed = (Array.isArray(roster) ? roster : []).filter(
+    (seat) => seat?.slotId && attached.has(seat.slotId),
+  );
   return deriveSlotMentionSpans(body, claimed).map((mention) =>
     Object.freeze({ slot_id: mention.slot_id, offset: mention.offset, len: mention.len }),
   );
 }
 
-function standaloneSlotMentionIndex(text, slotId) {
-  const needle = `@${slotId}`;
+function standaloneMentionIndex(text, name) {
+  const needle = `@${name}`;
   let from = 0;
   for (;;) {
     const index = text.indexOf(needle, from);
     if (index === -1) return -1;
     const before = index === 0 ? "" : text[index - 1];
     const after = text[index + needle.length] ?? "";
-    if (!SLOT_CHARACTER.test(before) && before !== "@" && !SLOT_CHARACTER.test(after)) {
+    if (!NAME_CHARACTER.test(before) && before !== "@" && !WORD_CHARACTER.test(after)) {
       return index;
     }
     from = index + 1;

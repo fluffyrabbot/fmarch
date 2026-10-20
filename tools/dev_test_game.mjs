@@ -14,6 +14,7 @@ import {
   runFmarchMigrations,
   serverRuntimeEnvironment,
 } from "./run_fmarch_migrations.mjs";
+import { seatNames, voteTargetLabel } from "../frontend/src/lib/app/seat-presenter.mjs";
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
@@ -2360,6 +2361,7 @@ async function freezeStaleHostPublishPage({
 async function freezeStaleHostPublishAfterClearPage({
   staleHostPublishPage,
   game,
+  apiBaseUrl,
   frontendBaseUrl,
   targetSlot,
 }) {
@@ -2388,7 +2390,13 @@ async function freezeStaleHostPublishAfterClearPage({
   );
   const targetRow = votecountRows.find((row) => row.target === targetSlot);
   const staleBody =
-    targetRow === undefined ? null : `Official votecount for D02\n- ${targetSlot}: ${targetRow.count}`;
+    targetRow === undefined
+      ? null
+      : officialVotecountBodyFromRows(
+          "D02",
+          [targetRow],
+          await fetchGameSeatNames({ apiBaseUrl, game }),
+        );
   if (
     stalePhase?.id !== "D02" ||
     stalePhase?.locked !== false ||
@@ -12425,7 +12433,11 @@ async function verifyConcurrentHostPublishRace({
       (row) => row.phaseId === "D01",
     );
     const targetRow = expectedRows.find((row) => Number(row.count) > 0);
-    const expectedBody = officialVotecountBodyFromRows("D01", expectedRows);
+    const expectedBody = officialVotecountBodyFromRows(
+      "D01",
+      expectedRows,
+      await fetchGameSeatNames({ apiBaseUrl, game: publishRaceGame }),
+    );
     if (targetRow === undefined || expectedRows.length === 0) {
       throw new Error(
         `concurrent host publish setup had no D01 votecount rows: ${JSON.stringify(
@@ -12717,7 +12729,11 @@ async function verifyHostVotecountPublication({
   apiBaseUrl,
   concurrentVoteRace,
 }) {
-  const expectedBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+  const expectedBody = officialVotecountBodyFromRows(
+    "D02",
+    [{ target: concurrentVoteRace.targetSlot, count: concurrentVoteRace.apiProjection.count }],
+    await fetchGameSeatNames({ apiBaseUrl, game }),
+  );
   await hostPage.waitForFunction(
     (expected) =>
       window.__fmarchHostVotecountProjection?.some(
@@ -12803,7 +12819,8 @@ async function verifyStaleHostPublishAfterVotecountChange({
       frontendBaseUrl,
       concurrentVoteRace,
     });
-    const staleBody = officialVotecountBodyFromRows("D02", setup.votecountRows);
+    const names = await fetchGameSeatNames({ apiBaseUrl, game });
+    const staleBody = officialVotecountBodyFromRows("D02", setup.votecountRows, names);
     const changeCommandId = crypto.randomUUID();
     const changeVoteRaw = await sendBrowserCommand(playerPage, {
       principalId: "player-mira",
@@ -12849,7 +12866,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
     const currentRows = normalizedVotecountRows(apiVotecountAfterChange).filter(
       (row) => row.phaseId === "D02",
     );
-    const expectedBody = officialVotecountBodyFromRows("D02", currentRows);
+    const expectedBody = officialVotecountBodyFromRows("D02", currentRows, names);
     if (
       staleBody === expectedBody ||
       !currentRows.some((row) => row.target === concurrentVoteRace.targetSlot && row.count === 1) ||
@@ -25521,6 +25538,7 @@ async function verifyDeadCurrentVoteRecovery({
   const staleHostPublishAfterClearSetup = await freezeStaleHostPublishAfterClearPage({
     staleHostPublishPage: staleHostPublishAfterClearPage,
     game,
+    apiBaseUrl,
     frontendBaseUrl,
     targetSlot: target.slotId,
   });
@@ -25889,6 +25907,7 @@ async function verifyConcurrentVoteRace({
   return {
     status: "passed",
     targetSlot,
+    targetLabel: (await fetchGameSeatNames({ apiBaseUrl, game })).label(targetSlot),
     target,
     playerCommandStateBeforeVote,
     actionCommandStateBeforeVote,
@@ -26051,15 +26070,28 @@ function normalizeDayVoteOutcomeRows(apiDayVoteOutcomes) {
     }));
 }
 
-function officialVotecountBodyFromRows(phase, rows) {
+/**
+ * The official votecount body the server writes, naming each candidate the way
+ * the seat presenter does (RFC 0008 slice 3b): `- Ilya · S2: 4`, `- No lynch: 1`.
+ */
+function officialVotecountBodyFromRows(phase, rows, names = seatNames([])) {
   const currentRows = Array.isArray(rows) ? rows : [];
   if (currentRows.length === 0) {
     return `Official votecount for ${phase}\n\nNo active ballots.`;
   }
   return [
     `Official votecount for ${phase}`,
-    ...currentRows.map((row) => `- ${row.target}: ${row.count}`),
+    ...currentRows.map((row) => `- ${voteTargetLabel(row.target, names)}: ${row.count}`),
   ].join("\n");
+}
+
+/** The game's seats as players read them, from the host console roster. */
+async function fetchGameSeatNames({ apiBaseUrl, game }) {
+  const state = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (!Array.isArray(state?.roster)) {
+    throw new Error(`host console state for ${game} carried no roster`);
+  }
+  return seatNames(state.roster);
 }
 
 async function fetchHostConsoleState({

@@ -6,7 +6,7 @@
 
 use content_reference::{
     decide_profile_mentions, decide_slot_mentions, mentions_payload, slot_mentions_payload,
-    ChannelAudience, MentionCandidate, MentionSpan, ProfileMention, SlotMention,
+    AudienceSeat, ChannelAudience, MentionCandidate, MentionSpan, ProfileMention, SlotMention,
     SlotMentionCandidate,
 };
 
@@ -32,12 +32,15 @@ pub fn a_game_thread_addresses_a_slot() {
         span: MentionSpan { offset: 0, len: 3 },
     }]);
     let _ = decide_slot_mentions(
-        "@S1",
-        &ChannelAudience::new(["S1".to_string()]),
+        "@Mira",
+        &ChannelAudience::new([AudienceSeat {
+            slot_id: "S1".to_string(),
+            public_name: "Mira".to_string(),
+        }]),
         &[SlotMentionCandidate {
             slot_id: "S1".to_string(),
             offset: 0,
-            len: 3,
+            len: 5,
         }],
     );
 }

@@ -2,7 +2,8 @@
 //!
 //! The write model resolves the posting channel's audience, decides the spans,
 //! and refuses every failure with one non-disclosing reject. Delivery is
-//! slot-addressed, so replacement carries a pending mention with the seat.
+//! slot-addressed, so replacement carries a pending mention with the seat. A
+//! mention is written as the seat's current persona name (RFC 0008 slice 3b).
 
 use commands::{handle, Command, Reject};
 use content_reference::{MentionSpan, SlotMention, SlotMentionCandidate};
@@ -33,6 +34,25 @@ fn post(game: Uuid, slot: &str, body: &str, mentions: Vec<SlotMentionCandidate>)
     }
 }
 
+/// Add a seat occupied by `name`, the way a mention of it must be written.
+async fn add_named_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str, name: &str) {
+    add_vanilla_slot(pool, game, host, slot).await;
+    let occupant = format!("player_{slot}_{}", name.to_lowercase());
+    ensure_test_principals(pool, [occupant.as_str()]).await;
+    handle(
+        pool,
+        &user(host),
+        Command::SeatPersona {
+            game,
+            slot: slot.into(),
+            principal_id: fixture_principal_id(&occupant),
+            public_name: name.into(),
+        },
+    )
+    .await
+    .expect("seat a named persona");
+}
+
 async fn delivered_source_seqs(pool: &PgPool, game: Uuid, slot: &str) -> Vec<i64> {
     projections::slot_mention_notifications_for_slot(pool, game, slot)
         .await
@@ -51,7 +71,7 @@ async fn submit_post_decides_a_slot_mention_and_delivers_it_to_the_seat(pool: Pg
     let addressed = "slot_2";
     let occupant = "player_m";
     let game = setup_game(&pool, host, slot, occupant).await;
-    add_vanilla_slot(&pool, game, host, addressed).await;
+    add_named_slot(&pool, game, host, addressed, "Ilya").await;
 
     handle(
         &pool,
@@ -64,16 +84,28 @@ async fn submit_post_decides_a_slot_mention_and_delivers_it_to_the_seat(pool: Pg
         ),
     )
     .await
+    .expect_err("a seat is written by its persona name, not its slot id");
+    handle(
+        &pool,
+        &user(occupant),
+        post(
+            game,
+            slot,
+            "@Ilya explain the wagon",
+            vec![candidate(addressed, 0, 5)],
+        ),
+    )
+    .await
     .expect("post addressing a seat that can read main");
 
     let payloads = stored_payloads(&pool, game, "PostSubmitted").await;
     let mentioning = payloads
         .iter()
-        .find(|payload| payload["body"] == "@slot_2 explain the wagon")
+        .find(|payload| payload["body"] == "@Ilya explain the wagon")
         .expect("the mentioning post is on the stream");
     assert_eq!(
         mentioning["mentions"],
-        serde_json::json!([{ "slot_id": "slot_2", "span": { "offset": 0, "len": 7 } }]),
+        serde_json::json!([{ "slot_id": "slot_2", "span": { "offset": 0, "len": 5 } }]),
         "the decision is stored as a typed fact, never re-derived from prose",
     );
     assert!(
@@ -87,7 +119,7 @@ async fn submit_post_decides_a_slot_mention_and_delivers_it_to_the_seat(pool: Pg
     let stored: serde_json::Value =
         sqlx::query_scalar("SELECT mentions FROM thread_view WHERE game_id = $1 AND body = $2")
             .bind(game)
-            .bind("@slot_2 explain the wagon")
+            .bind("@Ilya explain the wagon")
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -95,7 +127,7 @@ async fn submit_post_decides_a_slot_mention_and_delivers_it_to_the_seat(pool: Pg
         serde_json::from_value::<Vec<SlotMention>>(stored).unwrap(),
         vec![SlotMention {
             slot_id: addressed.to_string(),
-            span: MentionSpan { offset: 0, len: 7 },
+            span: MentionSpan { offset: 0, len: 5 },
         }],
     );
 
@@ -115,7 +147,7 @@ async fn every_mention_failure_is_the_same_non_disclosing_reject(pool: PgPool) {
     let addressed = "slot_2";
     let occupant = "player_m2";
     let game = setup_game(&pool, host, slot, occupant).await;
-    add_vanilla_slot(&pool, game, host, addressed).await;
+    add_named_slot(&pool, game, host, addressed, "Ilya").await;
 
     let foreign = handle(
         &pool,
@@ -127,7 +159,7 @@ async fn every_mention_failure_is_the_same_non_disclosing_reject(pool: PgPool) {
     let bad_span = handle(
         &pool,
         &user(occupant),
-        post(game, slot, "no at sign", vec![candidate(addressed, 0, 7)]),
+        post(game, slot, "no at sign", vec![candidate(addressed, 0, 5)]),
     )
     .await
     .expect_err("a span that does not quote the seat label cannot be addressed");
@@ -137,8 +169,8 @@ async fn every_mention_failure_is_the_same_non_disclosing_reject(pool: PgPool) {
         post(
             game,
             slot,
-            "@slot_2 @slot_2",
-            vec![candidate(addressed, 0, 7), candidate(addressed, 8, 7)],
+            "@Ilya @Ilya",
+            vec![candidate(addressed, 0, 5), candidate(addressed, 6, 5)],
         ),
     )
     .await
@@ -149,9 +181,9 @@ async fn every_mention_failure_is_the_same_non_disclosing_reject(pool: PgPool) {
         post(
             game,
             slot,
-            "@slot_2",
+            "@Ilya",
             (0..=content_reference::MAX_MENTIONS_PER_POST)
-                .map(|_| candidate(addressed, 0, 7))
+                .map(|_| candidate(addressed, 0, 5))
                 .collect(),
         ),
     )
@@ -182,7 +214,7 @@ async fn a_private_room_refuses_a_non_member_exactly_as_it_refuses_a_stranger(po
     let outsider = "slot_2";
     let occupant = "player_m4";
     let game = setup_game(&pool, host, slot, occupant).await;
-    add_vanilla_slot(&pool, game, host, outsider).await;
+    add_named_slot(&pool, game, host, outsider, "Ilya").await;
     let room = domain::role_pm_channel_id(slot);
 
     let private_post = |mentions: Vec<SlotMentionCandidate>, body: &str| Command::SubmitPost {
@@ -209,7 +241,7 @@ async fn a_private_room_refuses_a_non_member_exactly_as_it_refuses_a_stranger(po
     let non_member = handle(
         &pool,
         &user(occupant),
-        private_post(vec![candidate(outsider, 0, 7)], "@slot_2 join me"),
+        private_post(vec![candidate(outsider, 0, 5)], "@Ilya join me"),
     )
     .await
     .expect_err("a seat outside this room cannot be addressed from inside it");
@@ -268,8 +300,8 @@ async fn replacement_transfers_a_pending_mention_without_a_new_event(pool: PgPoo
         post(
             game,
             author_slot,
-            "@slot_7 you are wagoned",
-            vec![candidate(addressed, 0, 7)],
+            "@Persona out you are wagoned",
+            vec![candidate(addressed, 0, 12)],
         ),
     )
     .await

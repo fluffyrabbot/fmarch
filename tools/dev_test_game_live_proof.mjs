@@ -1721,7 +1721,8 @@ assert.equal(
   true,
 );
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
-const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+assert.match(concurrentVoteRace.targetLabel, /\S · S\d+$/u);
+const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetLabel}: ${concurrentVoteRace.apiProjection.count}`;
 const voteResolveRace =
   session.verification.multiplayerHardening.concurrentPlayerVoteResolveRace;
 const actionAdvanceRace =
@@ -1794,7 +1795,10 @@ assert.match(
 assert.equal(concurrentHostPublishRace.status, "passed");
 assert.equal(concurrentHostPublishRace.targetSlot, "slot_5");
 assert.equal(concurrentHostPublishRace.targetCount, 3);
-assert.equal(concurrentHostPublishRace.expectedBody, "Official votecount for D01\n- slot_5: 3");
+assert.equal(
+  concurrentHostPublishRace.expectedBody,
+  "Official votecount for D01\n- player-goon-b · S5: 3",
+);
 assert.equal(concurrentHostPublishRace.ack.state, "ack");
 assert.equal(concurrentHostPublishRace.ack.serverEnvelope.body.kind, "Ack");
 assert.equal(Array.isArray(concurrentHostPublishRace.ack.streamSeqs), true);

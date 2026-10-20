@@ -3302,7 +3302,7 @@ async function emitPlayerOfficialThreadPost(page) {
                 channel_id: "main",
                 author: { kind: "host_narrator" },
                 phase_id: "D01",
-                body: "Official votecount for D01\n- slot_2: 1",
+                body: "Official votecount for D01\n- Ilya · S2: 1",
                 media: [],
                 quotations: [],
                 citation_count: 0,

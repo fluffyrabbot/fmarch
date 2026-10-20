@@ -7498,54 +7498,82 @@ where
         .collect())
 }
 
-/// Whether a slot exists in the game (has a `slot_state` row).
-/// The seats that can read a channel.
+/// One seat that can read a channel, under its occupant's current name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelAudienceSeatRow {
+    pub slot_id: String,
+    pub public_name: String,
+}
+
+/// The occupied seats that can read a channel, each with the persona name a
+/// mention of it is written as (RFC 0008 slice 3b).
 ///
 /// `main` is the whole table, `dead` is the graveyard, and a private room is
 /// its declared membership. Hosts, cohosts, and spectators read channels
-/// without holding a seat, so they are deliberately absent: a game mention
-/// addresses a slot or nothing (RFC 0007 §4).
-pub async fn channel_audience_slots<'e, E>(
+/// without holding a seat, and an empty seat has nobody to read it, so all are
+/// deliberately absent: a game mention addresses an occupied slot or nothing
+/// (RFC 0007 §4).
+pub async fn channel_audience<'e, E>(
     executor: E,
     game_id: Uuid,
     channel_id: &str,
-) -> Result<Vec<String>, ProjectionError>
+) -> Result<Vec<ChannelAudienceSeatRow>, ProjectionError>
 where
     E: sqlx::PgExecutor<'e>,
 {
-    let rows =
-        match channel_id {
-            "main" => {
-                sqlx::query_scalar::<_, String>(
-                    "SELECT slot_id FROM slot_state WHERE game_id = $1 ORDER BY slot_id",
-                )
-                .bind(game_id)
-                .fetch_all(executor)
-                .await?
-            }
-            "dead" => sqlx::query_scalar::<_, String>(
-                "SELECT slot_id FROM slot_state WHERE game_id = $1 AND NOT alive ORDER BY slot_id",
+    macro_rules! occupied {
+        ($filter:literal) => {
+            concat!(
+                "SELECT s.slot_id, p.current_public_name \
+                 FROM slot_state s \
+                 JOIN slot_occupancy_epoch o \
+                   ON o.game_id = s.game_id AND o.slot_id = s.slot_id AND o.ended_seq IS NULL \
+                 JOIN game_persona_public p \
+                   ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+                 WHERE s.game_id = $1",
+                $filter,
+                " ORDER BY s.slot_id"
             )
-            .bind(game_id)
-            .fetch_all(executor)
-            .await?,
-            // The fixed spectator room has no player-authoring path and seats
-            // nobody, so it addresses nobody.
-            "spectator" => Vec::new(),
-            private => {
-                sqlx::query_scalar::<_, String>(
-                    "SELECT slot_id FROM private_channel_member \
-                 WHERE game_id = $1 AND channel_id = $2 ORDER BY slot_id",
-                )
+        };
+    }
+    let rows = match channel_id {
+        "main" => {
+            sqlx::query(occupied!(""))
                 .bind(game_id)
-                .bind(private)
                 .fetch_all(executor)
                 .await?
-            }
-        };
-    Ok(rows)
+        }
+        "dead" => {
+            sqlx::query(occupied!(" AND NOT s.alive"))
+                .bind(game_id)
+                .fetch_all(executor)
+                .await?
+        }
+        // The fixed spectator room has no player-authoring path and seats
+        // nobody, so it addresses nobody.
+        "spectator" => Vec::new(),
+        private => {
+            sqlx::query(occupied!(
+                " AND EXISTS (SELECT 1 FROM private_channel_member m \
+                   WHERE m.game_id = s.game_id AND m.channel_id = $2 \
+                     AND m.slot_id = s.slot_id)"
+            ))
+            .bind(game_id)
+            .bind(private)
+            .fetch_all(executor)
+            .await?
+        }
+    };
+    Ok(rows
+        .into_iter()
+        .map(|row| ChannelAudienceSeatRow {
+            slot_id: row.get("slot_id"),
+            public_name: row.get("current_public_name"),
+        })
+        .collect())
 }
 
+/// Whether a slot exists in the game (has a `slot_state` row).
 pub async fn slot_exists<'e, E>(
     executor: E,
     game_id: Uuid,

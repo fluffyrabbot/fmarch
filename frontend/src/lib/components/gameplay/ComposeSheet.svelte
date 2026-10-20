@@ -35,12 +35,12 @@
     mentionCaret = event.currentTarget?.selectionStart ?? null;
   }
 
-  function chooseMention(slotId) {
-    const applied = applySlotMentionSelection(body, mentionQuery, slotId);
+  function chooseMention(seat) {
+    const applied = applySlotMentionSelection(body, mentionQuery, seat);
     body = applied.body;
     mentionCaret = applied.caret;
-    if (!attachedMentions.includes(slotId)) {
-      attachedMentions = [...attachedMentions, slotId];
+    if (!attachedMentions.includes(seat.slotId)) {
+      attachedMentions = [...attachedMentions, seat.slotId];
     }
     if (bodyElement !== null) {
       bodyElement.focus();
@@ -121,16 +121,16 @@
     </label>
     {#if mentionOptions.length > 0}
       <ul class="compose-sheet__mentions" data-testid="player-mention-suggestions">
-        {#each mentionOptions as slotId}
+        {#each mentionOptions as seat (seat.slotId)}
           <li>
             <button
               type="button"
               class="fm-touch-button fm-touch-button--secondary"
               data-min-touch-target-px="44"
-              data-testid={`player-mention-suggestion-${slotId}`}
-              on:click={() => chooseMention(slotId)}
+              data-testid={`player-mention-suggestion-${seat.slotId}`}
+              on:click={() => chooseMention(seat)}
             >
-              @{slotId}
+              @{seat.label}
             </button>
           </li>
         {/each}
