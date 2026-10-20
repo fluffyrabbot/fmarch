@@ -16,8 +16,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
 const providerLogoutUrl =
   "https://api.workos.com/user_management/sessions/logout?session_id=session_01JNXQF0S5V5TQ0M9K2R8E7C6D";
+// The production server resolves its bundled imports from frontend/
+// node_modules, so this build writes the in-tree .svelte-kit and build/
+// (this lane alone owns frontend-worktree) instead of a lane scratch dir.
+const { FMARCH_FRONTEND_SCRATCH_DIR: _laneScratch, ...buildEnv } = process.env;
 const build = spawnSync("npm", ["run", "build"], {
   cwd: frontendRoot,
+  env: buildEnv,
   encoding: "utf8",
   stdio: ["ignore", "pipe", "pipe"],
 });
