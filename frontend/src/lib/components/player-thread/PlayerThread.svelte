@@ -483,6 +483,11 @@
   }
 
   @media (max-width: 560px) {
+    .player-surface__post {
+      gap: 8px;
+      padding-block: 6px 14px;
+    }
+
     .player-surface__post header {
       align-items: start;
     }
