@@ -70,6 +70,7 @@
       {liveStatus.state === "connecting" ? "Reconnecting…" : liveStatus.message}
     </p>
   {/if}
+  <slot />
 </header>
 
 <style>
@@ -80,6 +81,9 @@
     display: grid;
     gap: 16px;
     grid-template-columns: minmax(0, 1fr) auto auto;
+    position: sticky;
+    top: var(--fm-app-topbar-block-size);
+    z-index: 11;
     min-block-size: 76px;
     padding: 10px clamp(14px, 3vw, 30px);
   }
@@ -161,7 +165,7 @@
       grid-template-columns: minmax(0, 1fr) auto;
       min-block-size: 60px;
       padding-block: 6px;
-      position: relative;
+
     }
 
     .game-bar__facts a {
@@ -175,20 +179,9 @@
     }
 
     .game-bar__connection {
-      font-size: 0;
-      inset-block-end: 7px;
-      inset-inline-start: 14px;
-      max-inline-size: 12px;
-      position: absolute;
-    }
-
-    .game-bar__connection::before {
-      block-size: 9px;
-      background: currentColor;
-      border-radius: 999px;
-      content: "";
-      display: block;
-      inline-size: 9px;
+      grid-column: 1 / -1;
+      max-inline-size: none;
+      text-align: start;
     }
   }
 </style>

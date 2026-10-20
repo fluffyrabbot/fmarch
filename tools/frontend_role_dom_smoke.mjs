@@ -212,11 +212,11 @@ async function proveAdminFeedbackTrace(bundle) {
 async function provePlayerFeedbackTrace(bundle) {
   const { html } = await bundle.renderPlayerCommandReceipt();
   return {
-    component: "player-command-receipt",
-    rowTestId: "player-command-receipt-submit_vote",
+    component: "player-feedback",
+    rowTestId: "player-feedback",
     statusTestId: "player-command-status",
     commandTrace: assertCommandTraceAttributes(html, {
-      testId: "player-command-receipt-submit_vote",
+      testId: "player-feedback",
       surface: "player",
       actionId: "submit_vote",
       statusKey: "submit_vote",

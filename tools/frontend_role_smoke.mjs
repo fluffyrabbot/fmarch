@@ -2611,35 +2611,26 @@ async function assertRailCommandActivity(page, { prefix, actionId, expectedState
 }
 
 async function assertPlayerCommandReceipt(page, { actionId, expectedState }) {
-  await page.getByTestId("player-command-receipt").waitFor({ state: "visible" });
-  await page
-    .getByTestId(`player-command-receipt-${actionId}`)
-    .waitFor({ state: "visible" });
   const status = page.getByTestId("player-command-status");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    ({ state }) => {
-      const node = document.querySelector('[data-testid="player-command-status"]');
-      return node?.getAttribute("data-state") === state;
-    },
-    { state: expectedState },
-  );
-  const exportedReceipts = await page.evaluate(
-    () => window.__fmarchPlayerCommandReceipts ?? null,
-  );
+  await page.waitForFunction(state => document.querySelector('[data-testid="player-command-status"]')?.getAttribute("data-state") === state, expectedState);
+  const feedback = page.getByTestId("player-feedback");
+  if (expectedState === "ack") {
+    if (await feedback.count()) throw new Error("Resolved feedback must clear from the game bar");
+  } else {
+    await feedback.waitFor({ state: "visible" });
+    if (await feedback.getAttribute("data-action-id") !== actionId) throw new Error("Feedback must describe the current action");
+    if (await page.getByTestId("player-game-bar").getByTestId("player-feedback").count() !== 1) throw new Error("Feedback must be in the game bar");
+  }
+  const exportedReceipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts ?? null);
   const statusRegion = await assertStatusLiveRegion(status, {
-    label: `player command receipt ${actionId}`,
-    expectedState,
-    expectedAriaLive: expectedState === "reject" ? "assertive" : "polite",
+    label: `player feedback ${actionId}`, expectedState,
+    expectedAriaLive: ["reject", "interrupted"].includes(expectedState) ? "assertive" : "polite",
   });
   return {
-    receiptTestId: "player-command-receipt",
-    receiptItemTestId: `player-command-receipt-${actionId}`,
-    statusTestId: "player-command-status",
-    state: await status.getAttribute("data-state"),
-    message: await status.innerText(),
-    exportedReceipts,
-    statusRegion,
+    receiptTestId: expectedState === "ack" ? null : "player-feedback",
+    receiptItemTestId: expectedState === "ack" ? null : "player-feedback",
+    statusTestId: "player-command-status", state: await status.getAttribute("data-state"),
+    message: await status.innerText(), exportedReceipts, statusRegion,
   };
 }
 

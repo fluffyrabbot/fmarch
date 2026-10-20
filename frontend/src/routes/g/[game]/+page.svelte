@@ -38,7 +38,7 @@
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
-  import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
+  import PlayerFeedback from "$lib/components/player-command/PlayerFeedback.svelte";
   import PlayerDayEventRail from "$lib/components/player-command/PlayerDayEventRail.svelte";
   import PlayerEndgameSummary from "$lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
   import { buildPlayerEndgameSummaryViewModel } from "$lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
@@ -1031,7 +1031,17 @@
       {votecount}
       {liveStatus}
       {player}
-    />
+    >
+      <PlayerFeedback
+        status={commandStatus}
+        attempt={commandRecoveryAttempts[commandStatus?.actionId ?? commandStatus?.commandTrace?.actionId]}
+        roster={commandState?.roster ?? []}
+        retryAvailable={confirmedRetryAvailable}
+        retryEnabled={projectionCommandsReady && !commandPending}
+        onRetry={retryPlayerCommand}
+        onDismiss={cancelPlayerCommandRecovery}
+      />
+    </GameBar>
     <ChannelTabs slot="channels" {channels} />
 
     {#if player.gameCompleted}
@@ -1047,8 +1057,8 @@
         data-testid="player-command-recovery-storage-warning"
         role="status"
       >
-        <strong>Reload recovery unavailable</strong>
-        <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
+        <strong>Posting and voting unavailable</strong>
+        <p>Allow browser storage, then reload to post or vote safely.</p>
       </section>
     {/if}
 
@@ -1124,8 +1134,7 @@
       >
         <strong>Player commands paused</strong>
         <p>
-          Authoritative game state is {projectionHealth?.state ?? "unavailable"}.
-          Controls return after a validated refresh.
+          Waiting for the current game state. You can read saved posts; posting and voting will return when the connection recovers.
         </p>
       </section>
     {/if}
@@ -1185,19 +1194,6 @@
       </details>
     </ContextSheet>
 
-    {#if commandReceipts.length > 0}
-      <div class="player-command-feedback">
-        <PlayerCommandReceipt
-          receipts={commandReceipts}
-          currentStatus={commandStatus}
-          retryAvailable={confirmedRetryAvailable}
-          retryEnabled={projectionCommandsReady && !commandPending}
-          onRetry={retryPlayerCommand}
-          onCancel={cancelPlayerCommandRecovery}
-        />
-      </div>
-    {/if}
-
       <ActionDock
         slot="dock"
         view={playerActionView}
@@ -1213,14 +1209,6 @@
 <style>
   .reader-saved-position { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; position: fixed; z-index: 30; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); box-shadow: 0 2px 12px color-mix(in srgb, var(--fm-ground) 36%, transparent); }
   .reader-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .player-command-feedback {
-    bottom: calc(82px + env(safe-area-inset-bottom));
-    inset-inline-end: max(14px, calc((100vw - 920px) / 2));
-    max-inline-size: min(360px, calc(100vw - 28px));
-    position: fixed;
-    z-index: 13;
-  }
-
   :global(.player-role-card__name) {
     color: var(--fm-ink);
     display: block;
@@ -1352,6 +1340,6 @@
     overflow-wrap: anywhere;
   }
   @media (max-width: 560px) {
-    .player-command-feedback { bottom: calc(130px + env(safe-area-inset-bottom)); }
+
   }
 </style>

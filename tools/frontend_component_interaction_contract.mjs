@@ -119,8 +119,8 @@ async function proveSourceContracts() {
       requiredSnippets: ["data-action={button.action}"],
     }),
     await proveSourceContract({
-      component: "PlayerCommandReceipt",
-      path: "frontend/src/lib/components/player-command/PlayerCommandReceipt.svelte",
+      component: "PlayerFeedback",
+      path: "frontend/src/lib/components/player-command/PlayerFeedback.svelte",
       requiredSnippets: ["<CommandRecovery", "status={currentStatus}"],
     }),
     await proveSourceContract({
@@ -235,9 +235,9 @@ async function provePlayerInteraction(bundle) {
     false,
     "an unarmed vote picker exposes no dispatching vote control",
   );
-  assertIncludes(voteAck.html, 'data-testid="player-command-receipt-submit_vote"', "player vote ack row");
+  assert.equal(voteAck.html.includes('data-testid="player-feedback"'), false, "resolved vote clears feedback");
   assertIncludes(voteAck.html, 'data-state="ack"', "player vote ack state");
-  assertIncludes(postAck.html, 'data-testid="player-command-receipt-submit_post"', "player post ack row");
+  assert.equal(postAck.html.includes('data-testid="player-feedback"'), false, "resolved post clears feedback");
   assertIncludes(postAck.html, 'data-state="ack"', "player post ack state");
   assert.equal(invoked[0], "submit_vote");
   assert.equal(invoked[1], "submit_post");
@@ -427,7 +427,7 @@ import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.s
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
 import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
 import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
-import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
+import PlayerFeedback from "../src/lib/components/player-command/PlayerFeedback.svelte";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
 import { adminConfirmStatus } from "../src/routes/admin/admin-route-controller.mjs";
@@ -580,25 +580,25 @@ export function renderPlayerVoteSheet({ selectedVoteAction = "submit_vote" } = {
 }
 
 export function renderPlayerCommandReceiptVoteAck() {
-  return render(PlayerCommandReceipt, {
+  return render(PlayerFeedback, {
     props: {
-      receipts: recordPlayerCommandReceipt([], "submit_vote", {
+      status: {
         state: "ack",
         message: "Ack: stream seqs 71",
         commandTrace: playerCommandTrace("submit_vote"),
-      }),
+      },
     },
   });
 }
 
 export function renderPlayerCommandReceiptPostAck() {
-  return render(PlayerCommandReceipt, {
+  return render(PlayerFeedback, {
     props: {
-      receipts: recordPlayerCommandReceipt([], "submit_post", {
+      status: {
         state: "ack",
         message: "Ack: stream seqs 72",
         commandTrace: playerCommandTrace("submit_post"),
-      }),
+      },
     },
   });
 }

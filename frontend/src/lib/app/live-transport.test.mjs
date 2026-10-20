@@ -2159,7 +2159,7 @@ test("live projection events map to visible status copy", () => {
     }),
     {
       state: "reconnecting",
-      message: "Reconnecting live updates. Actions remain safe.",
+      message: "Reconnecting to the game…",
     },
   );
   assert.deepEqual(

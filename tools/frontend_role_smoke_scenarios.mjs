@@ -390,8 +390,8 @@ export const roles = Object.freeze([
     }),
     interactionGeometryBudget: Object.freeze({
       feedback: Object.freeze({
-        anchorSelector: '[data-testid="player-primary-action-zone"]',
-        targetSelector: '[data-testid="player-command-receipt-submit_vote"]',
+        anchorSelector: '[data-testid="player-game-bar"]',
+        targetSelector: '[data-testid="player-feedback"]',
         maxAnchorShiftPx: 1,
         maxCombinedSpanViewportRatio: 0.9,
         maxDocumentGrowthViewportRatio: 0.25,
