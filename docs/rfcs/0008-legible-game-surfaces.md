@@ -162,6 +162,19 @@ Command traces remain in the host and admin "Technical details" drawers only.
 *Rationale:* doc 13 already says technical traces belong in the activity
 disclosure; the panel violated that and covered the thread on phones.
 
+Slice 5 settles the details. The line sits in its own sticky slot directly
+under the game bar rather than inside it, because the bar scrolls away and a
+vote cast from the picker at the foot of the page must see its outcome. It
+names the intent from the command and the roster ("your vote for Ilya", "your
+post", "your night action") and gives each known rejection a player reason;
+an unknown one says only that it didn't go through. A settled line shows
+until the next command or Dismiss. Retry appears only for an interruption or
+a rejection whose exact attempt is retained. Proofs read raw messages,
+receipts and traces from the page's proof globals. The night action card's
+diagnostic rows (actor, action state, receipt state, stale recovery) move to
+slice 8 with the capability text: both are proof readouts on a player
+surface, and live proofs read them through the same checkpoint attributes.
+
 ### 5. Player context states only what the player can act on
 
 The More sheet has three sections: Your role (the role card, or "Your role
