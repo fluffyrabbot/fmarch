@@ -23,6 +23,8 @@
   setContext(THEME_CONTEXT, themeContext);
   $: themeContext.preferences.set(data?.themePreference ?? DEFAULT_THEME_PREFERENCE);
   $: themeContext.setRoute($page.url.pathname, ($page.data?.shell ?? data?.shell)?.phaseId);
+  // Children mount first, so this marks a fully hydrated document for browser proofs.
+  onMount(() => { document.documentElement.dataset.appHydrated = ""; });
   onMount(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => themeContext.system.set(media.matches ? "dark" : "light");

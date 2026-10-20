@@ -149,7 +149,7 @@ try {
     const boardContext = await newContextForViewport(viewport, boardScenario.token);
     const boardPage = await boardContext.newPage();
     const boardResponse = await navigateBrowserPage(boardPage, `${baseUrl}${boardScenario.path}`, {
-      waitUntil: "networkidle",
+      settle: true,
     });
     if (!boardResponse?.ok()) {
       throw new Error(
@@ -260,7 +260,7 @@ try {
         state: mockState,
       });
       const response = await navigateBrowserPage(page, `${baseUrl}${role.path}`, {
-        waitUntil: "networkidle",
+        settle: true,
       });
       if (!response?.ok()) {
         throw new Error(
@@ -487,7 +487,7 @@ try {
     const privateChannelResponse = await navigateBrowserPage(privateChannelPage,
       `${baseUrl}${privateChannelPath}`,
       {
-        waitUntil: "networkidle",
+        settle: true,
       },
     );
     if (!privateChannelResponse?.ok()) {
@@ -592,7 +592,7 @@ try {
       const context = await newContextForViewport(viewport, forbidden.token);
       const page = await context.newPage();
       const response = await navigateBrowserPage(page, `${baseUrl}${forbidden.path}`, {
-        waitUntil: "networkidle",
+        settle: true,
       });
       if (String(response?.status()) !== forbidden.status) {
         throw new Error(
@@ -631,7 +631,7 @@ try {
       const context = await newContextForViewport(viewport, scenario.token);
       const page = await context.newPage();
       const response = await navigateBrowserPage(page, `${baseUrl}${scenario.path}`, {
-        waitUntil: "networkidle",
+        settle: true,
       });
       if (!response?.ok()) {
         throw new Error(
@@ -668,7 +668,7 @@ try {
     const context = await newContextForViewport(viewport, hostSetupScenario.token);
     const page = await context.newPage();
     const response = await navigateBrowserPage(page, `${baseUrl}${hostSetupScenario.path}`, {
-      waitUntil: "networkidle",
+      settle: true,
     });
     if (!response?.ok()) {
       throw new Error(
@@ -702,7 +702,7 @@ try {
     const context = await newContextForViewport(viewport, null);
     const page = await context.newPage();
     const response = await navigateBrowserPage(page, `${baseUrl}${publicGameScenario.path}`, {
-      waitUntil: "networkidle",
+      settle: true,
     });
     if (!response?.ok()) {
       throw new Error(
@@ -911,7 +911,7 @@ async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
   const adminPage = await adminContext.newPage();
   await adminPage.emulateMedia(contract.media);
   const adminResponse = await navigateBrowserPage(adminPage, `${baseUrl}${contract.admin.path}`, {
-    waitUntil: "networkidle",
+    settle: true,
   });
   if (!adminResponse?.ok()) {
     throw new Error(`accessibility admin surface returned ${adminResponse?.status()}`);
@@ -984,7 +984,7 @@ async function assertAccessibilitySurfaceContracts({ baseUrl, artifactDir }) {
   await publicationPage.emulateMedia(contract.media);
   const publicationResponse = await navigateBrowserPage(publicationPage,
     `${baseUrl}${contract.publication.path}`,
-    { waitUntil: "networkidle" },
+    { settle: true },
   );
   if (!publicationResponse?.ok()) {
     throw new Error(`accessibility publication surface returned ${publicationResponse?.status()}`);
@@ -1058,6 +1058,7 @@ async function newContextForViewport(viewport, token) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
   });
+  await context.addInitScript(trackPageNetworkActivity);
   if (token !== null) {
     await context.addCookies([
       {
@@ -3238,7 +3239,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     reviewHref,
   });
 
-  await navigateBrowserPage(page, baseRouteUrl, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, baseRouteUrl, { settle: true });
   await page.getByTestId("player-private-review-notification-N02-0-slot-7").waitFor({
     state: "visible",
   });
@@ -4010,14 +4011,14 @@ function containsBox(outer, inner) {
 
 
 async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
-  await navigateBrowserPage(page, `${baseUrl}${routePath}?post=443#thread-post-443`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}?post=443#thread-post-443`, { settle: true });
   await page.waitForFunction(() => document.activeElement?.id === "thread-post-443");
   const href = await page.getByTestId("thread-post-permalink-442").getAttribute("href");
   if (href !== "?post=442#thread-post-442") throw new Error("Post permalink lacks a server-resolvable address");
   await page.getByTestId("thread-post-permalink-442").click();
   await page.waitForFunction(() => document.activeElement?.id === "thread-post-442");
   if (!page.url().includes("post=442")) throw new Error("Addressed navigation did not reach the selected post");
-  await page.waitForLoadState("networkidle");
+  await settlePage(page);
   // Activate without Playwright scrolling the pager into view: the reader's
   // existing viewport is the invariant under prepending history.
   const before = await page.locator("#thread-post-442").evaluate(post => post.getBoundingClientRect().top);
@@ -4029,7 +4030,7 @@ async function proveAddressedPlayerNavigation(page, baseUrl, routePath) {
 
 
 async function provePrivateAttention(page, baseUrl, routePath) {
-  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
   const id = "notification-N02-0-slot-7";
   const status = page.getByTestId(`private-attention-${id}`);
   const badge = page.getByTestId("player-private-new-count");
@@ -4059,7 +4060,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   assert.equal(new URL(page.url()).searchParams.get("private"), id);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
-  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
   const filter = page.getByTestId("private-attention-filter");
   await filter.selectOption("new");
   // Wait for the filter to re-render before asserting the reviewed item is gone.
@@ -4100,7 +4101,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.route(endpoint, mock);
   await peer.route(endpoint, mock);
   try {
-    await Promise.all([navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" }), navigateBrowserPage(peer, `${baseUrl}${routePath}`, { waitUntil: "networkidle" })]);
+    await Promise.all([navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true }), navigateBrowserPage(peer, `${baseUrl}${routePath}`, { settle: true })]);
     await Promise.all([page, peer].map(tab => tab.getByTestId("private-attention-filter").selectOption("all")));
     await filter.selectOption("new");
     await filter.evaluate(el => el.scrollIntoView({ block: "center" }));
@@ -4176,7 +4177,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
   const completed = route => route.fulfill({ json: { ...commandRoute.body, game_completed: true } });
   await page.route("**/games/*/player-command-state**", completed);
   try {
-    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+    await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
     await page.getByTestId("player-game-complete").waitFor();
     await proveNavigation(page, "private-attention-filter");
     assert.equal(await page.getByTestId("player-projection-command-health").count(), 0);
@@ -4188,7 +4189,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     await installLiveProjectionHarness(spectator, { roleId: "spectator", channel: "spectator" });
     await installFixtureApiRoutes(spectator, { routes: fixtureApiRoutes, projections: mockStateProjections, state: createRoleMockState() });
     await spectator.route("**/channels/spectator/thread?**", route => route.fulfill({ json: { posts: [], next_before_seq: null, next_after_seq: null } }));
-    const response = await navigateBrowserPage(spectator, `${baseUrl}/g/midsummer/c/spectator`, { waitUntil: "networkidle" });
+    const response = await navigateBrowserPage(spectator, `${baseUrl}/g/midsummer/c/spectator`, { settle: true });
     assert.equal(response.status(), 200);
     await proveNavigation(spectator, "player-private-queue");
     assert.equal(await spectator.getByTestId("player-private-new-count").count(), 0);
@@ -4198,7 +4199,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
 
 
 async function proveReadingReturn(page, baseUrl, routePath) {
-  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
+  await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
   const origin = page.locator("#thread-post-443");
   await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
   const top = await origin.evaluate(el => el.getBoundingClientRect().top);
@@ -4233,13 +4234,51 @@ async function proveReadingReturn(page, baseUrl, routePath) {
   await page.getByTestId("return-to-thread").click(); await assertReturned();
 }
 
+// Runs in every document before its scripts: counts in-flight fetch and XHR
+// requests and stamps the last network activity, including finished
+// resource loads, for settlePage.
+function trackPageNetworkActivity() {
+  const activity = { inflight: 0, last: performance.now() };
+  window.__fmarchProofNetwork = activity;
+  const begin = () => { activity.inflight += 1; activity.last = performance.now(); };
+  const end = () => { activity.inflight -= 1; activity.last = performance.now(); };
+  const fetchImpl = window.fetch;
+  window.fetch = function (...args) {
+    begin();
+    return fetchImpl.apply(this, args).finally(end);
+  };
+  const send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (...args) {
+    begin();
+    this.addEventListener("loadend", end, { once: true });
+    return send.apply(this, args);
+  };
+  new PerformanceObserver(() => { activity.last = performance.now(); }).observe({ type: "resource", buffered: true });
+}
+
+// Replaces Playwright's networkidle, whose fixed 500 ms idle window cost most
+// of each navigation: the app has hydrated, no request is in flight, fonts
+// are ready, and the network has been quiet for 100 ms.
+async function settlePage(page, { timeout } = {}) {
+  await page.waitForFunction((quietMs) => {
+    const activity = window.__fmarchProofNetwork;
+    return document.readyState === "complete"
+      && document.documentElement.dataset.appHydrated !== undefined
+      && document.fonts.status === "loaded"
+      && activity?.inflight === 0
+      && performance.now() - activity.last >= quietMs;
+  }, 100, { polling: 25, ...(timeout === undefined ? {} : { timeout }) });
+}
+
 // Navigate through the browser's own location API, keeping automation's
 // navigation tracking from manufacturing a pending navigation on Firefox.
-async function navigateBrowserPage(page, url, options = {}) {
+// `settle: true` waits for settlePage after the load event.
+async function navigateBrowserPage(page, url, { settle = false, ...options } = {}) {
   const [response] = await Promise.all([
-    page.waitForNavigation(options),
+    page.waitForNavigation(settle ? { ...options, waitUntil: "load" } : options),
     page.evaluate(destination => location.assign(destination), url),
   ]);
+  if (settle) await settlePage(page, options);
   return response;
 }
 
@@ -4248,9 +4287,10 @@ async function navigateBrowserPage(page, url, options = {}) {
 async function reloadBrowserPage(page) {
   const historyLength = await page.evaluate(() => history.length);
   await Promise.all([
-    page.waitForNavigation({waitUntil: "networkidle"}),
+    page.waitForNavigation({waitUntil: "load"}),
     page.evaluate(() => location.reload()),
   ]);
+  await settlePage(page);
   assert.equal(await page.evaluate(() => history.length), historyLength, "reload must preserve history length");
   assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0]?.type), "reload", "proof requires a real reload");
 }
@@ -4281,7 +4321,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
   try {
     for (outcome of channel === "main" ? ["ready", "hidden", "deleted", "offline", "cancelled"] : ["ready", "denied"]) {
       newest = null;
-      await navigateBrowserPage(page, `${baseUrl}${routePath}?reader-proof=${outcome}`, { waitUntil: "networkidle" });
+      await navigateBrowserPage(page, `${baseUrl}${routePath}?reader-proof=${outcome}`, { settle: true });
       await page.getByTestId("player-thread-load-older").click();
       const origin = page.locator("#thread-post-10");
       await origin.waitFor();
@@ -4422,7 +4462,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
       navigate: (tab, { timeout }) => navigateBrowserPage(
         tab,
         `${baseUrl}${routePath}?checkpoint-proof=ready`,
-        { waitUntil: "networkidle", timeout },
+        { settle: true, timeout },
       ),
       position: saved.position,
     });
@@ -4486,7 +4526,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
     await waitForRestore(peer, "reload-recovered-checkpoint:peer", saved.position);
     for (const outcome of ["hidden", "deleted"]) {
       unavailable = true; saved = { revision: saved.revision + 1, position: { source_seq: 20, offset_px: 110 }, available: false };
-      await navigateBrowserPage(page, `${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { waitUntil: "networkidle" });
+      await navigateBrowserPage(page, `${baseUrl}${routePath}?checkpoint-proof=${outcome}`, { settle: true });
       await page.getByTestId("reader-recovery-retry").waitFor();
       assert.equal(await page.locator("#thread-post-20").count(), 0);
       assert.equal(writes, 1, "restoration and background activity never create saves");
@@ -4495,7 +4535,7 @@ async function proveDurableReadingCheckpoint(page, baseUrl, routePath) {
   } finally {
     await peer.close(); await page.unroute(checkpointEndpoint, checkpoint); await page.unroute(threadEndpoint, thread);
     if (completed) await navigateBrowserPage(page, `${baseUrl}${routePath}`, {
-      waitUntil: "networkidle",
+      settle: true,
       timeout: DURABLE_READING_CHECKPOINT_INITIALIZATION_TIMEOUT_MS,
     });
   }
@@ -4510,7 +4550,7 @@ async function proveSavedResumeDenial(page, baseUrl, routePath) {
   const denied = route => new URL(route.request().url()).searchParams.has("around_seq") ? route.fulfill({ status: 403 }) : route.fallback();
   await page.route(endpoint, checkpoint);
   try {
-    await navigateBrowserPage(page, `${baseUrl}${routePath}?saved-resume=denied`, { waitUntil: "networkidle" });
+    await navigateBrowserPage(page, `${baseUrl}${routePath}?saved-resume=denied`, { settle: true });
     const post = page.locator('article[id^="thread-post-"]').first();
     const id = await post.getAttribute("id");
     await post.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center", behavior: "instant" }); });
