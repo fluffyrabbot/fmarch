@@ -82,6 +82,12 @@ import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media
 
 import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
 import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
+
+// The status line speaks in the player's terms; proofs compare the raw message.
+async function rawPlayerCommandStatus(statusLocator) {
+  await statusLocator.waitFor({ state: "attached" });
+  return statusLocator.page().evaluate(() => window.__fmarchPlayerCommandStatus?.message ?? "");
+}
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -1552,7 +1558,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
   const submitPostOutcome = await page.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  const commandStatus = await status.innerText();
+  const commandStatus = await rawPlayerCommandStatus(status);
   const { contentId, attachment } = assertFactionDayChatSubmitPostOutcome(
     submitPostOutcome,
   );
@@ -2642,7 +2648,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     throw new Error("spectator route exposed a player role card");
   }
   if (
-    (await page.getByTestId("player-command-receipt").count()) !== 0 ||
+    (await page.getByTestId("player-command-status").count()) !== 0 ||
     (await page.getByTestId("player-action-submission-checkpoint").count()) !== 0
   ) {
     throw new Error("spectator route exposed player command or action state");
@@ -3226,7 +3232,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   const submitOutcome = await incomingPage.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  const commandStatus = await status.innerText();
+  const commandStatus = await rawPlayerCommandStatus(status);
   const submitCommand = submitOutcome?.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (
     submitOutcome?.state !== "ack" ||
@@ -3850,7 +3856,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       retry: voteRetry,
       firstOutcome: voteOutcome,
       secondOutcome: raceVoteOutcome,
-      secondStatusMessage: await raceStatus.innerText(),
+      secondStatusMessage: await rawPlayerCommandStatus(raceStatus),
       rows: concurrentVoteRows,
       firstProjection: await page.evaluate(() => window.__fmarchPlayerProjection),
       secondProjection: await raceVoteSession.page.evaluate(
@@ -4110,7 +4116,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     const debug = {
       playerStep,
       errorMessage: error?.message ?? String(error),
-      statusText: await status.innerText(),
+      statusText: await rawPlayerCommandStatus(status),
       statusState: await status.getAttribute("data-state"),
       projection: await page.evaluate(() => window.__fmarchPlayerProjection),
       liveStatus: await page.evaluate(() => window.__fmarchLiveProjectionStatus),
@@ -4135,7 +4141,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   const liveProjectionEvents = await page.evaluate(
     () => window.__fmarchLiveProjectionEvents,
   );
-  const commandStatus = await status.innerText();
+  const commandStatus = await rawPlayerCommandStatus(status);
   await raceVoteSession.context.close();
   await duplicateVoteSession.context.close();
   await staleVoteSession.context.close();
@@ -4225,7 +4231,7 @@ async function submitDuplicatePlayerVote(
     duplicateOutcome: outcome,
     commandId,
   });
-  const statusMessage = await status.innerText();
+  const statusMessage = await rawPlayerCommandStatus(status);
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
@@ -4318,7 +4324,7 @@ async function submitStalePlayerVote(staleSession, competingOutcome) {
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStalePlayerVoteRecovery(outcome);
-  const statusMessage = await status.innerText();
+  const statusMessage = await rawPlayerCommandStatus(status);
   assertStalePlayerVoteRecoveryMessage({
     outcome,
     statusMessage,
@@ -4737,7 +4743,7 @@ async function submitStalePlayerAction(staleSession, competingOutcome) {
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStalePlayerActionRecovery(outcome);
-  const statusMessage = await status.innerText();
+  const statusMessage = await rawPlayerCommandStatus(status);
   assertStalePlayerActionRecoveryMessage({
     outcome,
     statusMessage,
@@ -4799,7 +4805,7 @@ async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, com
     commandId,
     heldRequest,
   });
-  const statusMessage = await status.innerText();
+  const statusMessage = await rawPlayerCommandStatus(status);
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
@@ -4860,7 +4866,7 @@ async function submitRacingPlayerAction(raceSession, { winningCommandId, competi
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStaleSameActionRecovery({ outcome, winningCommandId });
-  const statusMessage = await status.innerText();
+  const statusMessage = await rawPlayerCommandStatus(status);
   assertStaleSameActionRecoveryMessage({ outcome, statusMessage });
   await page.waitForFunction(
     () =>

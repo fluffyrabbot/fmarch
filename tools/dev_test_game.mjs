@@ -128,6 +128,9 @@ import {
   playerVoteOptionForTarget,
   withdrawPlayerVote,
 } from "./player_vote_picker_driver.mjs";
+import {
+  playerCommandStatusMessage,
+} from "./player_command_proof_reads.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -2623,9 +2626,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   const rejectedVoteReceipt = await staleVotePage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const rejectedVoteReceiptText = await staleVotePage
-    .getByTestId("player-command-status")
-    .innerText();
+  const rejectedVoteReceiptText = await playerCommandStatusMessage(staleVotePage);
   const rejectedVoteDispatchPlan = await staleVotePage.evaluate(
     () => window.__fmarchPlayerCommandDispatchBridgePlan,
   );
@@ -6567,9 +6568,7 @@ async function submitStaleD02VoteAfterTransition({ page, voteTarget }) {
   const currentReceipt = await page.evaluate(
     () => window.__fmarchPlayerProjection?.currentReceipt ?? null,
   );
-  const receiptStatusText = await page
-    .getByTestId("player-command-status")
-    .innerText();
+  const receiptStatusText = await playerCommandStatusMessage(page);
   const buttonsAfterReject = await playerCommandButtons(page);
   const currentVoteAfterReject = await playerCurrentVoteSnapshot(page);
   return {
@@ -7534,7 +7533,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   const currentReceipt = await page.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+  const receiptStatusText = await playerCommandStatusMessage(page);
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -7800,8 +7799,8 @@ async function submitConcurrentActionRace({
     ),
   ]);
   const [liveReceiptStatusText, concurrentReceiptStatusText] = await Promise.all([
-    actionPage.getByTestId("player-command-status").innerText(),
-    concurrentActionPage.getByTestId("player-command-status").innerText(),
+    playerCommandStatusMessage(actionPage),
+    playerCommandStatusMessage(concurrentActionPage),
   ]);
   const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
@@ -7991,9 +7990,7 @@ async function submitActionIdempotentRetry({
   const currentReceipt = await staleActionRetryPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await staleActionRetryPage
-    .getByTestId("player-command-status")
-    .innerText();
+  const receiptStatusText = await playerCommandStatusMessage(staleActionRetryPage);
   const apiCommandStateAfterRetry = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8106,9 +8103,7 @@ async function submitStaleSameActionRecovery({
   const currentReceipt = await staleSameActionPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await staleSameActionPage
-    .getByTestId("player-command-status")
-    .innerText();
+  const receiptStatusText = await playerCommandStatusMessage(staleSameActionPage);
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8223,9 +8218,7 @@ async function submitStaleActionConflict({
   const currentReceipt = await staleActionPage.evaluate(() =>
     window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
   );
-  const receiptStatusText = await staleActionPage
-    .getByTestId("player-command-status")
-    .innerText();
+  const receiptStatusText = await playerCommandStatusMessage(staleActionPage);
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
     `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
@@ -8773,9 +8766,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       postBody,
       expectedState: "ack",
     });
-    const receiptStatusText = await playerEntry.page
-      .getByTestId("player-command-status")
-      .innerText();
+    const receiptStatusText = await playerCommandStatusMessage(playerEntry.page);
     await playerEntry.page.waitForFunction(
       ({ expectedBody }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
@@ -9022,9 +9013,7 @@ async function verifyCompletedPrivateChannelRecovery({
         (receipt) => receipt.current === true,
       ),
     );
-    const receiptStatusText = await playerEntry.page
-      .getByTestId("player-command-status")
-      .innerText();
+    const receiptStatusText = await playerCommandStatusMessage(playerEntry.page);
     const threadPostBodiesAfterReject = await playerEntry.page.evaluate(() =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).map(
         (post) => post.body,
@@ -12353,9 +12342,7 @@ async function playerProjectionSnapshot(
     );
   }
   if (receiptStatusText) {
-    snapshot.receiptStatusText = await page
-      .getByTestId("player-command-status")
-      .innerText();
+    snapshot.receiptStatusText = await playerCommandStatusMessage(page);
   }
   if (notifications) {
     snapshot.notifications = await page.evaluate(
@@ -22679,9 +22666,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await replacementEntry.page
-      .getByTestId("player-command-status")
-      .innerText();
+    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
     const rowanPrivateIsolationAfterAck = await replacementEntry.page.evaluate(() => {
       const notifications = window.__fmarchPlayerProjection?.notifications ?? [];
       const investigationResults =
@@ -23317,9 +23302,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await replacementEntry.page
-      .getByTestId("player-command-status")
-      .innerText();
+    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
@@ -25089,9 +25072,7 @@ async function verifyStaleReplacementActionAfterResolve({
     const currentReceipt = await replacementEntry.page.evaluate(() =>
       window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
     );
-    const receiptStatusText = await replacementEntry.page
-      .getByTestId("player-command-status")
-      .innerText();
+    const receiptStatusText = await playerCommandStatusMessage(replacementEntry.page);
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
       `${apiBaseUrl}/games/${actionGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
