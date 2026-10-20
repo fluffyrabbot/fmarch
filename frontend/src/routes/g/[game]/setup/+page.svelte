@@ -55,8 +55,10 @@
     importingSignups = true;
     let seated = 0;
     try {
-      // Re-read before dispatch: a previous partial import or another host tab
-      // may have seated candidates since the confirmation list was opened.
+      // Re-read both seats and candidates after a partial import or another tab's work.
+      const refreshed = await refreshSetupState({ data, fetchImpl: fetch });
+      setupState = refreshed.setupState;
+      readiness = refreshed.readiness;
       const response = await fetch(`/api/gameplay/games/${encodeURIComponent(data.game.id)}/setup/signup-candidates`);
       if (!response.ok) throw new Error();
       const available = new Set((await response.json()).filter(c => !c.already_seated).map(c => c.principal_id));

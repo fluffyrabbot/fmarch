@@ -52,7 +52,7 @@ export function buildHostConsoleRouteData({
   principalId,
   coldLoad = null,
   fixtureMode = false,
-  nowSeconds = Math.floor(Date.now() / 1000),
+  nowSeconds = fixtureMode ? 1781806740 : Math.floor(Date.now() / 1000),
 }) {
   const gameId = normalizeGame(game);
   const commandPrincipalId = normalizePrincipal(principalId);

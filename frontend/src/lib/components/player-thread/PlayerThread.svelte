@@ -321,14 +321,6 @@
     justify-content: space-between;
   }
 
-  .player-surface__post:has(.player-surface__post-actions) header {
-    padding-inline-end: 56px;
-  }
-
-  .player-surface__post:has(.player-surface__vote-author-button):has(.player-surface__quote-button) header {
-    padding-inline-end: 116px;
-  }
-
   .player-surface__post-identity {
     align-items: baseline;
     display: flex;
@@ -362,10 +354,7 @@
   .player-surface__post-actions {
     display: flex;
     gap: 6px;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-    position: absolute;
-    z-index: 1;
+    flex: 0 0 auto;
   }
 
   .player-surface__post-action {

@@ -1355,8 +1355,10 @@ async function bootstrapSeededGameThroughSetup(card) {
     await sendCommand("host_h", {
       CreateGame: { game: bootstrapGame, pack: "mafiascum" },
     });
+    const setupProfiles = new Map();
     for (const row of uiBootstrapSetupRoster) {
       await ensureLocalAccount({ principalId: row.user });
+      setupProfiles.set(row.user, await ensureSetupPublicProfile(row.user));
     }
     const bootstrapSession = await createAccountLoginCredential({
       principalId: "host_h",
@@ -1379,6 +1381,8 @@ async function bootstrapSeededGameThroughSetup(card) {
       roster: uiBootstrapSetupRoster.map((row) => ({
         ...row,
         user: authorityPrincipalId(row.user),
+        handle: setupProfiles.get(row.user).handle,
+        displayName: setupProfiles.get(row.user).display_name,
       })),
     });
     return preserveFixturePrincipalAliases({ ...scenario, game: bootstrapGame });
@@ -1516,9 +1520,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
   const assignedPrincipalId = "setup-extra-player";
   const assignedAuthorityPrincipalId = authorityPrincipalId(assignedPrincipalId);
-  // The setup form accepts an exact principal identifier; seed that identity
-  // so the authoritative assignment command can bind it to the slot.
   await ensureLocalAccount({ principalId: assignedPrincipalId });
+  const assignedProfile = await ensureSetupPublicProfile(assignedPrincipalId);
   const setupSession = await createAccountLoginCredential({
     principalId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
@@ -1623,9 +1626,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     ).filter((slot) => slot.slotId === addedSlotId).length;
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
-    await rosterRow
-      .locator('input[name="principalId"]')
-      .fill(assignedAuthorityPrincipalId);
+    await rosterRow.getByLabel("Player handle").fill(assignedProfile.handle);
+    await rosterRow.getByRole("button", {name: `${assignedProfile.display_name} · @${assignedProfile.handle}`, exact: true}).click();
     await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
@@ -27068,4 +27070,22 @@ function lastServerOutputLine() {
     .map((line) => line.trim())
     .filter(Boolean);
   return lines.at(-1) ?? "";
+}
+
+
+async function ensureSetupPublicProfile(principalId) {
+  const token = await mintLocalProofSession({principalId, globalCapabilities: []});
+  const headers = {authorization: `Bearer ${token}`, "content-type": "application/json"};
+  const response = await fetch(`${apiBaseUrl}/profiles/me/editor`, {headers});
+  if (response.ok) {
+    const existing = await response.json();
+    if (existing.visibility === "public") return existing;
+    return fetchJson(`${apiBaseUrl}/profiles/me`, {method: "PUT", headers, body: JSON.stringify({display_name: existing.display_name, bio: existing.bio, visibility: "public", expected_revision: existing.revision})});
+  }
+  if (response.status !== 404) throw new Error(`Cannot read setup member profile: ${response.status}`);
+  return fetchJson(`${apiBaseUrl}/profiles`, {method: "POST", headers, body: JSON.stringify({
+    handle: principalId.replace(/[^a-z0-9]/g, ""),
+    display_name: principalId.split(/[-_]/).map(word => word[0].toUpperCase()+word.slice(1)).join(" "),
+    bio: "Setup acceptance participant.", visibility: "public",
+  })});
 }

@@ -76,6 +76,13 @@
 
   let dispatched = [];
   let commandOutcomes = [];
+  let hostClockSeconds = data.deadlineClock?.nowSeconds ?? Math.floor(Date.now() / 1000);
+  onMount(() => {
+    const startedAt = Date.now();
+    const initialSeconds = hostClockSeconds;
+    const timer = setInterval(() => { hostClockSeconds = initialSeconds + Math.floor((Date.now() - startedAt) / 1000); }, 30_000);
+    return () => clearInterval(timer);
+  });
   let commandStatuses = {};
   let commandRecoveryAttempts = {};
   let commandRecoveryStorage = null;
@@ -121,12 +128,12 @@
     phase: currentPhase,
     replacement: projection.replacement,
     votecountCount: votecount.length,
-    nowSeconds: data.deadlineClock?.nowSeconds,
+    nowSeconds: hostClockSeconds,
   });
   $: hostAttentionCount = buildHostTaskWorkspaceViewModel({
     groups: moderatorActionGroups, commandStatuses, phase: currentPhase,
     hostTasks, hostPrompts, hostDayEvents,
-    nowSeconds: data.deadlineClock?.nowSeconds,
+    nowSeconds: hostClockSeconds,
   }).queue.attentionCount;
   $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
@@ -147,7 +154,7 @@
       gameId: data.game.id,
       snapshot,
       capabilityKind: data.access.capability?.kind,
-      nowSeconds: data.deadlineClock?.nowSeconds,
+      nowSeconds: hostClockSeconds,
     });
     projection = derived.projection;
     votecount = derived.votecount;
@@ -161,7 +168,7 @@
     gameId: data.game.id,
     snapshot: { host: projection, votecount, dayVoteOutcomes, hostPrompts },
     capabilityKind: data.access.capability?.kind,
-    nowSeconds: data.deadlineClock?.nowSeconds,
+    nowSeconds: hostClockSeconds,
     replacementCandidate,
     fixtureMode: data.fixtureMode === true,
   }).moderatorActionGroups;
@@ -532,7 +539,7 @@
           {commandStatuses}
           commandContext={data.commandContext}
           phase={currentPhase}
-          nowSeconds={data.deadlineClock?.nowSeconds}
+          nowSeconds={hostClockSeconds}
           replacement={projection.replacement ?? data.replacement}
           {hostPrompts}
           {hostTasks}

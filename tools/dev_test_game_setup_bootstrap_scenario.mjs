@@ -28,7 +28,7 @@ export const seededSetupRoster = Object.freeze([
   }),
 ]);
 
-// The setup route derives each new seat id as `slot_${slots.length + 1}`, so a
+// The setup route derives the next numeric seat id, so a
 // browser-driven bootstrap can only produce sequential ids. The command-seeded
 // roster above keeps its mixed legacy ids to prove the id-format tolerance of
 // the command path.
@@ -124,6 +124,8 @@ export async function runSeededSetupBootstrapScenario({
         setupPage,
         slotId: row.slot,
         principalId: row.user,
+        handle: row.handle,
+        displayName: row.displayName,
       }),
     );
     commands.push(
@@ -294,12 +296,13 @@ export async function assignSetupSlot({
   setupPage,
   slotId,
   principalId,
+  handle,
+  displayName,
 }) {
   await selectHostSetupStage(setupPage, "roster");
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
-  await row
-    .locator('input[name="principalId"]')
-    .fill(principalId);
+  await row.getByLabel("Player handle").fill(handle);
+  await row.getByRole("button", {name: `${displayName} · @${handle}`, exact: true}).click();
   await row
     .locator('input[name="publicName"]')
     .fill(`Persona ${slotId}`);

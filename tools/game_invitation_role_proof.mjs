@@ -879,8 +879,8 @@ async function driveAccountLogin({
       );
     }
     const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes(game)) {
-      throw new Error(`account login did not render game ${game}`);
+    if (!new URL(page.url()).pathname.includes(`/${game}`)) {
+      throw new Error(`account login did not reach game ${game}`);
     }
     return {
       role: "hostAccount",
