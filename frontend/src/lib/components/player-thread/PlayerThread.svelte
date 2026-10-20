@@ -261,7 +261,7 @@
 
 <style>
   .player-surface__thread {
-    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size, 64px) + 16px);
+    scroll-margin-block-start: calc(var(--fm-app-topbar-block-size, 64px) + var(--fm-game-bar-block-size, 0px) + 16px);
     display: grid;
     gap: 0;
     min-inline-size: 0;

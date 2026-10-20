@@ -1,4 +1,18 @@
-<main class="game-frame player-surface" data-testid="player-surface">
+<script>
+  import { onMount } from "svelte";
+  let frame;
+  onMount(() => {
+    const bar = frame.querySelector('[data-testid="player-game-bar"]');
+    if (!bar) return;
+    const measure = () => frame.style.setProperty("--fm-game-bar-block-size", `${bar.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  });
+</script>
+
+<main bind:this={frame} class="game-frame player-surface" data-testid="player-surface">
   <slot name="bar" />
   <div class="game-frame__workspace">
     <slot name="channels" />
@@ -11,6 +25,7 @@
 
 <style>
   .game-frame {
+    --fm-game-bar-block-size: 76px;
     inline-size: 100%;
     min-block-size: calc(100svh - var(--fm-app-topbar-block-size));
     overflow-x: clip;

@@ -4300,7 +4300,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
         assert.equal(await page.evaluate(() => document.activeElement.id), "player-thread");
         const recovery = page.getByTestId("reader-recovery");
         const messageBox = await recovery.getByRole("status").boundingBox();
-        const headerBox = await page.getByTestId("app-shell-topbar").boundingBox();
+        const headerBox = await page.getByTestId("player-game-bar").boundingBox();
         assert.ok(messageBox && headerBox && messageBox.y >= headerBox.y + headerBox.height, "Recovery status must clear the sticky header");
         if (outcome === "hidden") {
           if (page.viewportSize().width === 390) await page.screenshot({ path: path.join(artifactDir, "mobile-reader-recovery.png") });
