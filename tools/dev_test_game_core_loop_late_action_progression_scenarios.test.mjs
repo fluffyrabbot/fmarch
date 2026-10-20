@@ -260,7 +260,7 @@ test("late action progression assertion checks host resolution and receipt priva
           principalId: "player_mira",
           actorAlive: true,
           actorStatus: "alive",
-          actionState: "disabled:phase locked",
+          actionState: "disabled:phase-locked",
           statusText: "phase locked",
           privateCount: 0,
           privateReceipt: false,

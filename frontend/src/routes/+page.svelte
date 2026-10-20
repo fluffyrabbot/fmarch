@@ -62,27 +62,13 @@
             {#if game.relation}<p>{game.relation}</p>{/if}
             <div class="fm-touch-row">
               {#each game.actions as action}
-                {#if action.navigation === "link"}
-                  <a
-                    class={action.className}
-                    href={action.href}
-                    data-testid={gameActionTestId(game.id, action.id)}
-                  >
-                    {action.label}
-                  </a>
-                {:else}
-                  <button
-                    type="button"
-                    class={action.className}
-                    data-testid={gameActionTestId(game.id, action.id)}
-                    data-blocked-reason={action.blockedReason}
-                    aria-disabled={action.ariaDisabled}
-                    disabled
-                  >
-                    <span class="fm-touch-button__label">{action.label}</span>
-                    <small class="fm-touch-button__reason">{action.blockedLabel}</small>
-                  </button>
-                {/if}
+                <a
+                  class={action.className}
+                  href={action.href}
+                  data-testid={gameActionTestId(game.id, action.id)}
+                >
+                  {action.label}
+                </a>
               {/each}
             </div>
           </article>

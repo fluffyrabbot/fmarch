@@ -4550,6 +4550,10 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(state["actor_slot"], "slot_4");
+    // The player bar names the game by the same title the host console reads.
+    assert!(state["title"]
+        .as_str()
+        .is_some_and(|title| !title.is_empty()));
     assert_eq!(state["actor_alive"], true);
     assert_eq!(state["actor_status"], "alive");
     assert_eq!(state["role_key"], "mafia_goon");

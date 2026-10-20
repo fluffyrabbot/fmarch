@@ -393,7 +393,7 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   });
 
   assert.equal(data.access.allowed, true);
-  assert.equal(data.operator.capabilityLabel, "GlobalAdmin");
+  assert.deepEqual(data.operator.capability, { kind: "GlobalAdmin", source: "session" });
   assert.deepEqual(data.surfaceHeader, {
     component: "fm-surface-header",
     surface: "admin",
@@ -407,6 +407,7 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     capability: {
       visible: true,
       kind: "GlobalAdmin",
+      scope: "",
       label: "Site administrator",
       testId: "admin-capability",
       className: "fm-capability-pill",
@@ -526,6 +527,8 @@ test("admin audit detail data stays inside the admin SPA shell", async () => {
     summary: "/operator/proof-runs machine-readable report",
     capability: {
       visible: true,
+      kind: "GlobalAdmin",
+      scope: "",
       label: "Site administrator",
       testId: "admin-audit-detail-capability",
       className: "fm-capability-pill",
@@ -677,7 +680,7 @@ test("admin route data uses operator proof status when available", async () => {
       id: "proof-a",
       label: "Proof A",
       status: "green",
-      authority: "GlobalAdmin or GlobalMod",
+      authority: ["GlobalAdmin", "GlobalMod"],
       boundary: "Read-only operator proof",
       boundaryDetail: "/operator/proof-runs machine-readable report",
       href: "/games/midsummer/operator/proof-runs",
@@ -719,7 +722,7 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
   );
   assert.equal(identity.label, "Identity lifecycle");
   assert.equal(identity.status, "13 lifecycle audit events available");
-  assert.equal(identity.authority, "GlobalAdmin");
+  assert.deepEqual(identity.authority, ["GlobalAdmin"]);
   assert.equal(identity.rawTokensStored, false);
   assert.deepEqual(identity.eventKinds, [
     "account_created",
@@ -825,7 +828,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   const ops = data.audit.find((item) => item.id === localAdminAuditIds.opsArtifacts);
   assert.equal(ops.label, "Local ops artifacts");
   assert.equal(ops.status, "7 local ops checks passed");
-  assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(ops.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.opsArtifacts, { game: "midsummer" }));
   assert.deepEqual(
     ops.checks.map((check) => check.id),
@@ -868,7 +871,7 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
   const ops = data.audit.find((item) => item.id === localAdminAuditIds.hostedOpsSignals);
   assert.equal(ops.label, "Local hosted ops signals");
   assert.equal(ops.status, "4 hosted-like ops signals passed");
-  assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(ops.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hostedOpsSignals, { game: "midsummer" }));
   assert.deepEqual(
     ops.checks.map((check) => [check.id, check.status]),
@@ -899,7 +902,7 @@ test("admin route data exposes real hosted observability handoff as a native aud
   );
   assert.equal(handoff.label, "Real hosted observability handoff");
   assert.equal(handoff.status, "blocked: 1 passed, 9 blocked");
-  assert.equal(handoff.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(handoff.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     handoff.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.realHostedObservabilityHandoff, {
@@ -1160,7 +1163,7 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   const lane = data.audit.find((item) => item.id === localAdminAuditIds.hostedEvidenceLane);
   assert.equal(lane.label, "Hosted evidence lane");
   assert.equal(lane.status, "blocked: 1 passed, 6 blocked");
-  assert.equal(lane.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(lane.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(lane.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }));
   assert.deepEqual(
     lane.checks.map((check) => check.id),
@@ -1388,7 +1391,7 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.status,
     `blocked: 0 passed, ${hostedIdentityEvidenceBlockedChecks.length} blocked`,
   );
-  assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(identity.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     identity.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence, { game: "midsummer" }),
@@ -2110,7 +2113,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
   const manifest = data.audit.find((item) => item.id === localAdminAuditIds.spineManifest);
   assert.equal(manifest.label, "Local spine manifest");
   assert.equal(manifest.status, "11 manifest checks passed");
-  assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(manifest.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(manifest.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }));
   assert.deepEqual(
     manifest.checks.map((check) => check.id),
@@ -2248,7 +2251,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   const adminSpine = data.audit.find((item) => item.id === localAdminAuditIds.adminSpine);
   assert.equal(adminSpine.label, "Local admin spine");
   assert.equal(adminSpine.status, "11 admin proof surfaces passed");
-  assert.equal(adminSpine.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(adminSpine.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(adminSpine.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" }));
   assert.deepEqual(
     adminSpine.checks.map((check) => check.id),
@@ -2620,7 +2623,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
     graph.status,
     `${proofGraph.summary.nodeCount} proof nodes, ${proofGraph.summary.edgeCount} edges`,
   );
-  assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(graph.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     graph.href,
     expectedAdminArtifactHref({
@@ -2961,7 +2964,7 @@ test("admin route data exposes local race coverage as a native audit row", async
   const raceCoverage = data.audit.find((item) => item.id === localAdminAuditIds.raceCoverage);
   assert.equal(raceCoverage.label, "Local race coverage");
   assert.equal(raceCoverage.status, "3 race cells passed");
-  assert.equal(raceCoverage.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(raceCoverage.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     raceCoverage.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.raceCoverage, { game: "midsummer" }),
@@ -3020,7 +3023,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
   );
   assert.equal(matrix.label, "Local hosted matrix");
   assert.equal(matrix.status, "3 hosted-like race cells passed");
-  assert.equal(matrix.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(matrix.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     matrix.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix, { game: "midsummer" }),
@@ -3349,7 +3352,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
   const freshness = data.audit.find((item) => item.id === localAdminAuditIds.proofFreshness);
   assert.equal(freshness.label, "Local proof freshness");
   assert.equal(freshness.status, "25 fresh, 0 stale, 0 missing");
-  assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(freshness.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     freshness.href,
     expectedAdminArtifactHref({
@@ -3500,7 +3503,7 @@ test("admin route data exposes local next action as a native audit row", async (
   );
   assert.equal(nextAction.label, "Local next action");
   assert.equal(nextAction.status, `ready: ${LOCAL_RACE_COMMAND}`);
-  assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(nextAction.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     nextAction.href,
     expectedAdminArtifactHref({
@@ -5032,7 +5035,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   const hardening = data.audit.find((item) => item.id === localAdminAuditIds.hardening);
   assert.equal(hardening.label, "Local multiplayer hardening");
   assert.equal(hardening.status, `${hardeningAuditLaneIds.length} hardening lanes passed`);
-  assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(hardening.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(hardening.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }));
   assert.deepEqual(
     hardening.checks.map((check) => check.id),
@@ -5079,7 +5082,7 @@ test("admin route data exposes local player recovery proof as a focused audit ro
     playerRecovery.status,
     `${playerRecoveryAuditLaneIds.length} player recovery lanes passed`,
   );
-  assert.equal(playerRecovery.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(playerRecovery.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     playerRecovery.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.playerRecovery, {
@@ -5117,7 +5120,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   const coreLoop = data.audit.find((item) => item.id === localAdminAuditIds.coreLoop);
   assert.equal(coreLoop.label, "Local core loop");
   assert.equal(coreLoop.status, `${coreLoopAuditLaneIds.length} core loop lanes passed`);
-  assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(coreLoop.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.deepEqual(coreLoop.earliestReachedProof, {
     status: "passed",
     pack: "dev_test_earliest_reached",
@@ -6674,7 +6677,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     seed.status,
     `${seedScenarioCoverageGroups.allDemo.length} demo scenarios available locally`,
   );
-  assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(seed.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(seed.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }));
   assert.deepEqual(
     seed.scenarios.map((scenario) => scenario.id),
@@ -6748,7 +6751,7 @@ test("admin route data exposes local release readiness as a native audit row", a
   const readiness = data.audit.find((item) => item.id === localAdminAuditIds.releaseReadiness);
   assert.equal(readiness.label, "Local release readiness");
   assert.equal(readiness.status, "13 local checks passed, 2 release items unproven");
-  assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(readiness.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     readiness.href,
     expectedAdminArtifactHref({
@@ -7048,7 +7051,7 @@ test("admin route data exposes local host setup proof as a native audit row", as
   );
   assert.equal(hostSetup.label, "Local host setup proof");
   assert.equal(hostSetup.status, "5 setup commands proven, 1 ready checks covered");
-  assert.equal(hostSetup.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(hostSetup.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(hostSetup.href, "target/dev-test-game/host-setup-proof.json");
   assert.equal(
     hostSetup.inspectHref,
@@ -7067,7 +7070,7 @@ test("admin route data exposes local host setup proof as a native audit row", as
     game: "game-a",
     hostSetupProof: "target/dev-test-game/host-setup-proof.json",
     roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
-    capabilityLabel: "HostOf(<seeded-game>)",
+    capabilityKind: "HostOf",
     readyCheckCount: 1,
     setupCommandEvidenceCount: 5,
     policyCommandStatus: "passed",
@@ -7270,7 +7273,7 @@ test("admin route data exposes local backup restore proof as a native audit row"
   const backup = data.audit.find((item) => item.id === localAdminAuditIds.backupRestore);
   assert.equal(backup.label, "Local backup restore");
   assert.equal(backup.status, "5 backup restore checks passed");
-  assert.equal(backup.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(backup.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     backup.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.backupRestore, { game: "midsummer" }),
@@ -7340,7 +7343,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
   const identity = data.audit.find((item) => item.id === localAdminAuditIds.identityAdapter);
   assert.equal(identity.label, "Local identity adapter");
   assert.equal(identity.status, "3 role surfaces, 13 lifecycle controls");
-  assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(identity.authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(
     identity.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter, { game: "midsummer" }),
@@ -7590,7 +7593,7 @@ test("admin load accepts GlobalMod escalation authority", async () => {
     fetch: async () => ({ ok: false }),
   });
 
-  assert.equal(data.access.capabilityLabel, "GlobalMod");
+  assert.equal(data.access.capability.kind, "GlobalMod");
   assert.equal(data.shell.activeSurface, "admin");
   assert.equal(data.shellOwner, "layout");
 });
@@ -12751,7 +12754,7 @@ function releaseReadinessChecklistFixture() {
           path: "target/dev-test-game/host-setup-proof.json",
           game: "game-a",
           roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
-          capabilityLabel: "HostOf(<seeded-game>)",
+          capabilityKind: "HostOf",
           readyCheckIds: ["start-phase"],
           policyCommandStatus: "passed",
           setupMutationStatus: "passed",

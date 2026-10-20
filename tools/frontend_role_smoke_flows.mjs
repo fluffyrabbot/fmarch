@@ -251,6 +251,7 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
     pattern: /\/games\/[^/]+\/player-command-state(?:\?.*)?$/,
     body: Object.freeze({
       game: "midsummer",
+      title: "Midsummer Invitational",
       actor_slot: "slot-7",
       actor_alive: true,
       actor_status: "alive",

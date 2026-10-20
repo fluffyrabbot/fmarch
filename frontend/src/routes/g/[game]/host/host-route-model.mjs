@@ -15,7 +15,6 @@ import {
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
 import {
-  capabilityLabel,
   normalizeCapabilities,
 } from "../../../../lib/app/capabilities.mjs";
 import { LIVE_TRANSPORT_BOUNDARY } from "../../../../lib/app/projection-store.mjs";
@@ -112,10 +111,12 @@ export function buildHostConsoleRouteData({
       gameId,
       principalId: commandPrincipalId,
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     },
   });
+
+  const gameTitle =
+    coldLoad.hostConsoleState?.title ?? (fixtureMode ? "Midsummer Invitational" : null);
 
   return Object.freeze({
     shell: buildAppShell({
@@ -127,21 +128,21 @@ export function buildHostConsoleRouteData({
     }),
     game: Object.freeze({
       id: gameId,
-      label: coldLoad.hostConsoleState?.title ?? (fixtureMode ? "Midsummer Invitational" : "Game"),
+      label: gameTitle ?? "Game",
     }),
     session: Object.freeze({
       principalId: commandPrincipalId,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "moderator",
-      eyebrow: coldLoad.hostConsoleState?.title ?? "Game",
+      eyebrow: gameTitle ?? "Game",
       title: "Host console",
       summary: hostConsoleSummary({
         phase: hostProjection.phase,
         replacement: hostProjection.replacement,
       }),
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
+      gameTitle,
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
     }),
@@ -153,7 +154,6 @@ export function buildHostConsoleRouteData({
       gameId,
       principalId: commandPrincipalId,
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     }),
     hostConsoleStateEndpoint: buildHostConsoleStateEndpoint({
@@ -403,12 +403,8 @@ export function resolveHostConsoleAccess({ game, capabilities = [] }) {
 
   return Object.freeze({
     allowed: capability !== undefined,
-    required: HOST_CONSOLE_REQUIRED_CAPABILITIES.map((kind) =>
-      capabilityLabel({ kind, game: gameId }),
-    ),
+    required: HOST_CONSOLE_REQUIRED_CAPABILITIES,
     capability: capability ?? null,
-    capabilityLabel:
-      capability === undefined ? null : capabilityLabel(capability),
   });
 }
 
@@ -428,9 +424,8 @@ export function resolveHostRoutePrincipal({ game, locals = {} }) {
   return canonicalPrincipalId(locals.principalId) ?? "";
 }
 
-export function hostConsoleForbiddenMessage(game) {
-  const gameId = normalizeGame(game);
-  return `Host console for ${gameId} requires HostOf(${gameId}) or CohostOf(${gameId}).`;
+export function hostConsoleForbiddenMessage() {
+  return "Only this game's host and co-hosts can open the host console.";
 }
 
 const HOST_FIXTURE_COLD_LOAD = Object.freeze({

@@ -28,6 +28,7 @@
         class={view.capability.className}
         data-testid={view.capability.testId}
         data-capability-kind={view.capability.kind}
+        data-capability-scope={view.capability.scope}
         data-min-touch-target-px={view.capability.minTouchTargetPx}
       >
         {view.capability.label}

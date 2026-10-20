@@ -19,7 +19,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
       operator: {
         principalId: "admin_a",
         capability: {kind: "GlobalAdmin"},
-        capabilityLabel: "GlobalAdmin",
+        capability: { kind: "GlobalAdmin" },
       },
       gameSetup: [
         { id: "create-game", label: "Create game" },
@@ -102,7 +102,7 @@ test("admin readiness strip fails closed when authority or proof data is missing
     buildAdminReadinessStripViewModel({
       operator: {
         principalId: "host_h",
-        capabilityLabel: "HostOf(midsummer)",
+        capability: { kind: "HostOf", game: "midsummer" },
       },
       audit: [
         {
@@ -113,7 +113,7 @@ test("admin readiness strip fails closed when authority or proof data is missing
       ],
     }).items.map((item) => [item.id, item.status.state, item.value, item.detail]),
     [
-      ["authority", "reject", "Hosting midsummer", "Signed in"],
+      ["authority", "reject", "Hosting this game", "Signed in"],
       ["setup", "reject", "0 available actions", "None"],
       [
         "audit",
@@ -223,7 +223,7 @@ test("admin setup grid view model binds command status and confirmation metadata
       {
         id: "cohost",
         label: "Cohost delegation",
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Command pipeline",
         boundaryDetail: "/commands AddCohost",
         commandAction: "add_cohost",
@@ -234,7 +234,7 @@ test("admin setup grid view model binds command status and confirmation metadata
       {
         id: "host-setup",
         label: "Host setup workflow",
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Game-specific setup",
         boundaryDetail: "Roster and policy",
         commandAction: "navigate",
@@ -313,7 +313,7 @@ test("admin setup grid treats create-game as an explicit confirmation action", (
       {
         id: "create-game",
         label: "Create game",
-        authority: "GlobalAdmin",
+        authority: ["GlobalAdmin"],
         boundary: "Command pipeline",
         boundaryDetail: "/commands CreateGame Ack/Reject",
         commandAction: "create_game",
@@ -365,7 +365,7 @@ test("admin setup grid disables a command while its request is pending", () => {
     items: [{
       id: "create-game",
       label: "Create game",
-      authority: "GlobalAdmin",
+      authority: ["GlobalAdmin"],
       boundary: "Command pipeline",
       boundaryDetail: "/commands CreateGame",
       commandAction: "create_game",
@@ -389,7 +389,7 @@ test("admin audit and escalation models expose stable test ids", () => {
           id: "proof-runs",
           label: "Proof runs",
           status: "Current local report available",
-          authority: "GlobalAdmin",
+          authority: ["GlobalAdmin"],
           boundary: "Machine proof",
           boundaryDetail: "/operator/proof-runs/status",
           href: "/games/midsummer/operator/proof-runs",
@@ -409,8 +409,8 @@ test("admin audit and escalation models expose stable test ids", () => {
         boundaryTestId: "admin-audit-boundary-proof-runs",
         evidenceTestId: "admin-audit-evidence-proof-runs",
         buttonLabel: "View details",
-        authority: "GlobalAdmin",
-        displayAuthority: "Site administrator",
+        authority: ["GlobalAdmin"],
+        displayAuthority: "Site administrators",
         boundary: "Machine proof",
         boundaryDetail: "/operator/proof-runs/status",
         statusView: {
@@ -454,7 +454,7 @@ test("admin audit and escalation models expose stable test ids", () => {
         "reject",
         "admin-audit-boundary-go-no-go",
         "admin-audit-evidence-go-no-go",
-        "GlobalAdmin or GlobalMod",
+        ["GlobalAdmin", "GlobalMod"],
         "Read-only operator proof",
         "/operator/proof-runs machine-readable report",
       ],
@@ -463,7 +463,7 @@ test("admin audit and escalation models expose stable test ids", () => {
         "pending",
         "admin-audit-boundary-queued",
         "admin-audit-evidence-queued",
-        "GlobalAdmin or GlobalMod",
+        ["GlobalAdmin", "GlobalMod"],
         "Read-only operator proof",
         "/operator/proof-runs machine-readable report",
       ],
@@ -525,7 +525,7 @@ test("admin recovery model binds proof-gate form and status metadata", () => {
       {
         id: "recovery-gate",
         label: "Recovery go/no-go",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs/go-no-go",
         buttonLabel: "Check gate",

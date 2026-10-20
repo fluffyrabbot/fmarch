@@ -366,7 +366,7 @@ export function assertCompletedPlayerReloadProofCase({
       snapshot?.checkpoint?.phaseId !== "N05" ||
       snapshot.checkpoint.phaseState !== "open" ||
       snapshot.checkpoint.actorSlot !== expectedSlot ||
-      snapshot.checkpoint.actionState !== "disabled:game complete" ||
+      snapshot.checkpoint.actionState !== "disabled:game-complete" ||
       snapshot.checkpoint.receiptState !== "idle" ||
       snapshot.commandState?.actorSlot !== expectedSlot ||
       snapshot.commandState?.phase?.phaseId !== "N05" ||
@@ -460,7 +460,7 @@ export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
     snapshot?.checkpoint?.phaseId !== "N05" ||
     snapshot.checkpoint.phaseState !== "open" ||
     snapshot.checkpoint.actorSlot !== scenario.expectedSlot ||
-    snapshot.checkpoint.actionState !== "disabled:game complete" ||
+    snapshot.checkpoint.actionState !== "disabled:game-complete" ||
     snapshot.checkpoint.receiptState !== "idle" ||
     snapshot.commandState?.actorSlot !== scenario.expectedSlot ||
     snapshot.commandState?.actorAlive !== false ||
@@ -544,7 +544,7 @@ export function assertStaleCompletedGamePlayerCommandRecoveryProofCase({
     ) ||
     proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
     proof.checkpointPhaseIdAfterReject !== "N05" ||
-    proof.checkpointActionStateAfterReject !== "disabled:game complete" ||
+    proof.checkpointActionStateAfterReject !== "disabled:game-complete" ||
     proof.checkpointTargetSlotsAfterReject !== "" ||
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")

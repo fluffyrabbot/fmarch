@@ -53,7 +53,6 @@ test("app shell builds role navigation from resolved capabilities", () => {
     },
     viewerLabel: "Your account",
     initials: "YA",
-    contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 2,
     capabilityKinds: ["HostOf", "SlotOccupant"],
@@ -104,8 +103,8 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(shell.surfaces[3].href, "/search");
   assert.equal(shell.surfaces[4].href, "/g/midsummer");
   assert.equal(shell.surfaces[5].navigation, "blocked");
-  assert.equal(shell.surfaces[5].ariaDisabled, "true");
-  assert.equal(shell.surfaces[5].blockedReason, "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)");
+  assert.equal(shell.surfaces[5].capability, null);
+  assert.equal("blockedReason" in shell.surfaces[5], false);
   assert.equal(shell.surfaces[6].navigation, "blocked");
 });
 
@@ -139,7 +138,6 @@ test("app shell session summary models signed-out and multi-capability states", 
     },
     viewerLabel: "Signed out",
     initials: "?",
-    contextLabel: "Site admin",
     gameLabel: "No game",
     capabilityCount: 4,
     capabilityKinds: ["GlobalAdmin", "HostOf", "SlotOccupant"],
@@ -190,29 +188,49 @@ test("board route is an app surface with capability-gated role actions", () => {
     liveStatus: { visible: false },
   });
   assert.equal(data.board.games[0].actions[0].href, "/games/midsummer");
-  assert.equal(data.board.games[0].actions[0].navigation, "link");
+  assert.equal(data.board.games[0].actions[0].label, "Read");
   assert.equal(data.board.games[0].actions.length, 1);
+  assert.equal(data.board.games[0].relation, null);
   assert.equal(BOARD_ROUTE_CONTRACT.surfaceTestId, "board-surface");
   assert.equal(BOARD_ROUTE_CONTRACT.requiredText, "Games");
   assert.equal(workbenchActionTestId("player"), "workbench-action-player");
   assert.equal(gameActionTestId("midsummer", "moderator"), "game-action-midsummer-moderator");
 });
 
-test("board actions block denied role transitions without links", () => {
-  const data = buildBoardRouteData({
+test("board cards render only the viewer's actions, primary first", () => {
+  const player = buildBoardRouteData({
     principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
+  const [midsummer, solstice] = player.board.games;
 
   assert.deepEqual(
-    data.board.games[0].actions.map((action) => [action.id, action.navigation]),
+    midsummer.actions.map((action) => [action.id, action.label, action.className]),
     [
-      ["player", "link"],
-      ["public-thread", "link"],
+      ["player", "Play", "fm-touch-button"],
+      ["public-thread", "Read", "fm-touch-button fm-touch-button--secondary"],
     ],
   );
-  assert.equal(data.board.games[0].actions.some(action => action.id === "moderator"), false);
+  assert.equal(midsummer.relation, "You're playing");
+  assert.deepEqual(
+    [midsummer.seatsFilled, midsummer.seatsTotal, midsummer.hostName, midsummer.phaseLabel],
+    [7, 13, "Rowan", "Day 2"],
+  );
+  assert.equal(typeof midsummer.deadline, "string");
+  assert.deepEqual(solstice.actions.map((action) => action.label), ["Read"]);
+  assert.equal(solstice.relation, null);
+
+  const host = buildBoardRouteData({
+    principalId: "host_h",
+    capabilities: [{ kind: "CohostOf", game: "midsummer" }],
+    gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
+  });
+  assert.deepEqual(
+    host.board.games[0].actions.map((action) => action.label),
+    ["Host", "Read"],
+  );
+  assert.equal(host.board.games[0].relation, "You're hosting");
 });
 
 test("a public board does not present an arbitrary listed game as viewer context", () => {
@@ -220,7 +238,6 @@ test("a public board does not present an arbitrary listed game as viewer context
     gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
 
-  assert.equal(data.shell.session.contextLabel, "Account");
   assert.equal(data.shell.session.gameLabel, "No game");
   assert.equal(data.shell.surfaces.find((surface) => surface.id === "player").navigation, "blocked");
 });
@@ -301,7 +318,7 @@ test("shared app CSS makes disabled touch actions visibly inert", async () => {
 test("route error state keeps failed paths inside the shared app shell", () => {
   const hostError = buildRouteErrorData({
     status: 403,
-    message: "Host console for midsummer requires HostOf(midsummer).",
+    message: "Only this game's host and co-hosts can open the host console.",
     path: "/g/midsummer/host",
   });
 
@@ -316,7 +333,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
 
   const adminError = buildRouteErrorData({
     status: 403,
-    message: "Admin operations require GlobalAdmin or GlobalMod capability.",
+    message: "Admin pages are open to site administrators and community moderators.",
     path: "/admin",
   });
   assert.equal(adminError.shell.activeSurface, "admin");

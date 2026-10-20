@@ -68,13 +68,14 @@ test("host console route data is allowed for HostOf scoped to the current game",
     className: "fm-surface__masthead",
     eyebrowClassName: "fm-eyebrow",
     statusStackClassName: "fm-status-stack",
-    eyebrow: "Game",
+    eyebrow: "Midsummer Invitational",
     title: "Host console",
     summary: "Day 1 deadline is active. Mira · S7 has a pending replacement.",
     capability: {
       visible: true,
       kind: "HostOf",
-      label: "Hosting midsummer",
+      scope: "midsummer",
+      label: "Hosting Midsummer Invitational",
       testId: "host-console-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,
@@ -92,7 +93,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     requiredText: "Live official tally",
   });
   assert.equal(data.shell.activeSurface, "moderator");
-  assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");
+  assert.equal(data.access.capability.kind, "HostOf");
   assert.equal(
     data.projectionBoundary.status,
     "cbor-ws-projection-deltas-with-resync-and-reconnect",
@@ -118,7 +119,6 @@ test("host console route data is allowed for HostOf scoped to the current game",
     gameId: "midsummer",
     principalId: HOST_PRINCIPAL_ID,
     capability: { kind: "HostOf", game: "midsummer", source: "session" },
-    capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
   assert.equal(
@@ -641,9 +641,9 @@ test("host console route data is allowed for CohostOf scoped to the current game
   });
 
   assert.equal(access.allowed, true);
-  assert.equal(access.capabilityLabel, "CohostOf(midsummer)");
+  assert.equal(access.capability.kind, "CohostOf");
   assert.equal(data.access.allowed, true);
-  assert.equal(data.access.capabilityLabel, "CohostOf(midsummer)");
+  assert.equal(data.access.capability.kind, "CohostOf");
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
     [],
@@ -666,7 +666,6 @@ test("host console route data is allowed for CohostOf scoped to the current game
     gameId: "midsummer",
     principalId: COHOST_PRINCIPAL_ID,
     capability: { kind: "CohostOf", game: "midsummer", source: "session" },
-    capabilityLabel: "CohostOf(midsummer)",
     commandEndpoint: "/commands",
   });
   assert.equal(
@@ -730,7 +729,7 @@ test("host console access accepts API-shaped game capabilities", () => {
   });
 
   assert.equal(access.allowed, true);
-  assert.equal(access.capabilityLabel, "HostOf(midsummer)");
+  assert.equal(access.capability.kind, "HostOf");
 });
 
 test("host console access rejects missing and wrong-game capabilities", () => {
@@ -753,7 +752,7 @@ test("host console access rejects missing and wrong-game capabilities", () => {
       game: "midsummer",
       capabilities: [{ kind: "SlotOccupant", game: "midsummer" }],
     }).required,
-    ["HostOf(midsummer)", "CohostOf(midsummer)"],
+    ["HostOf", "CohostOf"],
   );
 });
 
@@ -782,7 +781,7 @@ test("load returns host shell data in explicit fixture mode", async () => {
 
   assert.equal(data.game.id, "midsummer");
   assert.equal(data.shellOwner, "layout");
-  assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");
+  assert.equal(data.access.capability.kind, "HostOf");
   assert.equal(data.session.principalId, HOST_PRINCIPAL_ID);
   assert.equal(data.commandEndpoint, "/commands");
 });

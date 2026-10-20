@@ -1,10 +1,11 @@
 <script>
   import AccountMenu from "$lib/app/AccountMenu.svelte";
+  import { capabilityEvidence } from "$lib/app/capabilities.mjs";
+  import { capabilitySentence } from "$lib/app/presentation-copy.mjs";
   export let shell = null;
   export let capability = null;
   export let game;
   export let phase = {};
-  export let capabilityLabel = "";
   export let liveStatus = null;
   export let attentionCount = 0;
 
@@ -15,7 +16,12 @@
   <div>
     <span>{game.label}</span>
     <h1>Host · {phase?.label ?? "Awaiting first phase"}</h1>
-    <span class="fm-sr-only" data-testid="host-console-capability" data-capability-kind={capability?.kind}>Hosting this game</span>
+    <span
+      class="fm-sr-only"
+      data-testid="host-console-capability"
+      data-capability-kind={capabilityEvidence(capability).kind}
+      data-capability-scope={capabilityEvidence(capability).scope}
+    >{capabilitySentence(capability, { gameTitle: game.label })}</span>
   </div>
   <dl>
     <div data-testid="host-console-attention"><dt>Attention</dt><dd>{attentionCount} tasks</dd></div>

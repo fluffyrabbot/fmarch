@@ -426,18 +426,11 @@ export function playerActionSubmissionRoleSurfaceFixture({
       selectedAction: scenario.actionId,
       targetSlots: scenario.targetSlot,
       receiptState: "idle",
-      visibleRows: [
-        "phase",
-        "actor",
-        "actionState",
-        "target",
-        "receipt",
-        "recovery",
-      ],
-      targetText: `Selected target\n${scenario.actionId} -> ${scenario.targetSlot}`,
+      visibleRows: ["phase", "target", "receipt", "recovery"],
+      targetText: "Who you can choose\nIlya · S3",
       recoveryText:
-        "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
-      statusText: "Player action submission is reachable from this role URL",
+        "If the phase changes\nIf the phase changes first, choose again from the new options.",
+      statusText: "You can choose your night action.",
     },
     playerActionSubmissionClickProof:
       playerActionSubmissionClickProofFixture({

@@ -54,7 +54,7 @@ const replacementResolvedPrivatePostProofFixture = () => ({
   channelContextBeforeClose: {
     channelId: resolveScenario.channelId,
     actorSlot: resolveScenario.actorSlot,
-    capabilityLabel: `ChannelMember(${resolveScenario.channelId})`,
+    capability: { kind: "ChannelMember", scope: resolveScenario.channelId },
   },
   submitPostBeforeClose: { disabled: false },
   closedStatus: { state: "closed" },
@@ -189,7 +189,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
   channelContextBeforeClose: {
     channelId: scenario.channelId,
     actorSlot: scenario.actorSlot,
-    capabilityLabel: `ChannelMember(${scenario.channelId})`,
+    capability: { kind: "ChannelMember", scope: scenario.channelId },
   },
   submitPostBeforeClose: { disabled: false },
   closedStatus: { state: "closed" },
@@ -268,7 +268,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
     reloadChannelContext: {
       channelId: scenario.channelId,
       actorSlot: scenario.actorSlot,
-      capabilityLabel: `ChannelMember(${scenario.channelId})`,
+      capability: { kind: "ChannelMember", scope: scenario.channelId },
     },
     reloadButtons: [{ action: "submit_post", disabled: true }],
     reloadRejectedPostVisible: false,

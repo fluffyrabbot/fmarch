@@ -768,12 +768,7 @@ function buildBoardSmokeScenario({ id, token, game }) {
     actions,
     focus: buildShellKeyboardOrder({
       shell: data.shell,
-      contentTestIds: actions
-        .filter((action) => action.navigation === "link")
-        .map((action) => action.testId),
-      forbiddenContentTestIds: actions
-        .filter((action) => action.navigation === "blocked")
-        .map((action) => action.testId),
+      contentTestIds: actions.map((action) => action.testId),
     }),
   });
 }
@@ -839,13 +834,12 @@ function navTestIds(nav, navigation) {
     .map(([surface]) => roleNavTestId(surface));
 }
 
+// Board cards render only actions the viewer can take, so every one is a link.
 function boardActionScenario({ testId, action }) {
   return Object.freeze({
     testId,
-    navigation: action.navigation,
-    ...(action.navigation === "link"
-      ? { hrefPath: action.href }
-      : { blockedReason: action.blockedReason, blockedLabel: action.blockedLabel }),
+    navigation: "link",
+    hrefPath: action.href,
   });
 }
 

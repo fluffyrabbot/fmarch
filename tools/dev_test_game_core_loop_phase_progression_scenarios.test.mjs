@@ -252,7 +252,7 @@ test("phase progression shares empty Night 3 and Day 4 survivor assertions", () 
     expectedPhaseState: "open",
     expectedActorAlive: true,
     expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
+    expectedActionState: "disabled:no-legal-action",
     expectedStatusText: "no legal action available",
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,

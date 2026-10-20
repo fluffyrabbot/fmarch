@@ -309,6 +309,7 @@ async function provePlayerLiveRuntime() {
       ],
       [data.coldLoad.commandStateEndpoint]: {
         game: "midsummer",
+        title: "Midsummer Invitational",
         actor_slot: "slot-7",
         actor_alive: true,
         actor_status: "alive",

@@ -535,6 +535,7 @@ function playerPayloadFor(url) {
   if (path.includes("player-command-state")) {
     return {
       game: "midsummer",
+      title: "Midsummer Invitational",
       actor_slot: "slot-4",
       actor_alive: true,
       actor_status: "alive",

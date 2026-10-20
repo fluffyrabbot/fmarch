@@ -39,7 +39,7 @@ test("post-Day 3 resolution case shares transition and observation facts", () =>
       expectedPhaseState: "open",
       expectedActorAlive: true,
       expectedActorStatus: "alive",
-      expectedActionState: "disabled:no legal action available",
+      expectedActionState: "disabled:no-legal-action",
       expectedStatusText: "no legal action available",
       expectedPrivateCount: 0,
       expectedPrivateReceipt: false,

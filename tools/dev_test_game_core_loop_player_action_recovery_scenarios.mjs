@@ -83,13 +83,11 @@ export function assertPlayerActionRoleSurfaceProof({
     checkpoint.selectedAction !== scenario.actionId ||
     checkpoint.targetSlots !== scenario.targetSlot ||
     checkpoint.receiptState !== "idle" ||
-    !checkpoint.targetText?.includes(
-      `${scenario.actionId} -> ${scenario.targetSlot}`,
-    ) ||
-    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
-    !String(checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes("player action submission is reachable from this role url")
+    // The card's rows are player copy; seat ids live only on data-* attributes.
+    !checkpoint.targetText?.startsWith("Who you can choose") ||
+    /slot[-_]\d/u.test(checkpoint.targetText) ||
+    !checkpoint.recoveryText?.includes("choose again from the new options") ||
+    !String(checkpoint.statusText ?? "").includes("You can choose your night action.")
   ) {
     throwPlayerActionRecoveryAssertionError({
       message: "core-loop admin proof missing player action role checkpoint",
@@ -97,14 +95,7 @@ export function assertPlayerActionRoleSurfaceProof({
       includeEvidenceInError,
     });
   }
-  for (const rowId of [
-    "phase",
-    "actor",
-    "actionState",
-    "target",
-    "receipt",
-    "recovery",
-  ]) {
+  for (const rowId of ["phase", "target", "receipt", "recovery"]) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throwPlayerActionRecoveryAssertionError({
         message: `player action checkpoint missing visible row: ${rowId}`,

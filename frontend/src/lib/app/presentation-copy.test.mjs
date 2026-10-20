@@ -1,35 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  humanizeCapabilityLabel,
-  sessionContextLabel,
-} from "./presentation-copy.mjs";
+import { authoritySentence, capabilitySentence } from "./presentation-copy.mjs";
 
-test("presentation copy translates capability values without formatting principals as handles", () => {
-  assert.equal(humanizeCapabilityLabel("HostOf(solstice)"), "Hosting solstice");
-  assert.equal(humanizeCapabilityLabel("GlobalAdmin"), "Site administrator");
+test("capability sentences name the game by title, never the capability", () => {
+  const gameTitle = "Midsummer Invitational";
+  assert.equal(capabilitySentence({ kind: "HostOf", game: "midsummer" }, { gameTitle }), "Hosting Midsummer Invitational");
+  assert.equal(capabilitySentence({ kind: "CohostOf", game: "midsummer" }, { gameTitle }), "Co-hosting Midsummer Invitational");
+  assert.equal(
+    capabilitySentence({ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }, { gameTitle }),
+    "Playing Midsummer Invitational",
+  );
+  assert.equal(
+    capabilitySentence({ kind: "PendingReplacement", game: "midsummer" }, { gameTitle }),
+    "Joining Midsummer Invitational as a replacement",
+  );
+  assert.equal(capabilitySentence({ kind: "SpectatorOf", game: "midsummer" }, { gameTitle }), "Watching Midsummer Invitational");
+  assert.equal(capabilitySentence(null, { gameTitle }), "Reading Midsummer Invitational");
+  assert.equal(capabilitySentence({ kind: "HostOf", game: "midsummer" }), "Hosting this game");
+  assert.equal(capabilitySentence({ kind: "GlobalAdmin" }), "Site administrator");
+  assert.equal(capabilitySentence(null), "Signed in");
 });
 
-test("session context only describes access for the current game", () => {
-  assert.equal(
-    sessionContextLabel({
-      game: "solstice",
-      capabilities: [
-        { kind: "SlotOccupant", game: "solstice" },
-        { kind: "HostOf", game: "equinox" },
-      ],
-    }),
-    "Playing solstice",
-  );
-  assert.equal(
-    sessionContextLabel({
-      game: "solstice",
-      capabilities: [
-        { kind: "GlobalAdmin" },
-        { kind: "HostOf", game: "equinox" },
-      ],
-    }),
-    "Site admin",
-  );
+test("authority sentences name who may act from capability kinds", () => {
+  assert.equal(authoritySentence(["GlobalAdmin", "GlobalMod"]), "Site administrators or community moderators");
+  assert.equal(authoritySentence(["HostOf"]), "The game's host");
+  assert.equal(authoritySentence([]), "Signed-in accounts");
 });

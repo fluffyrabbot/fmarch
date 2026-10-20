@@ -2,7 +2,7 @@ import {
   CONFIRMATION_ACTION_CONTRACT,
   buildConfirmationActionViewModel,
 } from "../../app/confirmation-action-model.mjs";
-import { humanizeCapabilityLabel } from "../../app/presentation-copy.mjs";
+import { authoritySentence, capabilitySentence } from "../../app/presentation-copy.mjs";
 import { isCommandInterruptionStatus } from "../../app/command-interruption.mjs";
 
 export const ADMIN_SURFACE_CONTRACT = Object.freeze({
@@ -65,8 +65,8 @@ export function buildAdminReadinessStripViewModel({
       Object.freeze({
         id: "authority",
         label: "Your access",
-        value: operator.capabilityLabel
-          ? humanizeCapabilityLabel(operator.capabilityLabel)
+        value: operator.capability
+          ? capabilitySentence(operator.capability)
           : "No administrator access",
         detail: operator.principalId ? "Signed in" : "Signed out",
         status: Object.freeze({
@@ -245,10 +245,8 @@ export function buildAdminAuditPanelViewModel({ audit = [] } = {}) {
         boundaryTestId: `admin-audit-boundary-${item.id}`,
         evidenceTestId: `admin-audit-evidence-${item.id}`,
         buttonLabel: state === "ack" ? "View details" : "Review check",
-        authority: item.authority ?? "GlobalAdmin or GlobalMod",
-        displayAuthority: humanizeCapabilityLabel(
-          item.authority ?? "GlobalAdmin or GlobalMod",
-        ),
+        authority: item.authority ?? ADMIN_AUTHORITY,
+        displayAuthority: authoritySentence(item.authority ?? ADMIN_AUTHORITY),
         boundary: item.boundary ?? "Read-only operator proof",
         boundaryDetail:
           item.boundaryDetail ?? "/operator/proof-runs machine-readable report",
@@ -375,7 +373,7 @@ function baseAdminItem(item, testIdPrefix) {
     ...item,
     displayValue: adminSetupDisplayValue(item),
     displayConfirmLabel: humanizeAdminMessage(item.confirmLabel),
-    displayAuthority: humanizeCapabilityLabel(item.authority),
+    displayAuthority: authoritySentence(item.authority),
     testId: `${testIdPrefix}-${item.id}`,
     boundaryTestId:
       testIdPrefix === "admin-recovery"
@@ -509,6 +507,8 @@ function adminAuditRollupMessage(audit, state) {
   }
   return "System checks are current";
 }
+
+const ADMIN_AUTHORITY = Object.freeze(["GlobalAdmin", "GlobalMod"]);
 
 function isAdminAuthority(capability) {
   return capability?.kind === "GlobalAdmin" || capability?.kind === "GlobalMod";

@@ -897,6 +897,7 @@ struct PlayerCommandStateQuery {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayerCommandStateResponse {
     pub game: Uuid,
+    pub title: String,
     pub actor_slot: Option<String>,
     pub actor_alive: bool,
     pub actor_status: String,
@@ -1123,8 +1124,10 @@ async fn player_command_state(
         })
         .collect();
 
+    let title = load_game_title(&state.pool, game).await?;
     Ok(Json(PlayerCommandStateResponse {
         game,
+        title,
         actor_slot: Some(actor_slot),
         actor_alive: actor.alive,
         actor_status: actor.status.clone(),
@@ -1147,6 +1150,18 @@ async fn player_command_state(
             "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string()
         },
     }))
+}
+
+/// The title people read for a game: its signup topic's title, else the pack's
+/// name. Player and host reads share it so both bars name the game alike.
+async fn load_game_title(pool: &PgPool, game: Uuid) -> Result<String, ApiError> {
+    if let Some(origin) = projections::game_origin_topic(pool, game).await? {
+        return Ok(origin.title);
+    }
+    if let Some(artifact) = projections::game_pack_artifact(pool, game).await? {
+        return Ok(resolve_pack_artifact(&artifact)?.document().name.clone());
+    }
+    Ok("Game".to_string())
 }
 
 /// Reusable authority-checked DayEvent attention read for local proof and
@@ -2293,13 +2308,7 @@ pub(super) async fn load_host_console_state(
         .collect();
 
     let roster = load_game_roster(pool, game).await?;
-    let title = if let Some(origin) = projections::game_origin_topic(pool, game).await? {
-        origin.title
-    } else if let Some(artifact) = projections::game_pack_artifact(pool, game).await? {
-        resolve_pack_artifact(&artifact)?.document().name.clone()
-    } else {
-        "Game".to_string()
-    };
+    let title = load_game_title(pool, game).await?;
     Ok(HostConsoleStateResponse {
         title,
         game,

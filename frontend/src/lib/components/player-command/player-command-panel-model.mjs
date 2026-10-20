@@ -1,3 +1,4 @@
+import { capabilityEvidence } from "../../app/capabilities.mjs";
 import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
 import { seatNames } from "../../app/seat-presenter.mjs";
 import { buildPlayerVotePicker } from "./player-vote-picker-model.mjs";
@@ -139,11 +140,9 @@ function buildChannelContextViewModel({ channel = {}, player = {}, names = seatN
   const channelId = String(channel.channel ?? "main");
   const channelLabel = String(channel.label ?? "Main thread");
   const actorStatus = String(player.status ?? "").trim();
-  const capabilityLabel = String(
-    actorStatus === "replaced"
-      ? player.capabilityLabel ?? channel.capabilityLabel ?? "Scoped player capability"
-      : channel.capabilityLabel ?? player.capabilityLabel ?? "Scoped player capability",
-  );
+  // A replaced actor holds nothing here, whatever the channel would grant.
+  const capability =
+    actorStatus === "replaced" ? null : channel.capability ?? player.capability ?? null;
   const slotId = String(player.slotId ?? "slot");
   const actorAlive = player.alive === false ? "false" : player.alive === true ? "true" : "unknown";
   const lifecycleSuffix =
@@ -152,7 +151,7 @@ function buildChannelContextViewModel({ channel = {}, player = {}, names = seatN
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId,
     channelLabel,
-    capabilityLabel,
+    capabilityEvidence: capabilityEvidence(capability),
     slotId,
     actorAlive,
     actorStatus,

@@ -1,4 +1,4 @@
-import { hasCapability } from "../../app/capabilities.mjs";
+import { capabilityEvidence } from "../../app/capabilities.mjs";
 import {
   dayEventRoomLabel,
   dayEventRoomStateLabel,
@@ -15,37 +15,34 @@ const PLAYER_CHANNELS = Object.freeze([
   Object.freeze({
     id: "main",
     label: "Main thread",
-    capabilityLabel: "SlotOccupant or ChannelMember(main)",
     href(game) {
       return `/g/${encodeURIComponent(game)}`;
     },
-    allowed({ capabilities, game }) {
+    grant({ capabilities, game }) {
       return (
-        hasCapability({ capabilities, kind: "SlotOccupant", game }) ||
-        hasChannelMember({ capabilities, game, channel: "main" })
+        heldCapability({ capabilities, game, kind: "SlotOccupant" }) ??
+        heldCapability({ capabilities, game, kind: "ChannelMember", channel: "main" })
       );
     },
   }),
   Object.freeze({
     id: "dead",
     label: "Dead chat",
-    capabilityLabel: "DeadViewer(game)",
     href(game) {
       return `/g/${encodeURIComponent(game)}/c/dead`;
     },
-    allowed({ capabilities, game }) {
-      return hasCapability({ capabilities, kind: "DeadViewer", game });
+    grant({ capabilities, game }) {
+      return heldCapability({ capabilities, game, kind: "DeadViewer" });
     },
   }),
   Object.freeze({
     id: "spectator",
     label: "Spectator room",
-    capabilityLabel: "SpectatorOf(game)",
     href(game) {
       return `/g/${encodeURIComponent(game)}/c/spectator`;
     },
-    allowed({ capabilities, game }) {
-      return hasCapability({ capabilities, kind: "SpectatorOf", game });
+    grant({ capabilities, game }) {
+      return heldCapability({ capabilities, game, kind: "SpectatorOf" });
     },
   }),
 ]);
@@ -62,8 +59,7 @@ export function buildPlayerChannels({
     label: channel.label,
     href: channel.href(game),
     active: channel.id === activeChannel,
-    capabilityLabel: channel.capabilityLabel,
-    allowed: channel.allowed({ capabilities, game }),
+    ...grantFields(channel.grant({ capabilities, game })),
     ...(channel.roomState === undefined
       ? {}
       : {
@@ -77,7 +73,7 @@ export function buildPlayerChannels({
   return Object.freeze(
     channels
       .filter((channel) => channel.allowed)
-      .map(({ allowed, ...channel }) => Object.freeze(channel)),
+      .map(({ allowed, capability, ...channel }) => Object.freeze(channel)),
   );
 }
 
@@ -102,7 +98,8 @@ export function resolvePlayerChannelAccess({
       supported: false,
       allowed: false,
       label: null,
-      capabilityLabel: null,
+      capability: null,
+      capabilityEvidence: capabilityEvidence(null),
       href: null,
     });
   }
@@ -110,9 +107,8 @@ export function resolvePlayerChannelAccess({
   return Object.freeze({
     channel,
     supported: true,
-    allowed: definition.allowed({ capabilities, game }),
+    ...grantFields(definition.grant({ capabilities, game })),
     label: definition.label,
-    capabilityLabel: definition.capabilityLabel,
     href: definition.href(game),
     ...(definition.roomState === undefined
       ? {}
@@ -190,9 +186,8 @@ function revokedDayEventRoom(channelId) {
   return Object.freeze({
     ...definition,
     label: "Event room",
-    capabilityLabel: "Current DayEvent room membership",
-    allowed() {
-      return false;
+    grant() {
+      return null;
     },
   });
 }
@@ -203,15 +198,15 @@ function dynamicDayEventRoom(room) {
     id,
     eventId: String(room.eventId),
     label: dayEventRoomLabel(room),
-    capabilityLabel: `DayEventRoom(${room.eventId})`,
     roomState: String(room.state),
     postingAllowed: room.postingAllowed === true,
     roomStateLabel: dayEventRoomStateLabel(room),
     href(game) {
       return `/g/${encodeURIComponent(game)}/c/${encodeURIComponent(id)}`;
     },
-    allowed() {
-      return true;
+    // The room projection is the membership authority for event rooms.
+    grant({ game }) {
+      return Object.freeze({ kind: "ChannelMember", game, channel: id });
     },
   });
 }
@@ -229,12 +224,11 @@ function dynamicPrivateChannel(channelId) {
   return Object.freeze({
     id,
     label: privateChannelLabel(id),
-    capabilityLabel: `ChannelMember(${id})`,
     href(game) {
       return `/g/${encodeURIComponent(game)}/c/${encodeURIComponent(id)}`;
     },
-    allowed({ capabilities, game }) {
-      return hasChannelMember({ capabilities, game, channel: id });
+    grant({ capabilities, game }) {
+      return heldCapability({ capabilities, game, kind: "ChannelMember", channel: id });
     },
   });
 }
@@ -262,11 +256,21 @@ function isPrivateRoomChannel(channel) {
   return typeof channel === "string" && channel.startsWith("private:");
 }
 
-function hasChannelMember({ capabilities, game, channel }) {
-  return capabilities.some(
-    (capability) =>
-      capability.kind === "ChannelMember" &&
-      capability.game === game &&
-      capability.channel === channel,
+function heldCapability({ capabilities, game, kind, channel = undefined }) {
+  return (
+    capabilities.find(
+      (capability) =>
+        capability.kind === kind &&
+        capability.game === game &&
+        (channel === undefined || capability.channel === channel),
+    ) ?? null
   );
+}
+
+function grantFields(capability) {
+  return {
+    allowed: capability !== null,
+    capability,
+    capabilityEvidence: capabilityEvidence(capability),
+  };
 }

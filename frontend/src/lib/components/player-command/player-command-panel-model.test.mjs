@@ -49,11 +49,11 @@ test("player command panel model exposes tablet touch command contracts", () => 
     channel: {
       channel: "private:role_pm:slot-7",
       label: "Role PM",
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capability: { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     },
     player: {
       slotId: "slot-7",
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capability: { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     },
   });
 
@@ -67,7 +67,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "private:role_pm:slot-7",
     channelLabel: "Role PM",
-    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+    capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     slotId: "slot-7",
     actorAlive: "unknown",
     actorStatus: "",
@@ -160,7 +160,7 @@ test("player command panel model disables command controls for dead actors", () 
       slotId: "slot-2",
       alive: false,
       status: "dead",
-      capabilityLabel: "SlotOccupant(slot-2)",
+      capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-2" },
     },
   });
 
@@ -168,7 +168,7 @@ test("player command panel model disables command controls for dead actors", () 
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",
     channelLabel: "Main thread",
-    capabilityLabel: "SlotOccupant(slot-2)",
+    capabilityEvidence: { kind: "SlotOccupant", scope: "slot-2" },
     slotId: "slot-2",
     actorAlive: "false",
     actorStatus: "dead",
@@ -246,13 +246,13 @@ test("dead chat enables only posting for a dead actor", () => {
     channel: {
       channel: "dead",
       label: "Dead chat",
-      capabilityLabel: "DeadViewer(midsummer)",
+      capability: { kind: "DeadViewer", game: "midsummer" },
     },
     player: {
       slotId: "slot-7",
       alive: false,
       status: "dead",
-      capabilityLabel: "DeadViewer(midsummer)",
+      capability: { kind: "DeadViewer", game: "midsummer" },
     },
   });
 
@@ -284,7 +284,7 @@ test("player command panel disables withdraw until command state has a current v
       slotId: "slot-2",
       alive: true,
       status: "alive",
-      capabilityLabel: "SlotOccupant(slot-2)",
+      capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-2" },
     },
   });
 
@@ -357,7 +357,7 @@ test("player command panel model disables command controls after completion", ()
       alive: true,
       status: "alive",
       gameCompleted: true,
-      capabilityLabel: "SlotOccupant(slot-2)",
+      capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-2" },
     },
   });
 
@@ -380,13 +380,13 @@ test("player command panel model surfaces replaced slot recovery context", () =>
     channel: {
       channel: "main",
       label: "Main thread",
-      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+      capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
     },
     player: {
       slotId: "slot-7",
       alive: false,
       status: "replaced",
-      capabilityLabel: "No current SlotOccupant(slot-7)",
+      capability: null,
     },
   });
 
@@ -394,7 +394,7 @@ test("player command panel model surfaces replaced slot recovery context", () =>
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",
     channelLabel: "Main thread",
-    capabilityLabel: "No current SlotOccupant(slot-7)",
+    capabilityEvidence: { kind: "", scope: "" },
     slotId: "slot-7",
     actorAlive: "false",
     actorStatus: "replaced",
@@ -420,7 +420,7 @@ test("player command panel model normalizes missing row and label data", () => {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",
     channelLabel: "Main thread",
-    capabilityLabel: "Scoped player capability",
+    capabilityEvidence: { kind: "", scope: "" },
     slotId: "slot",
     actorAlive: "unknown",
     actorStatus: "",
@@ -450,7 +450,7 @@ test("locked DayEvent rooms retain context with a read-only composer", () => {
     channel: {
       channel: "private:event:event-cookie",
       label: "Raffle room",
-      capabilityLabel: "DayEventRoom(event-cookie)",
+      capability: { kind: "ChannelMember", game: "midsummer", channel: "private:event:event-cookie" },
       allowed: true,
       postingAllowed: false,
       roomStateLabel: "Locked · read-only",

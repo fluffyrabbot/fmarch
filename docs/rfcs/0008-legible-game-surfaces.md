@@ -254,6 +254,25 @@ otherwise. Actions the viewer cannot take are not rendered. The empty hero
 band above the list is removed so the first game starts within the first
 viewport.
 
+Slice 8 settles the details. The capability string and its parser are gone:
+routes pass the typed capability, `capabilitySentence` in
+`presentation-copy.mjs` turns it into the sentence ("Co-hosting Midsummer
+Invitational", "Joining … as a replacement", "Reading …" once a seat is
+replaced), and `capabilityEvidence` puts the kind and its one scope (seat,
+channel or game) on `data-capability-kind` and `data-capability-scope`. Every
+proof reads those attributes, and a replaced seat's channel context carries
+an empty kind. The player command-state read gains the game's `title` (signup
+topic title, else pack name), shared with the host console, so the player bar
+stops naming every game "Midsummer Invitational". Admin rows declare authority
+as kinds and read "Site administrators or community moderators"; the host and
+admin 403 messages say who may enter instead of naming capabilities. Board
+cards render only links, and the shell keeps a "blocked" surface only so
+proofs can assert its absence. The night action card drops the actor and
+action-state rows and reads Phase, Who you can choose, Your choice and If the
+phase changes. Its `data-action-state` carries a stable reason code
+(`disabled:phase-locked`, `actor-dead`, `game-complete`, `no-legal-action`)
+apart from the sentence, so proofs stop matching the card's copy.
+
 ### 9. Legibility is mechanically enforced
 
 The role-smoke runner gains a legibility assertion applied to every visited

@@ -1430,14 +1430,14 @@ async function verifySeededHostSetupRoute({
 
   const [
     surfaceGame,
-    capabilityLabel,
+    capability,
     readinessSummary,
     startDisabled,
     hostHref,
     windowState,
   ] = await Promise.all([
     setupPage.getByTestId("host-setup-surface").getAttribute("data-game"),
-    setupPage.getByTestId("host-setup-capability").innerText(),
+    readCapabilityEvidence(setupPage.getByTestId("host-setup-capability")),
     setupPage.getByTestId("host-setup-readiness-summary").innerText(),
     setupPage.getByTestId("host-setup-start-review").isDisabled(),
     setupPage.locator(`a[href="/g/${game}/host"]`).first().getAttribute("href"),
@@ -1453,7 +1453,8 @@ async function verifySeededHostSetupRoute({
   if (
     setupPage.url() !== roleUrl ||
     surfaceGame !== game ||
-    capabilityLabel !== `Hosting ${game}` ||
+    capability.kind !== "HostOf" ||
+    capability.scope !== game ||
     readinessSummary !== "Started at Day 1" ||
     mainPolicyText !== "Media-only posts are disabled." ||
     startDisabled !== true ||
@@ -1470,7 +1471,7 @@ async function verifySeededHostSetupRoute({
         url: setupPage.url(),
         roleUrl,
         surfaceGame,
-        capabilityLabel,
+        capability,
         readinessSummary,
         mainPolicyText,
         startDisabled,
@@ -1495,7 +1496,7 @@ async function verifySeededHostSetupRoute({
     proof:
       "Host setup role URL opens roster, role, policy, invite, and start recovery surface, then round-trips the post-policy command and restores the seeded policy.",
     roleUrl,
-    capabilityLabel,
+    capability,
     readinessSummary,
     phaseId,
     startDisabled,
@@ -1864,15 +1865,15 @@ async function verifySeededCohostConsole({
   frontendBaseUrl,
 }) {
   await cohostPage.getByTestId("host-console-surface").waitFor({ state: "visible" });
-  const renderedCapabilityLabel = await cohostPage
-    .getByTestId("host-console-capability")
-    .innerText();
-  const capabilityLabel = `CohostOf(${game})`;
+  const capability = await readCapabilityEvidence(
+    cohostPage.getByTestId("host-console-capability"),
+  );
   if (
     cohostPrincipalUserId !== "cohost_c" ||
-    renderedCapabilityLabel.toLowerCase() !== capabilityLabel.toLowerCase()
+    capability.kind !== "CohostOf" ||
+    capability.scope !== game
   ) {
-    throw new Error(`cohost console capability drifted: ${renderedCapabilityLabel}`);
+    throw new Error(`cohost console capability drifted: ${JSON.stringify(capability)}`);
   }
   const extendDeadline = await confirmHostAction(cohostPage, "extend_deadline");
   const command = extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command;
@@ -1923,8 +1924,7 @@ async function verifySeededCohostConsole({
   return {
     status: "passed",
     sessionPrincipalUserId: cohostPrincipalUserId,
-    capabilityLabel,
-    renderedCapabilityLabel,
+    capability,
     extendDeadline,
     hostOnlyControlsVisible,
     hostOnlyResolveReject: {
@@ -1979,10 +1979,9 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       { initialDeadline: seed.initialDeadline },
     );
     await revealHostAction(cohostEntry.page, "extend_deadline");
-    const renderedCapabilityLabel = await cohostEntry.page
-      .getByTestId("host-console-capability")
-      .innerText();
-    const capabilityLabel = `CohostOf(${proofGame})`;
+    const capability = await readCapabilityEvidence(
+      cohostEntry.page.getByTestId("host-console-capability"),
+    );
     const setupPhase = await cohostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
@@ -2056,7 +2055,8 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       apiPhaseAfterReload: apiStateAfterReload.phase,
     };
     if (
-      renderedCapabilityLabel.toLowerCase() !== capabilityLabel.toLowerCase() ||
+      capability.kind !== "CohostOf" ||
+      capability.scope !== proofGame ||
       setupPhase?.id !== "D02" ||
       setupPhase?.locked !== false ||
       setupPhase?.deadline !== seed.initialDeadline ||
@@ -2085,7 +2085,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       throw new Error(
         `cohost later-phase deadline proof drifted: ${JSON.stringify({
           proofGame,
-          capabilityLabel,
+          capability,
           setupPhase,
           setupDeadlineActions,
           setupPhaseActions,
@@ -2107,8 +2107,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       expectedDeadline,
       cohostEntry: cohostEntry.verification,
       sessionPrincipalUserId: cohostEntry.verification.principalId,
-      capabilityLabel,
-      renderedCapabilityLabel,
+      capability,
       setupPhase,
       setupDeadlineActions,
       setupPhaseActions,
@@ -6948,7 +6947,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
     context: setupSnapshot.channelContext,
     expectedChannelId: factionDayChatChannel,
     expectedActorSlot: "slot_4",
-    requireCapabilityLabel: true,
+    requireMemberCapability: true,
     label: "private-channel invalid action setup",
     includeEvidenceInError: true,
   });
@@ -7450,7 +7449,7 @@ async function freezeStalePrivateChannelActionPage({ page, game, frontendBaseUrl
     context: snapshot.channelContext,
     expectedChannelId: factionDayChatChannel,
     expectedActorSlot: "slot_4",
-    requireCapabilityLabel: true,
+    requireMemberCapability: true,
     label: "stale private-channel action setup",
     includeEvidenceInError: true,
   });
@@ -7491,7 +7490,7 @@ function liveStaleN01ToD02ActionTransitionScenario({
     targetSlot: targetSlot ?? "",
     refreshedPhaseId: "D02",
     expectedRefreshKeys,
-    checkpointActionState: "disabled:no legal action available",
+    checkpointActionState: "disabled:no-legal-action",
     checkpointTargetSlots: "",
     receiptCount: 1,
   };
@@ -9109,7 +9108,7 @@ async function verifyCompletedPrivateChannelRecovery({
       context: channelContextBeforeComplete,
       expectedChannelId: factionDayChatChannel,
       expectedActorSlot: "slot-7",
-      requireCapabilityLabel: true,
+      requireMemberCapability: true,
       label: "completed private-channel setup",
       includeEvidenceInError: true,
     });
@@ -9125,7 +9124,7 @@ async function verifyCompletedPrivateChannelRecovery({
       expectedChannelId: factionDayChatChannel,
       expectedActorSlot: "slot-7",
       privateThreadPagerVisible: reloadAfterReject.threadPagerVisible,
-      requireCapabilityLabel: true,
+      requireMemberCapability: true,
       label: "completed private-channel reload recovery",
       includeEvidenceInError: true,
     });
@@ -9263,13 +9262,22 @@ async function seedPrivateChannelCompleteGame({ game }) {
   };
 }
 
+// Capability evidence lives on data-capability-kind / data-capability-scope;
+// the rendered text is a sentence for people and is never asserted.
+async function readCapabilityEvidence(locator) {
+  return {
+    kind: (await locator.getAttribute("data-capability-kind")) ?? "",
+    scope: (await locator.getAttribute("data-capability-scope")) ?? "",
+  };
+}
+
 async function playerPrivateChannelContext(page) {
   const context = page.getByTestId("player-command-channel-context");
   return {
     channelId: await context.getAttribute("data-channel-id"),
     actorSlot: await context.getAttribute("data-actor-slot"),
     actorStatus: await context.getAttribute("data-actor-status"),
-    capabilityLabel: await context.getAttribute("data-capability-label"),
+    capability: await readCapabilityEvidence(context),
   };
 }
 
@@ -13854,7 +13862,8 @@ async function verifySeededReplacementConsole({
       hostIssuedInvite?.session?.issuedBy?.capabilityKind !== "HostOf" ||
       hostIssuedInvite?.session?.returnTo !== `/g/${game}` ||
       pendingIncomingPlayer?.status !== "passed" ||
-      pendingIncomingPlayer?.capabilityLabel !== `PendingReplacement(${game})` ||
+      pendingIncomingPlayer?.capability?.kind !== "PendingReplacement" ||
+      pendingIncomingPlayer?.capability?.scope !== game ||
       pendingIncomingPlayer?.commandState?.actorStatus !== "pending_replacement" ||
       pendingIncomingPlayer?.controlCounts?.primaryButtons !== 0 ||
       redeemedInviteRecovery?.status !== "passed" ||
@@ -14415,7 +14424,8 @@ async function verifyInvalidReplacementRecovery({
     apiSlotAfterReject?.assigned_principal_id !== "player-mira" ||
     pendingAfterReject.principalId !== "player-rowan" ||
     pendingAfterReject.capabilityKinds.length !== 0 ||
-    pendingAfterReject.capabilityLabel !== `PendingReplacement(${game})` ||
+    pendingAfterReject.capability?.kind !== "PendingReplacement" ||
+    pendingAfterReject.capability?.scope !== game ||
     pendingAfterReject.commandState?.actorStatus !== "pending_replacement" ||
     pendingAfterReject.coldLoadEndpoints?.commandStateEndpoint !== null ||
     pendingAfterReject.controlCounts.primaryButtons !== 0 ||
@@ -14707,7 +14717,7 @@ async function readPendingReplacementSurface({
     headers: { authorization: `Bearer ${sessionCookie.value}` },
   });
   const capabilityKinds = (resolved.capabilities ?? []).map((capability) => capability.kind);
-  const capabilityLabel = await page.getByTestId("player-capability").innerText();
+  const capability = await readCapabilityEvidence(page.getByTestId("player-capability"));
   const routeStateText = await page.getByTestId("route-state-player-empty").innerText();
   const commandState = await page.evaluate(
     () => window.__fmarchPlayerProjection?.commandState,
@@ -14722,7 +14732,8 @@ async function readPendingReplacementSurface({
   if (
     resolved.principal_id !== "player-rowan" ||
     capabilityKinds.length !== 0 ||
-    capabilityLabel !== `PendingReplacement(${game})` ||
+    capability.kind !== "PendingReplacement" ||
+    capability.scope !== game ||
     !routeStateText.includes("Replacement invite accepted") ||
     commandState?.actorStatus !== "pending_replacement" ||
     commandState?.actions?.length !== 0 ||
@@ -14734,7 +14745,7 @@ async function readPendingReplacementSurface({
       `pending replacement player proof drifted: ${JSON.stringify({
         resolved,
         capabilityKinds,
-        capabilityLabel,
+        capability,
         routeStateText,
         commandState,
         coldLoadEndpoints,
@@ -14745,7 +14756,7 @@ async function readPendingReplacementSurface({
   return {
     principalId: resolved.principal_id,
     capabilityKinds,
-    capabilityLabel,
+    capability,
     routeStateText,
     commandState,
     coldLoadEndpoints,
@@ -14819,9 +14830,9 @@ async function verifyIncomingReplacementPlayer({
         `incoming replacement player found no legal vote target: ${JSON.stringify(commandState)}`,
       );
     }
-    const capabilityLabel = await page
-      .getByTestId("player-command-channel-context")
-      .getAttribute("data-capability-label");
+    const capability = await readCapabilityEvidence(
+      page.getByTestId("player-command-channel-context"),
+    );
     const stableHistoryVisible = await page
       .getByText("Seeded browser test-game thread post from dev:test-game.", {
         exact: true,
@@ -14905,7 +14916,7 @@ async function verifyIncomingReplacementPlayer({
       !browserEntry.capabilityKinds.includes("SlotOccupant") ||
       commandState?.actorSlot !== "slot-7" ||
       commandState?.actorAlive !== true ||
-      !capabilityLabel?.includes("SlotOccupant") ||
+      capability.kind !== "SlotOccupant" ||
       stableHistoryVisible !== true ||
       postStatus?.state !== "ack" ||
       postStatus?.requestEnvelope?.body?.body?.principal_id !== undefined ||
@@ -14929,7 +14940,7 @@ async function verifyIncomingReplacementPlayer({
         `incoming replacement player proof drifted: ${JSON.stringify({
           browserEntry,
           commandState,
-          capabilityLabel,
+          capability,
           stableHistoryVisible,
           postStatus,
           rowanProjectedPost,
@@ -14944,7 +14955,7 @@ async function verifyIncomingReplacementPlayer({
       status: "passed",
       browserEntry,
       commandState,
-      capabilityLabel,
+      capability,
       stableHistoryVisible,
       postStatus,
       rowanProjectedPost,
@@ -15045,7 +15056,7 @@ async function verifyReplacementStalePrivateChannel({
     url: privateUrl,
     channelContextId: await rowanChannelContext.getAttribute("data-channel-id"),
     actorSlot: await rowanChannelContext.getAttribute("data-actor-slot"),
-    capabilityLabel: await rowanChannelContext.getAttribute("data-capability-label"),
+    capability: await readCapabilityEvidence(rowanChannelContext),
   };
   const rowanPostBody = `Replacement Rowan private-channel post ${crypto.randomUUID()}.`;
   await rowanPage.locator('[data-testid="player-composer"] textarea').fill(rowanPostBody);
@@ -15093,9 +15104,8 @@ async function verifyReplacementStalePrivateChannel({
     staleRoute.actionHref !== "/" ||
     rowanRoute.channelContextId !== factionDayChatChannel ||
     rowanRoute.actorSlot !== "slot-7" ||
-    !rowanRoute.capabilityLabel?.includes(
-      `ChannelMember(${factionDayChatChannel})`,
-    ) ||
+    rowanRoute.capability.kind !== "ChannelMember" ||
+    rowanRoute.capability.scope !== factionDayChatChannel ||
     rowanPost?.state !== "ack" ||
     rowanPost?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
@@ -15536,9 +15546,9 @@ async function verifyReplacementSessionRefreshRecovery({
   const commandState = await page.evaluate(
     () => window.__fmarchPlayerProjection?.commandState,
   );
-  const capabilityLabel = await page
-    .getByTestId("player-command-channel-context")
-    .getAttribute("data-capability-label");
+  const capability = await readCapabilityEvidence(
+    page.getByTestId("player-command-channel-context"),
+  );
   const controlCounts = {
     primaryButtons: await page.locator("[data-action]").count(),
     actionButtons: await page.locator("[data-template-id]").count(),
@@ -15600,7 +15610,7 @@ async function verifyReplacementSessionRefreshRecovery({
     !browserEntry.capabilityKinds.includes("SlotOccupant") ||
     commandState?.actorSlot !== "slot-7" ||
     commandState?.actorAlive !== true ||
-    !capabilityLabel?.includes("SlotOccupant") ||
+    capability.kind !== "SlotOccupant" ||
     controlCounts.primaryButtons <= 0 ||
     postStatus?.state !== "ack" ||
     postStatus?.requestEnvelope?.body?.body?.principal_id !== undefined ||
@@ -15621,7 +15631,7 @@ async function verifyReplacementSessionRefreshRecovery({
         prefilledAccountId,
         browserEntry,
         commandState,
-        capabilityLabel,
+        capability,
         controlCounts,
         postStatus,
         rowanProjectedPost,
@@ -15644,7 +15654,7 @@ async function verifyReplacementSessionRefreshRecovery({
     },
     browserEntry,
     commandState,
-    capabilityLabel,
+    capability,
     controlCounts,
     postStatus,
     rowanProjectedPost,
@@ -15741,7 +15751,7 @@ async function submitStaleOutgoingReplacementRecovery({
     .evaluate((node) => ({
       actorAlive: node.getAttribute("data-actor-alive"),
       actorStatus: node.getAttribute("data-actor-status"),
-      capabilityLabel: node.getAttribute("data-capability-label"),
+      capabilityKind: node.getAttribute("data-capability-kind"),
     }));
   const buttonsDisabled = await staleOutgoingPage.evaluate(() =>
     [
@@ -15795,7 +15805,7 @@ async function submitStaleOutgoingReplacementRecovery({
     !recoveredCommandState?.boundary?.includes("no longer owns slot-7") ||
     contextState.actorAlive !== "false" ||
     contextState.actorStatus !== "replaced" ||
-    !contextState.capabilityLabel?.includes("No current SlotOccupant(slot-7)") ||
+    contextState.capabilityKind !== "" ||
     buttonsDisabled !== true ||
     !commandReceipts.some(
       (receipt) =>
@@ -22592,9 +22602,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       actorStatus: await replacementEntry.page
         .getByTestId("player-command-channel-context")
         .getAttribute("data-actor-status"),
-      capabilityLabel: await replacementEntry.page
-        .getByTestId("player-command-channel-context")
-        .getAttribute("data-capability-label"),
+      capability: await readCapabilityEvidence(
+        replacementEntry.page.getByTestId("player-command-channel-context"),
+      ),
     };
     const buttonsBeforeClose = await playerCommandButtons(replacementEntry.page);
     const submitPostBeforeClose = buttonsBeforeClose.find(
@@ -22665,9 +22675,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       actorStatus: await replacementEntry.page
         .getByTestId("player-command-channel-context")
         .getAttribute("data-actor-status"),
-      capabilityLabel: await replacementEntry.page
-        .getByTestId("player-command-channel-context")
-        .getAttribute("data-capability-label"),
+      capability: await readCapabilityEvidence(
+        replacementEntry.page.getByTestId("player-command-channel-context"),
+      ),
     };
     const projectedPost = await replacementEntry.page.evaluate((expectedBody) =>
       window.__fmarchPlayerProjection?.thread?.posts?.find(
@@ -22905,9 +22915,8 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       commandStateBeforeClose?.phase?.locked !== false ||
       channelContextBeforeClose.channelId !== scenario.channelId ||
       channelContextBeforeClose.actorSlot !== scenario.actorSlot ||
-      !channelContextBeforeClose.capabilityLabel?.includes(
-        `ChannelMember(${scenario.channelId})`,
-      ) ||
+      channelContextBeforeClose.capability.kind !== "ChannelMember" ||
+      channelContextBeforeClose.capability.scope !== scenario.channelId ||
       submitPostBeforeClose?.disabled !== false ||
       closedStatus?.state !== "closed" ||
       resolveDay?.commandStatus?.state !== "ack" ||
@@ -23238,9 +23247,9 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       actorStatus: await replacementEntry.page
         .getByTestId("player-command-channel-context")
         .getAttribute("data-actor-status"),
-      capabilityLabel: await replacementEntry.page
-        .getByTestId("player-command-channel-context")
-        .getAttribute("data-capability-label"),
+      capability: await readCapabilityEvidence(
+        replacementEntry.page.getByTestId("player-command-channel-context"),
+      ),
     };
     const buttonsBeforeClose = await playerCommandButtons(replacementEntry.page);
     const submitPostBeforeClose = buttonsBeforeClose.find(
@@ -23384,9 +23393,9 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       actorStatus: await replacementEntry.page
         .getByTestId("player-command-channel-context")
         .getAttribute("data-actor-status"),
-      capabilityLabel: await replacementEntry.page
-        .getByTestId("player-command-channel-context")
-        .getAttribute("data-capability-label"),
+      capability: await readCapabilityEvidence(
+        replacementEntry.page.getByTestId("player-command-channel-context"),
+      ),
     };
     const reloadButtons = await playerCommandButtons(replacementEntry.page);
     const reloadThreadPostBodies = (reloadProjection?.thread?.posts ?? []).map(
@@ -23456,9 +23465,8 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       commandStateBeforeClose?.gameCompleted !== false ||
       channelContextBeforeClose.channelId !== scenario.channelId ||
       channelContextBeforeClose.actorSlot !== scenario.actorSlot ||
-      !channelContextBeforeClose.capabilityLabel?.includes(
-        `ChannelMember(${scenario.channelId})`,
-      ) ||
+      channelContextBeforeClose.capability.kind !== "ChannelMember" ||
+      channelContextBeforeClose.capability.scope !== scenario.channelId ||
       submitPostBeforeClose?.disabled !== false ||
       closedStatus?.state !== "closed" ||
       complete?.commandStatus?.state !== "ack" ||
@@ -23510,9 +23518,8 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       privateReloadAfterReject.reloadChannelContext.channelId !==
         scenario.channelId ||
       privateReloadAfterReject.reloadChannelContext.actorSlot !== scenario.actorSlot ||
-      !privateReloadAfterReject.reloadChannelContext.capabilityLabel?.includes(
-        `ChannelMember(${scenario.channelId})`,
-      ) ||
+      privateReloadAfterReject.reloadChannelContext.capability.kind !== "ChannelMember" ||
+      privateReloadAfterReject.reloadChannelContext.capability.scope !== scenario.channelId ||
       privateReloadAfterReject.reloadButtons.some(
         (button) => button.disabled !== true,
       ) ||

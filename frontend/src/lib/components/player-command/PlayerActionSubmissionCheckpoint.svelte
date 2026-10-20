@@ -19,10 +19,7 @@
     data-testid={checkpoint.root.testId}
   >
     <summary>
-      <div>
-        <span class="fm-eyebrow">Action readiness</span>
-        <strong>{checkpoint.heading}</strong>
-      </div>
+      <strong>{checkpoint.heading}</strong>
       <span class="fm-chip">{checkpoint.phase.value}</span>
     </summary>
 
@@ -35,8 +32,6 @@
       <dl>
         {#each [
           checkpoint.phase,
-          checkpoint.actor,
-          checkpoint.actionState,
           checkpoint.target,
           checkpoint.receipt,
           checkpoint.recovery,

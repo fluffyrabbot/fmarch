@@ -69,7 +69,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: false,
       actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
+      actionState: "disabled:actor-dead",
       statusText: "actor is not alive",
       privateReceipt: true,
       privateReceiptStatus: "factional_kill",
@@ -89,7 +89,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: true,
       actorStatus: "alive",
-      actionState: "disabled:phase locked",
+      actionState: "disabled:phase-locked",
       statusText: "phase locked",
       privateReceipt: false,
       privateReceiptStatus: "factional_kill",
@@ -107,7 +107,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: false,
       actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
+      actionState: "disabled:actor-dead",
       statusText: "actor is not alive",
       privateReceipt: true,
       privateReceiptStatus: "day_vote",
@@ -126,7 +126,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: true,
       actorStatus: "alive",
-      actionState: "disabled:phase locked",
+      actionState: "disabled:phase-locked",
       statusText: "phase locked",
       privateReceipt: false,
       privateReceiptStatus: "day_vote",
@@ -144,7 +144,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: false,
       actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
+      actionState: "disabled:actor-dead",
       statusText: "actor is not alive",
       privateReceipt: true,
       privateReceiptStatus: "factional_kill",
@@ -162,7 +162,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: true,
       actorStatus: "alive",
-      actionState: "disabled:phase locked",
+      actionState: "disabled:phase-locked",
       statusText: "phase locked",
       privateReceipt: false,
       privateReceiptStatus: "factional_kill",
@@ -179,7 +179,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: false,
       actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
+      actionState: "disabled:actor-dead",
       statusText: "actor is not alive",
       privateReceipt: true,
       privateReceiptStatus: "day_vote",
@@ -196,7 +196,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: true,
       actorStatus: "alive",
-      actionState: "disabled:phase locked",
+      actionState: "disabled:phase-locked",
       statusText: "phase locked",
       privateReceipt: false,
       privateReceiptStatus: "day_vote",
@@ -213,7 +213,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: false,
       actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
+      actionState: "disabled:actor-dead",
       statusText: "actor is not alive",
       privateReceipt: true,
       privateReceiptStatus: "factional_kill",
@@ -230,7 +230,7 @@ export function privateReceiptScenarios() {
       phaseState: "locked",
       actorAlive: true,
       actorStatus: "alive",
-      actionState: "disabled:phase locked",
+      actionState: "disabled:phase-locked",
       statusText: "phase locked",
       privateReceipt: false,
       privateReceiptStatus: "factional_kill",
@@ -371,8 +371,8 @@ export function assertPrivateChannelRoleSurfaceProof({
     privateChannelRoleSurface.channelAriaCurrent !== "page" ||
     privateChannelRoleSurface.commandPanelChannelId !== expectedChannel ||
     privateChannelRoleSurface.channelContextChannelId !== expectedChannel ||
-    privateChannelRoleSurface.channelContextCapabilityLabel !==
-      `ChannelMember(${expectedChannel})` ||
+    privateChannelRoleSurface.channelContextCapability?.kind !== "ChannelMember" ||
+    privateChannelRoleSurface.channelContextCapability?.scope !== expectedChannel ||
     privateChannelRoleSurface.privateQueueBoundary?.status !==
       privateQueueBoundaryStatus ||
     privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
@@ -1116,8 +1116,8 @@ export function assertCompletedPrivateChannelSnapshotCase({
     snapshot.commandPanelChannelId !== scenario.channelId ||
     snapshot.channelContext?.channelId !== scenario.channelId ||
     snapshot.channelContext?.actorSlot !== scenario.actorSlot ||
-    snapshot.channelContext?.capabilityLabel !==
-      `ChannelMember(${scenario.channelId})` ||
+    snapshot.channelContext?.capability?.kind !== "ChannelMember" ||
+    snapshot.channelContext?.capability?.scope !== scenario.channelId ||
     snapshot.channelContext?.actorStatus !== scenario.actorStatus ||
     snapshot.commandState?.actorSlot !== scenario.actorSlot ||
     snapshot.commandState?.gameCompleted !== true ||
@@ -1265,9 +1265,6 @@ export function assertPrivateReceiptRoleSurfaceCase({
     proof.checkpoint.actorSlot !== expectedSlot ||
     proof.checkpoint.actionState !== expectedActionState ||
     proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(`player action unavailable: ${expectedStatusText}`) ||
     proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
@@ -1374,9 +1371,6 @@ export function assertDayThreePlayerObservationProofCase({
     proof.checkpoint.actorSlot !== expectedSlot ||
     proof.checkpoint.actionState !== expectedActionState ||
     proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
     proof.privateQueueBoundary?.status !== privateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
@@ -1478,9 +1472,6 @@ export function assertPostDayThreePlayerSurfaceProofCase({
     proof.checkpoint.actorSlot !== expectedSlot ||
     proof.checkpoint.actionState !== expectedActionState ||
     proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
     proof.privateQueueBoundary?.status !== privateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(

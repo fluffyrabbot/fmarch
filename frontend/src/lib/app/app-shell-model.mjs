@@ -3,10 +3,7 @@ import { canonicalPhaseId, phaseLabelFromId } from "../phase-id.mjs";
 
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
-import {
-  sessionContextLabel,
-  packLabel,
-} from "./presentation-copy.mjs";
+import { packLabel } from "./presentation-copy.mjs";
 import { buildViewerPresentation } from "./viewer-presentation-model.mjs";
 
 export const APP_SHELL_CONTRACT = Object.freeze({
@@ -84,7 +81,6 @@ export function buildAppShell({
       href: "/",
       active: activeSurface === "board",
       allowed: true,
-      capabilityLabel: "Public",
       group: "primary",
     }),
     surfaceItem({
@@ -93,7 +89,6 @@ export function buildAppShell({
       href: "/community",
       active: activeSurface === "community",
       allowed: true,
-      capabilityLabel: "Public",
       group: "primary",
     }),
     surfaceItem({
@@ -102,7 +97,6 @@ export function buildAppShell({
       href: "/search",
       active: activeSurface === "search",
       allowed: true,
-      capabilityLabel: "Public",
       group: "primary",
     }),
     surfaceItem({
@@ -111,7 +105,6 @@ export function buildAppShell({
       href: "/inbox",
       active: activeSurface === "inbox",
       allowed: typeof principalId === "string" && principalId.trim() !== "",
-      capabilityLabel: "Authenticated account",
       group: "primary",
     }),
     surfaceItem({
@@ -148,7 +141,13 @@ export function buildAppShell({
     phaseId: canonicalPhaseId(phase?.id),
     session,
     sessionLabel: session.viewerLabel,
-    surfaces: Object.freeze([...surfaces].sort((a,b) => ["board","community","inbox","search","player","moderator","admin"].indexOf(a.id) - ["board","community","inbox","search","player","moderator","admin"].indexOf(b.id))),
+    surfaces: Object.freeze(
+      [...surfaces].sort(
+        (a, b) =>
+          APP_SHELL_CONTRACT.surfaceOrder.indexOf(a.id) -
+          APP_SHELL_CONTRACT.surfaceOrder.indexOf(b.id),
+      ),
+    ),
   });
 }
 
@@ -201,7 +200,7 @@ export function buildBoardRouteData({
     board: Object.freeze({
       ...board,
       games: Object.freeze(
-        board.games.map((entry) => boardGameCard({ entry, principalId, capabilities })),
+        board.games.map((entry) => boardGameCard({ entry, capabilities })),
       ),
     }),
   });
@@ -291,16 +290,30 @@ function normalizeBoardGameIndexEntry(entry) {
   });
 }
 
+// A card's actions are only the ones the viewer can take, primary first:
+// Play for an occupant, Host for a host, and Read for everyone.
 function boardGameCard({ entry, capabilities }) {
-  const scoped = normalizeCapabilities(capabilities).filter(cap => cap.game === entry.id);
-  const playing = scoped.some(cap => cap.kind === 'SlotOccupant');
-  const hosting = scoped.some(cap => ['HostOf', 'CohostOf'].includes(cap.kind));
-  const actions = [];
-  if (playing) actions.push({id: 'player', label: 'Play', href: `/g/${encodeURIComponent(entry.id)}`});
-  if (hosting) actions.push({id: 'moderator', label: 'Host', href: `/g/${encodeURIComponent(entry.id)}/host`});
-  actions.push({id: 'public-thread', label: 'Read', href: `/games/${encodeURIComponent(entry.id)}`});
-  return Object.freeze({...entry, relation: playing ? "You're playing" : hosting ? "You're hosting" : null,
-    actions: Object.freeze(actions.map((action,index) => Object.freeze({...action, allowed: true, navigation: 'link', className: index === 0 ? 'fm-touch-button' : 'fm-touch-button fm-touch-button--secondary'}))),
+  const scoped = normalizeCapabilities(capabilities).filter((cap) => cap.game === entry.id);
+  const playing = scoped.some((cap) => cap.kind === "SlotOccupant");
+  const hosting = scoped.some((cap) => cap.kind === "HostOf" || cap.kind === "CohostOf");
+  const game = encodeURIComponent(entry.id);
+  const actions = [
+    ...(playing ? [{ id: "player", label: "Play", href: `/g/${game}` }] : []),
+    ...(hosting ? [{ id: "moderator", label: "Host", href: `/g/${game}/host` }] : []),
+    { id: "public-thread", label: "Read", href: `/games/${game}` },
+  ];
+  return Object.freeze({
+    ...entry,
+    relation: playing ? "You're playing" : hosting ? "You're hosting" : null,
+    actions: Object.freeze(
+      actions.map((action, index) =>
+        Object.freeze({
+          ...action,
+          className:
+            index === 0 ? "fm-touch-button" : "fm-touch-button fm-touch-button--secondary",
+        }),
+      ),
+    ),
   });
 }
 
@@ -452,7 +465,6 @@ function surfaceSummary({ surface, game, capabilities }) {
   return {
     allowed: access.allowed,
     capability: access.capability,
-    capabilityLabel: access.capabilityLabel ?? access.required.join(" or "),
   };
 }
 
@@ -472,7 +484,6 @@ function buildSessionSummary({ game, principalId, viewerProfile, capabilities })
     viewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
-    contextLabel: sessionContextLabel({ game, capabilities: normalizedCapabilities }),
     gameLabel: game === null || game === undefined ? "No game" : String(game),
     capabilityCount: normalizedCapabilities.length,
     capabilityKinds,
@@ -503,26 +514,8 @@ function summarizeCapabilityKinds(capabilityKinds) {
   return `${capabilityKinds[0]} + ${capabilityKinds.length - 1} roles`;
 }
 
-const NAV_ACCESS_LABELS = Object.freeze({
-  inbox: "Your updates",
-  board: "Public",
-  community: "Public",
-  player: "Your seat",
-  moderator: "Your console",
-  admin: "Operator access",
-});
-
-const NAV_BLOCKED_LABELS = Object.freeze({
-  inbox: "Sign in",
-  player: "Players only",
-  moderator: "Hosts only",
-  admin: "Operators only",
-});
-
-export function navBlockedLabel(surfaceId) {
-  return NAV_BLOCKED_LABELS[surfaceId] ?? "Not open to you";
-}
-
+// Surfaces the viewer cannot use stay in the model as "blocked" so keyboard
+// and smoke contracts can assert their absence; nothing renders them.
 function surfaceItem(item) {
   const allowed = item.allowed !== false;
   return Object.freeze({
@@ -530,31 +523,6 @@ function surfaceItem(item) {
     testId: roleNavTestId(item.id),
     minTouchTargetPx: APP_SHELL_CONTRACT.minTouchTargetPx,
     navigation: allowed ? "link" : "blocked",
-    ariaDisabled: allowed ? undefined : "true",
-    blockedReason: allowed ? null : `Requires ${item.capabilityLabel}`,
-    blockedLabel: allowed ? null : NAV_BLOCKED_LABELS[item.id] ?? "Not open to you",
-    accessLabel: NAV_ACCESS_LABELS[item.id] ?? item.capabilityLabel,
-  });
-}
-
-function boardAction(shell, { surface, label, primary = false }) {
-  const surfaceItem = shell.surfaces.find((item) => item.id === surface);
-  if (surfaceItem === undefined) {
-    throw new TypeError(`unknown board surface action: ${surface}`);
-  }
-  return Object.freeze({
-    id: surfaceItem.id,
-    label,
-    href: surfaceItem.href,
-    allowed: surfaceItem.allowed,
-    navigation: surfaceItem.navigation,
-    ariaDisabled: surfaceItem.ariaDisabled,
-    blockedReason: surfaceItem.blockedReason,
-    blockedLabel: surfaceItem.blockedLabel,
-    capabilityLabel: surfaceItem.capabilityLabel,
-    className: primary
-      ? "fm-touch-button"
-      : "fm-touch-button fm-touch-button--secondary",
   });
 }
 

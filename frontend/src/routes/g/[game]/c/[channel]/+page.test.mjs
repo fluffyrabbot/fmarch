@@ -115,7 +115,7 @@ test("player dead channel accepts dead-viewer capability", async () => {
     fetch: async () => ({ ok: false }),
   }));
 
-  assert.equal(data.access.capabilityLabel, "DeadViewer(midsummer)");
+  assert.equal(data.access.capability.kind, "DeadViewer");
   assert.equal(data.shellOwner, "layout");
   assert.deepEqual(data.channels.map((channel) => [channel.id, channel.active]), [
     ["dead", true],

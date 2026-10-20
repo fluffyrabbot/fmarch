@@ -7,7 +7,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildRoleRouteStateMatrix } from "../frontend/src/lib/app/app-route-state-model.mjs";
 import {
   APP_SHELL_CONTRACT,
-  navBlockedLabel,
   roleNavTestId,
 } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
@@ -617,8 +616,13 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
-    'data-capability-label="ChannelMember(private:role_pm:slot-7)"',
+    'data-capability-kind="ChannelMember"',
     "player private channel command capability",
+  );
+  assertIncludes(
+    html,
+    'data-capability-scope="private:role_pm:slot-7"',
+    "player private channel command capability scope",
   );
   assertIncludes(
     html,
@@ -671,7 +675,7 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
       channelId: "private:role_pm:slot-7",
       channelLabel: "Role PM",
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
       actorSlot: "slot-7",
     },
     privateReviewLinkTestId: "player-private-link-notification-N02-0-slot-7",
@@ -1255,7 +1259,8 @@ async function proveRenderedAdminSurface(bundle) {
   assertIncludes(html, 'data-surface="admin"', "admin surface shell state");
   assertIncludes(html, 'data-testid="admin-surface"', "admin route surface");
   assertIncludes(html, 'data-testid="admin-capability"', "admin capability pill");
-  assertIncludes(html, "GlobalAdmin", "admin capability label");
+  assertIncludes(html, 'data-capability-kind="GlobalAdmin"', "admin capability kind");
+  assertIncludes(html, "Site administrator", "admin capability sentence");
   assertIncludes(
     html,
     'data-testid="admin-operator-inbox"',
@@ -1417,7 +1422,7 @@ async function proveRenderedAdminAuditDetailSurface(bundle) {
     'data-testid="admin-audit-detail-capability"',
     "admin audit detail capability",
   );
-  assertIncludes(html, "GlobalAdmin", "admin audit detail capability label");
+  assertIncludes(html, 'data-capability-kind="GlobalAdmin"', "admin audit detail capability kind");
   assertIncludes(
     html,
     'data-testid="admin-audit-detail-status"',
@@ -1515,8 +1520,13 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
-    'data-capability-label="SlotOccupant or ChannelMember(main)"',
+    'data-capability-kind="SlotOccupant"',
     "player command channel capability",
+  );
+  assertIncludes(
+    html,
+    'data-capability-scope="slot-7"',
+    "player command channel capability scope",
   );
   assertIncludes(html, 'data-min-touch-target-px="44"', "player command touch floor");
   assertIncludes(
@@ -1609,7 +1619,7 @@ async function proveRenderedPlayerSurface(bundle) {
       testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
       channelId: "main",
       channelLabel: "Main thread",
-      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+      capabilityEvidence: { kind: "SlotOccupant", scope: "slot-7" },
       actorSlot: "slot-7",
     },
     dayEventRailTestId: "player-day-event-rail",
@@ -1744,7 +1754,7 @@ async function proveRenderedModeratorSurface(bundle) {
   assertIncludes(html, 'data-surface="moderator"', "moderator surface shell state");
   assertIncludes(html, 'data-testid="host-console-surface"', "moderator route surface");
   assertIncludes(html, 'data-testid="host-console-capability"', "moderator capability");
-  assertIncludes(html, "HostOf(midsummer)", "moderator capability label");
+  assertIncludes(html, "Hosting Midsummer Invitational", "moderator capability sentence");
   assertIncludes(
     html,
     `data-testid="${HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId}"`,
@@ -1758,7 +1768,7 @@ async function proveRenderedModeratorSurface(bundle) {
   assertIncludes(html, "Technical access", "moderator command authority label");
   assertIncludes(
     html,
-    `HostOf(midsummer) · @${renderFixturePrincipalIds.hostH}`,
+    `HostOf midsummer · @${renderFixturePrincipalIds.hostH}`,
     "moderator command authority value",
   );
   assertIncludes(html, 'data-game-id="midsummer"', "moderator command authority game");
@@ -1769,8 +1779,13 @@ async function proveRenderedModeratorSurface(bundle) {
   );
   assertIncludes(
     html,
-    'data-capability-label="HostOf(midsummer)"',
+    'data-capability-kind="HostOf"',
     "moderator command authority capability",
+  );
+  assertIncludes(
+    html,
+    'data-capability-scope="midsummer"',
+    "moderator command authority capability scope",
   );
   assertIncludes(
     html,
@@ -1896,7 +1911,7 @@ async function proveRenderedModeratorSurface(bundle) {
       testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
       principalId: renderFixturePrincipalIds.hostH,
-      capabilityLabel: "HostOf(midsummer)",
+      capabilityEvidence: { kind: "HostOf", scope: "midsummer" },
       commandEndpoint: "/commands",
     },
     commandActivityTestId: "host-command-activity",
@@ -2041,52 +2056,14 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
     blockedNavTestIds: navItems
       .filter((item) => item.rendered === "blocked")
       .map((item) => item.testId),
-    blockedNavReasons: navItems
-      .filter((item) => item.rendered === "blocked")
-      .map((item) => ({
-        testId: item.testId,
-        blockedReason: item.blockedReason,
-      })),
     sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
     sessionViewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     shellComponentCount,
     navItems,
-    ...(id === boardScenario.id
-      ? { blockedActionReasons: assertBoardBlockedActionReasons({ id, html }) }
-      : {}),
     htmlBytes: Buffer.byteLength(html),
   };
-}
-
-function assertBoardBlockedActionReasons({ id, html }) {
-  return boardScenario.actions
-    .filter((action) => action.navigation === "blocked")
-    .map((action) => {
-      const tag = tagWithTestId(html, action.testId);
-      assert.notEqual(tag, null, `${id} blocked board action ${action.testId} missing`);
-      assertIncludes(
-        tag,
-        `data-blocked-reason="${action.blockedReason}"`,
-        `${id} blocked board action ${action.testId} reason attribute`,
-      );
-      assertIncludes(
-        html,
-        `>${action.blockedLabel}</small>`,
-        `${id} blocked board action ${action.testId} visible reason`,
-      );
-      assertExcludes(
-        tag,
-        "title=",
-        `${id} blocked board action ${action.testId} tooltip dependency`,
-      );
-      return {
-        testId: action.testId,
-        blockedReason: action.blockedReason,
-        titleAttribute: false,
-      };
-    });
 }
 
 function countOccurrences(value, needle) {
@@ -2879,7 +2856,7 @@ export async function renderPlayerActionTargetConfirmation() {
           slotId: commandState.actorSlot,
           alive: true,
           status: "alive",
-          capabilityLabel: "SlotOccupant(seeded-action-open)",
+          capability: { kind: "SlotOccupant", game: "seeded-action-open", slot: commandState.actorSlot },
         },
         confirmingAction: "submit_action:factional_kill",
         roster: commandState.roster ?? [],
@@ -2915,7 +2892,7 @@ export async function renderPlayerActionWithdrawConfirmation() {
           slotId: commandState.actorSlot,
           alive: true,
           status: "alive",
-          capabilityLabel: "SlotOccupant(seeded-action-submitted)",
+          capability: { kind: "SlotOccupant", game: "seeded-action-submitted", slot: commandState.actorSlot },
         },
         confirmingAction: "withdraw_action:factional_kill",
         roster: commandState.roster ?? [],

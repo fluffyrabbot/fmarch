@@ -3,6 +3,8 @@
   export let shell = null;
   import { onMount } from "svelte";
   import { deadlineCountdown } from "$lib/app/deadline-countdown.mjs";
+  import { capabilityEvidence } from "$lib/app/capabilities.mjs";
+  import { capabilitySentence } from "$lib/app/presentation-copy.mjs";
 
   export let game;
   export let phase = {};
@@ -35,7 +37,12 @@
   <div class="game-bar__identity">
     <span>{game.label}</span>
     <h1>{phase.label}</h1>
-    <span class="fm-sr-only" data-testid="player-capability" data-capability-kind={player.capability?.kind}>Your game access</span>
+    <span
+      class="fm-sr-only"
+      data-testid="player-capability"
+      data-capability-kind={capabilityEvidence(player.capability).kind}
+      data-capability-scope={capabilityEvidence(player.capability).scope}
+    >{capabilitySentence(player.capability, { gameTitle: game.label })}</span>
   </div>
   <div class="game-bar__facts" aria-label="Current game state">
     {#if phase.deadlineLabel}

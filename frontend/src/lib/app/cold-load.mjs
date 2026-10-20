@@ -432,6 +432,19 @@ function normalizeNumericRecord(value) {
   );
 }
 
+// Operator proof rows name their authority as text ("GlobalAdmin or
+// GlobalMod"); the admin surface works with capability kinds, so the boundary
+// keeps only the kinds it recognises.
+const OPERATOR_AUTHORITY_KINDS = new Set(["GlobalAdmin", "GlobalMod", "HostOf", "CohostOf"]);
+
+function operatorProofAuthority(value) {
+  const kinds = String(value ?? "")
+    .split(/\s+or\s+/u)
+    .map((part) => part.replace(/\(.*\)$/u, "").trim())
+    .filter((kind) => OPERATOR_AUTHORITY_KINDS.has(kind));
+  return Object.freeze(kinds.length > 0 ? kinds : ["GlobalAdmin", "GlobalMod"]);
+}
+
 function normalizeNullableNumber(value) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -442,6 +455,7 @@ function normalizeNullableNumber(value) {
 
 export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   game: null,
+  title: null,
   actorSlot: null,
   actorAlive: null,
   actorStatus: null,
@@ -489,6 +503,9 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       : [];
   return Object.freeze({
     game: payload.game ?? fallback.game ?? null,
+    title: typeof payload.title === "string" && payload.title.trim() !== ""
+      ? payload.title
+      : fallback.title ?? null,
     actorSlot: payload.actor_slot ?? payload.actorSlot ?? fallback.actorSlot ?? null,
     actorAlive:
       typeof payload.actor_alive === "boolean"
@@ -840,7 +857,7 @@ export function normalizeAdminAudit(proofStatus, fallback, context = {}) {
         id: String(row.id ?? row.name ?? row.proof_id ?? `proof-${index + 1}`),
         label: String(row.label ?? row.name ?? row.id ?? `Proof ${index + 1}`),
         status: String(row.status ?? row.state ?? row.summary ?? "Available"),
-        authority: String(row.authority ?? "GlobalAdmin or GlobalMod"),
+        authority: operatorProofAuthority(row.authority),
         boundary: String(row.boundary ?? "Read-only operator proof"),
         boundaryDetail: String(
           row.boundaryDetail ??
@@ -907,7 +924,7 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     status: complete
       ? `${eventKinds.length} lifecycle audit events available`
       : "Lifecycle audit is missing required events",
-    authority: "GlobalAdmin",
+    authority: Object.freeze(["GlobalAdmin"]),
     boundary: "Local identity lifecycle audit",
     boundaryDetail:
       "/auth/identity-lifecycle-audit records account, session, and invite lifecycle events without raw credential echoes",

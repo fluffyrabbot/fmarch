@@ -45,7 +45,7 @@ test("player channel switcher gives spectators only the fixed read-only room", (
         label: "Spectator room",
         href: "/g/midsummer/c/spectator",
         active: false,
-        capabilityLabel: "SpectatorOf(game)",
+        capabilityEvidence: { kind: "SpectatorOf", scope: "midsummer" },
       },
     ],
   );
@@ -73,7 +73,7 @@ test("player channel switcher model exposes active and touch contracts", () => {
       label: "Main thread",
       href: "/g/midsummer",
       active: true,
-      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+      capabilityEvidence: { kind: "SlotOccupant", scope: "slot-7" },
       ariaCurrent: "page",
       stateLabel: "Current channel",
       minTouchTargetPx: 44,
@@ -93,7 +93,7 @@ test("player channel switcher encodes game ids in channel hrefs", () => {
       label: "Role PM",
       href: "/g/game%20with%20spaces/c/private%3Arole_pm%3Aslot-7",
       active: false,
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     },
   ]);
 });
@@ -114,7 +114,7 @@ test("player channel switcher marks the active private channel and resolves acce
       label: "Role PM",
       href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       active: true,
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     },
   ]);
   assert.deepEqual(resolvePlayerChannelAccess({
@@ -125,8 +125,9 @@ test("player channel switcher marks the active private channel and resolves acce
     channel: "private:role_pm:slot-7",
     supported: true,
     allowed: true,
+    capability: { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
+    capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     label: "Role PM",
-    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   });
   assert.equal(resolvePlayerChannelAccess({
@@ -142,8 +143,9 @@ test("player channel switcher marks the active private channel and resolves acce
     channel: "private:mafia_day_chat",
     supported: true,
     allowed: false,
+    capability: null,
+    capabilityEvidence: { kind: "", scope: "" },
     label: "Mafia day chat",
-    capabilityLabel: "ChannelMember(private:mafia_day_chat)",
     href: "/g/midsummer/c/private%3Amafia_day_chat",
   });
 });
@@ -169,14 +171,14 @@ test("player channel switcher exposes capability-derived private rooms", () => {
       label: "Main thread",
       href: "/g/midsummer",
       active: false,
-      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+      capabilityEvidence: { kind: "SlotOccupant", scope: "slot_1" },
     },
     {
       id: "private:mafia_day_chat",
       label: "Mafia day chat",
       href: "/g/midsummer/c/private%3Amafia_day_chat",
       active: true,
-      capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
     },
   ]);
   assert.deepEqual(
@@ -189,8 +191,9 @@ test("player channel switcher exposes capability-derived private rooms", () => {
       channel: "private:mafia_day_chat",
       supported: true,
       allowed: true,
+      capability: { kind: "ChannelMember", game: "midsummer", channel: "private:mafia_day_chat" },
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
       label: "Mafia day chat",
-      capabilityLabel: "ChannelMember(private:mafia_day_chat)",
       href: "/g/midsummer/c/private%3Amafia_day_chat",
     },
   );
@@ -218,14 +221,14 @@ test("player channel switcher derives Mason and Neighbor rooms from capabilities
         label: "Mason",
         href: "/g/midsummer/c/private%3Amason",
         active: false,
-        capabilityLabel: "ChannelMember(private:mason)",
+        capabilityEvidence: { kind: "ChannelMember", scope: "private:mason" },
       },
       {
         id: "private:neighbor",
         label: "Neighbor",
         href: "/g/midsummer/c/private%3Aneighbor",
         active: false,
-        capabilityLabel: "ChannelMember(private:neighbor)",
+        capabilityEvidence: { kind: "ChannelMember", scope: "private:neighbor" },
       },
     ],
   );
@@ -261,7 +264,7 @@ test("typed DayEvent rooms override stale capability labels and posting posture"
     label: "Raffle room",
     href: "/g/midsummer/c/private%3Aevent%3Aevent-cookie",
     active: true,
-    capabilityLabel: "DayEventRoom(event-cookie)",
+    capabilityEvidence: { kind: "ChannelMember", scope: "private:event:event-cookie" },
     roomState: "locked",
     postingAllowed: false,
     roomStateLabel: "Locked · read-only",

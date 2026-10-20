@@ -2067,14 +2067,12 @@ export async function buildAdminRouteData({
         summary:
           "Set up games, manage access, and review system health.",
         capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
         capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
       }),
       access,
       operator: Object.freeze({
         principalId,
         capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
       }),
       audit: Object.freeze([]),
     });
@@ -2104,14 +2102,12 @@ export async function buildAdminRouteData({
       summary:
         "Set up games, manage access, and review system health.",
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
       capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
     operator: Object.freeze({
       principalId,
       capability: access.capability,
-      capabilityLabel: access.capabilityLabel,
     }),
     command: Object.freeze({
       endpoint: "/commands",
@@ -2131,7 +2127,7 @@ export async function buildAdminRouteData({
         id: "create-game",
         label: "Create game",
         value: "Pack mafiascum",
-        authority: "GlobalAdmin",
+        authority: ["GlobalAdmin"],
         boundary: "Command pipeline",
         boundaryDetail: "/commands CreateGame Ack/Reject",
         commandAction: "create_game",
@@ -2143,7 +2139,7 @@ export async function buildAdminRouteData({
         id: "host-setup",
         label: "Host setup workflow",
         value: `${game} setup`,
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Game-specific setup",
         boundaryDetail: "Roster, roles, policy, invites, and StartGame readiness",
         commandAction: "navigate",
@@ -2154,7 +2150,7 @@ export async function buildAdminRouteData({
         id: "cohost",
         label: "Cohost delegation",
         value: "Cohost C",
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Command pipeline",
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
@@ -2257,7 +2253,7 @@ export async function buildAdminRouteData({
         id: "recovery-gate",
         label: "Recovery go/no-go",
         value: "Check saved production proof artifacts before recovery",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs/go-no-go machine-readable report",
         action: "check_recovery_gate",
@@ -2364,7 +2360,7 @@ export async function buildAdminAuditDetailData({
       eyebrow: "Admin audit",
       title: item?.label ?? auditId,
       summary: item?.boundaryDetail ?? "Audit row unavailable.",
-      capabilityLabel: data.operator.capabilityLabel,
+      capability: data.operator.capability,
       capabilityTestId: "admin-audit-detail-capability",
     }),
     game: Object.freeze({
@@ -2978,7 +2974,7 @@ function optionalProductionFeatureDestinationRoleValue(row, field, { game } = {}
 }
 
 export function adminForbiddenMessage() {
-  return "Admin operations require GlobalAdmin or GlobalMod capability.";
+  return "Admin pages are open to site administrators and community moderators.";
 }
 
 export function summarizeRecoveryGate(body) {
@@ -3019,7 +3015,7 @@ function adminFixtureColdLoad({ game }) {
         id: "proof-runs",
         label: "Proof runs",
         status: "Current local report available",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs machine-readable report",
         href: operatorProofRunUrl({ game }),
@@ -3028,7 +3024,7 @@ function adminFixtureColdLoad({ game }) {
         id: "command-receipts",
         label: "Command receipts",
         status: "Durable ack path live",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Committed command audit",
         boundaryDetail: "/operator command receipt inspection",
         href: operatorProofRunUrl({
@@ -3040,7 +3036,7 @@ function adminFixtureColdLoad({ game }) {
         id: "recovery",
         label: "Recovery queue",
         status: "No destructive action armed",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only recovery proof",
         boundaryDetail: "/operator/proof-runs/go-no-go/view saved report",
         href: operatorProofRunUrl({
@@ -3166,7 +3162,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
     id: localAdminAuditIds.hostedTargetPreflight,
     label: "Hosted target preflight",
     status: `${passedChecks.length} passed, ${blockedChecks.length} blocked`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Hosted target preflight",
     boundaryDetail:
       hostedTargetPreflight.proofBoundary ??
@@ -3333,7 +3329,7 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     id: localAdminAuditIds.hostedIdentityEvidence,
     label: "Hosted identity evidence",
     status: `${hostedIdentityEvidence.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Hosted identity evidence handoff",
     boundaryDetail:
       hostedIdentityEvidence.proofBoundary ??
@@ -3618,7 +3614,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     id: localAdminAuditIds.hostedEvidenceLane,
     label: "Hosted evidence lane",
     status: `${hostedEvidenceLane.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Hosted evidence lane",
     boundaryDetail:
       hostedEvidenceLane.proofBoundary ??
@@ -3891,7 +3887,7 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
     id: localAdminAuditIds.hostedOpsSignals,
     label: "Local hosted ops signals",
     status: `${passedChecks.length} hosted-like ops signals passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local hosted-like ops signal bundle",
     boundaryDetail:
       hostedOpsSignals.proofBoundary ??
@@ -4021,7 +4017,7 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     id: localAdminAuditIds.realHostedObservabilityHandoff,
     label: "Real hosted observability handoff",
     status: `${realHostedObservabilityHandoff.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Real hosted observability handoff",
     boundaryDetail:
       realHostedObservabilityHandoff.proofBoundary ??
@@ -4363,7 +4359,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     status: `${Number(
       hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
     )} hosted-like race cells passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local hosted-like concurrency matrix",
     boundaryDetail:
       hostedConcurrentRaceMatrix.proofBoundary ??
@@ -4591,7 +4587,7 @@ export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {
     id: localAdminAuditIds.raceCoverage,
     label: "Local race coverage",
     status: `${passedCells.length} race cells passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local race-coverage inventory",
     boundaryDetail:
       raceCoverage.proofBoundary ??
@@ -4651,7 +4647,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     id: localAdminAuditIds.proofGraph,
     label: "Local proof graph",
     status: `${nodes.length} proof nodes, ${edges.length} edges`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local development-spine proof graph",
     boundaryDetail:
       proofGraph.proofBoundary ??
@@ -5417,7 +5413,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       command === ""
         ? `${actionStatus}: command missing`
         : `${actionStatus}: ${command}`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local next-action receipt",
     boundaryDetail:
       nextAction.proofBoundary ??
@@ -7630,7 +7626,7 @@ export function normalizeLocalProofFreshnessAudit(
     status: `${Number(summary.freshCount ?? 0)} fresh, ${Number(
       summary.staleCount ?? 0,
     )} stale, ${Number(summary.missingCount ?? 0)} missing`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local proof freshness dashboard",
     boundaryDetail:
       proofFreshness.proofBoundary ??
@@ -7715,7 +7711,7 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
     id: localAdminAuditIds.opsArtifacts,
     label: "Local ops artifacts",
     status: `${passedChecks.length} local ops checks passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local ops artifact bundle",
     boundaryDetail:
       opsArtifacts.proofBoundary ??
@@ -7807,7 +7803,7 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
     id: localAdminAuditIds.spineManifest,
     label: "Local spine manifest",
     status: `${checks.filter((check) => check?.status === "passed").length} manifest checks passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local development-spine manifest",
     boundaryDetail:
       spineManifest.proofBoundary ??
@@ -7946,7 +7942,7 @@ export function normalizeLocalAdminSpineAudit(
     id: localAdminAuditIds.adminSpine,
     label: "Local admin spine",
     status: `${proofs.filter((proof) => proof?.status === "passed").length} admin proof surfaces passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local aggregate admin proof",
     boundaryDetail:
       adminSpineProof.proofBoundary ??
@@ -8214,7 +8210,7 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
     id: localAdminAuditIds.seedFixtures,
     label: "Local seed fixtures",
     status: `${localScenarios.length} demo scenarios available locally`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local seed/demo fixture inventory",
     boundaryDetail:
       seedFixtureSummary.proofBoundary ??
@@ -8362,7 +8358,7 @@ export function normalizeLocalReleaseReadinessAudit(
     id: localAdminAuditIds.releaseReadiness,
     label: "Local release readiness",
     status: `${statusPrefix}, ${unproven.length} release items unproven`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local release-readiness checklist",
     boundaryDetail:
       releaseReadinessChecklist.proofBoundary ??
@@ -8636,7 +8632,7 @@ export function normalizeLocalHostSetupProofAudit(
     id: localAdminAuditIds.hostSetupProof,
     label: "Local host setup proof",
     status: `${setupCommandEvidence.length} setup commands proven, ${readyCheckIds.length} ready checks covered`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local host setup role proof",
     boundaryDetail:
       hostSetupProofEvidence.proofBoundary ??
@@ -8688,7 +8684,7 @@ export function normalizeLocalHostSetupProofAudit(
       ),
       hostSetupProof: hostSetupProofPath,
       roleUrl: String(hostSetupProofEvidence.roleUrl ?? hostSetupCheck?.roleUrl ?? ""),
-      capabilityLabel: String(hostSetupProofEvidence.capabilityLabel ?? ""),
+      capabilityKind: String(hostSetupProofEvidence.capabilityKind ?? ""),
       readyCheckCount: readyCheckIds.length,
       setupCommandEvidenceCount: setupCommandEvidence.length,
       policyCommandStatus: String(hostSetupProofEvidence.policyCommandStatus ?? ""),
@@ -8795,7 +8791,7 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
     id: localAdminAuditIds.releaseRunbook,
     label: "Local release runbook",
     status: `${passedChecks.length} runbook checks passed, ${runbookItems.length} gaps rehearsed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local release-runbook rehearsal",
     boundaryDetail:
       releaseRunbook.proofBoundary ??
@@ -8921,7 +8917,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     id: localAdminAuditIds.coreLoop,
     label: "Local core loop",
     status: `${requiredLaneIds.length} core loop lanes passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local core-loop proof",
     boundaryDetail:
       proofRun.proofBoundary ??
@@ -9292,7 +9288,7 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
     id: localAdminAuditIds.playerRecovery,
     label: "Local player recovery",
     status: `${LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.length} player recovery lanes passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local player-action recovery proof",
     boundaryDetail:
       "Focused local dev-test-game player action recovery, stale command, reload, and conflict lanes without hosted multiplayer claims.",
@@ -9379,7 +9375,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     id: localAdminAuditIds.hardening,
     label: "Local multiplayer hardening",
     status: `${requiredLaneIds.length} hardening lanes passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local multiplayer-hardening proof",
     boundaryDetail:
       proofRun.proofBoundary ??
@@ -9457,7 +9453,7 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
     id: localAdminAuditIds.backupRestore,
     label: "Local backup restore",
     status: `${requiredChecks.length} backup restore checks passed`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local backup/restore drill",
     boundaryDetail:
       backupRestoreProof.proofBoundary ??
@@ -10011,7 +10007,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     id: localAdminAuditIds.identityAdapter,
     label: "Local identity adapter",
     status: `${roles.length} role surfaces, ${controls.length} lifecycle controls`,
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Local production-identity adapter proof",
     boundaryDetail:
       identityAdapterProof.proofBoundary ??

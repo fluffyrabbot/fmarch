@@ -1,7 +1,6 @@
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import {
-  capabilityLabel,
   normalizeCapabilities,
   resolveSurfaceAccess,
 } from "../../../lib/app/capabilities.mjs";
@@ -154,8 +153,8 @@ export function buildGameRouteData({
     game: gameId,
     channel: channelId,
   });
-  const playerCapabilityLabel =
-    slotCapability === undefined ? access.capabilityLabel : capabilityLabel(slotCapability);
+  const playerCapability = slotCapability ?? access.capability;
+  const gameTitle = coldLoad.commandState.title ?? (fixtureMode ? "Midsummer Invitational" : null);
   const phase = buildPlayerPhaseView(coldLoad.commandState);
   const composer = buildPlayerComposerView(
     {
@@ -192,7 +191,7 @@ export function buildGameRouteData({
     }),
     game: Object.freeze({
       id: gameId,
-      label: "Midsummer Invitational",
+      label: gameTitle ?? "Game",
     }),
     access,
     commandsEnabled,
@@ -212,17 +211,16 @@ export function buildGameRouteData({
       alive: coldLoad.commandState.actorAlive,
       status: coldLoad.commandState.actorStatus,
       gameCompleted: coldLoad.commandState.gameCompleted === true,
-      capability: slotCapability ?? access.capability,
-      capabilityLabel: playerCapabilityLabel,
+      capability: playerCapability,
       readOnly: !commandsEnabled,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "player",
-      eyebrow: "Midsummer Invitational",
+      eyebrow: gameTitle ?? "Game",
       title: phase.label,
       summary: phase.summary,
-      capability: slotCapability ?? access.capability,
-      capabilityLabel: playerCapabilityLabel,
+      capability: playerCapability,
+      gameTitle,
       capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: PLAYER_ROUTE_CONTRACT.liveStatusTestId,
     }),
@@ -314,14 +312,8 @@ function pendingPlayerAccess(game) {
     surface: "player",
     allowed: true,
     pending: true,
-    capability: null,
-    capabilityLabel: `PendingReplacement(${game})`,
-    required: Object.freeze([
-      `SlotOccupant(${game})`,
-      `ChannelMember(${game})`,
-      `DeadViewer(${game})`,
-      `SpectatorOf(${game})`,
-    ]),
+    capability: Object.freeze({ kind: "PendingReplacement", game }),
+    required: Object.freeze(["SlotOccupant", "ChannelMember", "DeadViewer", "SpectatorOf"]),
   });
 }
 

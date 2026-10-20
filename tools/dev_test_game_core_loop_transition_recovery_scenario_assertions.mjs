@@ -236,7 +236,7 @@ export function liveStaleD02VoteTransitionRecoveryProof({
       button.disabled === false,
   )
     ? "enabled:submit_action:factional_kill"
-    : "disabled:no legal action available";
+    : "disabled:no-legal-action";
   const refreshedTargetSlots =
     recovery?.commandStateAfterReject?.actions
       ?.flatMap((action) => action.targets ?? [])
@@ -368,7 +368,7 @@ export function liveStaleN01ActionTransitionRecoveryProof({
       recovery?.commandStateAfterReject?.phase?.phaseId,
     checkpointActionStateAfterReject:
       recovery?.actionVisibleAfterRefresh === false
-        ? "disabled:no legal action available"
+        ? "disabled:no-legal-action"
         : scenario.checkpointActionState,
     checkpointTargetSlotsAfterReject: targetSlots,
     recoveryText: recovery?.receiptStatusText,

@@ -58,7 +58,7 @@ export async function buildHostSetupRouteData({
       title: "Host setup",
       summary: "Roster, roles, post policy, invites, and start readiness.",
       capability: access.capability,
-      capabilityLabel: "Game host",
+      gameTitle: setupState.originTopic?.title ?? setupState.pack.name,
       capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,

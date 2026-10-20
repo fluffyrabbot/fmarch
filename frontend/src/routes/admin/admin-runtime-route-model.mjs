@@ -30,7 +30,6 @@ export async function buildAdminRuntimeRouteData({
   const operator = Object.freeze({
     principalId,
     capability: access.capability,
-    capabilityLabel: access.capabilityLabel,
   });
   const communityAudit = capabilities.some((capability) => capability?.kind === "GlobalAdmin")
     ? [communityStewardshipAudit()]
@@ -79,7 +78,7 @@ export async function buildAdminRuntimeRouteData({
         id: "host-setup",
         label: "Host setup workflow",
         value: `${selectedGame} setup`,
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Game-specific setup",
         boundaryDetail: "Roster, roles, policy, invites, and StartGame readiness",
         commandAction: "navigate",
@@ -97,7 +96,7 @@ export async function buildAdminRuntimeRouteData({
         id: "recovery-gate",
         label: "Recovery go/no-go",
         value: "Check saved production proof artifacts before recovery",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs/go-no-go machine-readable report",
         action: "check_recovery_gate",
@@ -216,7 +215,6 @@ export async function buildAdminRuntimeAuditDetailData({ audit, ...context }) {
       title: selected?.label ?? "Audit unavailable",
       summary: selected?.boundaryDetail ?? "The requested live audit is not available.",
       capability: overview.access.capability,
-      capabilityLabel: overview.access.capabilityLabel,
       capabilityTestId: "admin-audit-detail-capability",
     }),
     auditId: audit,
@@ -227,7 +225,7 @@ export async function buildAdminRuntimeAuditDetailData({ audit, ...context }) {
 }
 
 export function adminForbiddenMessage() {
-  return "Admin operations require GlobalAdmin or GlobalMod capability.";
+  return "Admin pages are open to site administrators and community moderators.";
 }
 
 export function summarizeRecoveryGate(body) {
@@ -266,7 +264,6 @@ function adminSurfaceHeader(access) {
     title: "Operations",
     summary: "Manage live games, access, recovery, and system health.",
     capability: access.capability,
-    capabilityLabel: access.capabilityLabel,
     capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
   });
 }
@@ -299,7 +296,7 @@ function runtimeAuditFallback({ game }) {
         id: "proof-runs",
         label: "Proof runs",
         status: "Operator status unavailable",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs machine-readable report",
         href: operatorProofRunUrl({ game }),
@@ -330,7 +327,7 @@ function authDeliveryQueueAudit() {
     id: "auth-deliveries",
     label: "Identity deliveries",
     status: "Review exceptions",
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Credential-safe operator queue",
     boundaryDetail: "Failures and cancellations are visible without credential material",
     href: "/admin/deliveries",
@@ -343,7 +340,7 @@ function communityStewardshipAudit() {
     id: "community-stewardship",
     label: "Community stewardship",
     status: "Review provenance",
-    authority: "GlobalAdmin",
+    authority: ["GlobalAdmin"],
     boundary: "Invite chain and membership controls",
     boundaryDetail: "Privacy-safe invitation pressure, lineage, suspension, restoration, and revocation",
     href: "/admin/community",

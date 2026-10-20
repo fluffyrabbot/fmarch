@@ -312,7 +312,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     }),
     lane("host-setup-role", "Host setup role URL opens setup recovery surface", {
       roleUrl: verification.hostSetup?.roleUrl ?? null,
-      capabilityLabel: verification.hostSetup?.capabilityLabel ?? null,
+      capability: verification.hostSetup?.capability ?? null,
       readinessSummary: verification.hostSetup?.readinessSummary ?? null,
       phaseId: verification.hostSetup?.phaseId ?? null,
       startDisabled: verification.hostSetup?.startDisabled ?? null,
@@ -329,8 +329,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.status === "passed" &&
         verification.hostSetup?.roleUrl?.includes(`/g/${session?.game ?? ""}/setup`) ===
           true &&
-        verification.hostSetup?.capabilityLabel ===
-          `Hosting ${session?.game ?? ""}` &&
+        verification.hostSetup?.capability?.kind === "HostOf" &&
+        verification.hostSetup?.capability?.scope === session?.game &&
         verification.hostSetup?.readinessSummary === "Started at Day 1" &&
         verification.hostSetup?.phaseId === "D01" &&
         verification.hostSetup?.startDisabled === true &&
@@ -435,7 +435,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.readyCheckIds?.length === 7,
     }),
     lane("cohost-console", "Cohost role URL opens delegated host console controls", {
-      capabilityLabel: verification.cohostConsole?.capabilityLabel ?? null,
+      capability: verification.cohostConsole?.capability ?? null,
       extendDeadlineState:
         verification.cohostConsole?.extendDeadline?.commandStatus?.state ?? null,
       extendDeadlinePrincipal:
@@ -450,8 +450,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
       phaseAfterReject: verification.cohostConsole?.phaseAfterReject ?? null,
       passed:
         verification.cohostConsole?.status === "passed" &&
-        verification.cohostConsole?.capabilityLabel ===
-          `CohostOf(${session?.game ?? ""})` &&
+        verification.cohostConsole?.capability?.kind === "CohostOf" &&
+        verification.cohostConsole?.capability?.scope === session?.game &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.state === "ack" &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body
           ?.body?.principal_id === undefined &&
@@ -471,7 +471,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       "Cohost role URL extends the currently projected later phase deadline",
       {
         game: cohostLaterPhaseDeadline.game ?? null,
-        capabilityLabel: cohostLaterPhaseDeadline.capabilityLabel ?? null,
+        capability: cohostLaterPhaseDeadline.capability ?? null,
         phaseBefore: cohostLaterPhaseDeadline.setupPhase ?? null,
         deadlineBefore: cohostLaterPhaseDeadline.initialDeadline ?? null,
         expectedDeadline: cohostLaterPhaseDeadline.expectedDeadline ?? null,
@@ -491,8 +491,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         passed:
           cohostLaterPhaseDeadline.status === "passed" &&
           typeof cohostLaterPhaseDeadline.game === "string" &&
-          cohostLaterPhaseDeadline.capabilityLabel ===
-            `CohostOf(${cohostLaterPhaseDeadline.game ?? ""})` &&
+          cohostLaterPhaseDeadline.capability?.kind === "CohostOf" &&
+          cohostLaterPhaseDeadline.capability?.scope === cohostLaterPhaseDeadline.game &&
           cohostLaterPhaseDeadline.setupPhase?.id === "D02" &&
           cohostLaterPhaseDeadline.setupPhase?.locked === false &&
           cohostLaterPhaseDeadline.setupPhase?.deadline ===
@@ -1683,8 +1683,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.pendingIncomingPlayer?.principalId ?? null,
       capabilityKinds:
         verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds ?? null,
-      capabilityLabel:
-        verification.replacementConsole?.pendingIncomingPlayer?.capabilityLabel ?? null,
+      capability:
+        verification.replacementConsole?.pendingIncomingPlayer?.capability ?? null,
       actorStatus:
         verification.replacementConsole?.pendingIncomingPlayer?.commandState?.actorStatus ??
         null,
@@ -1700,8 +1700,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "player-rowan" &&
         verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds?.length ===
           0 &&
-        verification.replacementConsole?.pendingIncomingPlayer?.capabilityLabel ===
-          `PendingReplacement(${session?.game ?? ""})` &&
+        verification.replacementConsole?.pendingIncomingPlayer?.capability?.kind ===
+          "PendingReplacement" &&
+        verification.replacementConsole?.pendingIncomingPlayer?.capability?.scope ===
+          session?.game &&
         verification.replacementConsole?.pendingIncomingPlayer?.routeStateText?.includes(
           "Replacement invite accepted",
         ) === true &&
@@ -2122,7 +2124,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.capabilityKinds?.length === 0 &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
-          ?.capabilityLabel === `PendingReplacement(${session?.game ?? ""})` &&
+          ?.capability?.kind === "PendingReplacement" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.capability?.scope === session?.game &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.commandState?.actorStatus === "pending_replacement" &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
@@ -2283,9 +2287,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.actorAlive ?? null,
       buttonsDisabled:
         verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled ?? null,
-      capabilityLabel:
+      capabilityKind:
         verification.replacementConsole?.staleOutgoingPlayer?.contextState
-          ?.capabilityLabel ?? null,
+          ?.capabilityKind ?? null,
       passed:
         verification.replacementConsole?.status === "passed" &&
         verification.replacementConsole?.staleOutgoingPlayer?.status === "passed" &&
@@ -2309,7 +2313,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleOutgoingPlayer?.contextState
           ?.actorStatus === "replaced" &&
         verification.replacementConsole?.staleOutgoingPlayer?.contextState
-          ?.capabilityLabel?.includes("No current SlotOccupant(slot-7)") === true &&
+          ?.capabilityKind === "" &&
         verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled === true,
     }),
     lane("replacement-stale-action", "Outgoing replacement action command recovers stale role", {
@@ -2367,9 +2371,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       rowanChannelContext:
         verification.replacementConsole?.stalePrivateChannel?.rowanRoute
           ?.channelContextId ?? null,
-      rowanCapabilityLabel:
+      rowanCapability:
         verification.replacementConsole?.stalePrivateChannel?.rowanRoute
-          ?.capabilityLabel ?? null,
+          ?.capability ?? null,
       rowanPostState:
         verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ??
         null,
@@ -2411,7 +2415,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.stalePrivateChannel?.rowanRoute
           ?.actorSlot === "slot-7" &&
         verification.replacementConsole?.stalePrivateChannel?.rowanRoute
-          ?.capabilityLabel?.includes("ChannelMember(private:mafia_day_chat)") === true &&
+          ?.capability?.kind === "ChannelMember" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.capability?.scope === "private:mafia_day_chat" &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ===
           "ack" &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost
@@ -2516,9 +2522,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.incomingPlayer?.commandState?.actorSlot ===
           "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.commandState?.actorAlive === true &&
-        verification.replacementConsole?.incomingPlayer?.capabilityLabel?.includes(
-          "SlotOccupant",
-        ) === true &&
+        verification.replacementConsole?.incomingPlayer?.capability?.kind ===
+          "SlotOccupant" &&
         verification.replacementConsole?.incomingPlayer?.stableHistoryVisible === true &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.state === "ack" &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body

@@ -3,7 +3,7 @@ export function assertPrivateChannelContext({
   expectedChannelId,
   expectedActorSlot,
   expectedActorStatus,
-  requireCapabilityLabel = false,
+  requireMemberCapability = false,
   label = "private-channel context",
   includeEvidenceInError = false,
 }) {
@@ -12,10 +12,9 @@ export function assertPrivateChannelContext({
     context?.actorSlot !== expectedActorSlot ||
     (expectedActorStatus !== undefined &&
       context?.actorStatus !== expectedActorStatus) ||
-    (requireCapabilityLabel === true &&
-      !String(context?.capabilityLabel ?? "").includes(
-        `ChannelMember(${expectedChannelId})`,
-      ))
+    (requireMemberCapability === true &&
+      (context?.capability?.kind !== "ChannelMember" ||
+        context?.capability?.scope !== expectedChannelId))
   ) {
     throwPrivateChannelContextAssertionError({
       message: `${label} drifted`,
@@ -60,7 +59,7 @@ export function assertPrivateChannelRouteContext({
   expectedActorSlot,
   expectedActorStatus,
   privateThreadPagerVisible,
-  requireCapabilityLabel = false,
+  requireMemberCapability = false,
   label = "private-channel route context",
   includeEvidenceInError = false,
 }) {
@@ -69,7 +68,7 @@ export function assertPrivateChannelRouteContext({
     expectedChannelId,
     expectedActorSlot,
     expectedActorStatus,
-    requireCapabilityLabel,
+    requireMemberCapability,
     label,
     includeEvidenceInError,
   });

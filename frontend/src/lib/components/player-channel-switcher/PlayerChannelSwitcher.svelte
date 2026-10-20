@@ -20,7 +20,8 @@
       href={channel.href}
       aria-current={channel.ariaCurrent}
       data-testid={`player-channel-${channel.id}`}
-      data-channel-capability={channel.capabilityLabel}
+      data-capability-kind={channel.capabilityEvidence.kind}
+      data-capability-scope={channel.capabilityEvidence.scope}
       data-min-touch-target-px={channel.minTouchTargetPx}
     >
       <span>{channel.label}</span>

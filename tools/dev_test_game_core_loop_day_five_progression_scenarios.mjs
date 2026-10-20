@@ -142,7 +142,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPhaseState: "open",
     expectedActorAlive: true,
     expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
+    expectedActionState: "disabled:no-legal-action",
     expectedStatusText: "no legal action available",
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,
@@ -169,7 +169,7 @@ const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
     refreshedPhaseId: "N05",
     refreshedBoundary: "stale D05 vote refreshed into current Night 5 controls",
     checkpointReceiptState: "reject:PhaseLocked",
-    checkpointActionState: "disabled:no legal action available",
+    checkpointActionState: "disabled:no-legal-action",
     checkpointTargetSlots: "",
   }),
 });

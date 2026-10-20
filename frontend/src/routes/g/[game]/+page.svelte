@@ -539,10 +539,8 @@
       alive: commandState?.actorAlive ?? data.player.alive,
       status: commandState?.actorStatus ?? data.player.status,
       gameCompleted: commandState?.gameCompleted === true,
-      capabilityLabel:
-        commandState?.actorStatus === "replaced"
-          ? `No current SlotOccupant(${data.player.slotId})`
-          : data.player.capabilityLabel,
+      capability:
+        commandState?.actorStatus === "replaced" ? null : data.player.capability,
     });
     phase = buildPlayerPhaseView(commandState);
     composer = buildPlayerComposerView(

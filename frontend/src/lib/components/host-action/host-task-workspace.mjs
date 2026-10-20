@@ -1,3 +1,4 @@
+import { capabilityEvidence } from "../../app/capabilities.mjs";
 import { seatNames } from "../../app/seat-presenter.mjs";
 import { visibleHostCommandStatus } from "./host-command-status.mjs";
 import { formatDeadlinePacific } from "./host-console-critical-action.mjs";
@@ -414,15 +415,15 @@ function buildCommandContext(commandContext) {
   if (principalId === null) {
     throw new TypeError("host task workspace principal must be a canonical UUID");
   }
-  const capabilityLabel = String(commandContext.capabilityLabel ?? "HostOf(game)");
+  const evidence = capabilityEvidence(commandContext.capability);
   return Object.freeze({
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
     summary: "Technical details",
     label: "Technical access",
-    value: `${capabilityLabel} · @${principalId}`,
+    value: `${evidence.kind === "" ? "No capability" : `${evidence.kind} ${evidence.scope}`} · @${principalId}`,
     gameId,
     principalId,
-    capabilityLabel,
+    capabilityEvidence: evidence,
     commandEndpoint: String(commandContext.commandEndpoint ?? "/commands"),
   });
 }

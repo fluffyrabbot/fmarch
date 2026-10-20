@@ -178,7 +178,7 @@ test("shared live stale N01 action transition assertion adapts raw browser evide
       "commandState",
       "dayVoteOutcomes",
     ],
-    checkpointActionState: "disabled:no legal action available",
+    checkpointActionState: "disabled:no-legal-action",
     checkpointTargetSlots: "",
     receiptCount: 1,
   };
@@ -203,7 +203,7 @@ test("shared live stale N01 action transition assertion adapts raw browser evide
       actorSlot: "slot_4",
       targetSlot: "slot-2",
       phase: "D02",
-      actionState: "disabled:no legal action available",
+      actionState: "disabled:no-legal-action",
       targetSlots: "",
     },
   );

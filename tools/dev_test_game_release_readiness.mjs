@@ -3284,8 +3284,11 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
   ) {
     throw new Error("host setup proof role URL does not target setup route");
   }
-  if (proof.hostSetup.capabilityLabel !== `Hosting ${proof.game}`) {
-    throw new Error("host setup proof capability label drifted");
+  if (
+    proof.hostSetup.capability?.kind !== "HostOf" ||
+    proof.hostSetup.capability?.scope !== proof.game
+  ) {
+    throw new Error("host setup proof capability drifted");
   }
   if (
     proof.hostSetup.policyCommand?.status !== "passed" ||
@@ -3320,10 +3323,7 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
     path: options.path ?? "target/dev-test-game/host-setup-proof.json",
     game: proof.game,
     roleUrl: proof.hostSetup.roleUrl.replace(proof.game, "<seeded-game>"),
-    capabilityLabel: proof.hostSetup.capabilityLabel.replace(
-      proof.game,
-      "<seeded-game>",
-    ),
+    capabilityKind: proof.hostSetup.capability.kind,
     proofBoundary: proof.proofBoundary,
     readyCheckIds: [...proof.hostSetup.readyCheckIds],
     browserWorkbench: hostSetupBrowserWorkbenchEvidence(proof),
@@ -3376,7 +3376,8 @@ function validateCohostConsoleLaneProof(proof, options = {}) {
     typeof game !== "string" ||
     game.trim() === "" ||
     frontendBaseUrl === "" ||
-    evidence.capabilityLabel !== `CohostOf(${game})` ||
+    evidence.capability?.kind !== "CohostOf" ||
+    evidence.capability?.scope !== game ||
     evidence.extendDeadlineState !== "ack" ||
     evidence.extendDeadlinePrincipal !== "cohost_c" ||
     evidence.hostOnlyControlsVisible !== false ||
@@ -3392,7 +3393,7 @@ function validateCohostConsoleLaneProof(proof, options = {}) {
     path: options.path ?? devTestGameProofRunPath,
     game,
     roleUrl: `${frontendBaseUrl}/g/<seeded-game>/host`,
-    capabilityLabel: evidence.capabilityLabel.replace(game, "<seeded-game>"),
+    capabilityKind: evidence.capability.kind,
     extendDeadlineState: evidence.extendDeadlineState,
     extendDeadlinePrincipal: evidence.extendDeadlinePrincipal,
     hostOnlyRejectError: evidence.hostOnlyRejectError,
@@ -3617,8 +3618,8 @@ function validateReplacementPrivateLaneProof(proof, options = {}) {
     authority.evidence?.staleRejectError !== "NotYourSlot" ||
     authority.evidence?.staleRouteStatus !== 403 ||
     authority.evidence?.rowanChannelContext !== "private:mafia_day_chat" ||
-    authority.evidence?.rowanCapabilityLabel !==
-      "ChannelMember(private:mafia_day_chat)" ||
+    authority.evidence?.rowanCapability?.kind !== "ChannelMember" ||
+    authority.evidence?.rowanCapability?.scope !== "private:mafia_day_chat" ||
     authority.evidence?.rowanPostState !== "ack" ||
     receipts?.status !== "passed" ||
     receipts.evidence?.staleNotificationsStatus !== 403 ||
@@ -3676,7 +3677,7 @@ function validateReplacementPrivateLaneProof(proof, options = {}) {
       channel: authority.evidence.channel,
       staleRejectError: authority.evidence.staleRejectError,
       staleRouteStatus: authority.evidence.staleRouteStatus,
-      rowanCapabilityLabel: authority.evidence.rowanCapabilityLabel,
+      rowanCapability: authority.evidence.rowanCapability,
       rowanPostState: authority.evidence.rowanPostState,
     },
     receipts: {
@@ -9215,7 +9216,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (
     cohostCheck === undefined ||
     !cohostCheck.roleUrl?.includes("/g/<seeded-game>/host") ||
-    cohostCheck.capabilityLabel !== "CohostOf(<seeded-game>)" ||
+    cohostCheck.capabilityKind !== "CohostOf" ||
     cohostCheck.extendDeadlineState !== "ack" ||
     cohostCheck.extendDeadlinePrincipal !== "cohost_c" ||
     cohostCheck.hostOnlyRejectError !== "CohostPermissionDenied" ||

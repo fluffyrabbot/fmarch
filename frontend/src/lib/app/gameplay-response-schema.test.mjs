@@ -423,6 +423,7 @@ test("host live-delta schema rejects malformed cells and unknown kinds", () => {
 function playerCommandState() {
   return {
     game: "midsummer",
+    title: "Midsummer Invitational",
     actor_slot: "slot-4",
     actor_alive: true,
     actor_status: "alive",

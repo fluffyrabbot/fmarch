@@ -16,7 +16,8 @@
       href={channel.href}
       aria-current={channel.ariaCurrent}
       data-testid={`player-channel-${channel.id}`}
-      data-channel-capability={channel.capabilityLabel}
+      data-capability-kind={channel.capabilityEvidence.kind}
+      data-capability-scope={channel.capabilityEvidence.scope}
       data-room-state={channel.roomState}
       data-posting-allowed={channel.postingAllowed}
       data-min-touch-target-px={channel.minTouchTargetPx}

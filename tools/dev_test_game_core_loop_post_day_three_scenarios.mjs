@@ -55,7 +55,7 @@ const postDayThreeResolutionSurfaceCaseDefinition = Object.freeze({
     expectedPhaseState: "open",
     expectedActorAlive: true,
     expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
+    expectedActionState: "disabled:no-legal-action",
     expectedStatusText: "no legal action available",
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,

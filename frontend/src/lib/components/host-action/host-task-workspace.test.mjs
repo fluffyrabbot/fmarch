@@ -92,7 +92,8 @@ test("host task workspace prioritizes decisions and selects one canvas", () => {
   assert.equal(view.selectedTaskId, "engine-host-prompt:prompt-1");
   assert.equal(view.selectedTask.consequence, "Your choice will resolve this decision.");
   assert.equal(view.queue.attentionCount, 1);
-  assert.equal(view.commandContext.value, `HostOf(game) · @${HOST_PRINCIPAL_ID}`);
+  assert.equal(view.commandContext.value, `No capability · @${HOST_PRINCIPAL_ID}`);
+  assert.deepEqual(view.commandContext.capabilityEvidence, { kind: "", scope: "" });
 });
 
 test("interrupted commands move their task to the front for recovery", () => {

@@ -70,8 +70,8 @@ const channelContextMatches = (context, scenario) =>
 
 const channelContextHasMemberCapability = (context, scenario) =>
   channelContextMatches(context, scenario) &&
-  context?.capabilityLabel?.includes(`ChannelMember(${scenario.channelId})`) ===
-    true;
+  context?.capability?.kind === "ChannelMember" &&
+  context?.capability?.scope === scenario.channelId;
 
 const threadDoesNotIncludePost = (posts, proof) =>
   posts?.includes(proof?.postBody) === false;

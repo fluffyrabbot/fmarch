@@ -3236,7 +3236,7 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
           "reject:GameAlreadyCompleted" &&
         document
           .querySelector('[data-testid="player-action-submission-checkpoint"]')
-          ?.getAttribute("data-action-state") === "disabled:game complete",
+          ?.getAttribute("data-action-state") === "disabled:game-complete",
       null,
       { timeout: 15000 },
     );
@@ -4971,8 +4971,10 @@ async function collectCompletedPrivateChannelSnapshot(page) {
       channelContext: {
         channelId: channelContext?.getAttribute("data-channel-id") ?? null,
         actorSlot: channelContext?.getAttribute("data-actor-slot") ?? null,
-        capabilityLabel:
-          channelContext?.getAttribute("data-capability-label") ?? null,
+        capability: {
+          kind: channelContext?.getAttribute("data-capability-kind") ?? "",
+          scope: channelContext?.getAttribute("data-capability-scope") ?? "",
+        },
         actorStatus: channelContext?.getAttribute("data-actor-status") ?? null,
       },
       commandState: window.__fmarchPlayerProjection?.commandState ?? null,
@@ -5180,8 +5182,6 @@ async function provePlayerActionSubmissionCheckpoint({
     const visibleRows = [];
     for (const [id, testId] of Object.entries({
       phase: "player-action-submission-phase",
-      actor: "player-action-submission-actor",
-      actionState: "player-action-submission-action-state",
       target: "player-action-submission-target",
       receipt: "player-action-submission-receipt",
       recovery: "player-action-submission-recovery",
@@ -8381,9 +8381,10 @@ async function provePrivateChannelRoleSurface({
     const channelContextChannelId = await channelContext.getAttribute(
       "data-channel-id",
     );
-    const channelContextCapabilityLabel = await channelContext.getAttribute(
-      "data-capability-label",
-    );
+    const channelContextCapability = {
+      kind: (await channelContext.getAttribute("data-capability-kind")) ?? "",
+      scope: (await channelContext.getAttribute("data-capability-scope")) ?? "",
+    };
     const boundary = page.getByTestId("player-private-boundary");
     await boundary.waitFor({ state: "visible", timeout: 15000 });
     const privateQueue = page.locator('[data-component="player-private-queue"]');
@@ -8461,7 +8462,7 @@ async function provePrivateChannelRoleSurface({
       channelAriaCurrent,
       commandPanelChannelId,
       channelContextChannelId,
-      channelContextCapabilityLabel,
+      channelContextCapability,
       privateQueueBoundary: {
         status: privateBoundaryStatus,
         count: privateCount,

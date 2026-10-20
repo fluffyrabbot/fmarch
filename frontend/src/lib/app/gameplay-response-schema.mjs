@@ -536,6 +536,7 @@ export function validatePlayerCommandStateResponse(
     isPlainObject(value) &&
     nonEmptyString(game) &&
     value.game === game &&
+    nonEmptyString(value.title) &&
     nonEmptyString(actorSlot) &&
     value.actor_slot === actorSlot &&
     typeof value.actor_alive === "boolean" &&

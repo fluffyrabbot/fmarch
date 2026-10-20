@@ -694,10 +694,10 @@ assert.match(
   session.verification.hostSetup.roleUrl,
   new RegExp(`/g/${session.game}/setup$`),
 );
-assert.equal(
-  session.verification.hostSetup.capabilityLabel,
-  `Hosting ${session.game}`,
-);
+assert.deepEqual(session.verification.hostSetup.capability, {
+  kind: "HostOf",
+  scope: session.game,
+});
 assert.equal(session.verification.hostSetup.readinessSummary, "Started at Day 1");
 assert.equal(session.verification.hostSetup.phaseId, "D01");
 assert.equal(session.verification.hostSetup.startDisabled, true);
@@ -833,10 +833,10 @@ assert.equal(
   true,
 );
 assert.equal(session.verification.cohostConsole.status, "passed");
-assert.equal(
-  session.verification.cohostConsole.capabilityLabel,
-  `CohostOf(${session.game})`,
-);
+assert.deepEqual(session.verification.cohostConsole.capability, {
+  kind: "CohostOf",
+  scope: session.game,
+});
 assert.equal(
   session.verification.cohostConsole.extendDeadline.commandStatus.state,
   "ack",
@@ -2026,10 +2026,10 @@ assert.equal(
   session.verification.replacementConsole.pendingIncomingPlayer.capabilityKinds.length,
   0,
 );
-assert.equal(
-  session.verification.replacementConsole.pendingIncomingPlayer.capabilityLabel,
-  `PendingReplacement(${session.game})`,
-);
+assert.deepEqual(session.verification.replacementConsole.pendingIncomingPlayer.capability, {
+  kind: "PendingReplacement",
+  scope: session.game,
+});
 assert.match(
   session.verification.replacementConsole.pendingIncomingPlayer.routeStateText,
   /Replacement invite accepted/,
@@ -2542,10 +2542,10 @@ assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.contextState.actorStatus,
   "replaced",
 );
-assert.match(
+assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.contextState
-    .capabilityLabel,
-  /No current SlotOccupant\(slot-7\)/,
+    .capabilityKind,
+  "",
 );
 assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.buttonsDisabled,
@@ -2654,10 +2654,9 @@ assert.equal(
   session.verification.replacementConsole.stalePrivateChannel.rowanRoute.actorSlot,
   "slot-7",
 );
-assert.match(
-  session.verification.replacementConsole.stalePrivateChannel.rowanRoute
-    .capabilityLabel,
-  /ChannelMember\(private:mafia_day_chat\)/,
+assert.deepEqual(
+  session.verification.replacementConsole.stalePrivateChannel.rowanRoute.capability,
+  { kind: "ChannelMember", scope: "private:mafia_day_chat" },
 );
 assert.equal(
   session.verification.replacementConsole.stalePrivateChannel.rowanPost.state,
@@ -2855,9 +2854,9 @@ assert.equal(
   session.verification.replacementConsole.incomingPlayer.commandState.actorAlive,
   true,
 );
-assert.match(
-  session.verification.replacementConsole.incomingPlayer.capabilityLabel,
-  /SlotOccupant/,
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.capability.kind,
+  "SlotOccupant",
 );
 assert.equal(
   session.verification.replacementConsole.incomingPlayer.stableHistoryVisible,
@@ -4553,10 +4552,10 @@ assert.equal(
     .reloadChannelContext.actorSlot,
   "slot-7",
 );
-assert.match(
+assert.deepEqual(
   replacementStalePrivatePostAfterComplete.privateReloadAfterReject
-    .reloadChannelContext.capabilityLabel,
-  /ChannelMember\(private:mafia_day_chat\)/,
+    .reloadChannelContext.capability,
+  { kind: "ChannelMember", scope: "private:mafia_day_chat" },
 );
 assert.equal(
   replacementStalePrivatePostAfterComplete.privateReloadAfterReject.reloadButtons.some(

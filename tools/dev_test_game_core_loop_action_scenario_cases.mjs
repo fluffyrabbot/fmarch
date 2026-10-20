@@ -124,7 +124,7 @@ export function playerActionSubmissionScenario() {
       "commandState",
     ],
     refreshedPhaseId: "N02",
-    checkpointActionState: "disabled:no legal action available",
+    checkpointActionState: "disabled:no-legal-action",
   };
 }
 
@@ -220,7 +220,7 @@ export function staleNightFourActionRecoveryScenario() {
     refreshedBoundary:
       "stale N04 action refreshed into current Day 5 controls",
     checkpointReceiptState: "reject:PhaseLocked",
-    checkpointActionState: "disabled:no legal action available",
+    checkpointActionState: "disabled:no-legal-action",
     checkpointTargetSlots: "",
   };
 }

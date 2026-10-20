@@ -96,7 +96,8 @@ test("player route data exposes thread, channel, votecount, and touch command la
     capability: {
       visible: true,
       kind: "SlotOccupant",
-      label: "Playing midsummer",
+      scope: "slot-7",
+      label: "Playing Midsummer Invitational",
       testId: "player-capability",
       className: "fm-capability-pill",
       minTouchTargetPx: 44,
@@ -129,8 +130,9 @@ test("player route data exposes thread, channel, votecount, and touch command la
     channel: "main",
     supported: true,
     allowed: true,
+    capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-7", source: "session" },
+    capabilityEvidence: { kind: "SlotOccupant", scope: "slot-7" },
     label: "Main thread",
-    capabilityLabel: "SlotOccupant or ChannelMember(main)",
     href: "/g/midsummer",
   });
   assert.equal(data.thread.posts[1].body, "@Ilya \u2014 ##vote slot-2");
@@ -341,7 +343,7 @@ test("spectator role URLs load only the spectator room without player-private co
   assert.equal(data.player.slotId, null);
   assert.deepEqual(data.channels.map((channel) => channel.id), ["spectator"]);
   assert.equal(data.channel.allowed, true);
-  assert.equal(data.channel.capabilityLabel, "SpectatorOf(game)");
+  assert.deepEqual(data.channel.capabilityEvidence, { kind: "SpectatorOf", scope: "midsummer" });
   assert.equal(data.composer.readOnly, true);
   assert.equal(data.commandState.actorSlot, null);
   assert.equal(data.commandState.role, null);
@@ -457,8 +459,14 @@ test("player route data marks active private channel access without host data", 
     channel: "private:role_pm:slot-7",
     supported: true,
     allowed: true,
+    capability: {
+      kind: "ChannelMember",
+      game: "midsummer",
+      channel: "private:role_pm:slot-7",
+      source: "session",
+    },
+    capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     label: "Role PM",
-    capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
     href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
   });
   assert.deepEqual(data.channels, [
@@ -467,7 +475,7 @@ test("player route data marks active private channel access without host data", 
       label: "Role PM",
       href: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       active: true,
-      capabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+      capabilityEvidence: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     },
   ]);
   assert.equal(
@@ -955,7 +963,7 @@ test("player load renders pending replacement state for authenticated no-slot se
   assert.equal(data.shellOwner, "layout");
   assert.equal(data.access.allowed, true);
   assert.equal(data.access.pending, true);
-  assert.equal(data.access.capabilityLabel, "PendingReplacement(midsummer)");
+  assert.deepEqual(data.access.capability, { kind: "PendingReplacement", game: "midsummer" });
   assert.equal(data.pendingReplacement, true);
   assert.equal(data.commandsEnabled, false);
   assert.equal(data.liveProjectionEnabled, false);
@@ -1025,7 +1033,7 @@ test("player load accepts channel membership scoped to the game", async () => {
 
   assert.equal(data.shell.activeSurface, "player");
   assert.equal(data.shellOwner, "layout");
-  assert.equal(data.access.capabilityLabel, "ChannelMember(midsummer)");
+  assert.equal(data.access.capability.kind, "ChannelMember");
   assert.equal(data.commandsEnabled, false);
   assert.equal(data.liveProjectionEnabled, true);
   assert.equal(data.player.readOnly, true);

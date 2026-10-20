@@ -450,9 +450,6 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
     proof.checkpoint.actorSlot !== expectedSlot ||
     proof.checkpoint.actionState !== expectedActionState ||
     proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
     proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(

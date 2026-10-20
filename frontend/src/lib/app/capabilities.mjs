@@ -89,30 +89,28 @@ export function resolveSurfaceAccess({ surface, game = null, capabilities = [] }
     surface,
     allowed: capability !== undefined,
     capability: capability ?? null,
-    capabilityLabel: capability === undefined ? null : capabilityLabel(capability),
-    required: Object.freeze(
-      definition.capabilityKinds.map((kind) =>
-        game === null ? kind : `${kind}(${game})`,
-      ),
-    ),
+    required: definition.capabilityKinds,
   });
 }
 
-export function capabilityLabel(capability) {
-  const normalized = normalizeCapability(capability);
+// Proof evidence for a capability: its kind and the one scope it names (seat,
+// channel or game). Surfaces put these on `data-capability-kind` and
+// `data-capability-scope`; the capability never becomes display text.
+export function capabilityEvidence(capability) {
+  const normalized = normalizeCapability(capability) ?? pendingCapability(capability);
   if (normalized === null) {
-    return "Unknown";
+    return Object.freeze({ kind: "", scope: "" });
   }
-  if (normalized.game !== undefined) {
-    return `${normalized.kind}(${normalized.game})`;
-  }
-  if (normalized.slot !== undefined) {
-    return `${normalized.kind}(${normalized.slot})`;
-  }
-  if (normalized.channel !== undefined) {
-    return `${normalized.kind}(${normalized.channel})`;
-  }
-  return normalized.kind;
+  return Object.freeze({
+    kind: normalized.kind,
+    scope: normalized.slot ?? normalized.channel ?? normalized.game ?? "",
+  });
+}
+
+function pendingCapability(capability) {
+  return capability?.kind === "PendingReplacement" && typeof capability.game === "string"
+    ? Object.freeze({ kind: "PendingReplacement", game: capability.game })
+    : null;
 }
 
 export function hasCapability({ capabilities = [], kind, game = null }) {

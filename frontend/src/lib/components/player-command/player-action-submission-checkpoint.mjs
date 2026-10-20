@@ -6,13 +6,12 @@ export const PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT = Object.freeze({
   rootClassName: "player-action-submission-checkpoint fm-proof-disclosure",
   rootTestId: "player-action-submission-checkpoint",
   phaseTestId: "player-action-submission-phase",
-  actorTestId: "player-action-submission-actor",
-  actionStateTestId: "player-action-submission-action-state",
   targetTestId: "player-action-submission-target",
   receiptTestId: "player-action-submission-receipt",
   recoveryTestId: "player-action-submission-recovery",
   statusTestId: "player-action-submission-status",
   componentName: "player-action-submission-checkpoint",
+  recoveryCopy: "If the phase changes first, choose again from the new options.",
 });
 
 export function buildPlayerActionSubmissionCheckpoint({
@@ -36,6 +35,7 @@ export function buildPlayerActionSubmissionCheckpoint({
       ? "locked"
       : "open";
   const actorSlot = String(commandState?.actorSlot ?? player.slotId ?? "");
+  const names = seatNames(commandState?.roster);
   const selectedAction = String(legalAction?.templateId ?? "");
   const targetSlots = Array.isArray(legalAction?.targets)
     ? legalAction.targets.map((target) => String(target))
@@ -71,59 +71,63 @@ export function buildPlayerActionSubmissionCheckpoint({
     proofCheckId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.proofCheckId,
     phase: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.phaseTestId,
-      label: "Current phase",
-      value: `${phaseLabelFromId(phaseId) ?? "No phase open"} / ${phaseState}`,
-    }),
-    actor: Object.freeze({
-      testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.actorTestId,
-      label: "Actor",
-      value: `${actorSlot ? seatNames(commandState?.roster).label(actorSlot) : "unknown"} / ${String(
-        commandState?.actorStatus ?? player.status ?? "unknown",
-      )}`,
-    }),
-    actionState: Object.freeze({
-      testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.actionStateTestId,
-      label: "Action state",
-      value: legalAction === null ? "Not available" : "Available",
+      label: "Phase",
+      value: phaseLabelFromId(phaseId) ?? "Not started",
     }),
     target: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.targetTestId,
-      label: "Selected target",
+      label: "Who you can choose",
       value:
-        selectedAction === ""
-          ? "none"
-          : targetSlots.map((slot) => seatNames(commandState?.roster).label(slot)).join(", ") || "No target needed",
+        legalAction === null
+          ? "No one right now"
+          : targetSlots.map((slot) => names.label(slot)).join(", ") || "No target needed",
     }),
     receipt: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.receiptTestId,
-      label: "Submission",
-      value: commandStatus?.state === "ack" ? "Sent" : commandStatus?.state === "pending" ? "Sending…" : commandStatus?.state === "interrupted" ? "Not yet confirmed" : commandStatus?.state === "reject" ? "Not accepted" : "Not submitted",
+      label: "Your choice",
+      value: SUBMISSION_COPY[commandStatus?.state] ?? "Not sent yet",
     }),
     recovery: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.recoveryTestId,
-      label: "When the phase changes",
-      value: "Check the current phase before choosing an action.",
+      label: "If the phase changes",
+      value: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.recoveryCopy,
     }),
     status: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.statusTestId,
       state: legalAction === null ? "pending" : "ack",
       message:
         legalAction === null
-          ? `Your night action is unavailable: ${actionDisabledReason({ commandState, player })}.`
+          ? `Your night action isn't available: ${DISABLED_REASON_COPY[actionDisabledReason({ commandState, player })]}.`
           : "You can choose your night action.",
     }),
   });
 }
 
+const SUBMISSION_COPY = Object.freeze({
+  ack: "Sent",
+  pending: "Sending…",
+  interrupted: "Not confirmed yet",
+  reject: "Not accepted",
+});
+
+// Why the action is unavailable, as a stable code for `data-action-state`
+// and as the sentence the player reads.
+const DISABLED_REASON_COPY = Object.freeze({
+  "game-complete": "the game is over",
+  "actor-dead": "you are no longer alive",
+  "phase-locked": "the phase is closed",
+  "no-legal-action": "there is nothing to do right now",
+});
+
 function actionDisabledReason({ commandState, player }) {
   if (player.gameCompleted === true || commandState?.gameCompleted === true) {
-    return "game complete";
+    return "game-complete";
   }
   if (player.alive === false || commandState?.actorAlive === false) {
-    return "you are no longer alive";
+    return "actor-dead";
   }
   if (commandState?.phase?.locked === true) {
-    return "phase locked";
+    return "phase-locked";
   }
-  return "no action is available now";
+  return "no-legal-action";
 }

@@ -868,7 +868,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
       visibleAdminCheckIds: ["start-phase"],
       readinessDetailKeys: [
-        "capabilityLabel",
+        "capabilityKind",
         "readyCheckIds",
         "browserWorkbench",
         "setupMutationStatus",
@@ -885,7 +885,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       targetRow: cohostFeatureSpineTargetRows.cohostConsole,
       visibleAdminCheckIds: ["cohost-console"],
       readinessDetailKeys: [
-        "capabilityLabel",
+        "capabilityKind",
         "extendDeadlineState",
         "extendDeadlinePrincipal",
         "hostOnlyRejectError",

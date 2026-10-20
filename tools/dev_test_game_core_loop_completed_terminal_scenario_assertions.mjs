@@ -647,7 +647,7 @@ export function completedActionPlayerSurfaceProofArgs({
     expectedPhaseState: "open",
     expectedActorAlive: true,
     expectedActorStatus: "alive",
-    expectedActionState: "disabled:game complete",
+    expectedActionState: "disabled:game-complete",
     expectedStatusText: "game complete",
     expectedPrivateCount: 0,
     expectedPrivateReceipt: false,

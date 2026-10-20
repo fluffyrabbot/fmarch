@@ -227,12 +227,13 @@ function proveBoardSurface() {
     ],
   );
   assert.deepEqual(
-    data.board.games[0].actions.map((action) => [action.id, action.navigation]),
+    data.board.games[0].actions.map((action) => [action.id, action.label]),
     [
-      ["player", "link"],
-      ["public-thread", "link"],
+      ["player", "Play"],
+      ["public-thread", "Read"],
     ],
   );
+  assert.equal(data.board.games[0].relation, "You're playing");
   return {
     activeSurface: data.shell.activeSurface,
     surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
@@ -242,7 +243,7 @@ function proveBoardSurface() {
     })),
     gameActions: data.board.games[0].actions.map((action) => ({
       id: action.id,
-      navigation: action.navigation,
+      label: action.label,
     })),
   };
 }
@@ -291,7 +292,6 @@ async function proveAppShellContract() {
     },
     viewerLabel: "Your account",
     initials: "YA",
-    contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 1,
     capabilityKinds: ["SlotOccupant"],
@@ -1114,7 +1114,7 @@ async function proveConfirmationActionContract() {
       {
         id: "cohost",
         label: "Cohost delegation",
-        authority: "HostOf(game)",
+        authority: ["HostOf"],
         boundary: "Command pipeline",
         boundaryDetail: "/commands AddCohost host-gated by committed game grants",
         commandAction: "add_cohost",
@@ -1135,7 +1135,7 @@ async function proveConfirmationActionContract() {
       {
         id: "recovery-gate",
         label: "Recovery go/no-go",
-        authority: "GlobalAdmin or GlobalMod",
+        authority: ["GlobalAdmin", "GlobalMod"],
         boundary: "Read-only operator proof",
         boundaryDetail: "/operator/proof-runs/go-no-go",
         buttonLabel: "Check gate",
@@ -1379,7 +1379,7 @@ async function proveAdminSurface() {
   assert.equal(audit.items[0].linkTestId, "admin-audit-link-proof-runs");
   assert.equal(audit.items[0].boundaryTestId, "admin-audit-boundary-proof-runs");
   assert.equal(audit.items[0].evidenceTestId, "admin-audit-evidence-proof-runs");
-  assert.equal(audit.items[0].authority, "GlobalAdmin or GlobalMod");
+  assert.deepEqual(audit.items[0].authority, ["GlobalAdmin", "GlobalMod"]);
   assert.equal(audit.items[0].boundary, "Read-only operator proof");
   assert.equal(audit.items[0].boundaryDetail.includes("/operator/proof-runs"), true);
   assertTouchTargets([
@@ -1431,7 +1431,7 @@ async function proveAdminSurface() {
     role: {
       id: "admin",
       activeSurface: data.shell.activeSurface,
-      capability: data.operator.capabilityLabel,
+      capabilityKind: data.operator.capability?.kind ?? "",
       surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
       auditDetailSurfaceHeader: surfaceHeaderSummary(auditDetailData.surfaceHeader),
       surfaces: {
@@ -1610,7 +1610,7 @@ async function provePlayerSurface() {
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId: "main",
     channelLabel: "Main thread",
-    capabilityLabel: "SlotOccupant or ChannelMember(main)",
+    capabilityEvidence: { kind: "SlotOccupant", scope: "slot-7" },
     slotId: "slot-7",
     actorAlive: "unknown",
     actorStatus: "",
@@ -1764,7 +1764,7 @@ async function provePlayerSurface() {
     role: {
       id: "player",
       activeSurface: data.shell.activeSurface,
-      capability: data.player.capabilityLabel,
+      capabilityKind: data.player.capability?.kind ?? "",
       surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
       posture: posture.items.map((item) => ({
         id: item.id,
@@ -1964,10 +1964,10 @@ async function proveModeratorSurface() {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
     summary: "Technical details",
     label: "Technical access",
-    value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
+    value: `HostOf midsummer · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
     principalId: FIXTURE_PRINCIPAL_IDS.hostH,
-    capabilityLabel: "HostOf(midsummer)",
+    capabilityEvidence: { kind: "HostOf", scope: "midsummer" },
     commandEndpoint: "/commands",
   });
   assert.deepEqual(
@@ -2134,7 +2134,7 @@ async function proveModeratorSurface() {
     role: {
       id: "moderator",
       activeSurface: data.shell.activeSurface,
-      capability: data.access.capabilityLabel,
+      capabilityKind: data.access.capability?.kind ?? "",
       surfaceHeader: surfaceHeaderSummary(data.surfaceHeader),
       taskLandmarks: [
         {
@@ -2274,7 +2274,7 @@ function proveAdminConfirmationCoverage({ data, setup, recovery }) {
       returnFocusTestId: item.triggerTestId,
     });
     assert.equal(item.minTouchTargetPx >= 44, true);
-    assert.equal(typeof item.authority, "string");
+    assert.equal(Array.isArray(item.authority), true);
     assert.equal(item.authority.length > 0, true);
     assert.equal(typeof item.boundary, "string");
     assert.equal(item.boundary.length > 0, true);

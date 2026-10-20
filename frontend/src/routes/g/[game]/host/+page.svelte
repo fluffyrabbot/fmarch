@@ -511,7 +511,6 @@
     capability={data.access.capability}
     game={data.game}
     phase={currentPhase}
-    capabilityLabel={data.access.capabilityLabel}
     {liveStatus}
     attentionCount={hostAttentionCount}
   />

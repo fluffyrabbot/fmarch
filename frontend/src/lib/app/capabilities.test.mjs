@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  capabilityLabel,
+  capabilityEvidence,
   normalizeCapabilities,
   resolveSurfaceAccess,
 } from "./capabilities.mjs";
@@ -32,7 +32,12 @@ test("normalizes documented capability vocabulary without ambient roles", () => 
       "SpectatorOf",
     ],
   );
-  assert.equal(capabilityLabel(capabilities[2]), "HostOf(midsummer)");
+  assert.deepEqual(capabilityEvidence(capabilities[2]), { kind: "HostOf", scope: "midsummer" });
+  assert.deepEqual(capabilityEvidence({ kind: "PendingReplacement", game: "midsummer" }), {
+    kind: "PendingReplacement",
+    scope: "midsummer",
+  });
+  assert.deepEqual(capabilityEvidence(null), { kind: "", scope: "" });
 });
 
 test("role surface access is explicit and scoped", () => {
@@ -56,24 +61,24 @@ test("role surface access is explicit and scoped", () => {
       surface: "player",
       game: "midsummer",
       capabilities: [{ kind: "ChannelMember", game: "midsummer", channel: "main" }],
-    }).capabilityLabel,
-    "ChannelMember(midsummer)",
+    }).capability.kind,
+    "ChannelMember",
   );
   assert.equal(
     resolveSurfaceAccess({
       surface: "player",
       game: "midsummer",
       capabilities: [{ kind: "DeadViewer", game: "midsummer" }],
-    }).capabilityLabel,
-    "DeadViewer(midsummer)",
+    }).capability.kind,
+    "DeadViewer",
   );
   assert.equal(
     resolveSurfaceAccess({
       surface: "player",
       game: "midsummer",
       capabilities: [{ kind: "SpectatorOf", game: "midsummer" }],
-    }).capabilityLabel,
-    "SpectatorOf(midsummer)",
+    }).capability.kind,
+    "SpectatorOf",
   );
 });
 

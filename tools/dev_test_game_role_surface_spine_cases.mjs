@@ -34,7 +34,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
     visibleAdminCheckIds: Object.freeze(["start-phase"]),
     readinessDetails: (evidence) => ({
-      capabilityLabel: evidence.capabilityLabel,
+      capabilityKind: evidence.capabilityKind,
       readyCheckIds: evidence.readyCheckIds,
       browserWorkbench: evidence.browserWorkbench,
       setupMutationStatus: evidence.setupMutationStatus,
@@ -52,7 +52,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     targetRow: cohostFeatureSpineTargetRows.cohostConsole,
     visibleAdminCheckIds: Object.freeze(["cohost-console"]),
     readinessDetails: (evidence) => ({
-      capabilityLabel: evidence.capabilityLabel,
+      capabilityKind: evidence.capabilityKind,
       extendDeadlineState: evidence.extendDeadlineState,
       extendDeadlinePrincipal: evidence.extendDeadlinePrincipal,
       hostOnlyRejectError: evidence.hostOnlyRejectError,

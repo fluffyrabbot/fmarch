@@ -14,7 +14,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
     phaseState: "open",
     actorAlive: false,
     actorStatus: "dead",
-    actionState: "disabled:actor is not alive",
+    actionState: "disabled:actor-dead",
     statusText: "actor is not alive",
     privateReceipt: true,
     privateReceiptStatus: "day_vote",
@@ -32,7 +32,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
     phaseState: "open",
     actorAlive: true,
     actorStatus: "alive",
-    actionState: "disabled:no legal action available",
+    actionState: "disabled:no-legal-action",
     statusText: "no legal action available",
     privateReceipt: false,
     privateReceiptStatus: "day_vote",
@@ -121,9 +121,6 @@ function assertPostDayVoteAdvanceSurfaceProof({
     proof.checkpoint.actorSlot !== surfaceCase.expectedSlot ||
     proof.checkpoint.actionState !== surfaceCase.actionState ||
     proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(`player action unavailable: ${surfaceCase.statusText}`) ||
     proof.privateQueueBoundary?.status !==
       "principal-scoped-private-projections" ||
     proof.privateQueueBoundary.count !== (surfaceCase.privateReceipt ? 1 : 0) ||

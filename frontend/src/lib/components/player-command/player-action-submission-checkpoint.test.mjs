@@ -40,12 +40,17 @@ test("player action checkpoint points at the enabled action command", () => {
   assert.equal(checkpoint.root.data.selectedAction, "factional_kill");
   assert.equal(checkpoint.root.data.targetSlots, "slot-2");
   assert.equal(checkpoint.root.data.receiptState, "idle");
+  assert.equal(checkpoint.phase.value, "Night 2");
   assert.equal(checkpoint.target.value, "Slot 2");
+  assert.equal(checkpoint.receipt.value, "Not sent yet");
   assert.equal(
     checkpoint.recovery.value,
-    "Check the current phase before choosing an action.",
+    PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.recoveryCopy,
   );
   assert.equal(checkpoint.status.state, "ack");
+  assert.equal(checkpoint.status.message, "You can choose your night action.");
+  assert.equal("actor" in checkpoint, false);
+  assert.equal("actionState" in checkpoint, false);
 });
 
 test("player action checkpoint fails closed without legal actions", () => {
@@ -62,11 +67,16 @@ test("player action checkpoint fails closed without legal actions", () => {
   });
 
   assert.equal(checkpoint.root.data.phaseState, "locked");
-  assert.equal(checkpoint.root.data.actionState, "disabled:phase locked");
+  assert.equal(checkpoint.root.data.actionState, "disabled:phase-locked");
   assert.equal(checkpoint.root.data.selectedAction, "");
   assert.equal(checkpoint.root.data.receiptState, "reject:PhaseLocked");
   assert.equal(checkpoint.status.state, "pending");
-  assert.match(checkpoint.status.message, /phase locked/);
+  assert.equal(
+    checkpoint.status.message,
+    "Your night action isn't available: the phase is closed.",
+  );
+  assert.equal(checkpoint.receipt.value, "Not accepted");
+  assert.equal(checkpoint.target.value, "No one right now");
 });
 
 test("player action checkpoint keeps pre-phase state explicit", () => {
@@ -83,5 +93,6 @@ test("player action checkpoint keeps pre-phase state explicit", () => {
 
   assert.equal(checkpoint.root.data.phaseId, "");
   assert.equal(checkpoint.root.data.phaseState, "pre-phase");
-  assert.equal(checkpoint.phase.value, "No phase open / pre-phase");
+  assert.equal(checkpoint.phase.value, "Not started");
+  assert.equal(checkpoint.root.data.actionState, "disabled:no-legal-action");
 });

@@ -85,6 +85,20 @@ test("player-action role surface assertion uses the shared family cases", () => 
       }),
     /player action role checkpoint/,
   );
+  assert.throws(
+    () =>
+      assertPlayerActionRoleSurfaceProof({
+        playerRoleSurface: {
+          ...playerRoleSurfaceFixture(),
+          playerActionSubmissionCheckpoint: {
+            ...playerRoleSurfaceFixture().playerActionSubmissionCheckpoint,
+            targetText: "Who you can choose\nslot-3",
+          },
+        },
+        scenarioFamily: family,
+      }),
+    /player action role checkpoint/,
+  );
 });
 
 function playerRoleSurfaceFixture() {
@@ -107,17 +121,11 @@ function playerRoleSurfaceFixture() {
       selectedAction: "factional_kill",
       targetSlots: "slot-3",
       receiptState: "idle",
-      visibleRows: [
-        "phase",
-        "actor",
-        "actionState",
-        "target",
-        "receipt",
-        "recovery",
-      ],
-      targetText: "Selected target\nfactional_kill -> slot-3",
-      recoveryText: "Reject PhaseLocked: refresh command state",
-      statusText: "Player action submission is reachable from this role URL",
+      visibleRows: ["phase", "target", "receipt", "recovery"],
+      targetText: "Who you can choose\nIlya · S3",
+      recoveryText:
+        "If the phase changes\nIf the phase changes first, choose again from the new options.",
+      statusText: "You can choose your night action.",
     },
     playerActionSubmissionClickProof: playerActionSubmissionProof({
       game,

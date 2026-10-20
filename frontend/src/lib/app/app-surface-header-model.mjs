@@ -1,4 +1,5 @@
-import { humanizeCapabilityLabel } from "./presentation-copy.mjs";
+import { capabilityEvidence } from "./capabilities.mjs";
+import { capabilitySentence } from "./presentation-copy.mjs";
 
 export const APP_SURFACE_HEADER_CONTRACT = Object.freeze({
   component: "fm-surface-header",
@@ -15,8 +16,8 @@ export function buildAppSurfaceHeaderViewModel({
   eyebrow,
   title,
   summary = null,
-  capabilityLabel = null,
   capability = null,
+  gameTitle = null,
   capabilityTestId = null,
   liveStatusTestId = null,
   className = APP_SURFACE_HEADER_CONTRACT.defaultClassName,
@@ -39,12 +40,12 @@ export function buildAppSurfaceHeaderViewModel({
     title: heading,
     summary: optionalText(summary),
     capability:
-      capabilityLabel === null || capabilityLabel === undefined
+      capability === null || capability === undefined
         ? Object.freeze({ visible: false })
         : Object.freeze({
             visible: true,
-            ...(capability ? {kind: capability.kind} : {}),
-            label: humanizeCapabilityLabel(requiredText(capabilityLabel, "capabilityLabel")),
+            ...capabilityEvidence(capability),
+            label: capabilitySentence(capability, { gameTitle }),
             testId: capabilityTestId,
             className: APP_SURFACE_HEADER_CONTRACT.capabilityClassName,
             minTouchTargetPx: APP_SURFACE_HEADER_CONTRACT.minTouchTargetPx,

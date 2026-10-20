@@ -139,14 +139,14 @@ export async function runSeededSetupBootstrapScenario({
   const policyCommand = await verifyHostSetupPolicyCommandRoundTrip(setupPage);
   commands.push(policyCommand.enabled, policyCommand.restored);
   commands.push(await startSetupGame(setupPage));
-  const [readinessSummary, setupState, dispatchPlan, capabilityLabel] =
+  const [readinessSummary, setupState, dispatchPlan, capabilityKind] =
     await Promise.all([
       setupPage.getByTestId("host-setup-readiness-summary").innerText(),
       setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
       setupPage.evaluate(
         () => window.__fmarchHostSetupCommandDispatchBridgePlan ?? null,
       ),
-      setupPage.getByTestId("host-setup-capability").innerText(),
+      setupPage.getByTestId("host-setup-capability").getAttribute("data-capability-kind"),
     ]);
   const slotIds = (setupState?.slots ?? []).map((slot) => slot.slotId);
   const roleAssignments = Object.fromEntries(
@@ -180,7 +180,7 @@ export async function runSeededSetupBootstrapScenario({
     roleUrl,
     sessionPrincipalUserId: bootstrapSession.principalId,
     credentialKind: bootstrapSession.credentialKind,
-    capabilityLabel,
+    capabilityKind,
     readinessSummary,
     phaseId: setupState.phase.phaseId,
     commandCount: commands.length,

@@ -11,7 +11,8 @@ test("surface header owns role identity and capability touch metadata", () => {
     eyebrow: "Midsummer Invitational",
     title: "Day 2",
     summary: "Seven votes to hammer. Thread is open.",
-    capabilityLabel: "SlotOccupant(slot-7)",
+    capability: { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
+    gameTitle: "Midsummer Invitational",
     capabilityTestId: "player-capability",
     liveStatusTestId: "player-live-status",
   });
@@ -26,7 +27,9 @@ test("surface header owns role identity and capability touch metadata", () => {
   assert.equal(header.summary, "Seven votes to hammer. Thread is open.");
   assert.deepEqual(header.capability, {
     visible: true,
-    label: "Playing as slot 7",
+    kind: "SlotOccupant",
+    scope: "slot-7",
+    label: "Playing Midsummer Invitational",
     testId: "player-capability",
     className: "fm-capability-pill",
     minTouchTargetPx: 44,
@@ -43,20 +46,22 @@ test("surface header supports admin surfaces without a live transport slot", () 
     surface: "admin",
     eyebrow: "Admin",
     title: "Operations",
-    capabilityLabel: "GlobalAdmin",
+    capability: { kind: "GlobalAdmin" },
     capabilityTestId: "admin-capability",
   });
 
   assert.equal(header.summary, null);
   assert.deepEqual(header.liveStatus, { visible: false });
   assert.equal(header.capability.minTouchTargetPx, 44);
+  assert.equal(header.capability.label, "Site administrator");
+  assert.equal(header.capability.kind, "GlobalAdmin");
 });
 
 test("surface header builder accepts already-built route view models", () => {
   const header = buildAppSurfaceHeaderViewModel({
     surface: "moderator",
     title: "Host console",
-    capabilityLabel: "HostOf(midsummer)",
+    capability: { kind: "HostOf", game: "midsummer" },
     capabilityTestId: "host-console-capability",
     liveStatusTestId: "host-live-status",
   });

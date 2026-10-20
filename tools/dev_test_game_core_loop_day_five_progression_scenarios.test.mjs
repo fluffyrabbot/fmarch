@@ -293,7 +293,7 @@ function staleDayFiveVoteProof({ game, baseRoleUrl }) {
     },
     checkpointReceiptState: "reject:PhaseLocked",
     checkpointPhaseIdAfterReject: "N05",
-    checkpointActionStateAfterReject: "disabled:no legal action available",
+    checkpointActionStateAfterReject: "disabled:no-legal-action",
     checkpointTargetSlotsAfterReject: "",
     recoveryText: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
     receiptCount: 1,

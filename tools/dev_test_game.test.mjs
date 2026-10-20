@@ -11776,7 +11776,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     roleUrl: `http://127.0.0.1:4102/g/${bootstrapGame}/setup`,
     sessionPrincipalUserId: "host_h",
     credentialKind: "account",
-    capabilityLabel: `Hosting ${bootstrapGame}`,
+    capabilityKind: "HostOf",
     readinessSummary: "Started at Day 1",
     phaseId: "D01",
     commandCount: 18,
@@ -11977,7 +11977,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       proof:
         "Host setup role URL opens roster, role, policy, invite, and start recovery surface, then round-trips the post-policy command and restores the seeded policy.",
       roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
-      capabilityLabel: `Hosting ${game}`,
+      capability: { kind: "HostOf", scope: game },
       readinessSummary: "Started at Day 1",
       phaseId: "D01",
       startDisabled: true,
@@ -12150,7 +12150,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     cohostConsole: {
       status: "passed",
       sessionPrincipalUserId: "cohost_c",
-      capabilityLabel: `CohostOf(${game})`,
+      capability: { kind: "CohostOf", scope: game },
       proof: "cohost opened the host console, extended deadline, and rejected host-only resolve",
       extendDeadline: {
         statusMessage: "Ack: stream seqs 41",
@@ -12229,7 +12229,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         principalId: "cohost_c",
         capabilityKinds: ["CohostOf"],
       },
-      capabilityLabel: `CohostOf(${laterPhaseDeadlineGame})`,
+      capability: { kind: "CohostOf", scope: laterPhaseDeadlineGame },
       setupPhase: {
         id: "D02",
         locked: false,
@@ -14044,14 +14044,14 @@ test("session card and markdown include role credential URLs and tokens", async 
               phaseId: "D01",
               phaseState: "open",
               actorSlot: "slot-7",
-              actionState: "disabled:game complete",
+              actionState: "disabled:game-complete",
               receiptState: "reject:GameAlreadyCompleted",
             },
             commandPanelChannelId: "private:mafia_day_chat",
             channelContext: {
               channelId: "private:mafia_day_chat",
               actorSlot: "slot-7",
-              capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+              capability: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
               actorStatus: "alive",
             },
             commandState: {
@@ -14074,14 +14074,14 @@ test("session card and markdown include role credential URLs and tokens", async 
               phaseId: "D01",
               phaseState: "open",
               actorSlot: "slot-7",
-              actionState: "disabled:game complete",
+              actionState: "disabled:game-complete",
               receiptState: "reject:GameAlreadyCompleted",
             },
             commandPanelChannelId: "private:mafia_day_chat",
             channelContext: {
               channelId: "private:mafia_day_chat",
               actorSlot: "slot-7",
-              capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+              capability: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
               actorStatus: "alive",
             },
             commandState: {
@@ -14141,7 +14141,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         principalId: "player-rowan",
         capabilityKinds: [],
-        capabilityLabel: `PendingReplacement(${game})`,
+        capability: { kind: "PendingReplacement", scope: game },
         routeStateText:
           "Replacement invite accepted. Slot authority is pending host replacement; refresh this role URL after the host processes the replacement.",
         commandState: {
@@ -14212,7 +14212,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           actorAlive: true,
           actions: [],
         },
-        capabilityLabel: "SlotOccupant or ChannelMember(main)",
+        capability: { kind: "SlotOccupant", scope: "slot-7" },
         controlCounts: {
           primaryButtons: 3,
           actionButtons: 0,
@@ -14343,7 +14343,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         pendingAfterReject: {
           principalId: "player-rowan",
           capabilityKinds: [],
-          capabilityLabel: `PendingReplacement(${game})`,
+          capability: { kind: "PendingReplacement", scope: game },
           commandState: {
             actorStatus: "pending_replacement",
           },
@@ -14485,7 +14485,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         contextState: {
           actorAlive: "false",
           actorStatus: "replaced",
-          capabilityLabel: "No current SlotOccupant(slot-7)",
+          capabilityKind: "",
         },
         buttonsDisabled: true,
         commandReceipts: [
@@ -14599,7 +14599,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             { kind: "no_lynch", slotId: null, label: "No lynch" },
           ],
         },
-        capabilityLabel: "SlotOccupant or ChannelMember(main)",
+        capability: { kind: "SlotOccupant", scope: "slot-7" },
         stableHistoryVisible: true,
         postStatus: {
           state: "ack",
@@ -14681,7 +14681,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         rowanRoute: {
           channelContextId: "private:mafia_day_chat",
           actorSlot: "slot-7",
-          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+          capability: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
         },
         rowanPost: {
           state: "ack",
@@ -16382,8 +16382,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           channelId: replacementResolvedPrivatePost.channelId,
           actorSlot: replacementResolvedPrivatePost.actorSlot,
           actorStatus: "alive",
-          capabilityLabel:
-            `ChannelMember(${replacementResolvedPrivatePost.channelId})`,
+          capability: { kind: "ChannelMember", scope: replacementResolvedPrivatePost.channelId },
         },
         submitPostBeforeClose: {
           action: replacementResolvedPrivatePost.commandAction,
@@ -16544,8 +16543,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         channelContextBeforeClose: {
           channelId: replacementCompletedPrivatePost.channelId,
           actorSlot: replacementCompletedPrivatePost.actorSlot,
-          capabilityLabel:
-            `ChannelMember(${replacementCompletedPrivatePost.channelId})`,
+          capability: { kind: "ChannelMember", scope: replacementCompletedPrivatePost.channelId },
         },
         submitPostBeforeClose: {
           action: replacementCompletedPrivatePost.commandAction,
@@ -16638,8 +16636,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           reloadChannelContext: {
             channelId: replacementCompletedPrivatePost.channelId,
             actorSlot: replacementCompletedPrivatePost.actorSlot,
-            capabilityLabel:
-              `ChannelMember(${replacementCompletedPrivatePost.channelId})`,
+            capability: { kind: "ChannelMember", scope: replacementCompletedPrivatePost.channelId },
           },
           reloadButtons: [
             { action: "withdraw_vote", disabled: true },
@@ -19359,7 +19356,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     [
       cohostCheck.roleUrl,
-      cohostCheck.capabilityLabel,
+      cohostCheck.capabilityKind,
       cohostCheck.extendDeadlineState,
       cohostCheck.hostOnlyRejectError,
       cohostCheck.phaseAfterRejectId,
@@ -19369,7 +19366,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     ],
     [
       cohostCheck.roleUrl,
-      "CohostOf(<seeded-game>)",
+      "CohostOf",
       "ack",
       "CohostPermissionDenied",
       "D01",
@@ -19512,7 +19509,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         channel: "private:mafia_day_chat",
         staleRejectError: "NotYourSlot",
         staleRouteStatus: 403,
-        rowanCapabilityLabel: "ChannelMember(private:mafia_day_chat)",
+        rowanCapability: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
         rowanPostState: "ack",
       },
       {
@@ -21588,7 +21585,7 @@ function hostSetupProofFixture(game = "game-a") {
       status: "passed",
       proof: "Host setup role URL opens setup recovery surface.",
       roleUrl: `http://127.0.0.1:5173/g/${game}/setup`,
-      capabilityLabel: `Hosting ${game}`,
+      capability: { kind: "HostOf", scope: game },
       readinessSummary: "Started at Day 1",
       phaseId: "D01",
       startDisabled: true,
@@ -22082,7 +22079,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
                 proofBoundary:
                   "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
-                capabilityLabel: "Hosting <seeded-game>",
+                capabilityKind: "HostOf",
                 readyCheckIds: [
                   "game-created",
                   "pack-valid",
@@ -22116,7 +22113,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
           proofBoundary:
             "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and CohostPermissionDenied rejection for policy-denied resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
-          capabilityLabel: "CohostOf(<seeded-game>)",
+          capabilityKind: "CohostOf",
           extendDeadlineState: "ack",
           extendDeadlinePrincipal: "cohost_c",
           hostOnlyRejectError: "CohostPermissionDenied",
@@ -22229,7 +22226,7 @@ function devTestGameReleaseReadinessChecklistFixture({
             channel: "private:mafia_day_chat",
             staleRejectError: "NotYourSlot",
             staleRouteStatus: 403,
-            rowanCapabilityLabel: "ChannelMember(private:mafia_day_chat)",
+            rowanCapability: { kind: "ChannelMember", scope: "private:mafia_day_chat" },
             rowanPostState: "ack",
           },
           receipts: {
@@ -23688,7 +23685,7 @@ function coreLoopAdminProofFixture({
               phase: { phaseId: "D05" },
             },
             checkpointActionStateAfterReject:
-              "disabled:no legal action available",
+              "disabled:no-legal-action",
           },
         },
         dayFiveNoLynchResolutionSurface: {
@@ -23714,7 +23711,7 @@ function coreLoopAdminProofFixture({
               phase: { phaseId: "N05" },
             },
             checkpointActionStateAfterReject:
-              "disabled:no legal action available",
+              "disabled:no-legal-action",
           },
         },
       },
@@ -24213,7 +24210,7 @@ function privateChannelRoleSurfaceFixture() {
     channelAriaCurrent: "page",
     commandPanelChannelId: "private:role_pm:slot-7",
     channelContextChannelId: "private:role_pm:slot-7",
-    channelContextCapabilityLabel: "ChannelMember(private:role_pm:slot-7)",
+    channelContextCapability: { kind: "ChannelMember", scope: "private:role_pm:slot-7" },
     privateQueueBoundary: {
       status: "principal-scoped-private-projections",
       count: 2,
@@ -24334,7 +24331,7 @@ function privateChannelRoleSurfaceFixture() {
       stalePrivatePostBody: "Stale private phase proof post",
       currentThreadText: "Current private:role_pm:slot-7 thread after stale private post reject",
       checkpointPhaseId: "D02",
-      checkpointActionState: "disabled:phase locked",
+      checkpointActionState: "disabled:phase-locked",
       checkpointReceiptState: "reject:PhaseLocked",
       receiptStatusText:
         "Your post was not accepted because the phase is closed. Check the current phase before trying again.",

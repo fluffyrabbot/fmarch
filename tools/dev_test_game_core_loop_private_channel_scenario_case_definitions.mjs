@@ -6,7 +6,7 @@ export function completedPrivateChannelReloadScenario() {
     actorStatus: "alive",
     completedPhaseId: "N05",
     completedPhaseState: "open",
-    completedActionState: "disabled:game complete",
+    completedActionState: "disabled:game-complete",
     completedThreadBody: "Completed private channel remains readable.",
     authoritativeSourceSeq: 921,
     routeBoundary:
@@ -55,7 +55,7 @@ export function stalePrivateChannelPostPhaseLockedScenario() {
     currentThreadBody: "Current private:role_pm:slot-7 thread after stale private post reject",
     expectedPhaseId: "D02",
     expectedLocked: true,
-    expectedActionState: "disabled:phase locked",
+    expectedActionState: "disabled:phase-locked",
     expectedReceiptState: "reject:PhaseLocked",
     expectedReceiptStatusFragment: "reject phaselocked: phase locked",
     routeBoundary:
@@ -136,7 +136,7 @@ export function completedPrivateChannelSnapshot({
     channelContext: {
       channelId: scenario.channelId,
       actorSlot: scenario.actorSlot,
-      capabilityLabel: `ChannelMember(${scenario.channelId})`,
+      capability: { kind: "ChannelMember", scope: scenario.channelId },
       actorStatus: scenario.actorStatus,
     },
     commandState: {

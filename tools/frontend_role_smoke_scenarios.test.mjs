@@ -225,7 +225,7 @@ test("host setup scenario pins mobile stacking and workbench route identity", ()
   assert.equal(Object.isFrozen(hostSetupScenario.slotIds), true);
 });
 
-test("board smoke scenario keeps allowed and blocked navigation explicit", () => {
+test("board smoke scenario renders only the viewer's board actions", () => {
   assert.equal(boardScenario.path, "/");
   assert.equal(boardScenario.surfaceTestId, "board-surface");
   assert.deepEqual(boardScenario.nav, {
@@ -250,12 +250,6 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
       .filter((action) => action.navigation === "link")
       .map((action) => action.hrefPath),
     ["/g/midsummer", "/games/midsummer", "/games/solstice"],
-  );
-  assert.deepEqual(
-    boardScenario.actions
-      .filter((action) => action.navigation === "blocked")
-      .map((action) => [action.testId, action.blockedReason]),
-    [],
   );
   assertFocusScenario(boardScenario.focus, "board");
   assertFocusMatchesNav(boardScenario.focus, boardScenario.nav, "board");

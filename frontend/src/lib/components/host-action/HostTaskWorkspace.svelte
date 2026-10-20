@@ -215,7 +215,8 @@
       data-testid={view.commandContext.testId}
       data-game-id={view.commandContext.gameId}
       data-principal-id={view.commandContext.principalId}
-      data-capability-label={view.commandContext.capabilityLabel}
+      data-capability-kind={view.commandContext.capabilityEvidence.kind}
+      data-capability-scope={view.commandContext.capabilityEvidence.scope}
       data-command-endpoint={view.commandContext.commandEndpoint}
     >
       <summary>{view.commandContext.summary}</summary>

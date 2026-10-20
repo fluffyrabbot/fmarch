@@ -390,6 +390,7 @@ test("normalizes player command state into route action configs", () => {
     normalizePlayerCommandState(
       {
         game: "midsummer",
+        title: "Midsummer Invitational",
         actor_slot: "slot_4",
         actor_alive: false,
         actor_status: "dead",
@@ -452,6 +453,7 @@ test("normalizes player command state into route action configs", () => {
     ),
     {
       game: "midsummer",
+      title: "Midsummer Invitational",
       actorSlot: "slot_4",
       actorAlive: false,
       actorStatus: "dead",
@@ -554,7 +556,7 @@ test("admin cold-load maps operator proof status when available", async () => {
       id: "domain-ci",
       label: "Domain CI",
       status: "green",
-      authority: "GlobalAdmin",
+      authority: ["GlobalAdmin"],
       boundary: "Machine proof",
       boundaryDetail: "/operator/proof-runs/domain-ci",
       href: "/games/midsummer/operator/proof-runs",
@@ -589,7 +591,7 @@ test("admin cold-load maps real operator proof status families", async () => {
       id: "domain-ci-no-postgres",
       label: "domain-ci-no-postgres",
       status: "trusted",
-      authority: "GlobalAdmin or GlobalMod",
+      authority: ["GlobalAdmin", "GlobalMod"],
       boundary: "Read-only operator proof",
       boundaryDetail: "/operator/proof-runs machine-readable report",
       href: "/games/midsummer/operator/proof-runs",
