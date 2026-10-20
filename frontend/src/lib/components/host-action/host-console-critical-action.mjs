@@ -6,8 +6,8 @@ import {
 } from "../../principal-id.mjs";
 
 export const EXTEND_DEADLINE_PRESETS = Object.freeze([
-  Object.freeze({ id: "extend_deadline_24h", label: "Extend +24h", hours: 24 }),
-  Object.freeze({ id: "extend_deadline_48h", label: "Extend +48h", hours: 48 }),
+  Object.freeze({ id: "extend_deadline_24h", label: "Extend 24h", hours: 24 }),
+  Object.freeze({ id: "extend_deadline_48h", label: "Extend 48h", hours: 48 }),
 ]);
 
 const HOST_ACTION_FIXTURE_DEADLINE_SECONDS = 1781841600;
@@ -138,12 +138,13 @@ function buildExtendDeadlineActions(gameId, phase, nowSeconds) {
   return Object.freeze([
     freezeHostAction({
       id: "extend_deadline",
-      label: `${verb} deadline`,
+      label: "Set time…",
       objectLabel: target.objectLabel,
       outcomeLabel: `${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)}`,
       confirmationText:
         `${verb} ${target.objectLabel}: ${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)} for ${target.objectLabel}.`,
-      irreversible: true,
+      requiresConfirmation: true,
+      irreversible: false,
       payload: {
         kind: "extend_deadline",
         gameId,
@@ -169,7 +170,7 @@ function buildExtendDeadlinePresetAction(gameId, target, preset) {
     objectLabel: target.objectLabel,
     outcomeLabel,
     confirmationText:
-      `${verb} ${target.objectLabel} by ${preset.hours} hours: ${outcomeLabel} for ${target.objectLabel}.`,
+      `${target.objectLabel}: ${outcomeLabel}.`,
     requiresConfirmation: true,
     payload: {
       kind: "extend_deadline",

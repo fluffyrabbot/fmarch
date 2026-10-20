@@ -1661,15 +1661,9 @@ async function proveDayThreePlayerVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = page.getByTestId("player-command-receipt-submit_vote");
-    await voteReceipt.waitFor({ state: "visible", timeout: 15000 });
-    const receiptRefreshKeys = await voteReceipt.getAttribute(
-      "data-command-refresh-keys",
-    );
-    const receiptCount = Number.parseInt(
-      await page.getByTestId("player-command-receipt-count").innerText(),
-      10,
-    );
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
     const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2413,17 +2407,9 @@ async function proveDayFourNoLynchVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = page.getByTestId(
-      "player-command-receipt-submit_vote:no_lynch",
-    );
-    await voteReceipt.waitFor({ state: "visible", timeout: 15000 });
-    const receiptRefreshKeys = await voteReceipt.getAttribute(
-      "data-command-refresh-keys",
-    );
-    const receiptCount = Number.parseInt(
-      await page.getByTestId("player-command-receipt-count").innerText(),
-      10,
-    );
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
     const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2629,17 +2615,9 @@ async function proveDayFiveNoLynchVoteSubmission({
     await currentVote.waitFor({ state: "visible", timeout: 15000 });
     const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
     const currentVoteText = await currentVote.innerText();
-    const voteReceipt = page.getByTestId(
-      "player-command-receipt-submit_vote:no_lynch",
-    );
-    await voteReceipt.waitFor({ state: "visible", timeout: 15000 });
-    const receiptRefreshKeys = await voteReceipt.getAttribute(
-      "data-command-refresh-keys",
-    );
-    const receiptCount = Number.parseInt(
-      await page.getByTestId("player-command-receipt-count").innerText(),
-      10,
-    );
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful vote retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
+    const receiptCount = receipts.length;
     const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -5034,9 +5012,7 @@ async function collectPlayerStaleCommandProof({
   const recoveryText = await page
     .getByTestId("player-action-submission-recovery")
     .innerText();
-  const receiptCountText = await page
-    .getByTestId("player-command-receipt-count")
-    .innerText();
+  const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const command = commandRequests.at(-1)?.[commandSelector] ?? null;
   return {
@@ -5396,9 +5372,7 @@ async function provePlayerActionInvalidRecovery({
     const receiptState = await checkpoint.getAttribute("data-receipt-state");
     const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
     const targetSlotsAfterReject = await checkpoint.getAttribute("data-target-slots");
-    const receiptCountText = await page
-      .getByTestId("player-command-receipt-count")
-      .innerText();
+    const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
     const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -8338,9 +8312,7 @@ async function provePlayerActionSubmissionClick({
     const checkpoint = await revealPlayerActionSubmissionCheckpoint(page);
   const receiptState = await checkpoint.getAttribute("data-receipt-state");
   const actionStateAfterAck = await checkpoint.getAttribute("data-action-state");
-  const receiptCountText = await page
-    .getByTestId("player-command-receipt-count")
-    .innerText();
+  const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
   return {
@@ -8449,17 +8421,12 @@ async function provePrivateChannelRoleSurface({
     );
     const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
     const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
-    const receiptCountText = await page
-      .getByTestId("player-command-receipt-count")
-      .innerText();
+    const receiptCountText = String((await page.evaluate(() => window.__fmarchPlayerCommandReceipts)).length);
     const receiptStatusText = await page
       .getByTestId("player-command-status")
       .innerText();
-    const submitPostReceipt = page.getByTestId("player-command-receipt-submit_post");
-    await submitPostReceipt.waitFor({ state: "visible", timeout: 15000 });
-    const receiptRefreshKeys = await submitPostReceipt.getAttribute(
-      "data-command-refresh-keys",
-    );
+    if (await page.getByTestId("player-feedback").count() !== 0) throw new Error("Successful post retained visible feedback");
+    const receiptRefreshKeys = commandStatus.commandTrace?.projectionRefreshKeys?.join(",") ?? "";
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("private channel role proof leaked an invite URL token");
@@ -8599,7 +8566,7 @@ async function provePrivateChannelInvalidActionRecovery({
       { timeout: 15000 },
     );
     const invalidActionReceipt = page.getByTestId(
-      `player-command-receipt-${scenario.clickedAction}`,
+      "player-feedback",
     );
     await invalidActionReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
@@ -8717,7 +8684,7 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
       null,
       { timeout: 15000 },
     );
-    const stalePostReceipt = page.getByTestId("player-command-receipt-submit_post");
+    const stalePostReceipt = page.getByTestId("player-feedback");
     await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
     const bridgePlan = await page.evaluate(
@@ -8969,7 +8936,7 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       { timeout: 15000 },
     );
     const stalePostReceipt = page.getByTestId(
-      `player-command-receipt-${scenario.clickedAction}`,
+      "player-feedback",
     );
     await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);

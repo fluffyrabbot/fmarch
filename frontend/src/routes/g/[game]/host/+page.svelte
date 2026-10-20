@@ -122,9 +122,7 @@
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
-  $: hostAttentionCount = hostTasks.length + moderatorActionGroups.filter(
-    (group) => ["deadline", "replacement"].includes(group.id) && group.actions.length > 0,
-  ).length;
+  $: hostAttentionCount = hostTasks.length + (moderatorActionGroups.some(group => group.id === 'replacement' && group.actions.length > 0) ? 1 : 0);
   $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: currentPhase,
@@ -497,6 +495,8 @@
   data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
 >
   <HostConsoleBar
+    shell={data.shell}
+    capability={data.access.capability}
     game={data.game}
     phase={currentPhase}
     capabilityLabel={data.access.capabilityLabel}
@@ -566,9 +566,10 @@
       <details
         class="host-console-critical-path__drawer"
         data-testid="host-supporting-evidence"
+        data-legibility="technical"
       >
         <summary>
-          <span>Evidence and activity</span>
+          <span>Technical details</span>
           <small>Receipts, game state, vote record, and lifecycle checks</small>
         </summary>
         <div class="host-console-critical-path__drawer-content">

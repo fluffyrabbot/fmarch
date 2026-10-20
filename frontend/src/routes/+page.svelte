@@ -20,7 +20,7 @@
 
 {#snippet boardSurface()}
   <main class="fm-surface" data-testid={BOARD_ROUTE_CONTRACT.surfaceTestId}>
-    <AppSurfaceHeader header={data.surfaceHeader} />
+    <h1>Games</h1>
 
     {#if boardForcedRouteState}
       <RouteState view={boardForcedRouteState} />
@@ -56,7 +56,11 @@
           <article class="fm-panel" data-testid={`game-card-${game.id}`}>
             <p class="fm-eyebrow">{game.statusLabel}</p>
             <h2>{game.title}</h2>
-            <p>{game.phaseLabel}</p>
+            <p>{game.phaseLabel}{#if game.deadline} · Deadline <time datetime={game.deadline}>{new Date(game.deadline).toLocaleString()}</time>{/if}</p>
+            {#if game.seatsTotal !== null}<p>{game.seatsFilled} of {game.seatsTotal} seats filled</p>{/if}
+            {#if game.hostName}<p>Hosted by {game.hostName}</p>{/if}
+            <p>{game.signupLabel}</p>
+            {#if game.relation}<p>{game.relation}</p>{/if}
             <div class="fm-touch-row">
               {#each game.actions as action}
                 {#if action.navigation === "link"}

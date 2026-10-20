@@ -108,6 +108,28 @@ pub(super) async fn fill_game_origins(
     if ids.is_empty() {
         return Ok(());
     }
+    let overview = sqlx::query(r#"
+        SELECT game.game_id, phase.deadline,
+          (SELECT count(*) FROM slot_state AS seat WHERE seat.game_id = game.game_id) AS seats_total,
+          (SELECT count(*) FROM slot_occupancy_epoch AS occupied WHERE occupied.game_id = game.game_id AND occupied.ended_seq IS NULL) AS seats_filled,
+          (SELECT profile.display_name FROM game_authority AS authority
+             JOIN member_profile AS owner ON owner.active_principal_id = authority.principal_id AND owner.lifecycle = 'active'
+             JOIN public_profile AS profile ON profile.profile_id = owner.profile_id
+             WHERE authority.game_id = game.game_id AND authority.role = 'host' ORDER BY profile.handle LIMIT 1) AS host_name
+        FROM game_index AS game LEFT JOIN phase_state AS phase ON phase.game_id = game.game_id
+        WHERE game.game_id = ANY($1)
+    "#).bind(&ids).fetch_all(pool).await?;
+    for row in overview {
+        let id: Uuid = row.get("game_id");
+        if let Some(game) = games.iter_mut().find(|game| game.game_id == id) {
+            game.overview = crate::GameOverview {
+                deadline: row.get("deadline"),
+                seats_total: row.get("seats_total"),
+                seats_filled: row.get("seats_filled"),
+                host_name: row.get("host_name"),
+            };
+        }
+    }
     let rows = sqlx::query(
         r#"
         SELECT game.game_id, topic.topic_id, topic.title, surface.href FROM game_index AS game

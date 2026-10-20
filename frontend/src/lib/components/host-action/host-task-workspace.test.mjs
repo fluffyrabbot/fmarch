@@ -89,9 +89,9 @@ test("host task workspace prioritizes decisions and selects one canvas", () => {
   assert.equal(view.tasks[1].kind, "engine_host_prompt");
   assert.equal(view.tasks[1].sourceId, "prompt-1");
   assert.equal(view.tasks[1].actions.length, 1);
-  assert.equal(view.selectedTaskId, "deadline");
-  assert.equal(view.selectedTask.consequence, "move the deadline");
-  assert.equal(view.queue.attentionCount, 2);
+  assert.equal(view.selectedTaskId, "engine-host-prompt:prompt-1");
+  assert.equal(view.selectedTask.consequence, "Your choice will resolve this decision.");
+  assert.equal(view.queue.attentionCount, 1);
   assert.equal(view.commandContext.value, `HostOf(game) · @${HOST_PRINCIPAL_ID}`);
 });
 

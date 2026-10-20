@@ -22,6 +22,8 @@ pub const DEFAULT_SHIPPED_PACK: &str = "default_open";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
+    #[serde(default)]
+    pub host_prompt_kinds: BTreeMap<String, HostPromptPresentation>,
     pub name: String,
     pub version: u32,
     pub ir_version: u16,
@@ -1923,4 +1925,10 @@ pub enum WinFamily {
     SelfLynchIndependent,
     SurvivalIndependent,
     WinTriggeredActions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostPromptPresentation {
+    pub label: String,
+    pub description: String,
 }

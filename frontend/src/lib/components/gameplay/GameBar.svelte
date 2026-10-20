@@ -1,4 +1,6 @@
 <script>
+  import AccountMenu from "$lib/app/AccountMenu.svelte";
+  export let shell = null;
   import { onMount } from "svelte";
   import { deadlineCountdown } from "$lib/app/deadline-countdown.mjs";
 
@@ -33,7 +35,7 @@
   <div class="game-bar__identity">
     <span>{game.label}</span>
     <h1>{phase.label}</h1>
-    <span class="fm-sr-only" data-testid="player-capability">{player.capabilityLabel}</span>
+    <span class="fm-sr-only" data-testid="player-capability" data-capability-kind={player.capability?.kind}>Your game access</span>
   </div>
   <div class="game-bar__facts" aria-label="Current game state">
     {#if phase.deadlineLabel}
@@ -70,6 +72,7 @@
       {liveStatus.state === "connecting" ? "Reconnecting…" : liveStatus.message}
     </p>
   {/if}
+  {#if shell}<AccountMenu {shell} includeNavigation />{/if}
   <slot />
 </header>
 
@@ -80,7 +83,7 @@
     border-block-end: 1px solid var(--fm-line);
     display: grid;
     gap: 16px;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
     position: sticky;
     top: var(--fm-app-topbar-block-size);
     margin-block-end: 8px;
@@ -163,7 +166,7 @@
   @media (max-width: 680px) {
     .game-bar {
       gap: 8px;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       min-block-size: 60px;
       padding-block: 6px;
 

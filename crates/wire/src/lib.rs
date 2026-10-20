@@ -2097,6 +2097,8 @@ pub enum HostPromptPublicResolution {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HostPromptDelta {
+    pub label: String,
+    pub description: String,
     pub game: Uuid,
     pub phase_id: PhaseId,
     pub event_index: i32,
@@ -2160,6 +2162,8 @@ impl TryFrom<projections::HostPromptRow> for HostPromptDelta {
     fn try_from(row: projections::HostPromptRow) -> Result<Self, Self::Error> {
         const KIND: &str = "HostPrompt";
         Ok(HostPromptDelta {
+            label: "Host decision".into(),
+            description: "Choose how to resolve this decision.".into(),
             game: row.game_id,
             phase_id: row.phase_id,
             event_index: row.event_index,
@@ -2849,6 +2853,10 @@ pub struct SpawnedGame {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GameIndexEntry {
+    pub deadline: Option<i64>,
+    pub seats_filled: i64,
+    pub seats_total: i64,
+    pub host_name: Option<String>,
     pub game: Uuid,
     pub pack: String,
     pub status: String,
@@ -2867,6 +2875,10 @@ pub struct GameIndexPage {
 impl From<projections::GameIndexRow> for GameIndexEntry {
     fn from(row: projections::GameIndexRow) -> Self {
         GameIndexEntry {
+            deadline: row.overview.deadline,
+            seats_filled: row.overview.seats_filled,
+            seats_total: row.overview.seats_total,
+            host_name: row.overview.host_name,
             game: row.game_id,
             pack: row.pack_ref.key,
             status: row.status,
@@ -3855,10 +3867,11 @@ pub mod typescript {
         DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionPostMention,
         DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster, EmbedProvider,
-        EmbedSnapshot, GameIndexEntry, GameIndexPage, GameOriginTopic, GameThreadAuthor, Hello,
-        HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
-        HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
-        HostConsoleRosterDelta, HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
+        EmbedSnapshot, GameIndexEntry, GameIndexPage, GameOriginTopic, GameRosterName,
+        GameRosterOccupancy, GameRosterSeat, GameThreadAuthor, Hello, HostConsoleAuthorityDelta,
+        HostConsoleAuthorityKind, HostConsoleDayEventsDelta, HostConsoleHeaderDelta,
+        HostConsolePhaseStateDelta, HostConsoleRosterDelta, HostConsoleSchedulerDelta,
+        HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
         HostConsoleTasksDelta, HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta,
         HostConsoleThreadPostsDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
         HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution,
@@ -3873,7 +3886,7 @@ pub mod typescript {
         PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
         PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
         PrivatePostCitationBatch, ProfileEditor, ProjectionDelta, PublicContentRef,
-        GameRosterName, GameRosterOccupancy, GameRosterSeat, PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
+        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
         PublicPostCitationBatch, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
         PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
         Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
@@ -4272,10 +4285,12 @@ mod host_console_patch_tests {
         let patches = host_console_patches(Some(&previous), &current);
         assert_eq!(
             patches,
-            vec![ProjectionDelta::HostConsoleRosterChanged(HostConsoleRosterDelta {
-                game,
-                roster: current.roster.clone(),
-            })]
+            vec![ProjectionDelta::HostConsoleRosterChanged(
+                HostConsoleRosterDelta {
+                    game,
+                    roster: current.roster.clone(),
+                }
+            )]
         );
         for patch in &patches {
             validate_live_projection_payload(patch).expect("roster patch is canonical");

@@ -18,6 +18,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
     buildAdminReadinessStripViewModel({
       operator: {
         principalId: "admin_a",
+        capability: {kind: "GlobalAdmin"},
         capabilityLabel: "GlobalAdmin",
       },
       gameSetup: [
@@ -51,7 +52,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
       {
         id: "authority",
         value: "Site administrator",
-        detail: "Signed in as @admin_a",
+        detail: "Signed in",
         status: {
           state: "ack",
           message: "Administrator access confirmed",
@@ -112,7 +113,7 @@ test("admin readiness strip fails closed when authority or proof data is missing
       ],
     }).items.map((item) => [item.id, item.status.state, item.value, item.detail]),
     [
-      ["authority", "reject", "Hosting midsummer", "Signed in as @host_h"],
+      ["authority", "reject", "Hosting midsummer", "Signed in"],
       ["setup", "reject", "0 available actions", "None"],
       [
         "audit",

@@ -54,16 +54,17 @@ export async function buildHostSetupRouteData({
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "host-setup",
-      eyebrow: gameId,
+      eyebrow: setupState.originTopic?.title ?? setupState.pack.name,
       title: "Host setup",
       summary: "Roster, roles, post policy, invites, and start readiness.",
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
     game: Object.freeze({
       id: gameId,
-      label: gameId,
+      label: setupState.originTopic?.title ?? setupState.pack.name,
     }),
     session: Object.freeze({
       principalId: principal,

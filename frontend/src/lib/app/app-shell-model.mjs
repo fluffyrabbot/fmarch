@@ -25,7 +25,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 64,
   stickyRailGapPx: 16,
-  surfaceOrder: Object.freeze(["board", "community", "search", "inbox", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "inbox", "search", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -79,7 +79,7 @@ export function buildAppShell({
   const surfaces = Object.freeze([
     surfaceItem({
       id: "board",
-      label: "Board",
+      label: "Games",
       href: "/",
       active: activeSurface === "board",
       allowed: true,
@@ -147,7 +147,7 @@ export function buildAppShell({
     phaseId: canonicalPhaseId(phase?.id),
     session,
     sessionLabel: session.viewerLabel,
-    surfaces,
+    surfaces: Object.freeze([...surfaces].sort((a,b) => ["board","community","inbox","search","player","moderator","admin"].indexOf(a.id) - ["board","community","inbox","search","player","moderator","admin"].indexOf(b.id))),
   });
 }
 
@@ -264,7 +264,12 @@ function normalizeBoardGameIndexEntry(entry) {
   return Object.freeze({
     id,
     pack,
-    title: `${packLabel(pack)} game`,
+    title: entry.origin_topic?.title ?? `${packLabel(pack)} game`,
+    deadline: Number.isFinite(entry.deadline) ? new Date(entry.deadline * 1000).toISOString() : null,
+    seatsFilled: Number.isInteger(entry.seats_filled) ? entry.seats_filled : null,
+    seatsTotal: Number.isInteger(entry.seats_total) ? entry.seats_total : null,
+    hostName: entry.host_name ?? null,
+    signupLabel: status === 'completed' ? 'Signups closed' : phaseId ? 'Game in progress' : 'Preparing to start', 
     status,
     statusLabel: status === "active" ? "Active" : "Completed",
     phaseId,
@@ -277,31 +282,16 @@ function normalizeBoardGameIndexEntry(entry) {
   });
 }
 
-function boardGameCard({ entry, principalId, capabilities }) {
-  const gameShell = buildAppShell({
-    game: entry.id,
-    activeSurface: "board",
-    principalId,
-    capabilities,
-  });
-  return Object.freeze({
-    ...entry,
-    actions: Object.freeze([
-      Object.freeze({
-        id: "public-thread",
-        label: "View public thread",
-        href: `/games/${encodeURIComponent(entry.id)}`,
-        allowed: true,
-        navigation: "link",
-        ariaDisabled: undefined,
-        blockedReason: null,
-        blockedLabel: null,
-        capabilityLabel: "Public",
-        className: "fm-touch-button",
-      }),
-      boardAction(gameShell, { surface: "player", label: "Play" }),
-      boardAction(gameShell, { surface: "moderator", label: "Moderate" }),
-    ]),
+function boardGameCard({ entry, capabilities }) {
+  const scoped = normalizeCapabilities(capabilities).filter(cap => cap.game === entry.id);
+  const playing = scoped.some(cap => cap.kind === 'SlotOccupant');
+  const hosting = scoped.some(cap => ['HostOf', 'CohostOf'].includes(cap.kind));
+  const actions = [];
+  if (playing) actions.push({id: 'player', label: 'Play', href: `/g/${encodeURIComponent(entry.id)}`});
+  if (hosting) actions.push({id: 'moderator', label: 'Host', href: `/g/${encodeURIComponent(entry.id)}/host`});
+  actions.push({id: 'public-thread', label: 'Read', href: `/games/${encodeURIComponent(entry.id)}`});
+  return Object.freeze({...entry, relation: playing ? "You're playing" : hosting ? "You're hosting" : null,
+    actions: Object.freeze(actions.map((action,index) => Object.freeze({...action, allowed: true, navigation: 'link', className: index === 0 ? 'fm-touch-button' : 'fm-touch-button fm-touch-button--secondary'}))),
   });
 }
 
@@ -454,6 +444,7 @@ function surfaceSummary({ surface, game, capabilities }) {
   const access = resolveSurfaceAccess({ surface, game, capabilities });
   return {
     allowed: access.allowed,
+    capability: access.capability,
     capabilityLabel: access.capabilityLabel ?? access.required.join(" or "),
   };
 }

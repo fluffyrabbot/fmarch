@@ -56,9 +56,9 @@ test("board load opts into the root-owned shell with an API-backed public index"
     ],
   );
   assert.equal(data.board.games[0].actions[0].href, `/games/${FIRST_GAME}`);
-  assert.equal(data.board.games[0].actions[1].href, `/g/${FIRST_GAME}`);
+  assert.equal(data.board.games[0].actions.length, 1);
   assert.equal(data.board.games[1].actions[0].navigation, "link");
-  assert.equal(data.board.games[1].actions[1].navigation, "blocked");
+  assert.equal(data.board.games[1].actions.length, 1);
   assert.equal(data.board.olderHref, null);
   assert.equal(data.routeState, null);
 });

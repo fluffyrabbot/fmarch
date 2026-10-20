@@ -2066,13 +2066,15 @@ export async function buildAdminRouteData({
         title: "Operations",
         summary:
           "Set up games, manage access, and review system health.",
-        capabilityLabel: access.capabilityLabel,
+        capability: access.capability,
+      capabilityLabel: access.capabilityLabel,
         capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
       }),
       access,
       operator: Object.freeze({
         principalId,
-        capabilityLabel: access.capabilityLabel,
+        capability: access.capability,
+      capabilityLabel: access.capabilityLabel,
       }),
       audit: Object.freeze([]),
     });
@@ -2101,12 +2103,14 @@ export async function buildAdminRouteData({
       title: "Operations",
       summary:
         "Set up games, manage access, and review system health.",
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: ADMIN_ROUTE_CONTRACT.capabilityTestId,
     }),
     access,
     operator: Object.freeze({
       principalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
     }),
     command: Object.freeze({

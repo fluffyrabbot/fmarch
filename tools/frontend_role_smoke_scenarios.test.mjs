@@ -240,32 +240,22 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
   assert.deepEqual(
     boardScenario.actions.map((action) => [action.testId, action.navigation]),
     [
-      ["game-action-midsummer-public-thread", "link"],
       ["game-action-midsummer-player", "link"],
-      ["game-action-midsummer-moderator", "blocked"],
+      ["game-action-midsummer-public-thread", "link"],
       ["game-action-solstice-public-thread", "link"],
-      ["game-action-solstice-player", "blocked"],
-      ["game-action-solstice-moderator", "blocked"],
     ],
   );
   assert.deepEqual(
     boardScenario.actions
       .filter((action) => action.navigation === "link")
       .map((action) => action.hrefPath),
-    ["/games/midsummer", "/g/midsummer", "/games/solstice"],
+    ["/g/midsummer", "/games/midsummer", "/games/solstice"],
   );
   assert.deepEqual(
     boardScenario.actions
       .filter((action) => action.navigation === "blocked")
       .map((action) => [action.testId, action.blockedReason]),
-    [
-      [
-        "game-action-midsummer-moderator",
-        "Requires GlobalAdmin(midsummer) or GlobalMod(midsummer) or HostOf(midsummer) or CohostOf(midsummer)",
-      ],
-      ["game-action-solstice-player", "Requires SlotOccupant(solstice) or ChannelMember(solstice) or DeadViewer(solstice) or SpectatorOf(solstice)"],
-      ["game-action-solstice-moderator", "Requires GlobalAdmin(solstice) or GlobalMod(solstice) or HostOf(solstice) or CohostOf(solstice)"],
-    ],
+    [],
   );
   assertFocusScenario(boardScenario.focus, "board");
   assertFocusMatchesNav(boardScenario.focus, boardScenario.nav, "board");

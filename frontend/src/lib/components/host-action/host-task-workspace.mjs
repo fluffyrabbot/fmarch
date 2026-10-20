@@ -66,9 +66,11 @@ export function buildHostTaskWorkspaceViewModel({
   );
   const tasks = [...groupTasks, ...instanceTasks]
     .sort((left, right) => left.rank - right.rank || left.sourceIndex - right.sourceIndex);
+  const decisions = tasks.filter(task => task.kind === 'engine_host_prompt' || task.kind === 'day_event_resolve' || task.state === 'interrupted' || (task.kind === 'replacement' && task.actions.length > 0));
+  const tools = tasks.filter(task => !decisions.includes(task));
   const resolvedSelectedId = tasks.some((task) => task.id === selectedTaskId)
     ? selectedTaskId
-    : tasks[0]?.id ?? null;
+    : decisions[0]?.id ?? null;
   const selectedTask = tasks.find((task) => task.id === resolvedSelectedId) ?? null;
 
   return Object.freeze({
@@ -86,13 +88,15 @@ export function buildHostTaskWorkspaceViewModel({
     queue: Object.freeze({
       testId: HOST_TASK_WORKSPACE_CONTRACT.queueTestId,
       label: "Host queue",
-      summary: taskSummary(tasks),
-      attentionCount: tasks.filter((task) => task.rank < 10).length,
+      summary: decisions.length ? taskSummary(decisions) : "Nothing needs you right now",
+      attentionCount: decisions.length,
     }),
     canvas: Object.freeze({
       testId: HOST_TASK_WORKSPACE_CONTRACT.canvasTestId,
     }),
     tasks: Object.freeze(tasks),
+    decisions: Object.freeze(decisions),
+    tools: Object.freeze(tools),
     selectedTaskId: resolvedSelectedId,
     selectedTask,
     commandContext: buildCommandContext(commandContext),
@@ -195,8 +199,8 @@ function buildHostTaskInstance({
       prompt?.label ??
       dayEvent?.label ??
       (dayEventDecision ? "DayEvent decision" : "Host decision"),
-    intent: task.intent,
-    consequence: blockedReason ?? task.consequence,
+    intent: prompt?.value ?? task.intent,
+    consequence: blockedReason ?? (prompt ? "Your choice will resolve this decision." : task.consequence),
     meta:
       dayEvent?.meta ??
       [phaseLabelFromId(task.phaseId), task.subjectSlot].filter(Boolean).join(" · "),
@@ -380,7 +384,7 @@ function buildCommandContext(commandContext) {
   const capabilityLabel = String(commandContext.capabilityLabel ?? "HostOf(game)");
   return Object.freeze({
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${principalId}`,
+    summary: "Technical details",
     label: "Technical access",
     value: `${capabilityLabel} · @${principalId}`,
     gameId,

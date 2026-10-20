@@ -400,7 +400,7 @@ try {
         viewport,
       });
       await setDisclosureState(page, role.expandBeforeChecks, true);
-      const capability = await page.getByTestId(role.capabilityTestId).innerText();
+      const capability = await page.getByTestId(role.capabilityTestId).getAttribute("data-capability-kind");
       const legibility = await captureLegibility(page, { surface: role.id });
       reportLegibility(`${role.id} ${viewport.name}`, legibility);
       const linkClickProofs = [];

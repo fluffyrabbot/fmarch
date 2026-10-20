@@ -27,7 +27,7 @@
       <span
         class={view.capability.className}
         data-testid={view.capability.testId}
-        data-capability={view.capability.label}
+        data-capability-kind={view.capability.kind}
         data-min-touch-target-px={view.capability.minTouchTargetPx}
       >
         {view.capability.label}

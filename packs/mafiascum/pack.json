@@ -1,4 +1,14 @@
 {
+  "host_prompt_kinds": {
+    "revote": {
+      "label": "Choose the next vote",
+      "description": "Decide whether to run another vote or proceed to night."
+    },
+    "skip_next_day": {
+      "label": "Skip the next day?",
+      "description": "A Beloved Princess died. Decide whether the next day should be skipped."
+    }
+  },
   "name": "mafiascum",
   "version": 1,
   "ir_version": 68,

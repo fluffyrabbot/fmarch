@@ -167,6 +167,25 @@ pub fn validate_pack_validated(
     let document = pack;
     let pack: &Pack = &document;
     let mut issues = Vec::new();
+    let mut prompt_kinds: BTreeSet<&str> = pack
+        .day_vote_prompt_policies
+        .iter()
+        .map(|policy| policy.prompt_kind.as_str())
+        .collect();
+    if pack.beloved_princess_policy.enabled {
+        prompt_kinds.insert(&pack.beloved_princess_policy.prompt_kind);
+    }
+    for kind in prompt_kinds {
+        if !pack.host_prompt_kinds.get(kind).is_some_and(|text| {
+            !text.label.trim().is_empty() && !text.description.trim().is_empty()
+        }) {
+            issue(
+                &mut issues,
+                format!("host_prompt_kinds.{kind}"),
+                "host prompt kinds require a label and description",
+            );
+        }
+    }
 
     if pack.version != SUPPORTED_PACK_VERSION {
         issue(

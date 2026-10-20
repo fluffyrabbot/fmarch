@@ -1009,21 +1009,22 @@
 
 {#if playerForcedRouteState}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
-      {player.capabilityLabel}
+    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId} data-capability-kind={player.capability?.kind}>
+      Your game access
     </span>
     <RouteState view={playerForcedRouteState} />
   </main>
 {:else if playerSurfaceEmpty}
   <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId}>
-      {player.capabilityLabel}
+    <span class="fm-sr-only" data-testid={PLAYER_ROUTE_CONTRACT.capabilityTestId} data-capability-kind={player.capability?.kind}>
+      Your game access
     </span>
     <RouteState view={playerEmptyState} />
   </main>
 {:else}
   <GameFrame>
     <GameBar
+        shell={data.shell}
       slot="bar"
       game={data.game}
       {phase}

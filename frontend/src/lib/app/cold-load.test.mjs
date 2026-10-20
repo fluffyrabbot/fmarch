@@ -665,8 +665,8 @@ test("host prompt cold-load infers slot selection from HostDecides contenders", 
     [
       {
         id: "D01:pk:Tie",
-        label: "pk",
-        value: "host_decides_tie",
+        label: "Host decision",
+        value: "Awaiting host decision",
         status: "pending",
         phaseId: "D01",
         subjectSlot: null,
@@ -705,8 +705,8 @@ test("host prompt normalization preserves typed public resolution", () => {
     [
       {
         id: "D01:pk:Tie",
-        label: "pk",
-        value: "host_decides_tie",
+        label: "Host decision",
+        value: "Awaiting host decision",
         status: "resolved",
         phaseId: "D01",
         subjectSlot: null,

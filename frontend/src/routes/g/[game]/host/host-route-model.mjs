@@ -110,6 +110,7 @@ export function buildHostConsoleRouteData({
     commandContext: {
       gameId,
       principalId: commandPrincipalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     },
@@ -138,6 +139,7 @@ export function buildHostConsoleRouteData({
         phase: hostProjection.phase,
         replacement: hostProjection.replacement,
       }),
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
@@ -149,6 +151,7 @@ export function buildHostConsoleRouteData({
     commandContext: Object.freeze({
       gameId,
       principalId: commandPrincipalId,
+      capability: access.capability,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     }),
