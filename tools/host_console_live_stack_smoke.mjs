@@ -5520,8 +5520,10 @@ async function stagePlayerSubmission(session, { commandKind, commandId, targetGa
   session.heldSubmission = await holdBrowserPost(page, {
     game: targetGame, kind: commandKind, initialRecovery,
     trigger: async () => {
-      const action = commandKind === "SubmitVote" ? "submit_vote" : "submit_action:factional_kill";
-      const button = page.locator(`[data-action="${action}"]`);
+      // A vote is armed in the picker and dispatched by its confirmation.
+      const button = commandKind === "SubmitVote"
+        ? await armPlayerVote(page, playerVoteOption(page, "submit_vote"))
+        : page.locator('[data-action="submit_action:factional_kill"]');
       assertHitTarget(await button.boundingBox(), `held ${commandKind} button`);
       await button.click();
       if (commandKind === "SubmitAction") {

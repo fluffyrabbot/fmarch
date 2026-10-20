@@ -4906,9 +4906,9 @@ async function collectCompletedPlayerReloadSnapshot(page) {
     const checkpoint = document.querySelector(
       '[data-testid="player-action-submission-checkpoint"]',
     );
-    const buttons = Array.from(document.querySelectorAll("button[data-action]")).map(
+    const buttons = Array.from(document.querySelectorAll("button[data-action], button[data-vote-action]")).map(
       (button) => ({
-        action: button.getAttribute("data-action"),
+        action: button.getAttribute("data-action") ?? button.getAttribute("data-vote-action"),
         disabled: button.disabled,
         text: button.textContent?.trim() ?? "",
       }),
@@ -4969,9 +4969,9 @@ async function collectCompletedPrivateChannelSnapshot(page) {
     const channelContext = document.querySelector(
       '[data-testid="player-command-channel-context"]',
     );
-    const buttons = Array.from(document.querySelectorAll("button[data-action]")).map(
+    const buttons = Array.from(document.querySelectorAll("button[data-action], button[data-vote-action]")).map(
       (button) => ({
-        action: button.getAttribute("data-action"),
+        action: button.getAttribute("data-action") ?? button.getAttribute("data-vote-action"),
         disabled: button.disabled,
         reason: button.getAttribute("data-disabled-reason"),
         text: button.textContent?.trim() ?? "",

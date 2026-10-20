@@ -3282,7 +3282,7 @@ async function submitEarliestReachedBrowserVote({
     );
     return index === 0 ? "submit_vote" : `submit_vote:${expectedTargetSlot}`;
   }, targetSlot);
-  await page.locator(`[data-action="${action}"]`).click();
+  await castPlayerVote(page, action);
   await page.waitForFunction(
     (expectedTargetSlot) =>
       window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -11964,7 +11964,7 @@ async function verifyStalePlayerCompleteRecovery({
       );
     }
 
-    await stalePlayerPage.locator(`[data-action="${staleVoteButton.action}"]`).click();
+    await castPlayerVote(stalePlayerPage, staleVoteButton.action);
     await stalePlayerPage.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -12276,10 +12276,12 @@ async function playerEndgameSummarySurface(page) {
   };
 }
 
+// Every player control and its action. Vote rows and Unvote carry their action
+// as data-vote-action: tapping one arms a confirmation rather than dispatching.
 async function playerCommandButtons(page) {
-  return await page.locator("[data-action]").evaluateAll((nodes) =>
+  return await page.locator("[data-action], [data-vote-action]").evaluateAll((nodes) =>
     nodes.map((node) => ({
-      action: node.getAttribute("data-action"),
+      action: node.getAttribute("data-action") ?? node.getAttribute("data-vote-action"),
       disabled: node.hasAttribute("disabled"),
       text: node.textContent,
     })),
@@ -12295,7 +12297,13 @@ async function submitPlayerCommandAndWait({
   waitArg,
   waitOptions,
 }) {
-  await page.locator(`[data-action="${actionId}"]`, locatorOptions).first().click();
+  if (String(actionId).startsWith("submit_vote")) {
+    await castPlayerVote(page, actionId, locatorOptions);
+  } else if (actionId === "withdraw_vote") {
+    await withdrawPlayerVote(page);
+  } else {
+    await page.locator(`[data-action="${actionId}"]`, locatorOptions).first().click();
+  }
   if (confirmTestId) {
     const confirmButton = page.locator(`[data-testid="${confirmTestId}"]`);
     await confirmButton.waitFor({ state: "visible" });
@@ -19844,12 +19852,9 @@ async function verifyStalePlayerVoteAfterVotecountChange({
       );
     }
 
-    await stalePlayerPage
-      .locator(`[data-action="${staleVoteButton.action}"]`, {
-        hasText: staleVoteTarget.label,
-      })
-      .first()
-      .click();
+    await castPlayerVote(stalePlayerPage, staleVoteButton.action, {
+      hasText: staleVoteTarget.label,
+    });
     await stalePlayerPage.waitForFunction(
       (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -20043,12 +20048,9 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
       );
     }
 
-    await stalePlayerPage
-      .locator(`[data-action="${staleVoteButton.action}"]`, {
-        hasText: staleVoteTarget.label,
-      })
-      .first()
-      .click();
+    await castPlayerVote(stalePlayerPage, staleVoteButton.action, {
+      hasText: staleVoteTarget.label,
+    });
     await stalePlayerPage.waitForFunction(
       (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -20719,12 +20721,9 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
       );
     }
 
-    await playerEntry.page
-      .locator(`[data-action="${staleVoteButton.action}"]`, {
-        hasText: staleVoteTarget.label,
-      })
-      .first()
-      .click();
+    await castPlayerVote(playerEntry.page, staleVoteButton.action, {
+      hasText: staleVoteTarget.label,
+    });
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -25355,7 +25354,7 @@ async function verifyStaleDeadTargetVoteRecovery({
     slot: staleTarget.slotId,
   });
 
-  await playerPage.locator(`[data-action="${staleVoteButton.action}"]`).click();
+  await castPlayerVote(playerPage, staleVoteButton.action);
   await playerPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -26023,8 +26022,8 @@ async function waitForEnabledNoLynchVoteControl(page, actorSlot) {
     const evidence = await page.evaluate(() => ({
       href: window.location.href,
       projection: window.__fmarchPlayerProjection ?? null,
-      buttons: Array.from(document.querySelectorAll("[data-action]")).map((node) => ({
-        action: node.getAttribute("data-action"),
+      buttons: Array.from(document.querySelectorAll("[data-action], [data-vote-action]")).map((node) => ({
+        action: node.getAttribute("data-action") ?? node.getAttribute("data-vote-action"),
         disabled: node.hasAttribute("disabled"),
         reason: node.getAttribute("data-disabled-reason"),
         text: node.textContent?.trim() ?? "",

@@ -147,6 +147,7 @@
           type="button"
           class="fm-touch-button fm-touch-button--secondary"
           data-testid="player-vote-unvote"
+          data-vote-action={picker.unvote.action}
           disabled={picker.unvote.disabled}
           data-disabled-reason={picker.unvote.reason}
           aria-expanded={String(picker.unvote.selected)}
