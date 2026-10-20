@@ -1180,7 +1180,7 @@ async function proveRenderedModeratorSlotLifecycleConfirmation(bundle) {
     'data-testid="critical-host-action-confirmation-message"',
     "slot lifecycle confirmation message",
   );
-  assertIncludes(html, "Modkill slot-7", "slot lifecycle confirmation label");
+  assertIncludes(html, "Modkill Mira · S7", "slot lifecycle confirmation label");
   assertIncludes(
     html,
     "set lifecycle to modkilled",

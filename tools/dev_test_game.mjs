@@ -5283,7 +5283,7 @@ async function verifySeededD02VoteNightTransition({
       hostAfterResolveD03.hostPrompts.find(
         (prompt) =>
           prompt.id === "D03:revote:NoMajority" &&
-          prompt.label === "revote" &&
+          prompt.kind === "revote" &&
           prompt.status === "pending",
       ) ?? null;
     const d03RevotePromptActionId =
@@ -5526,7 +5526,7 @@ async function verifySeededD02VoteNightTransition({
       hostAfterResolveD03R1.hostPrompts.find(
         (prompt) =>
           prompt.id === "D03R1:revote:NoMajority" &&
-          prompt.label === "revote" &&
+          prompt.kind === "revote" &&
           prompt.status === "pending",
       ) ?? null;
     const d03R1RevotePromptActionId =
@@ -5692,7 +5692,7 @@ async function verifySeededD02VoteNightTransition({
       hostAfterResolveD03R2.hostPrompts.find(
         (prompt) =>
           prompt.id === "D03R2:revote:NoMajority" &&
-          prompt.label === "revote" &&
+          prompt.kind === "revote" &&
           prompt.status === "pending",
       ) ?? null;
     const d03R2RevotePromptActionId =

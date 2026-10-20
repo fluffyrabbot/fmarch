@@ -706,7 +706,7 @@ function hostResolveNoMajorityChecks({
     [
       prompt?.id === expectedPromptId &&
         prompt?.status === "pending" &&
-        prompt?.value === "no_majority",
+        prompt?.reason === "no_majority",
       `${label} revote prompt mismatch`,
     ],
     [

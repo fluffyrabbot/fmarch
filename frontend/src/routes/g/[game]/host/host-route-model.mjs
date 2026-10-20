@@ -467,7 +467,7 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
 
 const HOST_FIXTURE_REPLACEMENT = Object.freeze({
   slotId: "slot-7",
-  occupantLabel: "player-mira",
+  occupantLabel: "Mira",
   personaId: "persona-mira",
   assignedPrincipalId: FIXTURE_PRINCIPAL_IDS.playerMira,
   incomingPrincipalId: FIXTURE_PRINCIPAL_IDS.playerRowan,

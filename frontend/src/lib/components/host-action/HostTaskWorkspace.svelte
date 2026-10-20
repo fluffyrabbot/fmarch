@@ -1,5 +1,4 @@
 <script>
-  import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import HostAction from "./HostAction.svelte";
@@ -115,6 +114,9 @@
             <div>
               <p class="fm-eyebrow">{task.urgencyLabel}</p>
               <h2>{task.label}</h2>
+              {#if task.meta}
+                <p class="host-task-workspace__meta" data-testid={`${task.panelTestId}-meta`}>{task.meta}</p>
+              {/if}
             </div>
             <span data-state={task.state}>{task.state}</span>
           </header>

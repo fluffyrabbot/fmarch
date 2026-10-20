@@ -197,6 +197,24 @@ once, beside the confirm. The error colour is reserved for irreversible
 actions: kills, replacement, completing the game. "Hosting as @<uuid>" is
 removed.
 
+Slice 6 settles the details. Packs declare the text under a top-level
+`host_prompt_kinds` map keyed by `prompt_kind`, covering every day-vote prompt
+policy and the Beloved Princess prompt; the server labels host prompts from the
+game's own pack on both the cold read and the live channel. The client keeps
+the engine's `kind` and `reason` beside the pack text and keys behaviour (the
+no-majority revote's two policy choices) on them, never on the label. The
+queue holds a task only while it is due: a pending prompt or day event, a
+command needing recovery, a replacement request, a deadline that has passed,
+an open phase past its deadline (resolve), or a resolved, locked phase
+(advance). Everything else, including publishing the votecount and revealing
+roles, sits under Tools, and the canvas is empty until a task is chosen. Each
+task's canvas states its subject once under the title: the affected seat by
+the presenter for a prompt, and "Ends June 18, 2026 at 9:00 PM PT" (or "No
+deadline set") for the deadline, whose buttons carry no consequence of their
+own; the consequence appears only in the open confirmation. Slot lifecycle
+confirmations name the seat ("Modkill Mira · S7"). Host technical access stays
+in the Technical details drawer.
+
 ### 7. Setup seats people by handle and from the signup topic
 
 The roster stage replaces the principal-ID field with a handle typeahead over

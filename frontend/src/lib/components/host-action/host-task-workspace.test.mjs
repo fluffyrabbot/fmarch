@@ -213,9 +213,27 @@ test("idle host has no decisions while deadline and phase tools remain available
   assert.deepEqual(view.tools.map(task => task.id), ["deadline", "phase"]);
 });
 
-test("expired deadlines and a locked phase needing resolution enter the queue", () => {
+test("an expired deadline puts the deadline and phase resolution in the queue", () => {
   const dueGroups = groups.map(group => group.id === "phase" ? { ...group, actions: [{ id: "resolve_phase", payload: { kind: "resolve_phase" } }] } : group);
-  const view = buildHostTaskWorkspaceViewModel({ groups: dueGroups, phase: { deadline: 100, locked: true }, nowSeconds: 100 });
+  const view = buildHostTaskWorkspaceViewModel({ groups: dueGroups, phase: { deadline: 100, locked: false }, nowSeconds: 100 });
   assert.deepEqual(view.decisions.map(task => task.id), ["deadline", "phase"]);
   assert.equal(view.tools.length, 0);
+});
+
+test("a resolved phase waiting to advance enters the queue before its deadline", () => {
+  const lockedGroups = groups.map(group => group.id === "phase" ? { ...group, actions: [{ id: "advance_phase", payload: { kind: "advance_phase" } }] } : group);
+  const view = buildHostTaskWorkspaceViewModel({ groups: lockedGroups, phase: { deadline: 200, locked: true }, nowSeconds: 100 });
+  assert.deepEqual(view.decisions.map(task => task.id), ["phase"]);
+  assert.deepEqual(view.tools.map(task => task.id), ["deadline"]);
+});
+
+test("the deadline canvas states the current deadline once", () => {
+  const view = buildHostTaskWorkspaceViewModel({ groups, phase: { deadline: 1781841600, locked: false }, nowSeconds: 100 });
+  const deadline = view.tasks.find(task => task.id === "deadline");
+  assert.equal(deadline.meta, "Ends June 18, 2026 at 9:00 PM PT");
+  assert.equal(
+    buildHostTaskWorkspaceViewModel({ groups, phase: { locked: false }, nowSeconds: 100 })
+      .tasks.find(task => task.id === "deadline").meta,
+    "No deadline set",
+  );
 });

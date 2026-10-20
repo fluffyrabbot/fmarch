@@ -1,5 +1,6 @@
 import { seatNames } from "../../app/seat-presenter.mjs";
 import { visibleHostCommandStatus } from "./host-command-status.mjs";
+import { formatDeadlinePacific } from "./host-console-critical-action.mjs";
 import {
   canonicalPrincipalId,
   FIXTURE_PRINCIPAL_IDS,
@@ -71,12 +72,8 @@ export function buildHostTaskWorkspaceViewModel({
   const tasks = [...groupTasks, ...instanceTasks]
     .sort((left, right) => left.rank - right.rank || left.sourceIndex - right.sourceIndex);
   const deadlineDue = Number.isFinite(nowSeconds) && Number.isFinite(phase?.deadline) && phase.deadline <= nowSeconds;
-  const decisions = tasks.filter(task =>
-    task.kind === "engine_host_prompt" || task.kind === "day_event_resolve" ||
-    task.state === "interrupted" || task.state === "blocked" ||
-    (task.kind === "replacement" && task.actions.length > 0) ||
-    (task.kind === "deadline" && deadlineDue && task.actions.length > 0) ||
-    (task.kind === "phase" && (phase?.locked === true || phase?.state === "locked") && task.actions.some(action => action.config.payload?.kind === "resolve_phase")));
+  const phaseLocked = phase?.locked === true || phase?.state === "locked";
+  const decisions = tasks.filter((task) => hostTaskIsDue(task, { deadlineDue, phaseLocked }));
 
   const tools = tasks.filter(task => !decisions.includes(task));
   const resolvedSelectedId = tasks.some((task) => task.id === selectedTaskId)
@@ -112,6 +109,22 @@ export function buildHostTaskWorkspaceViewModel({
     selectedTask,
     commandContext: buildCommandContext(commandContext),
   });
+}
+
+// A host task is a decision only while the game waits on the host: a pending
+// prompt or day event, a command needing recovery, a replacement request, an
+// expired deadline, or a phase that is resolved and must advance (or is past
+// its deadline and must resolve). Everything else stays in Tools.
+function hostTaskIsDue(task, { deadlineDue, phaseLocked }) {
+  if (task.kind === "engine_host_prompt" || task.kind === "day_event_resolve") return true;
+  if (task.state === "interrupted" || task.state === "blocked") return true;
+  const offers = (kind) => task.actions.some((action) => action.config.payload?.kind === kind);
+  if (task.kind === "replacement") return task.actions.length > 0;
+  if (task.kind === "deadline") return deadlineDue && task.actions.length > 0;
+  if (task.kind === "phase") {
+    return phaseLocked ? offers("advance_phase") : deadlineDue && offers("resolve_phase");
+  }
+  return false;
 }
 
 function buildTask({
@@ -367,7 +380,11 @@ function stateLabel(state, fallback) {
 }
 
 function taskMeta({ groupId, phase, replacement, hostPrompts, votecount }) {
-  if (groupId === "deadline") return "Change when this phase ends";
+  if (groupId === "deadline") {
+    return Number.isFinite(phase?.deadline)
+      ? `Ends ${formatDeadlinePacific(phase.deadline)}`
+      : "No deadline set";
+  }
   if (groupId === "host-prompts") {
     const count = hostPrompts.filter((prompt) => prompt.status === "pending").length;
     return `${count} unresolved prompt${count === 1 ? "" : "s"}`;

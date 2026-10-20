@@ -70,7 +70,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     statusStackClassName: "fm-status-stack",
     eyebrow: "Game",
     title: "Host console",
-    summary: "Day 1 deadline is active. player-mira · S7 has a pending replacement.",
+    summary: "Day 1 deadline is active. Mira · S7 has a pending replacement.",
     capability: {
       visible: true,
       kind: "HostOf",
@@ -252,7 +252,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     slotId: "slot-7",
     principalId: PLAYER_MIRA_PRINCIPAL_ID,
     expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
-    targetLabel: "player-mira · S7",
+    targetLabel: "Mira · S7",
     submitLabel: "Issue player invite",
   });
   assert.equal(
@@ -486,6 +486,8 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   assert.deepEqual(data.hostPrompts, [
     {
       id: "D01:tie:slot_2",
+      kind: "tie",
+      reason: "host_decides_tie",
       label: "Host decision",
       value: "Awaiting host decision",
       status: "pending",

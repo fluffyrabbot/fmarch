@@ -8,8 +8,8 @@ export const terminalRecoveryBrowserScenarioDefinition = Object.freeze({
   expectedOutcomeStatus: "NoMajority",
   expectedRejectError: "InvalidTarget",
   expectedPromptId: "D03:revote:NoMajority",
-  expectedPromptLabel: "revote",
-  expectedPromptValue: "no_majority",
+  expectedPromptKind: "revote",
+  expectedPromptReason: "no_majority",
 });
 
 const cloneCase = (scenario) => ({
@@ -165,9 +165,9 @@ export function assertTerminalRecoveryBrowserProof({
     ],
     [
       proof?.d03RevotePrompt?.id === scenario.expectedPromptId &&
-        proof?.d03RevotePrompt?.label === scenario.expectedPromptLabel &&
+        proof?.d03RevotePrompt?.kind === scenario.expectedPromptKind &&
         proof?.d03RevotePrompt?.status === "pending" &&
-        proof?.d03RevotePrompt?.value === scenario.expectedPromptValue,
+        proof?.d03RevotePrompt?.reason === scenario.expectedPromptReason,
       "terminal revote prompt mismatch",
     ],
     [

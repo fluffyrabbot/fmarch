@@ -45,7 +45,7 @@ export function buildHostConsoleCriticalActions(
   }
   const deadlineActions = buildExtendDeadlineActions(gameId, phase, nowSeconds);
   const phaseActions = buildPhaseActions(gameId, phase);
-  const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
+  const lifecycleActions = buildSlotLifecycleActions(gameId, replacement, seatNames(roster));
   const replacementAction = buildProcessReplacementAction(gameId, replacement);
   const actions = [
     ...deadlineActions,
@@ -208,7 +208,7 @@ function normalizeNowSeconds(nowSeconds) {
   return Math.floor(nowSeconds);
 }
 
-function formatDeadlinePacific(epochSeconds) {
+export function formatDeadlinePacific(epochSeconds) {
   const date = new Date(epochSeconds * 1000);
   const day = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
@@ -310,13 +310,13 @@ const noMajorityRevotePolicyActions = Object.freeze([
 
 function isNoMajorityRevotePrompt(prompt) {
   return (
-    prompt?.label === "revote" &&
-    prompt?.value === "no_majority" &&
+    prompt?.kind === "revote" &&
+    prompt?.reason === "no_majority" &&
     prompt?.metadata?.policy === "no_majority_revote"
   );
 }
 
-function buildSlotLifecycleActions(gameId, replacement) {
+function buildSlotLifecycleActions(gameId, replacement, names) {
   if (!replacementAllowsTerminalLifecycleActions(replacement)) {
     return [];
   }
@@ -324,13 +324,16 @@ function buildSlotLifecycleActions(gameId, replacement) {
   if (slotId === null) {
     return [];
   }
+  const seat = seatLabel(slotId, {
+    name: names.name(slotId) ?? optionalNonEmptyString(replacement?.occupantLabel),
+  });
   return [
     freezeHostAction({
       id: "mark_dead",
       label: "Mark dead",
-      objectLabel: slotId,
+      objectLabel: seat,
       outcomeLabel: "set lifecycle to dead",
-      confirmationText: `Mark ${slotId} dead: set lifecycle to dead for ${slotId}.`,
+      confirmationText: `Mark ${seat} dead: set lifecycle to dead for ${seat}.`,
       irreversible: true,
       payload: {
         kind: "mark_dead",
@@ -342,10 +345,10 @@ function buildSlotLifecycleActions(gameId, replacement) {
     freezeHostAction({
       id: "modkill_slot",
       label: "Modkill slot",
-      objectLabel: slotId,
+      objectLabel: seat,
       outcomeLabel: "set lifecycle to modkilled",
       confirmationText:
-        `Modkill ${slotId}: set lifecycle to modkilled for ${slotId}.`,
+        `Modkill ${seat}: set lifecycle to modkilled for ${seat}.`,
       irreversible: true,
       payload: {
         kind: "modkill_slot",

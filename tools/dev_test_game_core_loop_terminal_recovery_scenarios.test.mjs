@@ -118,8 +118,8 @@ test("terminal recovery browser assertion owns D03 reject and reload proof shape
     expectedOutcomeStatus: "NoMajority",
     expectedRejectError: "InvalidTarget",
     expectedPromptId: "D03:revote:NoMajority",
-    expectedPromptLabel: "revote",
-    expectedPromptValue: "no_majority",
+    expectedPromptKind: "revote",
+    expectedPromptReason: "no_majority",
   });
   assert.doesNotThrow(() =>
     assertTerminalRecoveryBrowserProof({
@@ -147,9 +147,9 @@ test("terminal recovery browser assertion owns D03 reject and reload proof shape
 function terminalRecoveryBrowserProofFixture() {
   const prompt = {
     id: "D03:revote:NoMajority",
-    label: "revote",
+    kind: "revote",
     status: "pending",
-    value: "no_majority",
+    reason: "no_majority",
   };
   const outcome = {
     phaseId: "D03",

@@ -225,9 +225,11 @@ function revoteBrowserProofFixture() {
     return {
       id,
       prompt_id: id,
-      label: "revote",
+      kind: "revote",
+      reason: "no_majority",
+      label: "Choose the next vote",
       status,
-      value: "no_majority",
+      value: "Decide whether to run another vote or proceed to night.",
       ...(status === "resolved"
         ? {
             public_resolution: {

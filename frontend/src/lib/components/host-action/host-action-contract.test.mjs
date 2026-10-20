@@ -744,8 +744,10 @@ test("host console no-majority revote prompt exposes explicit policy choices", (
     hostPrompts: [
       {
         id: "D03R2:revote:NoMajority",
-        label: "revote",
-        value: "no_majority",
+        kind: "revote",
+        reason: "no_majority",
+        label: "Choose the next vote",
+        value: "Decide whether to run another vote or proceed to night.",
         status: "pending",
         phaseId: "D03R2",
         decisionKind: "acknowledge",

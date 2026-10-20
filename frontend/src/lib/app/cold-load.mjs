@@ -133,6 +133,8 @@ export function normalizeHostPrompts(rows, fallback) {
         id: String(
           row.prompt_id ?? row.promptId ?? row.id ?? `prompt-${index + 1}`,
         ),
+        kind: String(row.kind ?? ""),
+        reason: String(row.reason ?? ""),
         label: String(row.label ?? "Host decision"),
         value: String(row.description ?? row.value ?? "Awaiting host decision"),
         status: String(row.status ?? "pending"),

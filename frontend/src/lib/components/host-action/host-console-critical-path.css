@@ -500,6 +500,13 @@
   line-height: 1;
 }
 
+.host-task-workspace__decision .host-task-workspace__meta {
+  color: var(--fm-ink-muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin-block-start: 6px;
+}
+
 .host-task-workspace__intent {
   color: var(--fm-ink);
   font-size: 17px;
