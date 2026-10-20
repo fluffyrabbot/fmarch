@@ -1709,6 +1709,9 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     configure_plurality(&mut host_decides_pack, VoteTieBreaker::HostDecides);
     let host_decides_prompt = load_pack_named("epicmafia");
     host_decides_pack
+        .host_prompt_kinds
+        .extend(host_decides_prompt.host_prompt_kinds);
+    host_decides_pack
         .day_vote_prompt_policies
         .extend(host_decides_prompt.day_vote_prompt_policies);
     host_decides_pack

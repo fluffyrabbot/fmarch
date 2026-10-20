@@ -69,11 +69,11 @@ export function collectLegibilitySamples(exemptRegions) {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (parent === null || skipTags.has(parent.tagName) || parent.closest("pre,code,[hidden],[aria-hidden=true],script,style") || exempted(parent)) continue;
+    if (parent === null || skipTags.has(parent.tagName) || parent.closest("[hidden],script,style") || exempted(parent)) continue;
     push(node.nodeValue, parent, "text");
   }
   for (const element of document.body.querySelectorAll("[aria-label],[title],[placeholder],img[alt]")) {
-    if (element.closest("pre,code,[hidden],[aria-hidden=true]") || exempted(element)) continue;
+    if (element.closest("[hidden],[aria-hidden=true]") || exempted(element)) continue;
     for (const attribute of ["aria-label", "title", "placeholder", "alt"]) {
       if (element.hasAttribute(attribute)) push(element.getAttribute(attribute), element, attribute);
     }

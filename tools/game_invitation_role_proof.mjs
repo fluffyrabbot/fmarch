@@ -809,8 +809,8 @@ async function driveInviteLogin({
       );
     }
     const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes(game) && role !== "admin") {
-      throw new Error(`${role} invite URL did not render game ${game}`);
+    if (role !== "admin" && !new URL(page.url()).pathname.includes(`/${game}`)) {
+      throw new Error(`${role} invite URL did not reach game ${game}`);
     }
     return {
       role,

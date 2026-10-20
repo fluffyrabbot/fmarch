@@ -8,7 +8,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
-import { captureScreenshotEvidence } from "./frontend_screenshot_pixels.mjs";
+import { captureScreenshotEvidence as captureScreenshotPixels } from "./frontend_screenshot_pixels.mjs";
 import { roleNavTestId } from "../frontend/src/lib/app/app-shell-model.mjs";
 import {
   encodeServerEnvelopeFrame,
@@ -4559,4 +4559,12 @@ async function proveAccountMenu(page, role) {
   assert.equal(await page.locator("details.account-menu[open]").count(), 0);
   assert.equal(await toggle.evaluate(node => document.activeElement === node), true);
   return {links, escapeCloses: true, returnsFocus: true};
+}
+
+
+async function captureScreenshotEvidence(page, options) {
+  const surface = await page.locator('[data-component="fm-app-shell"]').first().getAttribute("data-surface") ?? "public";
+  const legibility = await captureLegibility(page, {surface});
+  reportLegibility(options.label, legibility);
+  return captureScreenshotPixels(page, options);
 }

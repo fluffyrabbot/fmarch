@@ -3479,9 +3479,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
 
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
-  await rosterRow
-    .locator('input[name="principalId"]')
-    .fill(authorityId);
+  await fetchJson(`${apiBaseUrl}/profiles`, {
+    method: "POST",
+    headers: {authorization: `Bearer ${playerSessionToken}`, "content-type": "application/json"},
+    body: JSON.stringify({handle: "mira", display_name: publicName, bio: "Host setup seating proof.", visibility: "public"}),
+  });
+  await rosterRow.getByLabel("Player handle").fill("mira");
+  await rosterRow.getByRole("button", {name: "Mira · @mira", exact: true}).click();
   await rosterRow.locator('input[name="publicName"]').fill(publicName);
   const assignSlotButton = rosterRow.getByRole("button", {
     name: "Assign player",
