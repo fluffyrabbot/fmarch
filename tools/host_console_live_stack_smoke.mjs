@@ -6462,7 +6462,7 @@ function assertStaleSameActionRecoveryMessage({ outcome, statusMessage }) {
   if (!String(outcome?.message ?? "").includes(expected)) {
     throw new Error(`stale same-action race did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!String(statusMessage ?? "").includes(expected)) {
+  if (!String(statusMessage ?? "").includes("already submitted") || !String(statusMessage).includes("current action")) {
     throw new Error(`stale same-action race did not render recovery guidance: ${statusMessage}`);
   }
 }

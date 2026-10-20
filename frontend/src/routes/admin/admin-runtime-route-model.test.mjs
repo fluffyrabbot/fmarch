@@ -20,6 +20,7 @@ const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
 test("admin game selection includes setup games and prefers the requested workspace", () => {
   const selection = normalizeAdminGameSelection(gameIndexPage, "active-game");
   assert.equal(selection.status, "ready");
+  assert.equal(normalizeAdminGameSelection({ games: [{ game: "one", pack: "mafia_universe", status: "active", phase_id: "D01" }] }, "one").options[0].label, "Mafia Universe · active · Day 1");
   assert.equal(selection.selectedGame, "active-game");
   assert.deepEqual(
     selection.options.map((game) => [game.id, game.status, game.selected, game.href]),

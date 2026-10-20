@@ -27,6 +27,7 @@ export function playerFeedback({ status, attempt, roster = [], action = null } =
 
 function rejectionMessage(error, intent) {
   switch (error) {
+    case "ActionAlreadySubmitted": return "Your night action was already submitted. Check your current action before changing it.";
     case "PhaseLocked": return `${intent} was not accepted because the phase is closed. Check the current phase before trying again.`;
     case "NotYourSlot": return "You no longer occupy this seat. Your action was not accepted.";
     case "RateLimited": return `${intent} was not accepted. Wait a moment before trying again.`;

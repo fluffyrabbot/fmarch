@@ -234,6 +234,7 @@
                   src={item.src}
                   sizes={item.sizes}
                   alt={item.alt}
+                  data-legibility="author-content"
                   width={item.width}
                   height={item.height}
                   loading="lazy"

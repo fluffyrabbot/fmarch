@@ -3,6 +3,7 @@ import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header
 import { resolveSurfaceAccess } from "../../lib/app/capabilities.mjs";
 import { loadAdminColdData, operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { canonicalPhaseId, phaseLabelFromId } from "../../lib/phase-id.mjs";
+import { packLabel } from "../../lib/app/presentation-copy.mjs";
 import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
 
 export async function buildAdminRuntimeRouteData({
@@ -368,7 +369,7 @@ function normalizeAdminGameOption(entry) {
     id,
     pack,
     status,
-    label: `${pack} · ${status}${phase === null ? "" : ` · ${phaseLabelFromId(phase)}`}`,
+    label: `${entry.origin_topic?.title ?? packLabel(pack)} · ${status}${phase === null ? "" : ` · ${phaseLabelFromId(phase)}`}`,
   });
 }
 

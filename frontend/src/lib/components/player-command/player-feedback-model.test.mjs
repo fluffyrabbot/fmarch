@@ -29,3 +29,7 @@ test("reload preserves the vote intent and exact retry request only in its game 
   persistPlayerInterruptedCommands({ ...scope, attempts: {} });
   assert.equal(restorePlayerInterruptedCommands(scope).commandStatus, null);
 });
+
+test("an already-submitted action explains the current action boundary", () => {
+  assert.equal(playerFeedback({ status: { state: "reject", error: "ActionAlreadySubmitted", actionId: "submit_action" } }).message, "Your night action was already submitted. Check your current action before changing it.");
+});

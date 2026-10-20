@@ -5,6 +5,7 @@ import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
 import {
   sessionContextLabel,
+  packLabel,
 } from "./presentation-copy.mjs";
 import { buildViewerPresentation } from "./viewer-presentation-model.mjs";
 
@@ -302,13 +303,6 @@ function preferredBoardGame({ capabilities }) {
   return capabilityGame ?? null;
 }
 
-function packLabel(pack) {
-  return pack
-    .split(/[_-]/)
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-}
 
 function nonemptyString(...values) {
   return values.find((value) => typeof value === "string" && value.trim() !== "") ?? null;
