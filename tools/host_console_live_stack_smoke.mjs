@@ -3890,7 +3890,8 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     });
 
     playerStep = "withdraw-vote";
-    const withdrawButton = page.getByText("Withdraw vote", { exact: true });
+    // Unvote is armed in the picker and dispatched by its confirmation.
+    const withdrawButton = await armPlayerVote(page, page.getByTestId("player-vote-unvote"));
     const withdrawButtonBox = await withdrawButton.boundingBox();
     assertHitTarget(withdrawButtonBox, "player withdraw button");
     const primaryWithdrawBoundary = await capturePlayerLiveBoundary(page, { game, channelId: "main" });

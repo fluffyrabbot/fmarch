@@ -630,13 +630,13 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.voterVoteButtons?.some(
           (button) =>
             button.action === "submit_vote" &&
-            /^Vote .*· S2\b/u.test(button.text ?? "") &&
+            /· S2\b/u.test(button.text ?? "") &&
             button.disabled === false,
         ) &&
         verification.dayVoteResolution?.voterVoteButtons?.some(
           (button) =>
             button.action === "submit_vote:no_lynch" &&
-            button.text?.includes("Vote no lynch") &&
+            button.text?.includes("No lynch") &&
             button.disabled === false,
         ) &&
         verification.dayVoteResolution?.voterAfterVote?.currentVote?.kind ===

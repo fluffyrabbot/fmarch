@@ -12348,7 +12348,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         {
           action: "submit_vote:no_lynch",
-          text: "Vote no lynch",
+          text: "No lynch",
           disabled: false,
         },
       ],
@@ -15333,7 +15333,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         buttonsAfterReject: [
           { action: "submit_vote", disabled: false, text: "Vote Target · S4" },
-          { action: "submit_vote:no_lynch", disabled: false, text: "Vote no lynch" },
+          { action: "submit_vote:no_lynch", disabled: false, text: "No lynch" },
           { action: "withdraw_vote", disabled: true, text: "Withdraw vote" },
         ],
         currentVoteAfterReject: {
