@@ -16,7 +16,7 @@ export PATH="$FMARCH_DEV_POSTGRES_BIN:$PATH"
 [[ $(uname -s) == Linux && $(node --version) == v26.9.0 && $(npm --version) == 12.0.2 ]]
 python3 scripts/check-rust-toolchain.py --runtime
 [[ $(pg_ctl --version) == 'pg_ctl (PostgreSQL) 16.15' ]]
-export CARGO_BUILD_JOBS=2
+export CARGO_BUILD_JOBS=6
 export FMARCH_DEV_POSTGRES_HOST=127.0.0.1
 export FMARCH_DEV_POSTGRES_PORT=15544
 export FMARCH_DEV_POSTGRES_DATA="$FMARCH_EXTERNAL_BUILD_ROOT/postgres/data"
