@@ -223,10 +223,6 @@ function lanePhases(laneId, lane) {
   return laneExecution(laneId, lane).prebuild ? ['build', 'run'] : ['run'];
 }
 
-function needsPostgresAdmin(execution, capacities) {
-  return Boolean(capacities['postgres-admin']) &&
-    execution.resources.some((resource) => resource.kind === 'postgres');
-}
 
 function dependenciesFor(laneId, manifest) {
   return manifest.lanes[laneId]?.depends_on ?? [];
