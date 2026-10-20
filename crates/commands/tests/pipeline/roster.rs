@@ -111,7 +111,11 @@ async fn game_roster_names_live_renamed_replaced_and_dead_seats(pool: PgPool) {
     // the resolver takes the latest name at or before a sequence.
     assert!(outgoing.names[0].effective_seq <= outgoing.began_seq);
     assert!(outgoing.names[0].effective_seq < outgoing.names[1].effective_seq);
-    assert_eq!(outgoing.ended_seq, Some(incoming.began_seq));
+    // The ending and the next start are consecutive events of one command, so
+    // no post can fall between the two tenures.
+    let ended_seq = outgoing.ended_seq.expect("the replaced tenure is closed");
+    assert!(ended_seq < incoming.began_seq);
+    assert!(incoming.names[0].effective_seq <= incoming.began_seq);
     assert_eq!(incoming.ended_seq, None);
     let current_name = projections::slot_occupancy(&pool, game)
         .await

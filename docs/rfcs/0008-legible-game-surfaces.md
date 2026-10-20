@@ -245,7 +245,7 @@ landed; slices 3 → 4 → 5 share the player route and run in order.
 1. The workbench report lists every current violation by route; the seven
    name helpers have one replacement with tests.
 2. A pipeline test proves the roster for a renamed-then-replaced seat (the
-   outgoing epoch keeps both names and ends where the incoming epoch begins),
+   outgoing epoch keeps both names and closes before the incoming epoch begins),
    a dead seat and an unseated seat, numeric seat order, agreement with the
    open-occupancy selector, and identity after projection rebuild; a wire test
    proves a roster change travels as one `HostConsoleRosterChanged` cell. The
