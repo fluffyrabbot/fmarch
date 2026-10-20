@@ -99,10 +99,12 @@
               {post.permalink.label}{#if post.permalink.meta !== ""} · {post.permalink.meta}{/if}
             </a>
           {/if}
+          {#if (post.author.kind === "slot" && votableAuthorSlots.has(post.author.slotId)) || post.quoteEnabled}
+          <div class="player-surface__post-actions">
           {#if post.author.kind === "slot" && votableAuthorSlots.has(post.author.slotId)}
             <button
               type="button"
-              class="fm-touch-button fm-touch-button--secondary player-surface__quote-button"
+              class="fm-touch-button fm-touch-button--secondary player-surface__post-action player-surface__vote-author-button"
               data-min-touch-target-px="44"
               data-testid={`player-vote-author-${post.seq}`}
               aria-label={`Vote ${post.authorLabel}`}
@@ -114,13 +116,15 @@
           {#if post.quoteEnabled}
             <button
               type="button"
-              class="fm-touch-button fm-touch-button--secondary player-surface__quote-button"
+              class="fm-touch-button fm-touch-button--secondary player-surface__post-action player-surface__quote-button"
               data-min-touch-target-px="44"
               data-testid={`player-quote-${post.seq}`}
               on:click={() => onQuote(post)}
             >
               Quote
             </button>
+          {/if}
+          </div>
           {/if}
         </div>
       </header>
@@ -317,8 +321,12 @@
     justify-content: space-between;
   }
 
-  .player-surface__post:has(.player-surface__quote-button) header {
+  .player-surface__post:has(.player-surface__post-actions) header {
     padding-inline-end: 56px;
+  }
+
+  .player-surface__post:has(.player-surface__vote-author-button):has(.player-surface__quote-button) header {
+    padding-inline-end: 116px;
   }
 
   .player-surface__post-identity {
@@ -351,15 +359,20 @@
     text-decoration: underline;
   }
 
-  .player-surface__quote-button {
-    font-size: 13px;
-    font-weight: 800;
+  .player-surface__post-actions {
+    display: flex;
+    gap: 6px;
     inset-block-start: 0;
     inset-inline-end: 0;
-    min-inline-size: 44px;
-    padding-inline: 12px;
     position: absolute;
     z-index: 1;
+  }
+
+  .player-surface__post-action {
+    font-size: 13px;
+    font-weight: 800;
+    min-inline-size: 44px;
+    padding-inline: 12px;
   }
 
   .player-surface__post {

@@ -2443,6 +2443,18 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
     );
     assert.equal(await page.getByTestId("player-vote-unvote").isDisabled(), true, "nothing to unvote yet");
 
+    // A post author's Vote opens the picker preselected; it still only arms.
+    const authorVote = page.locator('[data-testid^="player-vote-author-"]').first();
+    await assertHitTarget(authorVote, "post author vote");
+    const authorRequests = commandRequests.length;
+    await authorVote.click();
+    await page.getByTestId("player-vote-confirm").waitFor({ state: "visible" });
+    const authorMessage = (await page.getByTestId("player-vote-confirmation").innerText()).split("\n")[0].trim();
+    assert.match(authorMessage, /^Vote \S/u, "post author vote opens a preselected confirmation");
+    assert.equal(commandRequests.length, authorRequests, "a post author's Vote must not dispatch");
+    await page.getByTestId("player-vote-cancel").click();
+    await page.getByTestId("player-vote-confirm").waitFor({ state: "detached" });
+
     await choose({ testId: "player-vote-option-slot-2", message: "Vote Ilya", dockAfter: "Voting Ilya" });
     await choose({
       testId: "player-vote-option-slot-3",
@@ -2456,7 +2468,7 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
       await returnToThread.focus();
       await page.keyboard.press("Enter");
     }
-    return { rows: rows.length, steps };
+    return { rows: rows.length, authorPreselection: authorMessage, steps };
   } finally {
     await page.unroute(stateRoute, serveState);
     await page.unroute(commandRoute, answerVote);
