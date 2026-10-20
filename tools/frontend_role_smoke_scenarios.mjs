@@ -592,6 +592,7 @@ export const roles = Object.freeze([
       "host-decision-canvas",
     ],
     overlapTestIds: [
+      "host-console-bar",
       "host-task-queue-summary",
       "host-decision-canvas",
     ],

@@ -2139,7 +2139,7 @@ async function proveModeratorSurface() {
       taskLandmarks: [
         {
           id: "attention",
-          testId: "host-console-attention",
+          testId: "host-console-bar",
           label: "Attention",
           value: `${controls.queue.attentionCount} tasks`,
           detail: controls.queue.summary,
