@@ -2105,6 +2105,7 @@ async function captureInteractionGeometryBaseline(
   await assertVisibleBox(anchor, `${label} anchor`);
   return {
     anchor: await readDocumentBox(anchor),
+    anchorContainer: budget.anchorContainerSelector ? await readDocumentBox(page.locator(budget.anchorContainerSelector).first()) : null,
     documentHeight: await page.evaluate(
       () => document.documentElement.scrollHeight,
     ),
@@ -2124,12 +2125,16 @@ async function assertPostInteractionGeometry(
   await assertVisibleBox(target, `${label} target`);
   const anchorAfter = await readDocumentBox(anchor);
   const targetBox = await readDocumentBox(target);
+  const anchorContainerAfter = budget.anchorContainerSelector ? await readDocumentBox(page.locator(budget.anchorContainerSelector).first()) : null;
   const documentHeight = await page.evaluate(
     () => document.documentElement.scrollHeight,
   );
   const anchorUsesViewport =
     baseline.anchor.viewportAnchored === true && anchorAfter.viewportAnchored === true;
-  const anchorShift = Math.max(
+  const anchorShift = baseline.anchorContainer && anchorContainerAfter ? Math.max(
+    Math.abs((anchorAfter.x - anchorContainerAfter.x) - (baseline.anchor.x - baseline.anchorContainer.x)),
+    Math.abs((anchorAfter.y - anchorContainerAfter.y) - (baseline.anchor.y - baseline.anchorContainer.y)),
+  ) : Math.max(
     Math.abs(
       (anchorUsesViewport ? anchorAfter.viewportX : anchorAfter.x) -
         (anchorUsesViewport ? baseline.anchor.viewportX : baseline.anchor.x),
@@ -2172,6 +2177,9 @@ async function assertPostInteractionGeometry(
     targetSelector: budget.targetSelector,
     anchorBefore: baseline.anchor,
     anchorAfter,
+    anchorContainerSelector: budget.anchorContainerSelector ?? null,
+    anchorContainerBefore: baseline.anchorContainer,
+    anchorContainerAfter,
     target: targetBox,
     anchorShift,
     maxAnchorShift: budget.maxAnchorShiftPx,

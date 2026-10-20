@@ -6272,6 +6272,14 @@ function assertRoleMobileViewportEvidence(roleEntries) {
         assert.equal(phaseEvidence.withinBudget, true);
         assert.equal(phaseEvidence.anchorSelector, phaseBudget.anchorSelector);
         assert.equal(phaseEvidence.targetSelector, phaseBudget.targetSelector);
+        if (phaseBudget.anchorContainerSelector) {
+          assert.equal(phaseEvidence.anchorContainerSelector, phaseBudget.anchorContainerSelector);
+          assert.equal(phaseEvidence.anchorShift, Math.max(
+            Math.abs((phaseEvidence.anchorAfter.x - phaseEvidence.anchorContainerAfter.x) - (phaseEvidence.anchorBefore.x - phaseEvidence.anchorContainerBefore.x)),
+            Math.abs((phaseEvidence.anchorAfter.y - phaseEvidence.anchorContainerAfter.y) - (phaseEvidence.anchorBefore.y - phaseEvidence.anchorContainerBefore.y)),
+          ));
+        }
+
         assert.equal(
           phaseEvidence.anchorShift <= phaseEvidence.maxAnchorShift,
           true,

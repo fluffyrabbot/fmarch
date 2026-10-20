@@ -524,6 +524,7 @@ export const roles = Object.freeze([
       feedback: Object.freeze({
         anchorSelector:
           '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+        anchorContainerSelector: '[data-testid="host-decision-canvas"]',
         targetSelector: '[data-testid="host-command-status-extend_deadline"]',
         maxAnchorShiftPx: 1,
         maxCombinedSpanViewportRatio: 0.5,

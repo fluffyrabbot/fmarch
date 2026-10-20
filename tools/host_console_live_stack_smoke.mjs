@@ -5448,7 +5448,7 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
     staleLockReject: staleLockEvidence,
     unlock: unlockEvidence,
     proof:
-      "Both recovered host pages exposed Resolve and Lock. The second page emitted LockThread while D01 was open; its unchanged request was held until the first page's LockThread ACK, then released for a real Reject PhaseLocked and projection refresh. Live authority and updates remained enabled, and UnlockThread restored Resolve and Lock without reloading.",
+      "Both recovered host pages exposed Resolve and Lock. The second page emitted LockThread while D01 was open; its unchanged request was held until the first page's LockThread ACK, then released for a real stale-lock rejection (PhaseLocked or retryable StreamConflict) and projection refresh. Live authority and updates remained enabled, and UnlockThread restored Resolve and Lock without reloading.",
   };
 }
 

@@ -370,7 +370,7 @@ function liveStackReadinessFixture() {
         staleVoteRecovery: {
           recovery: {
             outcome: { error: "PhaseLocked" },
-            statusMessage: "stale projection refreshed current controls",
+            statusMessage: "Your vote was not accepted because the phase is closed. Check the current phase before trying again.",
           },
         },
       },
@@ -391,7 +391,7 @@ function liveStackReadinessFixture() {
         resolvedTargetSlot: { alive: false },
         staleActionRecovery: {
           outcome: { error: "PhaseLocked" },
-          statusMessage: "stale action state refreshed current action controls",
+          statusMessage: "Your night action was not accepted because the phase is closed. Check the current phase before trying again.",
         },
       },
       playerPrivateChannel: {
@@ -421,7 +421,7 @@ function liveStackReadinessFixture() {
         actions: [{ id: "process_replacement", replacementEvidence: hostReplacementFixture().evidence }],
         phaseControls: {
           lock: { commandStatus: { state: "ack" } },
-          staleLockReject: { commandStatus: { error: "PhaseLocked" } },
+          staleLockReject: { commandStatus: { state: "reject", error: "PhaseLocked" } },
           unlock: { commandStatus: { state: "ack" } },
         },
         hostPrompt: { commandStatus: { state: "ack" } },
@@ -677,5 +677,18 @@ test("reader readiness rejects missing outgoing original navigation evidence", (
       assert.ok(buildLiveStackReadiness(evidence).checks.some(check => check.status === "failed"));
       citation[key] = prior;
     }
+  }
+});
+
+ test("stale host lock accepts a retryable stream conflict but rejects unrelated failures", () => {
+  for (const [status, expected] of [
+    [{state: "reject", error: "StreamConflict", retryable: true}, "passed"],
+    [{state: "reject", error: "StreamConflict", retryable: false}, "failed"],
+    [{state: "reject", error: "Internal", retryable: true}, "failed"],
+    [{state: "ack", error: "PhaseLocked"}, "failed"],
+  ]) {
+    const evidence = liveStackReadinessFixture();
+    evidence.browser.moderator.phaseControls.staleLockReject.commandStatus = status;
+    assert.equal(checkStatus(buildLiveStackReadiness(evidence), "host-phase-controls"), expected);
   }
 });
