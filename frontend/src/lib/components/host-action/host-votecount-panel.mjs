@@ -1,3 +1,5 @@
+import { seatNames, voteTargetLabel } from "../../app/seat-presenter.mjs";
+
 export const HOST_VOTECOUNT_PANEL_CONTRACT = Object.freeze({
   rootClassName: "host-console-critical-path__votecount fm-section",
   rowsClassName: "host-console-critical-path__vote-rows fm-wagon",
@@ -10,7 +12,9 @@ export const HOST_VOTECOUNT_PANEL_CONTRACT = Object.freeze({
 export function buildHostVotecountPanelViewModel({
   boundary,
   rows = [],
+  roster = [],
 } = {}) {
+  const names = seatNames(roster);
   return Object.freeze({
     root: Object.freeze({
       className: HOST_VOTECOUNT_PANEL_CONTRACT.rootClassName,
@@ -36,7 +40,7 @@ export function buildHostVotecountPanelViewModel({
       rows: HOST_VOTECOUNT_PANEL_CONTRACT.rowsClassName,
       row: HOST_VOTECOUNT_PANEL_CONTRACT.rowClassName,
     }),
-    rows: Object.freeze(rows.map(normalizeVotecountRow)),
+    rows: Object.freeze(rows.map((row) => normalizeVotecountRow(row, names))),
   });
 }
 
@@ -44,11 +48,12 @@ export function votecountRowTestId(target) {
   return `host-console-votecount-row-${String(target).replace(/[^a-zA-Z0-9_-]+/g, "_")}`;
 }
 
-function normalizeVotecountRow(row) {
+function normalizeVotecountRow(row, names) {
   const count = Number(row.count ?? 0);
   const needed = Number(row.needed ?? 0);
   return Object.freeze({
     target: String(row.target ?? "unknown"),
+    label: voteTargetLabel(row.target ?? "unknown", names),
     tally: `${count}/${needed}`,
     fillPercent: needed > 0 ? Math.min(Math.round((count / needed) * 100), 100) : 0,
     atHammer: needed > 0 && count > 0 && needed - count <= 1,

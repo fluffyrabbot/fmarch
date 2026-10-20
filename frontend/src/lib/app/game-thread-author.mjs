@@ -1,4 +1,4 @@
-import { seatLabel } from "./seat-presenter.mjs";
+import { seatNames } from "./seat-presenter.mjs";
 
 export const GAME_THREAD_AUTHOR_KINDS = Object.freeze([
   "slot",
@@ -20,10 +20,14 @@ export function normalizeGameThreadAuthor(value) {
   return Object.freeze({ kind: "unknown" });
 }
 
-export function gameThreadAuthorLabel(author) {
+/**
+ * An author for display. A seat author is named through the roster as of the
+ * post's sequence, so a post keeps the name its author held when writing it.
+ */
+export function gameThreadAuthorLabel(author, { names = seatNames(), at = null } = {}) {
   switch (author?.kind) {
     case "slot":
-      return String(author.slotId ?? "").trim() === "" ? "Unknown player" : seatLabel(author.slotId);
+      return String(author.slotId ?? "").trim() === "" ? "Unknown player" : names.label(author.slotId, { at });
     case "host_narrator":
       return "Host";
     case "system":

@@ -556,7 +556,7 @@ export function renderPlayerCommandPanel() {
         label: "Day 2",
         deadlineProjected: true,
       },
-      votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      votecount: [{ target: "slot-2", count: 2, needed: 4 }],
       body: "vote: slot-2",
       onCommand: () => {},
     },

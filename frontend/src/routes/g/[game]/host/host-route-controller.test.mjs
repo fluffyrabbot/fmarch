@@ -198,7 +198,7 @@ test("host route controller derives action groups from live host projections", (
         phase: { id: "D01", locked: false, state: "open" },
         replacement: null,
       },
-      votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      votecount: [{ target: "slot-2", count: 2, needed: 4 }],
       dayVoteOutcomes: [
         {
           phaseId: "D01",
@@ -287,7 +287,7 @@ test("host route controller derives action groups from live host projections", (
         },
         replacement: null,
       },
-      votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      votecount: [{ target: "slot-2", count: 2, needed: 4 }],
       dayVoteOutcomes: [],
       hostPrompts: [
         {

@@ -266,10 +266,10 @@ test("normalizes thread and votecount projection payloads for the player view", 
 
   assert.deepEqual(
     normalizeVotecount(
-      [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
+      [{ target: "slot-2", count: 4, needed: 7 }],
       FALLBACK.votecount,
     ),
-    [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
+    [{ target: "slot-2", count: 4, needed: 7 }],
   );
 
   assert.deepEqual(
@@ -516,6 +516,7 @@ test("normalizes player command state into route action configs", () => {
         { channelId: "main", slots: ["slot-2", "slot-3", "slot_4"] },
         { channelId: "private:faction:mafia", slots: ["slot_4"] },
       ],
+      roster: [],
       boundary: "live command state",
     },
   );

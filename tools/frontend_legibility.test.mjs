@@ -42,7 +42,7 @@ test("transport jargon is a player-surface rule only", () => {
 test("ordinary product copy is clean", () => {
   assert.deepEqual(
     scanLegibility(
-      [sample("Slot 7 / Mira"), sample("Vote no lynch"), sample("Day 1 · Deadline Jun 20, 5:00 PM")],
+      [sample("Mira · S7"), sample("Vote no lynch"), sample("Day 1 · Deadline Jun 20, 5:00 PM")],
       { surface: "player" },
     ),
     [],

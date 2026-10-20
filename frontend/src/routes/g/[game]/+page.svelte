@@ -117,6 +117,7 @@
     removeAttachedQuotation,
     submittedQuotationsPayload,
   } from "$lib/app/game-quotation-model.mjs";
+  import { seatNames } from "$lib/app/seat-presenter.mjs";
   import { submittedSlotMentionsPayload } from "$lib/app/slot-mention-model.mjs";
 
   export let data;
@@ -447,6 +448,7 @@
     player,
     commandPending: commandPending || !projectionCommandsReady,
     commandInterrupted: commandRecoveryRequired,
+    roster: commandState?.roster ?? [],
   });
   $: quoteEnabled =
     projectionCommandsReady &&
@@ -463,6 +465,7 @@
   $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
     endgameSummary: endgameSummary ?? null,
     gameCompleted: player.gameCompleted === true,
+    roster: commandState?.roster ?? [],
   });
   $: themePhase?.update(commandState?.gameCompleted ? null : commandState?.phase?.phaseId);
   $: playerEmptyState = buildRouteStateViewModel({
@@ -541,6 +544,7 @@
     privateQueue = buildPrivateQueueRouteItems(snapshot, {
       game: data.game.id,
       channel: data.threadPager.channel,
+      roster: commandState?.roster ?? [],
     });
     privateQueueBoundary = buildPrivateQueueBoundary(snapshot);
     if (readingPosition) void tick().then(() => {
@@ -969,7 +973,7 @@
   }
 
   function quotePlayerPost(post) {
-    attachedQuotations = attachQuotation(attachedQuotations, post, data.game.id);
+    attachedQuotations = attachQuotation(attachedQuotations, post, data.game.id, seatNames(commandState?.roster));
     if (typeof document === "undefined") {
       return;
     }
@@ -1047,6 +1051,7 @@
       {liveOfficialPost}
       {threadPageStatus}
       {quoteEnabled}
+      roster={commandState?.roster ?? []}
       onLoadOlder={loadOlderThread}
       onLoadNewer={loadNewerThread}
       onQuote={quotePlayerPost}
@@ -1154,6 +1159,7 @@
             outcomes={dayVoteOutcomes}
             boundary={data.dayVoteOutcomeBoundary}
             rootTestId="player-day-vote-outcome"
+            roster={commandState?.roster ?? []}
           />
         </div>
       </details>

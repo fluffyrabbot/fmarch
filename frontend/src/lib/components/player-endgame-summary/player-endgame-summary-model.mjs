@@ -19,7 +19,9 @@ export const PLAYER_ENDGAME_SUMMARY_CONTRACT = Object.freeze({
 export function buildPlayerEndgameSummaryViewModel({
   endgameSummary = null,
   gameCompleted = false,
+  roster = [],
 } = {}) {
+  const names = seatNames(roster);
   const completed =
     gameCompleted === true || endgameSummary?.completed === true;
   if (!completed) {
@@ -57,7 +59,7 @@ export function buildPlayerEndgameSummaryViewModel({
         Object.freeze({
           testId: `${PLAYER_ENDGAME_SUMMARY_CONTRACT.revealRowTestIdPrefix}-${slot.slotId}`,
           className: PLAYER_ENDGAME_SUMMARY_CONTRACT.rowClassName,
-          slotLabel: humanizeTag(slot.slotId),
+          slotLabel: names.label(slot.slotId),
           roleLabel:
             slot.roleRevealed && slot.roleKey !== null
               ? humanizeTag(slot.roleKey)
@@ -80,9 +82,9 @@ export function buildPlayerEndgameSummaryViewModel({
             testId: `${PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowTestIdPrefix}-${outcome.phaseId}-${outcome.sourceSeq}-${outcome.eventIndex}`,
             className: PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowClassName,
             phaseLabel: phaseLabelFromId(outcome.phaseId) ?? outcome.phaseId,
-            resultLabel: endgameVoteResultLabel(outcome),
-            tallyLabel: endgameVoteTallyLabel(outcome),
-            ballotLabel: endgameVoteBallotLabel(outcome),
+            resultLabel: endgameVoteResultLabel(outcome, names),
+            tallyLabel: endgameVoteTallyLabel(outcome, names),
+            ballotLabel: endgameVoteBallotLabel(outcome, names),
             majorityLabel:
               outcome.majority === null
                 ? "Majority not recorded"
@@ -102,30 +104,39 @@ export function buildPlayerEndgameSummaryViewModel({
   });
 }
 
-function endgameVoteResultLabel(outcome) {
+// Vote history names each seat as of its resolution.
+function seatAt(outcome, slot, names) {
+  if (slot === "no_lynch" || slot === "NoLynch") {
+    return "No lynch";
+  }
+  const at = Number(outcome.sourceSeq);
+  return names.label(slot, { at: Number.isSafeInteger(at) && at > 0 ? at : null });
+}
+
+function endgameVoteResultLabel(outcome, names) {
   if (outcome.status === "Lynch" && outcome.winnerSlot !== null) {
-    return `Lynch: ${humanizeTag(outcome.winnerSlot)}`;
+    return `Lynch: ${seatAt(outcome, outcome.winnerSlot, names)}`;
   }
   return humanizeTag(outcome.status);
 }
 
-function endgameVoteTallyLabel(outcome) {
+function endgameVoteTallyLabel(outcome, names) {
   const rows = Object.entries(outcome.tallies ?? {});
   return rows.length === 0
     ? "No final tally"
     : rows
-        .map(([target, count]) => `${humanizeTag(target)}: ${count}`)
+        .map(([target, count]) => `${seatAt(outcome, target, names)}: ${count}`)
         .join("; ");
 }
 
-function endgameVoteBallotLabel(outcome) {
+function endgameVoteBallotLabel(outcome, names) {
   const rows = Object.entries(outcome.votes ?? {});
   return rows.length === 0
     ? "No ballots recorded"
     : rows
         .map(
           ([actor, target]) =>
-            `${humanizeTag(actor)} to ${humanizeTag(target)}`,
+            `${seatAt(outcome, actor, names)} to ${seatAt(outcome, target, names)}`,
         )
         .join("; ");
 }
@@ -142,3 +153,4 @@ function humanizeTag(tag) {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
 import { phaseLabelFromId } from "../../phase-id.mjs";
+import { seatNames } from "../../app/seat-presenter.mjs";

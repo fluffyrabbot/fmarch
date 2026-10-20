@@ -9,12 +9,13 @@
   export let liveOfficialPost = null;
   export let threadPageStatus = null;
   export let quoteEnabled = false;
+  export let roster = [];
   export let onLoadOlder = () => {};
   export let onLoadNewer = () => {};
   export let onQuote = () => {};
 
   let activeEmbedSeq = null;
-  $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled });
+  $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled, roster });
 </script>
 
 <section id="player-thread" tabindex="-1" class="player-surface__thread" aria-label="Thread">

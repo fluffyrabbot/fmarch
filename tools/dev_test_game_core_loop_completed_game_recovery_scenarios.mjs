@@ -301,8 +301,8 @@ export function assertCompletedPlayerEndgameRefreshBrowserProof({
             `player-endgame-vote-${scenario.expectedVoteHistoryPhaseId}-`,
           ) &&
           row.text.includes("No lynch") &&
-          row.text.includes("Slot 2 to No lynch") &&
-          row.text.includes("Slot 3 to No lynch"),
+          row.text.includes("· S2 to No lynch") &&
+          row.text.includes("· S3 to No lynch"),
       ),
   );
   const apiSlot = proof?.apiEndgameSummaryAfterReject?.slots?.find(

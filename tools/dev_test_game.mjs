@@ -2940,7 +2940,7 @@ async function verifySeededDayVoteResolution({
       !voterVoteButtons.some(
         (button) =>
           button.action === "submit_vote" &&
-          button.text.includes("Vote Slot 2") &&
+          /^Vote .*· S2\b/u.test(button.text) &&
           button.disabled === false,
       ) ||
       !voterVoteButtons.some(
@@ -2952,7 +2952,7 @@ async function verifySeededDayVoteResolution({
       voterAfterVote?.currentVote?.kind !== "slot" ||
       voterAfterVote?.currentVote?.slotId !== "slot-2" ||
       voterCurrentVoteAfter.hasVote !== "true" ||
-      !voterCurrentVoteAfter.text.includes("Slot 2") ||
+      !voterCurrentVoteAfter.text.includes("· S2") ||
       voterWithdrawAfter.exists !== true ||
       voterWithdrawAfter.disabled !== false ||
       !voterVotecountAfterVote.some(
@@ -2972,7 +2972,7 @@ async function verifySeededDayVoteResolution({
           row.winnerSlot === "slot-2",
       ) ||
       !hostAfterResolve.outcomePanel.includes("D01 Lynch") ||
-      !hostAfterResolve.outcomePanel.includes("Slot 2 was eliminated") ||
+      !hostAfterResolve.outcomePanel.includes("· S2 was eliminated") ||
       !hostAfterResolve.outcomeTally.includes("4/3") ||
       hostSlot?.alive !== false ||
       hostSlot?.status !== "dead" ||
@@ -2986,7 +2986,7 @@ async function verifySeededDayVoteResolution({
           row.winnerSlot === "slot-2",
       ) ||
       !targetOutcomePanel.includes("D01 Lynch") ||
-      !targetOutcomePanel.includes("Slot 2 was eliminated") ||
+      !targetOutcomePanel.includes("· S2 was eliminated") ||
       !targetOutcomeTally.includes("4/3") ||
       targetNotice?.audience_slot !== "slot-2" ||
       targetNotice?.effect !== "player_killed" ||
@@ -3203,8 +3203,8 @@ async function verifySeededEarliestReachedTie({
       outcome?.tiebreak !== "EarliestReached" ||
       outcome?.tallies?.["slot-1"] !== 2 ||
       outcome?.tallies?.["slot-2"] !== 2 ||
-      !hostOutcomePanel.includes("Slot 2 was eliminated") ||
-      !targetOutcomePanel.includes("Slot 2 was eliminated")
+      !hostOutcomePanel.includes("· S2 was eliminated") ||
+      !targetOutcomePanel.includes("· S2 was eliminated")
     ) {
       throw new Error(
         `earliest reached browser proof drifted: ${JSON.stringify({
@@ -3457,10 +3457,10 @@ async function verifySeededHostDecidesTie({
         },
       ) ||
       targetAfterDecision?.actorAlive !== false ||
-      !hostOutcomePanel.includes("HostDecides selected Slot 2") ||
+      !hostOutcomePanel.includes("· S2 to break the tie") ||
       !hostPromptHistory.includes("D01 official elimination") ||
       !hostPromptHistory.includes("Slot 2 selected after host decision") ||
-      !targetOutcomePanel.includes("HostDecides selected Slot 2")
+      !targetOutcomePanel.includes("· S2 to break the tie")
     ) {
       throw new Error(
         `host decides browser proof drifted: ${JSON.stringify({
@@ -10289,7 +10289,8 @@ async function captureHostPromptSelectionPlayerOutcome({
   playerEntries,
   selectedSlot,
 }) {
-  const expectedSlotLabel = `Slot ${selectedSlot.match(/\d+/)?.[0] ?? selectedSlot}`;
+  // The panel names the seat by persona; its tag is stable across names.
+  const expectedSlotLabel = `· S${selectedSlot.match(/\d+/)?.[0] ?? selectedSlot}`;
   const players = Object.fromEntries(
     await Promise.all(
       Object.entries(playerEntries).map(async ([key, { page }]) => {
@@ -10323,7 +10324,7 @@ async function captureHostPromptSelectionPlayerOutcome({
   const expectedPanelFragments = [
     "D01 Lynch",
     `${expectedSlotLabel} was eliminated by official vote.`,
-    `HostDecides selected ${expectedSlotLabel} after the tied vote.`,
+    `${expectedSlotLabel} to break the tie.`,
   ];
   const passed = Object.values(players).every(
     ({ outcome, panelText }) =>
@@ -14052,7 +14053,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
   if (
     statusState !== "ack" ||
     !statusText.includes("Replacement invite issued") ||
-    targetLabel !== "Slot 7 / player-rowan" ||
+    targetLabel !== "player-rowan · S7" ||
     loginUrl.origin !== frontendBaseUrl ||
     loginUrl.pathname !== "/auth/game-invite" ||
     returnTo !== `/g/${game}` ||
@@ -14342,7 +14343,7 @@ async function verifyInvalidReplacementRecovery({
     game,
     actionId: invalidActionId,
     label: "Invalid replacement",
-    objectLabel: "Slot 7 / player-rowan",
+    objectLabel: "player-rowan · S7",
     outcomeLabel: "Reject invalid replacement",
     outgoingPersonaId: crypto.randomUUID(),
     incomingPrincipalId: "player-rowan",
@@ -14418,7 +14419,7 @@ async function verifyStaleReplacementAfterSuccess({
     game,
     actionId: staleActionId,
     label: "Stale replacement",
-    objectLabel: "Slot 7 / player-mira",
+    objectLabel: "player-mira · S7",
     outcomeLabel: "Reject stale replacement",
     outgoingPersonaId: staleOutgoingPersonaId,
     incomingPrincipalId: "player-rowan",
@@ -20358,7 +20359,7 @@ async function openResolvedDayStalePlayerProof({
     if (
       commandStateBeforeClose?.currentVote?.slotId !== "slot-2" ||
       currentVoteBeforeClose.hasVote !== "true" ||
-      !currentVoteBeforeClose.text.includes("Slot 2") ||
+      !currentVoteBeforeClose.text.includes("· S2") ||
       closedStatus?.state !== "closed" ||
       resolveDay.commandStatus?.state !== "ack" ||
       hostAfterResolve.phase?.locked !== true ||
@@ -21166,7 +21167,7 @@ async function verifyConcurrentPlayerVoteResolveRace({
     const setupVoteButton = setupButtons.find(
       (button) =>
         button.action?.startsWith("submit_vote") &&
-        button.text?.includes("Slot 2") &&
+        button.text?.includes("· S2") &&
         button.disabled === false,
     );
     const setupHostPhase = await hostEntry.page.evaluate(

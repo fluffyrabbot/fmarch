@@ -432,8 +432,8 @@ export function hostConsoleForbiddenMessage(game) {
 const HOST_FIXTURE_COLD_LOAD = Object.freeze({
   hostConsoleState: null,
   votecount: Object.freeze([
-    Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
-    Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),
+    Object.freeze({ target: "slot-2", count: 4, needed: 7 }),
+    Object.freeze({ target: "slot-7", count: 2, needed: 7 }),
   ]),
   dayVoteOutcomes: Object.freeze([
     Object.freeze({
@@ -536,7 +536,7 @@ const HOST_FIXTURE_PHASE = Object.freeze({
   label: "Day 1",
   state: "open",
   locked: false,
-  summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
+  summary: "Day 1 deadline is active. Mira · S7 has a pending replacement.",
   deadline: 1781841600,
   deadlineLabel: "No deadline extension committed",
   lockedLabel: "Thread open",

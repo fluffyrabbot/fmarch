@@ -4,6 +4,7 @@ import {
   gameThreadAuthorLabel,
   normalizeGameThreadAuthor,
 } from "./game-thread-author.mjs";
+import { seatNames } from "./seat-presenter.mjs";
 
 export const GAME_QUOTATION_EXCERPT_BYTES = 1000;
 export const GAME_CITATION_PREVIEW_LIMIT = 5;
@@ -36,8 +37,12 @@ export function postSourceSeq(post) {
   return Number(post?.seq ?? post?.source_seq ?? post?.sourceSeq ?? post?.target?.source_seq);
 }
 
-export function postAuthorLabel(post) {
-  const author = gameThreadAuthorLabel(normalizeGameThreadAuthor(post?.author));
+export function postAuthorLabel(post, names = seatNames()) {
+  const sourceSeq = postSourceSeq(post);
+  const author = gameThreadAuthorLabel(normalizeGameThreadAuthor(post?.author), {
+    names,
+    at: Number.isSafeInteger(sourceSeq) ? sourceSeq : null,
+  });
   return author === "Unknown" ? null : author;
 }
 
@@ -66,7 +71,7 @@ export function removeQuoteSeq(quoteSeqs, sourceSeq) {
   );
 }
 
-export function buildAttachedQuotations({ posts = [], quoteSeqs = [], gameId } = {}) {
+export function buildAttachedQuotations({ posts = [], quoteSeqs = [], gameId, names = seatNames() } = {}) {
   const bySeq = postsBySeq(posts);
   const attached = [];
   const seen = new Set();
@@ -81,12 +86,12 @@ export function buildAttachedQuotations({ posts = [], quoteSeqs = [], gameId } =
       continue;
     }
     seen.add(sourceSeq);
-    attached.push(attachedQuotationFromPost(post, gameId, excerpt));
+    attached.push(attachedQuotationFromPost(post, gameId, excerpt, names));
   }
   return Object.freeze(attached);
 }
 
-export function attachQuotation(attached, post, gameId) {
+export function attachQuotation(attached, post, gameId, names = seatNames()) {
   const sourceSeq = postSourceSeq(post);
   const excerpt = excerptFromBody(post?.body);
   if (!Number.isInteger(sourceSeq) || sourceSeq < 1 || excerpt === "") {
@@ -97,7 +102,7 @@ export function attachQuotation(attached, post, gameId) {
     return Object.freeze(current);
   }
   return Object.freeze(
-    [...current, attachedQuotationFromPost(post, gameId, excerpt)].slice(0, GAME_MAX_QUOTATIONS),
+    [...current, attachedQuotationFromPost(post, gameId, excerpt, names)].slice(0, GAME_MAX_QUOTATIONS),
   );
 }
 
@@ -125,7 +130,7 @@ export function submittedQuotationsPayload(attached) {
   );
 }
 
-export function buildOutgoingQuotationViews(post, posts = [], unavailableSeqs = []) {
+export function buildOutgoingQuotationViews(post, posts = [], unavailableSeqs = [], names = seatNames()) {
   const bySeq = postsBySeq(posts);
   const unavailable = new Set(unavailableSeqs.map(String));
   const outgoing = Array.isArray(post?.quotations) ? post.quotations : [];
@@ -144,7 +149,7 @@ export function buildOutgoingQuotationViews(post, posts = [], unavailableSeqs = 
           sourceSeq,
           excerpt,
           href: postHref(sourceSeq),
-          authorLabel: postAuthorLabel(original),
+          authorLabel: postAuthorLabel(original, names),
           originalState: quotationOriginalState(original, unavailable.has(String(sourceSeq))),
         });
       })
@@ -190,7 +195,7 @@ export function buildIncomingCitationViews({
   });
 }
 
-export function buildGamePostQuoteView(post, { posts = [], unavailableSeqs = [], citations = Object.hasOwn(post ?? {}, "citationPage")
+export function buildGamePostQuoteView(post, { posts = [], unavailableSeqs = [], names = seatNames(), citations = Object.hasOwn(post ?? {}, "citationPage")
   ? post.citationPage ?? { citations: [], citation_count: post.citationCount ?? 0 } : null } = {}) {
   const sourceSeq = postSourceSeq(post);
   const incoming = buildIncomingCitationViews({
@@ -200,19 +205,19 @@ export function buildGamePostQuoteView(post, { posts = [], unavailableSeqs = [],
     sourceSeq,
   });
   return Object.freeze({
-    quotations: buildOutgoingQuotationViews(post, posts, unavailableSeqs),
+    quotations: buildOutgoingQuotationViews(post, posts, unavailableSeqs, names),
     citationCount: incoming.citationCount,
     incomingCitations: incoming.incomingCitations,
     moreCitationCount: incoming.moreCitationCount,
   });
 }
 
-function attachedQuotationFromPost(post, gameId, excerpt) {
+function attachedQuotationFromPost(post, gameId, excerpt, names) {
   const sourceSeq = postSourceSeq(post);
   return Object.freeze({
     sourceSeq,
     excerpt,
-    authorLabel: postAuthorLabel(post) ?? "Unknown",
+    authorLabel: postAuthorLabel(post, names) ?? "Unknown",
     target: gameQuotationTarget(gameId, sourceSeq),
   });
 }

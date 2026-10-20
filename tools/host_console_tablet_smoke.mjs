@@ -51,7 +51,7 @@ const criticalActions = Object.freeze([
     id: "process_replacement",
     taskId: "replacement",
     label: "Process replacement",
-    objectLabel: "Slot 7 / Mira",
+    objectLabel: "Mira · S7",
     outcomeLabel: "replace Mira with Rowan and preserve slot history",
     commandVariant: "ProcessReplacement",
     expectedResult: "ack",

@@ -53,11 +53,7 @@ export const mockStateProjections = Object.freeze({
           alignment_revealed: false,
         },
       ],
-      roster: [
-        rosterSeat("slot-1", "Juniper"),
-        rosterSeat("slot-2", "Ilya"),
-        rosterSeat("slot-7", "Mira", { alive: state.slotStatus === "alive", status: state.slotStatus }),
-      ],
+      roster: midsummerRoster({ slot7Status: state.slotStatus }),
       thread_posts: [
         {
           stream_seq: 72,
@@ -192,6 +188,7 @@ export const fixtureApiRoutes = Object.freeze([
         completed_seq: null,
       }),
       next_before_seq: 440,
+      roster: midsummerRoster(),
       posts: [
         {
           game: "midsummer",
@@ -277,7 +274,7 @@ export const fixtureApiRoutes = Object.freeze([
         body: {
           game: "midsummer",
           phase_id: "D01",
-          candidate_slot: "slot-2 / Ilya",
+          candidate_slot: "slot-2",
           count: 3,
           majority: 5,
         },
@@ -348,6 +345,7 @@ export const fixtureApiRoutes = Object.freeze([
       mention_targets: [
         { channel_id: "main", slots: ["slot-2", "slot-3", "slot-7"] },
       ],
+      roster: midsummerRoster(),
       day_events: [
         {
           event_id: "event-cookie",
@@ -407,4 +405,15 @@ function rosterSeat(slotId, publicName, { alive = true, status = "alive" } = {})
       { began_seq: 3, ended_seq: null, names: [{ effective_seq: 3, public_name: publicName }] },
     ],
   };
+}
+
+// The midsummer fixture's public roster: every seat that appears in its
+// thread, votecount, mentions and host console, named as the live API would.
+export function midsummerRoster({ slot7Status = "alive" } = {}) {
+  return [
+    rosterSeat("slot-1", "Juniper"),
+    rosterSeat("slot-2", "Ilya"),
+    rosterSeat("slot-3", "Rook"),
+    rosterSeat("slot-7", "Mira", { alive: slot7Status === "alive", status: slot7Status }),
+  ];
 }

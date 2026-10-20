@@ -2911,7 +2911,8 @@ pub struct GameRosterSeat {
     pub occupancies: Vec<GameRosterOccupancy>,
 }
 
-/// One persona's tenure in a seat, `[began_seq, ended_seq)`.
+/// One persona's tenure in a seat, `[began_seq, ended_seq)`, in global event
+/// sequences (a thread post's `source_seq`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct GameRosterOccupancy {
     pub began_seq: i64,

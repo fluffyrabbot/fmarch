@@ -155,11 +155,11 @@ assert.equal(
 );
 assert.match(
   session.verification?.hostDecidesTie?.hostOutcomePanel,
-  /HostDecides selected Slot 2/,
+  /· S2 to break the tie/u,
 );
 assert.match(
   session.verification?.hostDecidesTie?.targetOutcomePanel,
-  /HostDecides selected Slot 2/,
+  /· S2 to break the tie/u,
 );
 assert.deepEqual(
   session.verification?.hostDecidesTie?.promptActions,
@@ -1982,7 +1982,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.hostIssuedInvite.targetLabel,
-  "Slot 7 / player-rowan",
+  "player-rowan · S7",
 );
 assert.equal(
   session.verification.replacementConsole.hostIssuedInvite.session.principalId,
@@ -5194,7 +5194,7 @@ assert.equal(
       outcome.status === "Lynch" &&
       outcome.winnerSlot === hostPromptSelectionRace.selectedSlot &&
       outcome.reason === "host_decides_tie" &&
-      panelText.includes("HostDecides selected"),
+      panelText.includes("to break the tie"),
   ),
   true,
 );
@@ -5237,7 +5237,7 @@ assert.equal(
       outcome.status === "Lynch" &&
       outcome.winnerSlot === hostPromptSelectionRace.selectedSlot &&
       outcome.reason === "host_decides_tie" &&
-      panelText.includes("HostDecides selected"),
+      panelText.includes("to break the tie"),
   ),
   true,
 );

@@ -107,7 +107,7 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
   ]);
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.targetLabel),
-    ["Slot 1 / Mira", "Slot 2 / Goon"],
+    ["Mira · S1", "Goon · S2"],
   );
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.principalId),

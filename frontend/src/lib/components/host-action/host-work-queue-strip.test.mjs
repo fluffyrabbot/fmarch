@@ -11,7 +11,7 @@ test("host work queue strip model exposes deadline votecount and replacement que
     queues: [
       { id: "deadline", label: "Deadline", value: "Closes in 9h 41m" },
       { id: "votecount", label: "Votecount", value: "2 projected targets" },
-      { id: "replacement", label: "Replacement", value: "Slot 7 / Mira" },
+      { id: "replacement", label: "Replacement", value: "Mira · S7" },
     ],
   });
 
@@ -29,7 +29,7 @@ test("host work queue strip model exposes deadline votecount and replacement que
     [
       ["deadline", "Deadline", "Closes in 9h 41m", "host-work-queue-deadline", 112],
       ["votecount", "Votecount", "2 projected targets", "host-work-queue-votecount", 112],
-      ["replacement", "Replacement", "Slot 7 / Mira", "host-work-queue-replacement", 112],
+      ["replacement", "Replacement", "Mira · S7", "host-work-queue-replacement", 112],
     ],
   );
 });

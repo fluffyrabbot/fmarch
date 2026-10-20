@@ -787,8 +787,8 @@ export function completedStalePlayerCompleteProofLaneDescriptors({ hardening }) 
           ?.endgameSurface?.voteRows?.some(
             (row) =>
               row.testId?.startsWith("player-endgame-vote-D01-") &&
-              row.text.includes("Slot 2 to No lynch") &&
-              row.text.includes("Slot 3 to No lynch"),
+              row.text.includes("· S2 to No lynch") &&
+              row.text.includes("· S3 to No lynch"),
           ) === true,
     }),
   ];

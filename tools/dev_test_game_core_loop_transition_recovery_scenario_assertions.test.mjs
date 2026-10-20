@@ -280,7 +280,7 @@ function liveStaleVoteSetupFixture() {
       phase: { phaseId: "D02", locked: false },
       voteTargets: [{ kind: "slot", slotId: "slot-2", label: "Slot 2" }],
     },
-    voteButton: { action: "submit_vote", disabled: false, text: "Vote Slot 2" },
+    voteButton: { action: "submit_vote", disabled: false, text: "Vote Target · S2" },
     closedStatus: { state: "closed" },
   };
 }

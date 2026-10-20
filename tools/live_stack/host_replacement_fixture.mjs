@@ -64,7 +64,7 @@ export function hostReplacementFixture() {
   };
   return {
     expected,
-    evidence: structuredClone({ candidate, confirmationMessage: "Process replacement for Slot 7 / player-mira: replace player-mira with Rowan (@rowan) and preserve slot history.",
+    evidence: structuredClone({ candidate, confirmationMessage: "Process replacement for player-mira · S7: replace player-mira with Rowan (@rowan) and preserve slot history.",
       commandStatus, durableBefore, durableAfterLookup: structuredClone(durableBefore), durableAfter }),
   };
 }

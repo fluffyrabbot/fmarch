@@ -546,6 +546,7 @@ function playerPayloadFor(url) {
       current_actions: [],
       vote_targets: [],
       current_vote: null,
+      roster: [],
       day_events: [],
       day_event_rooms: [],
       post_policies: [],
@@ -646,6 +647,7 @@ function playerPayloadFor(url) {
       completed_seq: null,
     },
     next_before_seq: null,
+    roster: [],
     posts: [
       {
         game: "midsummer",

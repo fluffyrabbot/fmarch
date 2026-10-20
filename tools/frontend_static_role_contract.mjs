@@ -1156,10 +1156,10 @@ async function proveConfirmationActionContract() {
     {
       id: "modkill-slot",
       label: "Modkill",
-      objectLabel: "Slot 7 / Mira",
+      objectLabel: "Mira · S7",
       outcomeLabel: "mark dead and lock voting power",
       confirmationText:
-        "Modkill Slot 7 / Mira: mark dead and lock voting power.",
+        "Modkill Mira · S7: mark dead and lock voting power.",
       irreversible: true,
       payload: { slotId: "slot-7" },
     },

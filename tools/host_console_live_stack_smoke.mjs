@@ -4989,7 +4989,7 @@ async function driveModeratorBrowser(
       stalePlayerInviteSession = await openStaleModeratorBrowser(pageUrl);
       stalePlayerInviteBefore = await readPlayerInviteTarget(stalePlayerInviteSession.page);
       if (
-        !stalePlayerInviteBefore.targetLabel.includes("Slot 7") ||
+        !stalePlayerInviteBefore.targetLabel.includes("· S7") ||
         !stalePlayerInviteBefore.targetLabel.includes("player-mira") ||
         stalePlayerInviteBefore.principalId !== PLAYER_MIRA_PRINCIPAL_ID ||
         stalePlayerInviteBefore.expectedOccupantPrincipalId !==

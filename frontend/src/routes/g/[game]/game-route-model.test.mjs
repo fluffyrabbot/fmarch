@@ -378,7 +378,7 @@ test("selected action targets override the server default when legal", () => {
     { factional_kill: "slot-2" },
   ).actionCommands[0];
   assert.deepEqual(picked.targets, ["slot-2"]);
-  assert.equal(picked.detail, "factional_kill -> slot-2");
+  assert.equal(picked.detail, "Target: Slot 2");
   assert.deepEqual(picked.targetOptions, ["slot-2", "slot-3"]);
   assert.equal(picked.action, "submit_action:factional_kill");
 
@@ -388,7 +388,7 @@ test("selected action targets override the server default when legal", () => {
     { factional_kill: "slot-9" },
   ).actionCommands[0];
   assert.deepEqual(staleSelection.targets, ["slot-3"]);
-  assert.equal(staleSelection.detail, "factional_kill -> slot-3");
+  assert.equal(staleSelection.detail, "Target: Slot 3");
 
   const noSelection = buildPlayerComposerView({}, commandState)
     .actionCommands[0];
@@ -413,7 +413,7 @@ test("current actions surface a withdraw command once the picker template is sub
   assert.equal(withdrawal.actionId, "role_factional_kill");
   assert.equal(withdrawal.templateId, "factional_kill");
   assert.deepEqual(withdrawal.targets, ["slot-2"]);
-  assert.match(withdrawal.detail, /Current pick: slot-2/u);
+  assert.match(withdrawal.detail, /Current pick: Slot 2/u);
 });
 
 test("player vote commands honor explicitly empty live command-state targets", () => {
@@ -685,7 +685,7 @@ test("player route data projects an authoritative cold-load snapshot", async () 
         action: "submit_action:factional_kill",
         commandKind: "submit_action",
         label: "Submit factional kill",
-        detail: "factional_kill -> slot-2",
+        detail: "Target: Slot 2",
         templateId: "factional_kill",
         targets: ["slot-2"],
       },

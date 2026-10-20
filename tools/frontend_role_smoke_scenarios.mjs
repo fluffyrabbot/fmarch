@@ -604,7 +604,7 @@ export const roles = Object.freeze([
       '[data-testid="host-task-day-event-resolve-event-cookie"]',
       '[data-testid="host-task-replacement"]',
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="host-console-votecount-row-slot-2_Ilya"]',
+      '[data-testid="host-console-votecount-row-slot-2"]',
       '[data-testid="host-supporting-evidence"] > summary',
       '[data-testid="host-invite-workflows"] > summary',
     ],

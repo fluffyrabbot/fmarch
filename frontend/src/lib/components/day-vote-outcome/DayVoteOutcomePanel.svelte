@@ -7,12 +7,14 @@
   export let heading = "Day vote outcome";
   export let rootTestId = "day-vote-outcome";
   export let boundary = {};
+  export let roster = [];
 
   $: view = buildDayVoteOutcomePanelViewModel({
     outcomes,
     heading,
     rootTestId,
     boundary,
+    roster,
   });
 </script>
 

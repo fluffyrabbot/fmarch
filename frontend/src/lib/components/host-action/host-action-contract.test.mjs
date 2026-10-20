@@ -134,10 +134,10 @@ test("irreversible host actions open a named confirmation before dispatch", () =
     {
       id: "modkill-slot",
       label: "Modkill",
-      objectLabel: "Slot 7 / Mira",
+      objectLabel: "Mira · S7",
       outcomeLabel: "mark dead and lock voting power",
       confirmationText:
-        "Modkill Slot 7 / Mira: mark dead and lock voting power.",
+        "Modkill Mira · S7: mark dead and lock voting power.",
       irreversible: true,
       payload: { slotId: "slot-7" },
     },
@@ -147,7 +147,7 @@ test("irreversible host actions open a named confirmation before dispatch", () =
   action.activate();
 
   assert.equal(action.state.confirmationOpen, true);
-  assert.equal(action.state.confirmation.objectLabel, "Slot 7 / Mira");
+  assert.equal(action.state.confirmation.objectLabel, "Mira · S7");
   assert.equal(
     action.state.confirmation.outcomeLabel,
     "mark dead and lock voting power",
@@ -166,11 +166,11 @@ test("irreversible host actions open a named confirmation before dispatch", () =
     view.confirmation.messageId,
     "host-action-confirmation-message-modkill-slot",
   );
-  assert.match(view.confirmation.message, /Slot 7 \/ Mira/);
+  assert.match(view.confirmation.message, /Mira · S7/);
   assert.match(view.confirmation.message, /mark dead and lock voting power/);
   assert.equal(
     view.confirmation.message,
-    "Modkill Slot 7 / Mira: mark dead and lock voting power.",
+    "Modkill Mira · S7: mark dead and lock voting power.",
   );
   assert.deepEqual(
     {
@@ -205,7 +205,7 @@ test("irreversible host actions open a named confirmation before dispatch", () =
       type: "host-action/dispatch",
       actionId: "modkill-slot",
       label: "Modkill",
-      objectLabel: "Slot 7 / Mira",
+      objectLabel: "Mira · S7",
       outcomeLabel: "mark dead and lock voting power",
       payload: { slotId: "slot-7" },
       confirmationTrace: {

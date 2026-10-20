@@ -47,7 +47,9 @@ export async function load({ params, locals, cookies, fetch, url }) {
         posts: sourcePosts,
       })
     : {};
-  const posts = available ? buildPublicGamePosts(sourcePosts, citationPages, gameId) : [];
+  const posts = available
+    ? buildPublicGamePosts(sourcePosts, citationPages, gameId, page.roster)
+    : [];
   const subscription = available
     ? await loadSubscription({ locals, cookies, fetch, apiBaseUrl, game: gameId })
     : null;
@@ -209,5 +211,24 @@ function fixturePublicGame(game) {
       Object.freeze({ source_seq: 41, author: Object.freeze({ kind: "slot", slot_id: "slot_7" }), body: "One conversation, in chronological context.", occurred_at: 1784703600 }),
     ]),
     next_before_seq: 41,
+    roster: Object.freeze([
+      fixtureRosterSeat("slot_2", "Ilya", 3),
+      fixtureRosterSeat("slot_7", "Mira", 5),
+    ]),
+  });
+}
+
+function fixtureRosterSeat(slotId, publicName, seq) {
+  return Object.freeze({
+    slot_id: slotId,
+    alive: true,
+    status: "alive",
+    occupancies: Object.freeze([
+      Object.freeze({
+        began_seq: seq,
+        ended_seq: null,
+        names: Object.freeze([Object.freeze({ effective_seq: seq, public_name: publicName })]),
+      }),
+    ]),
   });
 }

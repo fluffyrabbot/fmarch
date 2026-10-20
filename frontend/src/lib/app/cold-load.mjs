@@ -455,6 +455,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   dayEventRooms: Object.freeze([]),
   postPolicies: Object.freeze([]),
   mentionTargets: Object.freeze([]),
+  roster: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -540,6 +541,11 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       )
         .map(normalizeChannelMentionTargets)
         .filter(Boolean),
+    ),
+    // The wire roster is kept as received (it is validated upstream) so one
+    // memoized presenter per roster array names every seat on the route.
+    roster: Object.freeze(
+      Array.isArray(payload.roster) ? [...payload.roster] : fallback.roster ?? [],
     ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
   });

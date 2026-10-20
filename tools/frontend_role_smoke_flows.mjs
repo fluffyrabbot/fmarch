@@ -106,6 +106,7 @@ export const commandMockFallback = Object.freeze({
 });
 
 export { createRoleMockState, mockStateProjections, fixtureApiRoutes } from "../frontend/src/lib/dev/role-fixtures.mjs";
+import { midsummerRoster } from "../frontend/src/lib/dev/role-fixtures.mjs";
 
 export const privateChannelCommandMockScenarios = Object.freeze([
   Object.freeze({
@@ -200,7 +201,7 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
         body: {
           game: "midsummer",
           phase_id: "D01",
-          candidate_slot: "slot-2 / Ilya",
+          candidate_slot: "slot-2",
           count: 3,
           majority: 5,
         },
@@ -284,6 +285,7 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
       ],
       day_event_rooms: [],
       post_policies: [],
+      roster: midsummerRoster(),
       boundary: "live",
     }),
   }),

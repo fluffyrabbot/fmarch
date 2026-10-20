@@ -8,6 +8,7 @@ import {
   isHostNarrator,
   normalizeGameThreadAuthor,
 } from "../../app/game-thread-author.mjs";
+import { seatNames } from "../../app/seat-presenter.mjs";
 import { buildSlotMentionSegments } from "../../app/slot-mention-model.mjs";
 import { buildPlayerThreadEmbedView } from "../../app/youtube-embed.mjs";
 
@@ -52,15 +53,16 @@ export function threadPageStatusForResult(olderPostCount) {
 
 export function buildPlayerThreadViewModel(
   thread = {},
-  { threadPageStatus = null, quoteEnabled = false } = {},
+  { threadPageStatus = null, quoteEnabled = false, roster = [] } = {},
 ) {
   const posts = Array.isArray(thread.posts) ? thread.posts : [];
+  const names = seatNames(roster);
   return Object.freeze({
     nextBeforeSeq: thread.nextBeforeSeq ?? null,
     pager: buildPlayerThreadPagerViewModel({ thread, threadPageStatus }),
     quoteEnabled: quoteEnabled === true,
     posts: Object.freeze(
-      posts.map((post) => buildPlayerThreadPostViewModel(post, { posts, quoteEnabled, unavailableSeqs: [...(thread.removedSeqs ?? []), ...(thread.unavailableSeqs ?? [])] })),
+      posts.map((post) => buildPlayerThreadPostViewModel(post, { posts, quoteEnabled, names, unavailableSeqs: [...(thread.removedSeqs ?? []), ...(thread.unavailableSeqs ?? [])] })),
     ),
   });
 }
@@ -131,16 +133,17 @@ export function buildPlayerThreadPermalinkView(post = {}) {
 
 export function buildPlayerThreadPostViewModel(
   post = {},
-  { posts = [], quoteEnabled = false, unavailableSeqs = [] } = {},
+  { posts = [], quoteEnabled = false, unavailableSeqs = [], names = seatNames() } = {},
 ) {
   const author = normalizeGameThreadAuthor(post?.author);
   const media = buildPlayerThreadMedia(post.media);
-  const quote = buildGamePostQuoteView(post, { posts, unavailableSeqs });
+  const quote = buildGamePostQuoteView(post, { posts, unavailableSeqs, names });
+  const at = Number.isSafeInteger(Number(post.seq)) ? Number(post.seq) : null;
   const excerpt = excerptFromBody(post.body);
   return Object.freeze({
     ...post,
     author,
-    authorLabel: gameThreadAuthorLabel(author),
+    authorLabel: gameThreadAuthorLabel(author, { names, at }),
     permalink: buildPlayerThreadPermalinkView(post),
     embed: buildPlayerThreadEmbedView(post.embed, post.seq),
     quotations: quote.quotations,
@@ -149,7 +152,12 @@ export function buildPlayerThreadPostViewModel(
     moreCitationCount: quote.moreCitationCount,
     quoteEnabled: quoteEnabled === true && excerpt !== "",
     // The renderer walks the decided list; it never scans the body for `@`.
-    bodySegments: buildSlotMentionSegments(post.body, post.mentions),
+    // A chip shows the addressed persona as of the post, not the stored span.
+    bodySegments: buildSlotMentionSegments(post.body, post.mentions).map((segment) =>
+      segment.kind === "mention" && segment.slotId !== null
+        ? Object.freeze({ ...segment, text: `@${names.label(segment.slotId, { at })}` })
+        : segment,
+    ),
     media,
     mediaBoundary: Object.freeze({
       status:

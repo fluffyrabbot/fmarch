@@ -68,9 +68,13 @@ export function validateGameplayThreadPageResponse(
   if (!isPlainObject(value) || !nonEmptyString(channel)) {
     return false;
   }
-  // The public main-thread page carries a GameIndexEntry. Private channel
-  // pages do not, so every post is instead scope-bound below.
-  if (value.game !== undefined && !isGameIndexEntryFor(value.game, game)) {
+  // The public main-thread page carries a GameIndexEntry and the game roster.
+  // Private channel pages carry neither, so every post is instead scope-bound
+  // below and names come from the player's command-state roster.
+  if (
+    value.game !== undefined &&
+    (!isGameIndexEntryFor(value.game, game) || !isGameRoster(value.roster))
+  ) {
     return false;
   }
   return (
@@ -542,6 +546,7 @@ export function validatePlayerCommandStateResponse(
     Array.isArray(value.actions) && value.actions.every(isPlayerCommandAction) &&
     Array.isArray(value.current_actions) && value.current_actions.every(isPlayerCurrentAction) &&
     Array.isArray(value.vote_targets) && value.vote_targets.every(isPlayerVoteTarget) &&
+    isGameRoster(value.roster) &&
     (value.current_vote === null || isPlayerVoteTarget(value.current_vote)) &&
     Array.isArray(value.day_events) && value.day_events.every(isPlayerDayEventAttention) &&
     Array.isArray(value.day_event_rooms) && value.day_event_rooms.every(isDayEventRoom) &&

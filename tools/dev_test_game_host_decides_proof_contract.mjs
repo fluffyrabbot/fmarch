@@ -35,10 +35,10 @@ export function assertDevTestGameHostDecidesProof(proof) {
     }) ||
     proof?.targetBeforeDecision?.actorAlive !== true ||
     proof?.targetAfterDecision?.actorAlive !== false ||
-    !proof?.hostOutcomePanel?.includes("HostDecides selected Slot 2") ||
+    !proof?.hostOutcomePanel?.includes("· S2 to break the tie") ||
     !proof?.hostPromptHistory?.includes("D01 official elimination") ||
     !proof?.hostPromptHistory?.includes("Slot 2 selected after host decision") ||
-    !proof?.targetOutcomePanel?.includes("HostDecides selected Slot 2") ||
+    !proof?.targetOutcomePanel?.includes("· S2 to break the tie") ||
     typeof proof?.sourceRoleUrls?.host !== "string" ||
     !proof.sourceRoleUrls.host.includes("/g/")
   ) {

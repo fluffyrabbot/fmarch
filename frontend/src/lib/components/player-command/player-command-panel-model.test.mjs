@@ -34,7 +34,17 @@ test("player command panel model exposes tablet touch command contracts", () => 
       state: "open",
       deadlineLabel: "Jun 19, 2026, 9:00 PM",
     },
-    votecount: [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
+    votecount: [{ target: "slot-2", count: 4, needed: 7 }],
+    roster: [
+    {
+      slot_id: "slot-2",
+      alive: true,
+      status: "alive",
+      occupancies: [
+        { began_seq: 3, ended_seq: null, names: [{ effective_seq: 3, public_name: "Ilya" }] },
+      ],
+    },
+    ],
     channel: {
       channel: "private:role_pm:slot-7",
       label: "Role PM",
@@ -78,7 +88,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
     testId: "player-full-votecount",
     summary: "Full votecount · 1 target",
     open: false,
-    rows: [{ target: "slot-2 / Ilya", label: "Slot 2 / Ilya", tally: "4/7" }],
+    rows: [{ target: "slot-2", label: "Ilya · S2", tally: "4/7" }],
   });
   assert.equal(
     view.quickActions.className,

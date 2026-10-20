@@ -326,6 +326,7 @@ async function provePlayerLiveRuntime() {
         day_events: [],
         day_event_rooms: [],
         post_policies: [],
+        roster: [],
         boundary: "Authoritative command state recovered through a fresh live generation.",
       },
     }),

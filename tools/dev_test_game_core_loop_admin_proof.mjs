@@ -1650,7 +1650,7 @@ async function proveDayThreePlayerVoteSubmission({
         window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
           "slot-4" &&
         window.__fmarchPlayerProjection?.votecount?.[0]?.target ===
-          "slot-4 / Rowan",
+          "slot-4",
       null,
       { timeout: 15000 },
     );
@@ -10345,7 +10345,7 @@ function dayTwoVoteOutcomeRows() {
 function dayThreeVotecountRows() {
   return [
     {
-      target: "slot-4 / Rowan",
+      target: "slot-4",
       count: 2,
       needed: 2,
     },

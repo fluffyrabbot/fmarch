@@ -47,7 +47,7 @@ import {
 } from "../../../lib/components/player-private-queue/player-private-queue-model.mjs";
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 import { buildPlayerRouteLayoutViewModel } from "./player-route-layout.mjs";
-import { voteTargetLabel } from "../../../lib/app/seat-presenter.mjs";
+import { seatNames, voteTargetLabel } from "../../../lib/app/seat-presenter.mjs";
 
 export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "player-surface",
@@ -450,7 +450,10 @@ export function buildPlayerComposerView(
     ...baseComposer,
     mentionRoster: playerMentionRoster(commandState, channelId),
     voteCommands: buildPlayerVoteCommands(baseComposer, commandState),
-    currentVoteLabel: playerCurrentVoteLabel(commandState?.currentVote ?? null),
+    currentVoteLabel: playerCurrentVoteLabel(
+      commandState?.currentVote ?? null,
+      seatNames(commandState?.roster),
+    ),
     hasCurrentVote: commandState?.currentVote != null,
     canWithdrawVote: withdrawState.canWithdrawVote,
     withdrawDisabledReason: withdrawState.reason,
@@ -542,14 +545,14 @@ export function playerWithdrawVoteState(commandState) {
   return Object.freeze({ canWithdrawVote: true, reason: "" });
 }
 
-export function playerCurrentVoteLabel(currentVote) {
+export function playerCurrentVoteLabel(currentVote, names = seatNames()) {
   if (currentVote == null) {
     return "No current vote";
   }
   if (currentVote.kind === "no_lynch") {
     return "Current vote: No lynch";
   }
-  return `Current vote: ${voteTargetLabel(currentVote)}`;
+  return `Current vote: ${voteTargetLabel(currentVote, names)}`;
 }
 
 export function buildPlayerVoteCommands(baseComposer, commandState) {
@@ -557,6 +560,7 @@ export function buildPlayerVoteCommands(baseComposer, commandState) {
     return Object.freeze(baseComposer.voteCommands ?? []);
   }
   const targets = commandState.voteTargets;
+  const names = seatNames(commandState.roster);
   return Object.freeze(
     targets.map((target, index) => {
       if (target.kind === "no_lynch") {
@@ -570,7 +574,7 @@ export function buildPlayerVoteCommands(baseComposer, commandState) {
       return Object.freeze({
         action: index === 0 ? "submit_vote" : `submit_vote:${target.slotId}`,
         commandKind: "submit_vote",
-        label: `Vote ${voteTargetLabel(target)}`,
+        label: `Vote ${voteTargetLabel(target, names)}`,
         voteTarget: { Slot: target.slotId },
       });
     }),
@@ -588,6 +592,9 @@ export function buildPlayerActionCommands(
   if (actions.length === 0 && currentActions.length === 0) {
     return Object.freeze([]);
   }
+  const names = seatNames(commandState?.roster);
+  const targetSummary = (targets) =>
+    targets.length > 0 ? targets.map((target) => names.label(target)).join(", ") : "no target";
   const legal = actions.map((action) => {
     const targetOptions = Object.freeze(
       Array.isArray(action.targetOptions)
@@ -603,10 +610,7 @@ export function buildPlayerActionCommands(
       action: action.action,
       commandKind: action.commandKind,
       label: action.label,
-      detail:
-        targets === action.targets
-          ? action.detail
-          : `${action.templateId} -> ${targets.join(", ")}`,
+      detail: targets.length > 0 ? `Target: ${targetSummary(targets)}` : "",
       actionId: action.actionId,
       templateId: action.templateId,
       targets,
@@ -629,7 +633,7 @@ export function buildPlayerActionCommands(
       action: `withdraw_action:${current.templateId}`,
       commandKind: "withdraw_action",
       label: `Withdraw ${current.templateId}`,
-      detail: `Current pick: ${targets.length > 0 ? targets.join(", ") : "no target"}`,
+      detail: `Current pick: ${targetSummary(targets)}`,
       actionId: current.actionId,
       templateId: current.templateId,
       targets,
@@ -670,8 +674,8 @@ function hasPrincipalId(principalId) {
   return typeof principalId === "string" && principalId.trim() !== "";
 }
 
-export function buildPrivateQueueRouteItems(snapshot, { game, channel }) {
-  return withPrivateQueueReviewLinks(buildPrivateQueue(snapshot), { game, channel });
+export function buildPrivateQueueRouteItems(snapshot, { game, channel, roster = [] }) {
+  return withPrivateQueueReviewLinks(buildPrivateQueue({ ...snapshot, roster }), { game, channel });
 }
 
 function withPrivateQueueReviewLinks(items, { game, channel }) {
@@ -762,8 +766,8 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       "Fixture player route data does not invent role action availability.",
   }),
   votecount: Object.freeze([
-    Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
-    Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),
+    Object.freeze({ target: "slot-2", count: 4, needed: 7 }),
+    Object.freeze({ target: "slot-7", count: 2, needed: 7 }),
     Object.freeze({ target: "No lynch", count: 1, needed: 7 }),
   ]),
   endgameSummary: null,

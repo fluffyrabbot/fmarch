@@ -40,7 +40,7 @@ const dayThreeVoteResolutionSurfaceCaseDefinition = Object.freeze({
     commandKind: "SubmitVote",
     actorSlot: "slot-7",
     targetSlot: "slot-4",
-    targetLabel: "slot-4 / Rowan",
+    targetLabel: "slot-4",
     streamSeq: 907,
     expectedPhaseId: "D03",
     previousOutcomePhaseId: "D02",
@@ -51,7 +51,7 @@ const dayThreeVoteResolutionSurfaceCaseDefinition = Object.freeze({
   }),
   hostResolutionCase: Object.freeze({
     surfaceTestId: "host-console-surface",
-    targetLabel: "slot-4 / Rowan",
+    targetLabel: "slot-4",
     expectedCount: 2,
     expectedNeeded: 2,
     expectedOutcomeIndex: 1,
@@ -181,7 +181,7 @@ export function assertDayThreePlayerVoteProofCase({
     proof.setupAuthoritativeSourceSeq !== voteCase.setupAuthoritativeSourceSeq ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== voteCase.expectedPhaseId ||
     proof.currentVote?.hasVote !== "true" ||
-    !String(proof.currentVote?.text ?? "").includes("Slot 4") ||
+    !String(proof.currentVote?.text ?? "").includes("· S4") ||
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()

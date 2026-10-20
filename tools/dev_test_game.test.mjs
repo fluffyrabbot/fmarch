@@ -996,11 +996,11 @@ test("HostDecides browser proof has a standalone artifact contract", () => {
     targetBeforeDecision: { actorAlive: true },
     targetAfterDecision: { actorAlive: false },
     hostOutcomePanel:
-      "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
+      "D01 Lynch\nTarget · S2 was eliminated by official vote.\nThe host chose Target · S2 to break the tie.",
     hostPromptHistory:
       "Host prompt history\nResolved prompt outcomes\nD01 official elimination\nSlot 2 selected after host decision",
     targetOutcomePanel:
-      "D01 Lynch\nSlot 2 was eliminated by official vote.\nHostDecides selected Slot 2 after the tied vote.",
+      "D01 Lynch\nTarget · S2 was eliminated by official vote.\nThe host chose Target · S2 to break the tie.",
   };
   assert.equal(assertDevTestGameHostDecidesProof(proof), proof);
   assert.deepEqual(devTestGameHostDecidesProofSummary(proof), {
@@ -12340,10 +12340,10 @@ test("session card and markdown include role credential URLs and tokens", async 
         text: "Withdraw vote",
       },
       voterVoteButtons: [
-        { action: "submit_vote", text: "Vote Slot 2", disabled: false },
+        { action: "submit_vote", text: "Vote Target · S2", disabled: false },
         {
           action: "submit_vote:slot-3",
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
           disabled: false,
         },
         {
@@ -12387,7 +12387,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         dayVoteOutcomes: [
           { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
         ],
-        outcomePanel: "D01 Lynch\nSlot 2 was eliminated by official vote.",
+        outcomePanel: "D01 Lynch\nTarget · S2 was eliminated by official vote.",
         outcomeTally: "Slot 2\n4/3",
       },
       dayVoteOutcome: {
@@ -12415,7 +12415,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       targetDayVoteOutcomes: [
         { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
       ],
-      targetOutcomePanel: "D01 Lynch\nSlot 2 was eliminated by official vote.",
+      targetOutcomePanel: "D01 Lynch\nTarget · S2 was eliminated by official vote.",
       targetOutcomeTally: "Slot 2\n4/3",
     },
     dayVoteNoLynch: {
@@ -12710,7 +12710,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             voteTargets: [{ kind: "slot", slotId: "slot_4", label: "Slot 4" }],
           },
           buttons: [
-            { action: "submit_vote:slot_4", text: "Vote Slot 4", disabled: false },
+            { action: "submit_vote:slot_4", text: "Vote Target · S4", disabled: false },
             { action: "submit_vote:no_lynch", disabled: false },
           ],
         },
@@ -12721,7 +12721,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         d03TerminalVoteButton: {
           action: "submit_vote:slot_4",
-          text: "Vote Slot 4",
+          text: "Vote Target · S4",
           disabled: false,
         },
         d03TerminalVoteSubmission: {
@@ -14081,7 +14081,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       proof: "host processed replacement",
       hostIssuedInvite: {
         status: "passed",
-        targetLabel: "Slot 7 / player-rowan",
+        targetLabel: "player-rowan · S7",
         statusText: "Replacement invite issued",
         loginUrl: `http://127.0.0.1:4102/auth/game-invite?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
         returnTo: `/g/${game}`,
@@ -14814,7 +14814,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           exists: true,
           disabled: false,
           reason: "",
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         withdrawBeforeClose: {
           exists: true,
@@ -14875,7 +14875,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleVoteButton: {
           action: "submit_vote",
           disabled: false,
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         closedStatus: { state: "closed" },
         actionVote: { state: "ack" },
@@ -14947,7 +14947,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleVoteButton: {
           action: "submit_vote",
           disabled: false,
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         initialVote: { state: "ack" },
         commandStateBeforeClose: {
@@ -15116,7 +15116,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleVoteButton: {
           action: "submit_vote:slot-3",
           disabled: false,
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         currentVoteBeforeClose: {
           hasVote: "true",
@@ -15299,7 +15299,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleVoteButton: {
           action: "submit_vote",
           disabled: false,
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         currentVoteBeforeClose: {
           hasVote: "false",
@@ -15332,7 +15332,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           projectionRefreshKeys: ["votecount", "commandState"],
         },
         buttonsAfterReject: [
-          { action: "submit_vote", disabled: false, text: "Vote Slot 4" },
+          { action: "submit_vote", disabled: false, text: "Vote Target · S4" },
           { action: "submit_vote:no_lynch", disabled: false, text: "Vote no lynch" },
           { action: "withdraw_vote", disabled: true, text: "Withdraw vote" },
         ],
@@ -15356,7 +15356,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         voteButton: {
           action: "submit_vote",
           disabled: false,
-          text: "Vote Slot 3",
+          text: "Vote Target · S3",
         },
         vote: {
           state: "ack",
@@ -15495,8 +15495,8 @@ test("session card and markdown include role credential URLs and tokens", async 
           actionCommandState: {
             currentVote: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
           },
-          playerCurrentVote: { hasVote: "true", text: "Current vote: Slot 3" },
-          actionCurrentVote: { hasVote: "true", text: "Current vote: Slot 3" },
+          playerCurrentVote: { hasVote: "true", text: "Current vote: Target · S3" },
+          actionCurrentVote: { hasVote: "true", text: "Current vote: Target · S3" },
           playerProjection: [{ target: "slot-3", count: 2 }],
           actionProjection: [{ target: "slot-3", count: 2 }],
           apiProjection: { count: 2 },
@@ -23025,8 +23025,8 @@ function replacementHandoffRecoveryMilestoneFixture() {
 function hostDecidesPlayerOutcomeConvergenceFixture(selectedSlot = "slot-2") {
   const panelText = [
     "D01 Lynch",
-    "Slot 2 was eliminated by official vote.",
-    "HostDecides selected Slot 2 after the tied vote.",
+    "Target · S2 was eliminated by official vote.",
+    "The host chose Target · S2 to break the tie.",
   ].join("\n");
   return {
     status: "passed",

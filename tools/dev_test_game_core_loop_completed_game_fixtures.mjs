@@ -495,7 +495,7 @@ function completedPlayerEndgameSurfaceFixture() {
       {
         testId: "player-endgame-vote-D01-31-0",
         text:
-          "D01 No lynch No lynch: 2 Slot 2 to No lynch; Slot 3 to No lynch Majority 2",
+          "D01 No lynch No lynch: 2 Target · S2 to No lynch; Target · S3 to No lynch Majority 2",
       },
     ],
   };

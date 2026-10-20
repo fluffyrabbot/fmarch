@@ -92,7 +92,7 @@ function validPlayerOutcomeConvergence(convergence, selectedSlot) {
         outcome?.winnerSlot === selectedSlot &&
         outcome?.reason === "host_decides_tie" &&
         panelText?.includes("D01 Lynch") &&
-        panelText?.includes("HostDecides selected"),
+        panelText?.includes("to break the tie"),
     )
   );
 }

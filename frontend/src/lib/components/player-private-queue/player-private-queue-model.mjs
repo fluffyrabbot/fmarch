@@ -24,7 +24,9 @@ export function buildPrivateQueue({
   notifications = [],
   investigationResults = [],
   slotMentions = [],
+  roster = [],
 } = {}) {
+  const names = seatNames(roster);
   return Object.freeze([
     ...notifications.map((notification) => {
       const phaseLabel = phaseLabelFromId(notification.phase_id);
@@ -50,7 +52,7 @@ export function buildPrivateQueue({
         id: privateItemId("slot-mention", mention),
         kind: "slot-mention",
         destination: { channel: mention.channel_id, sourceSeq: mention.source_seq },
-        label: `Addressed as ${seatLabel(mention.audience_slot)}`,
+        label: `Addressed as ${names.label(mention.audience_slot, { at: Number(mention.source_seq) })}`,
         value: channelLabel(mention.channel_id),
         detail:
           phaseLabel === null
@@ -128,4 +130,4 @@ function channelLabel(channelId) {
 }
 
 import { phaseLabelFromId } from "../../phase-id.mjs";
-import { seatLabel } from "../../app/seat-presenter.mjs";
+import { seatNames } from "../../app/seat-presenter.mjs";

@@ -70,7 +70,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     statusStackClassName: "fm-status-stack",
     eyebrow: "midsummer",
     title: "Host console",
-    summary: "Day 1 deadline is active. Slot 7 / player-mira has a pending replacement.",
+    summary: "Day 1 deadline is active. player-mira · S7 has a pending replacement.",
     capability: {
       visible: true,
       label: "Hosting midsummer",
@@ -124,8 +124,8 @@ test("host console route data is allowed for HostOf scoped to the current game",
     "/live/tickets?game=midsummer",
   );
   assert.deepEqual(data.votecount, [
-    { target: "slot-2 / Ilya", count: 4, needed: 7 },
-    { target: "slot-7 / Mira", count: 2, needed: 7 },
+    { target: "slot-2", count: 4, needed: 7 },
+    { target: "slot-7", count: 2, needed: 7 },
   ]);
   assert.deepEqual(data.dayVoteOutcomes, [
     {
@@ -250,7 +250,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     slotId: "slot-7",
     principalId: PLAYER_MIRA_PRINCIPAL_ID,
     expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
-    targetLabel: "Slot 7 / player-mira",
+    targetLabel: "player-mira · S7",
     submitLabel: "Issue player invite",
   });
   assert.equal(
@@ -287,12 +287,12 @@ test("host invite targets derive from projected slot occupancy", () => {
   assert.equal(targets.player.available, true);
   assert.equal(targets.player.principalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.player.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
-  assert.equal(targets.player.targetLabel, "Slot 12 / player-alex");
+  assert.equal(targets.player.targetLabel, "player-alex · S12");
   assert.equal(targets.replacement.slotId, "slot_12");
   assert.equal(targets.replacement.available, true);
   assert.equal(targets.replacement.principalId, PLAYER_JULES_PRINCIPAL_ID);
   assert.equal(targets.replacement.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
-  assert.equal(targets.replacement.targetLabel, "Slot 12 / player-jules");
+  assert.equal(targets.replacement.targetLabel, "player-jules · S12");
 });
 
 test("host invite targets fail closed when a live replacement omits principal authority", () => {

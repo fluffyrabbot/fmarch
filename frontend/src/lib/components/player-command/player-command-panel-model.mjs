@@ -1,5 +1,5 @@
 import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
-import { seatLabel, voteTargetLabel } from "../../app/seat-presenter.mjs";
+import { seatNames, voteTargetLabel } from "../../app/seat-presenter.mjs";
 
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   rootClassName: "player-command-panel fm-card fm-primary-action-zone",
@@ -27,8 +27,10 @@ export function buildPlayerCommandPanelViewModel({
   commandPending = false,
   commandInterrupted = false,
   confirmingAction = null,
+  roster = [],
 }) {
-  const channelContext = buildChannelContextViewModel({ channel, player });
+  const names = seatNames(roster);
+  const channelContext = buildChannelContextViewModel({ channel, player, names });
   const readOnlyReason =
     player.readOnly === true
       ? "Spectator rooms are read-only."
@@ -51,7 +53,7 @@ export function buildPlayerCommandPanelViewModel({
       }),
       heading: "Vote",
       context: buildActionContextViewModel({ phase, composer }),
-      votecount: buildVotecountViewModel(votecount),
+      votecount: buildVotecountViewModel(votecount, names),
       composer: Object.freeze({
         readOnly: true,
         reason: readOnlyReason,
@@ -102,7 +104,7 @@ export function buildPlayerCommandPanelViewModel({
     }),
     heading: "Vote",
     context: buildActionContextViewModel({ phase, composer }),
-    votecount: buildVotecountViewModel(votecount),
+    votecount: buildVotecountViewModel(votecount, names),
     composer: Object.freeze({
       label: "Post body",
       defaultBody: String(composer.defaultBody ?? ""),
@@ -119,6 +121,7 @@ export function buildPlayerCommandPanelViewModel({
         actionCommands: composer.actionCommands ?? [],
         confirmingAction,
         disabled: playerCommandsDisabled,
+        roster,
       }),
     }),
   });
@@ -132,8 +135,8 @@ function buildActionContextViewModel({ phase = {}, composer = {} } = {}) {
   });
 }
 
-function buildVotecountViewModel(votecount = []) {
-  const rows = Object.freeze(votecount.map(normalizeVotecountRow));
+function buildVotecountViewModel(votecount = [], names = seatNames()) {
+  const rows = Object.freeze(votecount.map((row) => normalizeVotecountRow(row, names)));
   return Object.freeze({
     className: PLAYER_COMMAND_PANEL_CONTRACT.votecountClassName,
     testId: PLAYER_COMMAND_PANEL_CONTRACT.votecountTestId,
@@ -156,7 +159,7 @@ function buildCurrentVoteViewModel(composer = {}) {
   });
 }
 
-function buildChannelContextViewModel({ channel = {}, player = {} }) {
+function buildChannelContextViewModel({ channel = {}, player = {}, names = seatNames() }) {
   const channelId = String(channel.channel ?? "main");
   const channelLabel = String(channel.label ?? "Main thread");
   const actorStatus = String(player.status ?? "").trim();
@@ -178,7 +181,7 @@ function buildChannelContextViewModel({ channel = {}, player = {} }) {
     actorAlive,
     actorStatus,
     label: "Posting target",
-    value: `${channelLabel} as ${seatLabel(slotId)}${lifecycleSuffix}`,
+    value: `${channelLabel} as ${names.label(slotId)}${lifecycleSuffix}`,
     audienceLabel:
       channelId === "main"
         ? "Everyone at the table reads this"
@@ -200,10 +203,10 @@ function buildDeadlineViewModel(phase) {
   });
 }
 
-function normalizeVotecountRow(row) {
+function normalizeVotecountRow(row, names = seatNames()) {
   return Object.freeze({
     target: String(row.target ?? "unknown"),
-    label: voteTargetLabel(row.target),
+    label: voteTargetLabel(row.target, names),
     tally: `${Number(row.count ?? 0)}/${Number(row.needed ?? 0)}`,
   });
 }

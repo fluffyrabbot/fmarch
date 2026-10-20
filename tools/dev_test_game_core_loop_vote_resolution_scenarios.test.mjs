@@ -35,7 +35,7 @@ test("Day 3 vote resolution case shares vote and host resolution facts", () => {
       commandKind: "SubmitVote",
       actorSlot: "slot-7",
       targetSlot: "slot-4",
-      targetLabel: "slot-4 / Rowan",
+      targetLabel: "slot-4",
       streamSeq: 907,
       expectedPhaseId: "D03",
       previousOutcomePhaseId: "D02",
@@ -46,7 +46,7 @@ test("Day 3 vote resolution case shares vote and host resolution facts", () => {
     },
     hostResolutionCase: {
       surfaceTestId: "host-console-surface",
-      targetLabel: "slot-4 / Rowan",
+      targetLabel: "slot-4",
       expectedCount: 2,
       expectedNeeded: 2,
       expectedOutcomeIndex: 1,
@@ -133,11 +133,11 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
         currentVote: { slotId: "slot-4" },
         boundary: "Seeded browser Day 3 vote ACK refreshed current vote.",
       },
-      projectionVotecount: [{ target: "slot-4 / Rowan", count: 2, needed: 2 }],
+      projectionVotecount: [{ target: "slot-4", count: 2, needed: 2 }],
       projectionDayVoteOutcomes: [{ phaseId: "D02" }],
       setupAuthoritativeSourceSeq: 906,
       setupSnapshotCommandState: { phase: { phaseId: "D03" } },
-      currentVote: { hasVote: "true", text: "Slot 4 / Rowan" },
+      currentVote: { hasVote: "true", text: "Rowan · S4" },
       receiptCount: 1,
       receiptStatusText: "Ack: stream seqs 907",
       receiptRefreshKeys: "votecount,commandState",
@@ -152,7 +152,7 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
       visitedRolePath: "/g/game-a/host",
       surfaceTestId: "host-console-surface",
       hostVotecountProjection: [
-        { target: "slot-4 / Rowan", count: 2, needed: 2 },
+        { target: "slot-4", count: 2, needed: 2 },
       ],
       hostDayVoteOutcomesProjection: [
         { phaseId: "D02", status: "NoLynch" },
@@ -160,7 +160,7 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
       ],
       resolveProof: {
         id: "resolve",
-        votecountProjection: [{ target: "slot-4 / Rowan" }],
+        votecountProjection: [{ target: "slot-4" }],
         dayVoteOutcomesProjection: [
           { phaseId: "D02" },
           { phaseId: "D03" },

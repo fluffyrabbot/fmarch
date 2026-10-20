@@ -12,9 +12,11 @@ export function buildDayVoteOutcomePanelViewModel({
   heading = "Day vote outcome",
   rootTestId = "day-vote-outcome",
   boundary = {},
+  roster = [],
 } = {}) {
   const normalized = Array.isArray(outcomes) ? outcomes : [];
   const latest = normalized.at(-1) ?? null;
+  const names = seatNames(roster);
   return Object.freeze({
     root: Object.freeze({
       className: DAY_VOTE_OUTCOME_PANEL_CONTRACT.rootClassName,
@@ -45,12 +47,12 @@ export function buildDayVoteOutcomePanelViewModel({
             phaseLabel: phaseLabelFromId(latest.phaseId) ?? latest.phaseId,
             status: latest.status,
             winnerSlot: latest.winnerSlot,
-            winnerLabel: outcomeWinnerLabel(latest),
-            summary: outcomeSummary(latest),
-            reason: outcomeReasonLabel(latest),
+            winnerLabel: outcomeWinnerLabel(latest, names),
+            summary: outcomeSummary(latest, names),
+            reason: outcomeReasonLabel(latest, names),
             testId: `${rootTestId}-latest`,
           }),
-    tallies: Object.freeze(outcomeTallies(latest).map((row) => Object.freeze({
+    tallies: Object.freeze(outcomeTallies(latest, names).map((row) => Object.freeze({
       ...row,
       testId: `${rootTestId}-tally-${sanitizeTestId(row.slot)}`,
       minTargetPx: DAY_VOTE_OUTCOME_PANEL_CONTRACT.minRowTargetPx,
@@ -61,44 +63,53 @@ export function buildDayVoteOutcomePanelViewModel({
   });
 }
 
-function outcomeSummary(outcome) {
+// A seat is named as of the resolution, so an elimination keeps the name the
+// eliminated persona held when the vote resolved.
+function outcomeSeatLabel(outcome, slot, names) {
+  const at = Number(outcome.sourceSeq);
+  return slot === "no_lynch" || slot === "NoLynch"
+    ? voteTargetLabel(slot)
+    : names.label(slot, { at: Number.isSafeInteger(at) && at > 0 ? at : null });
+}
+
+function outcomeSummary(outcome, names) {
   if (outcome.status === "Lynch" && typeof outcome.winnerSlot === "string") {
-    return `${voteTargetLabel(outcome.winnerSlot)} was eliminated by official vote.`;
+    return `${outcomeSeatLabel(outcome, outcome.winnerSlot, names)} was eliminated by official vote.`;
   }
   if (outcome.status === "NoLynch") {
     return "The official vote resolved without an elimination.";
   }
   if (typeof outcome.winnerSlot === "string") {
-    return `${outcome.status}: ${voteTargetLabel(outcome.winnerSlot)}`;
+    return `${outcome.status}: ${outcomeSeatLabel(outcome, outcome.winnerSlot, names)}`;
   }
   return outcome.status;
 }
 
-function outcomeWinnerLabel(outcome) {
+function outcomeWinnerLabel(outcome, names) {
   if (typeof outcome.winnerSlot === "string" && outcome.winnerSlot.trim() !== "") {
-    return voteTargetLabel(outcome.winnerSlot);
+    return outcomeSeatLabel(outcome, outcome.winnerSlot, names);
   }
   return outcome.status === "NoLynch" ? "No lynch" : "No winner";
 }
 
-function outcomeReasonLabel(outcome) {
+function outcomeReasonLabel(outcome, names) {
   if (
     outcome.reason === "host_decides_tie" &&
     typeof outcome.winnerSlot === "string"
   ) {
-    return `HostDecides selected ${voteTargetLabel(outcome.winnerSlot)} after the tied vote.`;
+    return `The host chose ${outcomeSeatLabel(outcome, outcome.winnerSlot, names)} to break the tie.`;
   }
   return outcome.reason;
 }
 
-function outcomeTallies(outcome) {
+function outcomeTallies(outcome, names) {
   if (outcome === null || outcome.tallies === null || typeof outcome.tallies !== "object") {
     return [];
   }
   return Object.entries(outcome.tallies)
     .map(([slot, count]) => ({
       slot,
-      slotLabel: voteTargetLabel(slot),
+      slotLabel: outcomeSeatLabel(outcome, slot, names),
       count: Number(count),
       majority: outcome.majority,
     }))
@@ -111,4 +122,4 @@ function sanitizeTestId(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]+/g, "_");
 }
 import { phaseLabelFromId } from "../../phase-id.mjs";
-import { voteTargetLabel } from "../../app/seat-presenter.mjs";
+import { seatNames, voteTargetLabel } from "../../app/seat-presenter.mjs";

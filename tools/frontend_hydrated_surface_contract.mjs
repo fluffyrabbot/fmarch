@@ -846,7 +846,7 @@ function refreshedValue(key) {
     case "thread":
       return { posts: [], nextBeforeSeq: null };
     case "votecount":
-      return [{ target: "slot-2 / Ilya", count: 5, needed: 7 }];
+      return [{ target: "slot-2", count: 5, needed: 7 }];
     case "hostPrompts":
       return [];
     default:

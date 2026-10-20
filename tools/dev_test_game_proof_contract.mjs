@@ -629,7 +629,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.voterVoteButtons?.some(
           (button) =>
             button.action === "submit_vote" &&
-            button.text?.includes("Vote Slot 2") &&
+            /^Vote .*· S2\b/u.test(button.text ?? "") &&
             button.disabled === false,
         ) &&
         verification.dayVoteResolution?.voterVoteButtons?.some(
@@ -661,7 +661,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) &&
         verification.dayVoteResolution?.hostAfterResolve?.outcomePanel?.includes("D01 Lynch") &&
         verification.dayVoteResolution?.hostAfterResolve?.outcomePanel?.includes(
-          "Slot 2 was eliminated",
+          "· S2 was eliminated",
         ) &&
         verification.dayVoteResolution?.hostAfterResolve?.outcomeTally?.includes("4/3") &&
         verification.dayVoteResolution?.hostSlot?.alive === false &&
@@ -676,7 +676,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) &&
         verification.dayVoteResolution?.targetOutcomePanel?.includes("D01 Lynch") &&
         verification.dayVoteResolution?.targetOutcomePanel?.includes(
-          "Slot 2 was eliminated",
+          "· S2 was eliminated",
         ) &&
         verification.dayVoteResolution?.targetOutcomeTally?.includes("4/3") &&
         verification.dayVoteResolution?.targetNotice?.effect === "player_killed" &&
@@ -1674,7 +1674,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.hostIssuedInvite?.session?.returnTo ===
           `/g/${session?.game ?? ""}` &&
         verification.replacementConsole?.hostIssuedInvite?.targetLabel ===
-          "Slot 7 / player-rowan" &&
+          "player-rowan · S7" &&
         verification.replacementConsole?.hostIssuedInvite?.tokenPresent === true,
     }),
     lane("replacement-pending-player", "Incoming replacement URL waits without slot authority", {
@@ -5680,7 +5680,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
               outcome?.winnerSlot ===
                 hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
               outcome?.reason === "host_decides_tie" &&
-              panelText?.includes("HostDecides selected"),
+              panelText?.includes("to break the tie"),
           ) &&
           hardening.concurrentHostPromptSelectionRace?.rejectActivityStatusText
             ?.includes("Reject PromptAlreadyResolved") === true &&
@@ -5754,7 +5754,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
               outcome?.winnerSlot ===
                 hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
               outcome?.reason === "host_decides_tie" &&
-              panelText?.includes("HostDecides selected"),
+              panelText?.includes("to break the tie"),
           ),
       },
     ),
@@ -5789,7 +5789,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
                 hardening.concurrentHostPromptSelectionRace?.selectedSlot &&
               outcome?.reason === "host_decides_tie" &&
               panelText?.includes("was eliminated by official vote") &&
-              panelText?.includes("HostDecides selected"),
+              panelText?.includes("to break the tie"),
           ) &&
           typeof hardening.concurrentHostPromptSelectionRace?.sourceRoleUrls
             ?.selectedPlayer === "string" &&
@@ -7150,10 +7150,10 @@ export function assertDevTestGameProofRun(proof) {
       proof.hostDecidesTie.selectedSlot !== "slot-2" ||
       proof.hostDecidesTie.targetAfterDecision?.actorAlive !== false ||
       !proof.hostDecidesTie.hostOutcomePanel?.includes(
-        "HostDecides selected Slot 2",
+        "· S2 to break the tie",
       ) ||
       !proof.hostDecidesTie.targetOutcomePanel?.includes(
-        "HostDecides selected Slot 2",
+        "· S2 to break the tie",
       ))
   ) {
     throw new Error("dev-test-game proof is missing HostDecides browser evidence");

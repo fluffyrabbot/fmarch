@@ -9,6 +9,7 @@ import {
 } from "../../../lib/app/game-thread-author.mjs";
 import { buildPlayerThreadEmbedView } from "../../../lib/app/youtube-embed.mjs";
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
+import { seatNames } from "../../../lib/app/seat-presenter.mjs";
 
 export { GAME_CITATION_PREVIEW_LIMIT };
 
@@ -73,8 +74,9 @@ function humanize(value) {
   return text === "" ? "Game" : `${text[0].toUpperCase()}${text.slice(1)}`;
 }
 
-export function buildPublicGamePosts(posts = [], citationPages = {}, gameId) {
+export function buildPublicGamePosts(posts = [], citationPages = {}, gameId, roster = []) {
   const source = Array.isArray(posts) ? posts : [];
+  const names = seatNames(roster);
   return Object.freeze(
     source.map((post) => {
       const author = normalizeGameThreadAuthor(post?.author);
@@ -98,12 +100,12 @@ export function buildPublicGamePosts(posts = [], citationPages = {}, gameId) {
       return Object.freeze({
         ...post,
         author,
-        authorLabel: gameThreadAuthorLabel(author),
+        authorLabel: gameThreadAuthorLabel(author, { names, at: Number(post.source_seq) }),
         embed: buildPlayerThreadEmbedView(
           post.embed,
           post.source_seq ?? post.sourceSeq,
         ),
-        quotations: buildOutgoingQuotationViews(post, source),
+        quotations: buildOutgoingQuotationViews(post, source, [], names),
         citationCount,
         incomingCitations,
         moreCitationCount: Math.max(0, citationCount - incomingCitations.length),

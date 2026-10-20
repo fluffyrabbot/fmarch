@@ -1,5 +1,5 @@
 import { buildConfirmationActionViewModel } from "../../app/confirmation-action-model.mjs";
-import { seatLabel } from "../../app/seat-presenter.mjs";
+import { seatNames } from "../../app/seat-presenter.mjs";
 
 export const PLAYER_ACTION_TARGET_PICKER_CONTRACT = Object.freeze({
   componentName: "player-action-target-picker",
@@ -29,7 +29,9 @@ export function buildPlayerActionTargetPicker({
   actionCommands = [],
   confirmingAction = null,
   disabled = false,
+  roster = [],
 } = {}) {
+  const names = seatNames(roster);
   const commands = Array.isArray(actionCommands) ? actionCommands : [];
   const submittable = commands.filter(isSubmitActionCommand);
   const withdrawable = commands.filter(isWithdrawActionCommand);
@@ -43,10 +45,10 @@ export function buildPlayerActionTargetPicker({
     }),
     actions: Object.freeze([
       ...submittable.map((command) =>
-        pickerAction({ command, confirmingAction, disabled }),
+        pickerAction({ command, confirmingAction, disabled, names }),
       ),
       ...withdrawable.map((command) =>
-        withdrawPickerAction({ command, confirmingAction, disabled }),
+        withdrawPickerAction({ command, confirmingAction, disabled, names }),
       ),
     ]),
   });
@@ -68,7 +70,7 @@ function isWithdrawActionCommand(command) {
   return String(command?.action ?? "").startsWith("withdraw_action");
 }
 
-function pickerAction({ command, confirmingAction, disabled }) {
+function pickerAction({ command, confirmingAction, disabled, names }) {
   const templateId = String(command.templateId ?? "");
   const action = String(command.action ?? `submit_action:${templateId}`);
   const targets = Object.freeze(
@@ -85,7 +87,7 @@ function pickerAction({ command, confirmingAction, disabled }) {
         const slot = String(option);
         return Object.freeze({
           slot,
-          label: seatLabel(slot),
+          label: names.label(slot),
           checked: slot === selectedTarget,
           name: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.optionTestIdPrefix}-${templateId}`,
           testId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.optionTestIdPrefix}-${templateId}-${slot}`,
@@ -125,7 +127,7 @@ function pickerAction({ command, confirmingAction, disabled }) {
         surface: PLAYER_ACTION_TARGET_PICKER_CONTRACT.surface,
         actionId: templateId,
         label,
-        message: `${label}: ${detail === "" ? `${templateId} -> ${targets.join(", ")}` : detail}. This submits your action for the current phase.`,
+        message: `${label}: ${detail === "" ? `Target: ${targets.length > 0 ? targets.map((target) => names.label(target)).join(", ") : "no target"}` : detail}. This submits your action for the current phase.`,
         messageIdPrefix: PLAYER_ACTION_TARGET_PICKER_CONTRACT.messageIdPrefix,
         confirmTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.confirmTestIdPrefix}-${templateId}`,
         cancelTestId: `${PLAYER_ACTION_TARGET_PICKER_CONTRACT.cancelTestIdPrefix}-${templateId}`,
@@ -146,7 +148,7 @@ function pickerAction({ command, confirmingAction, disabled }) {
 // A submitted action's withdraw affordance. Shaped like pickerAction so it renders
 // through the same panel block (no radios; the current pick shows in `detail`, the
 // trigger is the Withdraw button, and confirm dispatches the withdraw_action command).
-function withdrawPickerAction({ command, confirmingAction, disabled }) {
+function withdrawPickerAction({ command, confirmingAction, disabled, names }) {
   const templateId = String(command.templateId ?? "");
   const action = String(command.action ?? `withdraw_action:${templateId}`);
   const targets = Object.freeze(
@@ -156,7 +158,7 @@ function withdrawPickerAction({ command, confirmingAction, disabled }) {
   );
   const label = String(command.label ?? `Withdraw ${templateId}`);
   const detail = String(command.detail ?? "");
-  const pick = targets.length > 0 ? targets.map((target) => seatLabel(target)).join(", ") : "no target";
+  const pick = targets.length > 0 ? targets.map((target) => names.label(target)).join(", ") : "no target";
   return Object.freeze({
     action,
     commandKind: "withdraw_action",

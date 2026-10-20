@@ -108,6 +108,6 @@ test("day vote outcome panel names the final HostDecides selection", () => {
   assert.equal(view.latest.summary, "Slot 2 was eliminated by official vote.");
   assert.equal(
     view.latest.reason,
-    "HostDecides selected Slot 2 after the tied vote.",
+    "The host chose Slot 2 to break the tie.",
   );
 });

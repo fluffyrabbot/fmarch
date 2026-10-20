@@ -97,7 +97,7 @@ export function dayThreeVoteResolutionSurfaceFixture({
       },
       currentVote: {
         hasVote: "true",
-        text: "Current vote Slot 4",
+        text: "Current vote Goon A · S4",
       },
       receiptCount: 1,
       receiptStatusText: `Ack: stream seqs ${voteCase.streamSeq}`,

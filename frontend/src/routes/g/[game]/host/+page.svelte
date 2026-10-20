@@ -681,12 +681,14 @@
           <HostVotecountPanel
             boundary={data.votecountBoundary}
             rows={votecount}
+            roster={projection.roster ?? []}
           />
 
           <DayVoteOutcomePanel
             outcomes={dayVoteOutcomes}
             boundary={data.dayVoteOutcomeBoundary}
             rootTestId="host-day-vote-outcome"
+            roster={projection.roster ?? []}
           />
 
           <HostPhaseSummary phase={data.phase} {projection} />

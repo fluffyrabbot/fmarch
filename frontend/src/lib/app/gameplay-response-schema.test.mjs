@@ -42,6 +42,20 @@ test("aggregate DTO schemas reject partial, cross-game, and cross-channel rows",
     false,
   );
   assert.equal(validateGameplayThreadPageResponse({}), false);
+  const { roster: _roster, ...rosterless } = threadPage();
+  assert.equal(
+    validateGameplayThreadPageResponse(rosterless, { game: "midsummer" }),
+    false,
+    "a public page must carry its roster",
+  );
+  assert.equal(
+    validateGameplayThreadPageResponse(
+      { ...threadPage(), roster: [{ slot_id: "slot-2", alive: true, status: "alive", occupancies: [{ began_seq: 1, ended_seq: null, names: [{ effective_seq: 1, public_name: "" }] }] }] },
+      { game: "midsummer" },
+    ),
+    false,
+    "a roster name may not be blank",
+  );
   assert.equal(validateEndgameSummaryResponse(null), true);
   assert.equal(
     validateEndgameSummaryResponse(endgameSummary(), { game: "midsummer" }),
@@ -420,6 +434,7 @@ function playerCommandState() {
     current_actions: [],
     vote_targets: [],
     current_vote: null,
+    roster: [],
     day_events: [],
     day_event_rooms: [],
     post_policies: [],
@@ -455,6 +470,16 @@ function threadPage() {
     },
     posts: [threadPost()],
     next_before_seq: null,
+    roster: [
+      {
+        slot_id: "slot-2",
+        alive: true,
+        status: "alive",
+        occupancies: [
+          { began_seq: 1, ended_seq: null, names: [{ effective_seq: 1, public_name: "Ilya" }] },
+        ],
+      },
+    ],
   };
 }
 

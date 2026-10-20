@@ -13,8 +13,18 @@ test("host votecount panel model exposes live official-count boundary", () => {
       command: "official-votecount-live-ws",
     },
     rows: [
-      { target: "slot-2 / Ilya", count: 4, needed: 7 },
+      { target: "slot-2", count: 4, needed: 7 },
       { target: "No lynch", count: 1, needed: 7 },
+    ],
+    roster: [
+      {
+        slot_id: "slot-2",
+        alive: true,
+        status: "alive",
+        occupancies: [
+          { began_seq: 3, ended_seq: null, names: [{ effective_seq: 3, public_name: "Ilya" }] },
+        ],
+      },
     ],
   });
 
@@ -27,15 +37,17 @@ test("host votecount panel model exposes live official-count boundary", () => {
   assert.equal(view.boundary.command, "official-votecount-live-ws");
   assert.deepEqual(view.rows, [
     {
-      target: "slot-2 / Ilya",
+      target: "slot-2",
+      label: "Ilya · S2",
       tally: "4/7",
       fillPercent: 57,
       atHammer: false,
-      testId: "host-console-votecount-row-slot-2_Ilya",
+      testId: "host-console-votecount-row-slot-2",
       minTargetPx: 44,
     },
     {
       target: "No lynch",
+      label: "No lynch",
       tally: "1/7",
       fillPercent: 14,
       atHammer: false,
@@ -59,8 +71,8 @@ test("host votecount panel model represents empty ballot state", () => {
 
 test("host votecount row test ids normalize arbitrary targets", () => {
   assert.equal(
-    votecountRowTestId("slot-7 / Mira (replacement)"),
-    "host-console-votecount-row-slot-7_Mira_replacement_",
+    votecountRowTestId("slot-7 (replacement)"),
+    "host-console-votecount-row-slot-7_replacement_",
   );
   assert.equal(
     buildHostVotecountPanelViewModel({

@@ -61,14 +61,15 @@ on `main` @ 9782a3f6.
 
 Everywhere a seat appears — post author, votecount, vote picker, mention,
 quotation, host queue, outcomes, history — the primary text is the persona's
-public name and a muted `#2` tag follows it. The persona name is anonymous with
+public name and a short seat tag follows it (`Ilya · S2`). The tag is not
+`#2` because `#` already marks post numbers (owner decision, 2026-10-20). The persona name is anonymous with
 respect to the principal ([RFC 0004](0004-principal-profile-privacy-boundary.md));
 no player surface pairs it with a profile handle.
 
 A post is attributed to the persona that held the seat when it was written,
 not the seat's current occupant. After a replacement, the seat shows
 `Ilya (replaced Mira)` in the roster and votecount; earlier posts keep
-`Mira #2`. Renames follow `game_persona_name_history`: a post shows the name
+`Mira · S2`. Renames follow `game_persona_name_history`: a post shows the name
 in effect at its sequence, and the roster shows the current name.
 
 *Rationale:* a game about reading people must lead with people. The seat tag
@@ -88,7 +89,8 @@ GameRosterName      { effective_seq, public_name }
 
 It is a read-side join over `slot_state`, `slot_occupancy_epoch` and
 `game_persona_name_history`, with `game_persona_redaction` overriding every
-name of an erased persona, and it is rebuildable from the log. It carries no
+name of an erased persona, and it is rebuildable from the log. All sequences are
+global event sequences, which thread posts expose as `source_seq`. It carries no
 principal and no persona id. Seats sort by numeric suffix.
 
 Posts, quotations, mentions, votes and outcomes keep addressing seats by
@@ -226,6 +228,7 @@ every slice passes `npm run proof:remote -- --mode push` before landing.
 | 1 | Legibility guard and seat presenter | — | `tools/frontend_role_smoke*.mjs`, `frontend/src/lib/app/seat-presenter.mjs`, `presentation-copy.mjs`, `AppShell.svelte` |
 | 2 | Server roster read | 1 | `crates/api/src/game_http.rs`, `crates/projections`, `crates/wire`, `crates/api/src/live_delivery.rs`, `frontend/src/lib/wire/types.ts`, `game-roster.mjs`, host live validators |
 | 3 | Names on every player surface | 2 | `game-thread-author.mjs`, `player-thread`, `day-vote-outcome`, `player-action-target-picker.mjs`, mention and quotation models |
+| 3b | Names written into post bodies | 3 | `crates/content_reference` slot mentions, `crates/commands` official votecount body, composer `@` insertion, `tools/dev_test_game*.mjs` body expectations |
 | 4 | Vote picker and player context | 3 | `game-route-model.mjs`, `player-command`, `player-posture`, `player-role-card`, `player-private-queue` |
 | 5 | Interruption copy | 3 | `CommandRecovery.svelte`, `command-interruption.mjs`, `player-command-receipt-model.mjs`, game bar |
 | 6 | Host queue, pack prompt labels, deadline | 2 | `crates/domain/src/pack`, `packs/*/pack.json`, `host-route-model.mjs`, `host-action` |
@@ -251,8 +254,14 @@ landed; slices 3 → 4 → 5 share the player route and run in order.
    proves a roster change travels as one `HostConsoleRosterChanged` cell. The
    host live channel and host-console validators require the roster; the
    player and public validators require it in slice 3, which consumes it.
-3. No player route renders a slot identifier; quotes, mentions and outcomes
-   name personas.
+3. Thread authors, quotations, mention chips, votecounts, vote and action
+   targets, current vote, addressed notices, day-vote outcomes, endgame
+   history and the public publication name personas through the roster as of
+   each sequence; player and public-page validators require the roster.
+3b. A game mention is typed and stored as `@<public name>` and decided against
+   the addressed seat's current persona name, and the official votecount body
+   names candidates (`- Ilya · S2: 4`); the composer, public publication and
+   live `dev_test_game` body expectations follow.
 4. A 13-seat fixture votes, changes vote and unvotes through the picker on
    phone and tablet; a vote never commits on the first tap; the role card never
    reads "Unassigned" for a seated player.

@@ -5,10 +5,12 @@
 
   export let boundary;
   export let rows = [];
+  export let roster = [];
 
   $: view = buildHostVotecountPanelViewModel({
     boundary,
     rows,
+    roster,
   });
 </script>
 
@@ -45,7 +47,7 @@
           data-min-touch-target-px={row.minTargetPx}
           data-at-hammer={row.atHammer}
         >
-          <span class="fm-wagon__name">{row.target}</span>
+          <span class="fm-wagon__name">{row.label}</span>
           <progress
             class="fm-wagon__track"
             max="100"
