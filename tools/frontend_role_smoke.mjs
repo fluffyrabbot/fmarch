@@ -4076,7 +4076,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByText("Review status is unavailable.", { exact: true }).waitFor();
     assert.equal(await badge.count(), 0);
-    assert.equal(await more.getAttribute("aria-label"), "More: open private queue");
+    assert.equal(await more.getAttribute("aria-label"), "More: your role, messages and history");
     assert.equal(await peer.getByTestId("player-private-new-count").innerText(), "2");
     await page.unroute(endpoint, denySeat);
   } catch (error) {

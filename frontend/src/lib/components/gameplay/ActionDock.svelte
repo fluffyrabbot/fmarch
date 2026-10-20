@@ -61,7 +61,7 @@
     </a>
   {/if}
   <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
-    aria-label={privateNewCount === null ? "More: open private queue" : `More: ${privateNewCount} new private ${privateNewCount === 1 ? "item" : "items"}`}
+    aria-label={privateNewCount === null ? "More: your role, messages and history" : `More: ${privateNewCount} new ${privateNewCount === 1 ? "message" : "messages"}`}
     on:click|preventDefault={onOpenPrivateQueue}>
     <span>More</span>
     {#if privateNewCount > 0}<strong aria-hidden="true" data-testid="player-private-new-count">{privateNewCount}</strong>{/if}

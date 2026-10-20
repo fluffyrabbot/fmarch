@@ -14,7 +14,7 @@ export function buildPrivateQueueBoundary({
   return Object.freeze({
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Night results, notices, and seats you were addressed as are delivered to you alone.",
+      "Night results, notices and posts addressed to you, seen only by you.",
     count:
       notifications.length + investigationResults.length + slotMentions.length,
   });
@@ -94,12 +94,12 @@ export function buildPlayerPrivateQueueViewModel({
         boundaryStatus: boundary.status,
       }),
     }),
-    heading: "Private queue",
+    heading: "Messages",
     boundary: Object.freeze({
       detail: boundary.detail,
       count: Number(boundary.count ?? 0),
     }),
-    emptyMessage: "No private results visible to this session.",
+    emptyMessage: "Nothing new",
     items: Object.freeze(
       items.map((item) =>
         Object.freeze({

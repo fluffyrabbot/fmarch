@@ -32,7 +32,7 @@
   id="player-private-queue"
   tabindex="-1"
   class={view.root.className}
-  aria-label="Private queue"
+  aria-label="Messages"
   data-component={view.root.data.component}
   data-boundary-status={view.root.data.boundaryStatus}
 >
@@ -40,7 +40,7 @@
   <header class="fm-ledger__head">
     <h2>{view.heading}</h2>
     {#if attention.state === "ready" && view.items.length > 0}
-      <select id="private-attention-filter" class="private-filter" aria-label="Filter private queue" data-testid="private-attention-filter" value={filter} on:change={event => onFilter(event.currentTarget.value)}>
+      <select id="private-attention-filter" class="private-filter" aria-label="Filter messages" data-testid="private-attention-filter" value={filter} on:change={event => onFilter(event.currentTarget.value)}>
         <option value="all">All ({view.items.length})</option>
         <option value="new">New ({view.items.filter(item => !reviewed.has(item.id)).length})</option>
         <option value="reviewed">Reviewed ({view.items.filter(item => reviewed.has(item.id)).length})</option>
@@ -69,7 +69,7 @@
       {view.emptyMessage}
     </p>
   {:else}
-    {#if visibleItems.length === 0}<p role="status" data-testid="private-filter-empty">{filter === "new" ? "No new private items." : "No reviewed private items."}</p>{/if}
+    {#if visibleItems.length === 0}<p role="status" data-testid="private-filter-empty">{filter === "new" ? "Nothing new" : "No reviewed messages"}</p>{/if}
     {#each visibleItems as item (item.id)}
       <article
         class="player-private-queue__item fm-disclosure"

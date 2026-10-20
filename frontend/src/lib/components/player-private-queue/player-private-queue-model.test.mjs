@@ -34,7 +34,7 @@ test("player private queue model derives scoped private projection boundary", ()
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: PLAYER_PRIVATE_QUEUE_CONTRACT.boundaryStatus,
     detail:
-      "Night results, notices, and seats you were addressed as are delivered to you alone.",
+      "Night results, notices and posts addressed to you, seen only by you.",
     count: 4,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [

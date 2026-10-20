@@ -1,4 +1,7 @@
 <script>
+  import { onMount } from "svelte";
+  import { deadlineCountdown } from "$lib/app/deadline-countdown.mjs";
+
   export let game;
   export let phase = {};
   export let composer = {};
@@ -17,6 +20,12 @@
   $: currentVote = String(composer.currentVoteLabel ?? "")
     .replace(/^Current vote:\s*/u, "")
     .trim();
+  let now = Date.now();
+  onMount(() => {
+    const timer = setInterval(() => { now = Date.now(); }, 30_000);
+    return () => clearInterval(timer);
+  });
+  $: countdown = deadlineCountdown(phase.deadlineAt, now);
   $: degraded = liveStatus !== null && !["connected", "updated", "recovered"].includes(liveStatus.state);
 </script>
 
@@ -35,7 +44,12 @@
         data-projected="true"
       >
         <span>Deadline</span>
-        <strong>{phase.deadlineLabel}</strong>
+        {#if countdown}
+          <strong title={phase.deadlineLabel}>{countdown}</strong>
+          <span class="fm-sr-only">{phase.deadlineLabel}</span>
+        {:else}
+          <strong>{phase.deadlineLabel}</strong>
+        {/if}
       </a>
     {/if}
     {#if voteProgress}
@@ -155,7 +169,8 @@
       padding-inline: 8px;
     }
 
-    .game-bar__facts a:not(:last-child) {
+    /* The deadline stays on every breakpoint; other facts live in the sheet. */
+    .game-bar__facts a:not([data-testid="player-game-bar-deadline"]) {
       display: none;
     }
 

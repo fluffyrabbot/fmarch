@@ -117,6 +117,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     label: "Day 2",
     state: "open",
     deadlineLabel: "Jun 19, 2026, 9:00 PM",
+    deadlineAt: 1781928000,
     summary: "Day 2 is open.",
   });
   assert.deepEqual(
@@ -782,7 +783,7 @@ test("player private queue helpers derive visible queue from scoped projections"
   assert.deepEqual(buildPrivateQueueBoundary(snapshot), {
     status: "principal-scoped-private-projections",
     detail:
-      "Night results, notices, and seats you were addressed as are delivered to you alone.",
+      "Night results, notices and posts addressed to you, seen only by you.",
     count: 2,
   });
   assert.deepEqual(buildPrivateQueue(snapshot), [

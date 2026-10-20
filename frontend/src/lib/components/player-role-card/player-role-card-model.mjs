@@ -34,7 +34,7 @@ export function buildPlayerRoleCardViewModel({
         roleAlignment: role?.alignment ?? "",
       }),
     }),
-    heading: "Role identity",
+    heading: "Your role",
     proofCheckId: PLAYER_ROLE_CARD_CONTRACT.proofCheckId,
     name: Object.freeze({
       testId: PLAYER_ROLE_CARD_CONTRACT.nameTestId,
@@ -64,26 +64,27 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
         name: "Role pending",
         alignmentLabel: "Pending",
         description:
-          "Slot authority is pending host replacement; the role card unlocks once the host processes the replacement.",
-        statusMessage: "Role identity is pending host replacement",
+          "Your seat is being handed to a replacement; your role shows again once the host completes it.",
+        statusMessage: "Waiting for the host to complete the replacement",
       });
     }
+    // Roles are dealt when the game starts; a seated player is never told
+    // they are "unassigned" (RFC 0008, decision 5).
     return Object.freeze({
       state: "unassigned",
-      name: "No role assigned",
-      alignmentLabel: "Unassigned",
-      description: "The host has not assigned a role to this slot yet.",
-      statusMessage: "No role is assigned to this slot",
+      name: "Your role arrives when the game starts",
+      alignmentLabel: "Before start",
+      description: "The host deals roles when the game starts. Yours will appear here.",
+      statusMessage: "Your role arrives when the game starts",
     });
   }
   if (role === null) {
     return Object.freeze({
       state: "unpublished",
       name: humanizeRoleTag(roleKey),
-      alignmentLabel: "Not published",
-      description:
-        "Role details are not published to this surface; your Role PM channel remains the authoritative text.",
-      statusMessage: "Role details are not published to this surface",
+      alignmentLabel: "In your role PM",
+      description: "Your role PM holds the full text of your role.",
+      statusMessage: "Read your role PM for the full text",
     });
   }
   return Object.freeze({
@@ -97,7 +98,7 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
       String(role.description ?? "").trim() === ""
         ? "This role has no published description."
         : String(role.description),
-    statusMessage: "Role identity is read from your slot's command state",
+    statusMessage: "Your role for this game",
   });
 }
 

@@ -67,7 +67,7 @@ export function buildPlayerActionSubmissionCheckpoint({
         receiptState,
       }),
     }),
-    heading: "Action submission checkpoint",
+    heading: "Your night action",
     proofCheckId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.proofCheckId,
     phase: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.phaseTestId,

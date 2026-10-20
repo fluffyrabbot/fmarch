@@ -1,7 +1,6 @@
 <section class="context-sheet" id="player-context" data-testid="player-context-sheet">
   <header>
-    <p class="fm-eyebrow">Your game</p>
-    <h2>Private context and history</h2>
+    <h2>More</h2>
   </header>
   <div class="context-sheet__content">
     <slot />

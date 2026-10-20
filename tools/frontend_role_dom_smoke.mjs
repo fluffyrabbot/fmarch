@@ -362,7 +362,7 @@ function surfaceScenarios() {
       path: "/g/midsummer",
       render: "renderPlayerSurface",
       surfaceTestId: "player-surface",
-      requiredText: ["Votes", "Private queue", "Open events"],
+      requiredText: ["Votes", "Messages", "Open events"],
       requiredTestIds: [
         "player-composer",
         "player-day-event-rail",
@@ -406,7 +406,7 @@ function surfaceScenarios() {
       path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       render: "renderPlayerPrivateReviewRoute",
       surfaceTestId: "player-surface",
-      requiredText: ["Private queue", "Phase Night 2"],
+      requiredText: ["Messages", "Phase Night 2"],
       requiredTestIds: [
         "player-private-review-notification-N02-0-slot-7",
         "player-private-link-notification-N02-0-slot-7",
@@ -430,7 +430,7 @@ function surfaceScenarios() {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       render: "renderPlayerPrivateChannelRoute",
       surfaceTestId: "player-surface",
-      requiredText: ["Role PM", "Private queue"],
+      requiredText: ["Role PM", "Messages"],
       requiredTestIds: [
         "player-channel-private:role_pm:slot-7",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,

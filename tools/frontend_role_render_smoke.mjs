@@ -228,7 +228,7 @@ function surfaceScenarios() {
       path: "/g/midsummer",
       render: "renderPlayerSurface",
       surfaceTestId: "player-surface",
-      requiredText: ["Votes", "Private queue"],
+      requiredText: ["Votes", "Messages"],
       requiredSelectors: [
         '[data-testid="player-role-card"][data-role-state="unassigned"]',
         '[data-testid="player-private-link-notification-N02-0-slot-7"]',
@@ -242,7 +242,7 @@ function surfaceScenarios() {
       path: "/g/midsummer?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
       render: "renderPlayerPrivateReviewRoute",
       surfaceTestId: "player-surface",
-      requiredText: ["Private queue", "Phase Night 2"],
+      requiredText: ["Messages", "Phase Night 2"],
       requiredSelectors: [
         '[data-testid="player-private-review-notification-N02-0-slot-7"][aria-expanded="true"]',
         '[data-testid="player-private-detail-notification-N02-0-slot-7"]',
@@ -254,7 +254,7 @@ function surfaceScenarios() {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       render: "renderPlayerPrivateChannelRoute",
       surfaceTestId: "player-surface",
-      requiredText: ["Role PM", "Private queue"],
+      requiredText: ["Role PM", "Messages"],
       requiredSelectors: [
         '[data-testid="player-channel-private:role_pm:slot-7"][aria-current="page"]',
         '[data-testid="player-private-link-notification-N02-0-slot-7"][href="/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7"]',

@@ -37,8 +37,8 @@ test("role card stays self-scoped when details are not published", () => {
   });
   assert.equal(card.root.data.roleState, "unpublished");
   assert.equal(card.name.value, "Town cop");
-  assert.equal(card.alignment.label, "Not published");
-  assert.match(card.description.value, /Role PM channel remains the authoritative text/u);
+  assert.equal(card.alignment.label, "In your role PM");
+  assert.match(card.description.value, /role PM holds the full text/u);
   assert.equal(card.status.state, "pending");
 });
 
@@ -57,13 +57,14 @@ test("role card shows the pending-replacement boundary without inventing a role"
   assert.equal(card.status.state, "pending");
 });
 
-test("role card reports unassigned slots plainly", () => {
+test("a seated player before the deal is told when their role arrives", () => {
   const card = buildPlayerRoleCardViewModel({
     commandState: { roleKey: null, role: null, actorStatus: "alive" },
   });
   assert.equal(card.root.data.roleState, "unassigned");
-  assert.equal(card.name.value, "No role assigned");
-  assert.equal(card.alignment.label, "Unassigned");
+  assert.equal(card.name.value, "Your role arrives when the game starts");
+  assert.equal(card.alignment.label, "Before start");
+  assert.doesNotMatch(JSON.stringify(card), /Unassigned|unassigned slot|No role assigned/u);
 });
 
 test("dead actors keep their own role card", () => {

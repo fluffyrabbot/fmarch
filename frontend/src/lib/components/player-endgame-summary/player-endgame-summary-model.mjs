@@ -49,7 +49,7 @@ export function buildPlayerEndgameSummaryViewModel({
           : `${humanizeTag(winner.alignment)} wins`,
       detail:
         winner === null
-          ? "The engine result has not been published to this surface yet; reload after the host completes the reveal."
+          ? "The result is not public yet; it appears here once the host completes the reveal."
           : winner.reason,
       phaseId: winner?.phaseId ?? "",
       phaseLabel: phaseLabelFromId(winner?.phaseId),

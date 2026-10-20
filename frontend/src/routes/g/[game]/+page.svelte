@@ -1141,6 +1141,15 @@
     />
 
     <ContextSheet>
+      {#if player.readOnly !== true}
+        <PlayerRoleCard card={playerRoleCard} />
+        {#if projectionCommandsReady}
+          <PlayerActionSubmissionCheckpoint
+            checkpoint={playerActionSubmissionCheckpoint}
+          />
+        {/if}
+      {/if}
+
       <PlayerPrivateQueue
         returnAvailable={readerTrip?.destination === "private"}
         onReturnToThread={returnToThread}
@@ -1157,20 +1166,11 @@
         onRetry={refreshPrivateAttention}
       />
 
-      {#if player.readOnly !== true}
-        <PlayerRoleCard card={playerRoleCard} />
-        {#if projectionCommandsReady}
-          <PlayerActionSubmissionCheckpoint
-            checkpoint={playerActionSubmissionCheckpoint}
-          />
-        {/if}
-      {/if}
-
       <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
         <summary>
           <span class="fm-surface-drawer__label">
-            <strong>Game history</strong>
-            <small>Completed outcomes and endgame record</small>
+            <strong>History</strong>
+            <small>Day vote outcomes and the endgame record</small>
           </span>
         </summary>
         <div class="fm-surface-drawer__body">
