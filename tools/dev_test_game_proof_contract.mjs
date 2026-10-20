@@ -572,7 +572,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "commandState",
         ) === true &&
         verification.coreLoop?.staleVoteBrowserProof?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
+          "phase is closed",
         ) === true &&
         JSON.stringify(
           verification.coreLoop?.staleVoteBrowserProof?.commandStateAfterReject
@@ -4383,8 +4383,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             receiptRefreshKeys: ["commandState"],
             receiptStatusFragments: [
               replacementStaleActionAfterResolveCase.rejectionStatusText,
-              replacementStaleActionAfterResolveCase
-                .staleActionStateMessageFragment,
+              replacementStaleActionAfterResolveCase.recoveryStatusText,
             ],
             browserCommandState: {
               actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
@@ -5844,8 +5843,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           receiptRefreshKeys: ["commandState"],
           forbiddenReceiptRefreshKeys: ["dayVoteOutcomes"],
           receiptStatusFragments: [
-            "Reject ActionAlreadySubmitted",
-            "refresh and use current controls",
+            "already submitted",
+            "Check your current action",
           ],
           stalePhaseId: "N01",
           browserCommandState: {
@@ -5959,7 +5958,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "commandState",
             "dayVoteOutcomes",
           ],
-          receiptStatusFragments: ["Reject PhaseLocked", "stale action state"],
+          receiptStatusFragments: ["phase is closed", "Check the current phase"],
           stalePhaseId: "N01",
           browserCommandState: {
             actorSlot: "slot_4",
@@ -6002,10 +6001,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "current action controls",
         ) === true &&
         hardening.staleActionConflict?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
+          "phase is closed",
         ) === true &&
         hardening.staleActionConflict?.receiptStatusText?.includes(
-          "stale action state",
+          "Check the current phase",
         ) === true &&
         hardening.staleActionConflict?.currentReceipt?.actionId ===
           "submit_action:factional_kill" &&
@@ -6140,8 +6139,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
               commandAction: privateStaleActionReconnectExpectation.commandAction,
               messageFragments:
                 privateStaleActionReconnectExpectation.messageFragments,
-              receiptStatusFragments:
-                privateStaleActionReconnectExpectation.messageFragments,
+              receiptStatusFragments: ["phase is closed", "Check the current phase"],
               dispatchRefreshKeys:
                 privateStaleActionReconnectExpectation.dispatchRefreshKeys,
               receiptRefreshKeys:

@@ -954,7 +954,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.privateChannel.stalePostAfterPhaseTransition.receiptStatusText.includes(
-    "Ack",
+    "Saved.",
   ),
   true,
 );
@@ -4115,7 +4115,7 @@ assert.equal(
 );
 assert.equal(
   replacementStaleActionAfterResolve.receiptStatusText.includes(
-    replacementStaleActionAfterResolveCase.staleActionStateMessageFragment,
+    replacementStaleActionAfterResolveCase.recoveryStatusText,
   ),
   true,
 );

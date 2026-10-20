@@ -233,7 +233,7 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       expectedTemplateId: "factional_kill",
       expectedStalePhase: "N01",
       expectedRefreshedPhase: "D02",
-      expectedReceiptFragment: "stale action state",
+      expectedReceiptFragment: "phase is closed",
       proofBoundary:
         "Seeded player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message and refreshes into current action controls.",
     },
@@ -248,7 +248,7 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       expectedTemplateId: "factional_kill",
       expectedStalePhase: "N01",
       expectedRefreshedPhase: "D02",
-      expectedReceiptFragment: "stale action state",
+      expectedReceiptFragment: "phase is closed",
       expectedChannelId: "private:mafia_day_chat",
       expectedRoleUrlFragment: "/c/private%3Amafia_day_chat",
       expectedPrivateThreadPagerVisible: true,
@@ -402,7 +402,7 @@ test("hardening lane cases share stale conflict-message status expectations", ()
         role: "player",
         rejectError: "PhaseLocked",
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         receiptFragment: undefined,
         rejectMessageFragment: undefined,
         actorStatusAfterReject: undefined,
@@ -415,7 +415,7 @@ test("hardening lane cases share stale conflict-message status expectations", ()
         role: "player",
         rejectError: "PhaseLocked",
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         receiptFragment: undefined,
         rejectMessageFragment: undefined,
         actorStatusAfterReject: undefined,

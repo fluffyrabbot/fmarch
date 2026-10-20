@@ -118,7 +118,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
     expectedTemplateId: "factional_kill",
     expectedStalePhase: "N01",
     expectedRefreshedPhase: "D02",
-    expectedReceiptFragment: "stale action state",
+    expectedReceiptFragment: "phase is closed",
     proofBoundary:
       "Seeded player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message and refreshes into current action controls.",
   }),
@@ -133,7 +133,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
     expectedTemplateId: "factional_kill",
     expectedStalePhase: "N01",
     expectedRefreshedPhase: "D02",
-    expectedReceiptFragment: "stale action state",
+    expectedReceiptFragment: "phase is closed",
     expectedChannelId: privateChannelStaleActionReconnectExpectation().channelId,
     expectedRoleUrlFragment:
       privateChannelStaleActionReconnectExpectation().roleUrlFragment,
@@ -280,9 +280,8 @@ export function staleConflictMessageNoSurfaceYetCases() {
   return staleConflictMessageNoSurfaceYetDefinitions.map(cloneScenarioCase);
 }
 
-function actionConflictReceiptText({ rejectError, receiptFragment }) {
-  const reason = rejectError === "InvalidTarget" ? "invalid target" : "phase locked";
-  return `Reject ${rejectError}: ${reason}; ${receiptFragment}, refresh and use current action controls`;
+function actionConflictReceiptText() {
+  return "Your action was not accepted because the phase is closed. Check the current phase before trying again.";
 }
 
 function conflictStatusExpectation(scenario) {

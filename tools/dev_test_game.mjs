@@ -2673,7 +2673,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
     rejectedVoteReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "commandState",
     ) !== true ||
-    !rejectedVoteReceiptText.includes("Reject PhaseLocked") ||
+    !rejectedVoteReceiptText.includes("phase is closed") ||
     !isStaleVotePhaseLockedMessage(rejectedVote.message) ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
@@ -5158,7 +5158,7 @@ async function verifySeededD02VoteNightTransition({
       n02ActionAfterSubmit.buttons.some(
         (button) => button.action === "submit_action:factional_kill",
       ) ||
-      !n02ActionAfterSubmit.receiptStatusText.includes("Ack") ||
+      !n02ActionAfterSubmit.receiptStatusText.includes("Saved.") ||
       resolveN02.commandStatus?.state !== "ack" ||
       hostAfterResolveN02.phase?.id !== "N02" ||
       hostAfterResolveN02.phase?.locked !== true ||
@@ -8022,7 +8022,7 @@ async function submitActionIdempotentRetry({
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
     ) === true ||
-    !receiptStatusText.includes("Ack") ||
+    !receiptStatusText.includes("Saved.") ||
     commandStateAfterRetry?.actorSlot !== "slot_4" ||
     commandStateAfterRetry?.actorAlive !== true ||
     commandStateAfterRetry?.actorStatus !== "alive" ||
@@ -8138,8 +8138,8 @@ async function submitStaleSameActionRecovery({
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
     ) === true ||
-    !receiptStatusText.includes("Reject ActionAlreadySubmitted") ||
-    !receiptStatusText.includes("refresh and use current controls") ||
+    !receiptStatusText.includes("already submitted") ||
+    !receiptStatusText.includes("Check your current action") ||
     commandStateAfterReject?.actorSlot !== "slot_4" ||
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
@@ -22931,7 +22931,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
       currentReceipt?.actionId !== scenario.commandAction ||
       currentReceipt?.state !== "ack" ||
-      !receiptStatusText.includes("Ack") ||
+      !receiptStatusText.includes("Saved.") ||
       commandStateAfterAck?.actorSlot !== scenario.actorSlot ||
       commandStateAfterAck?.actorStatus !== "alive" ||
       commandStateAfterAck?.phase?.phaseId !== "D01" ||
@@ -25195,7 +25195,7 @@ async function verifyStaleReplacementActionAfterResolve({
       currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
         true ||
       !receiptStatusText.includes(scenario.rejectionStatusText) ||
-      !receiptStatusText.includes(scenario.staleActionStateMessageFragment) ||
+      !receiptStatusText.includes(scenario.recoveryStatusText) ||
       commandStateAfterReject?.actorSlot !== scenario.actorSlot ||
       commandStateAfterReject?.actorAlive !== true ||
       commandStateAfterReject?.actorStatus !== "alive" ||

@@ -116,7 +116,8 @@ export function replacementStaleActionAfterResolveScenario() {
     gameFixtureId: "replacement-stale-action-after-resolve-game-a",
     staleActionId: "role_factional_kill",
     rejectionError: "PhaseLocked",
-    rejectionStatusText: "Reject PhaseLocked",
+    rejectionStatusText: "phase is closed",
+    recoveryStatusText: "Check the current phase",
     staleActionStateMessageFragment: "stale action state",
     currentActionControlsMessageFragment: "current action controls",
     outcomeSummary:

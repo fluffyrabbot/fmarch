@@ -12306,7 +12306,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           commandTrace: { projectionRefreshKeys: ["votecount", "commandState"] },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         commandStateBeforeClose: {
           currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
         },
@@ -12667,7 +12667,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             { action: "submit_action:factional_kill", disabled: false },
           ],
           receiptStatusText:
-            "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         },
         n02ActionTarget: "slot-3",
         n02ActionSubmission: {
@@ -16278,7 +16278,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           commandTrace: { projectionRefreshKeys: ["commandState"] },
         },
         receiptStatusText:
-          `${replacementStaleActionAfterResolveCase.rejectionStatusText}: phase locked; ${replacementStaleActionAfterResolveCase.staleActionStateMessageFragment}, refresh and use ${replacementStaleActionAfterResolveCase.currentActionControlsMessageFragment}`,
+          `${replacementStaleActionAfterResolveCase.rejectionStatusText}. ${replacementStaleActionAfterResolveCase.recoveryStatusText}.`,
         apiCommandStateAfterReject: {
           actor_slot: replacementStaleActionAfterResolveCase.actorSlot,
           actor_alive: true,
@@ -17354,7 +17354,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+          "Your night action was already submitted. Check your current action before changing it.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -17449,7 +17449,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
@@ -17540,7 +17540,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          "Your action was not accepted because the phase is closed. Check the current phase before trying again.",
         apiCommandStateAfterReject: {
           actor_slot: "slot_4",
           actor_alive: true,
