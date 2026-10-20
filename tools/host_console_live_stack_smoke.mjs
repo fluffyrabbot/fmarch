@@ -5706,6 +5706,8 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
 }
 
 async function expectHostPhaseActions(page, expectedActions) {
+  if (!(await page.getByTestId("host-task-phase").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+  await page.getByTestId("host-task-phase").click();
   try {
     await page.waitForFunction((expected) => {
       const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
