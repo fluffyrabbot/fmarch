@@ -3086,7 +3086,7 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMedia
   const action = page.getByTestId("route-error-action");
   const actionLabel = await action.innerText();
   const actionHref = await action.getAttribute("href");
-  if (errorStatus !== "403" || actionLabel !== "Back to board" || actionHref !== "/") {
+  if (errorStatus !== "403" || actionLabel !== "Back to Games" || actionHref !== "/") {
     throw new Error(
       `private channel 403 recovery drifted: ${JSON.stringify({ errorStatus, actionLabel, actionHref })}`,
     );
@@ -3106,7 +3106,7 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMedia
       `private channel media leaked ${deniedMediaBytes.byteLength} bytes to a non-member`,
     );
   }
-  assertHitTarget(await action.boundingBox(), "private-channel 403 Back to board");
+  assertHitTarget(await action.boundingBox(), "private-channel 403 Back to Games");
   await Promise.all([
     page.waitForURL(`${frontendBaseUrl}/`, { waitUntil: "networkidle" }),
     action.click(),

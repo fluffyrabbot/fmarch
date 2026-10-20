@@ -4148,7 +4148,7 @@ test("in-app browser replay help records condensed external proof commands", asy
   assert.deepEqual(replayHelp.fixture.routeErrorScenario, {
     id: "route-error-back-to-board-click",
     targetTestId: "route-error-action",
-    expectedText: "Back to board",
+    expectedText: "Back to Games",
     errorSurface: {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,
@@ -4193,7 +4193,7 @@ test("in-app browser replay help records condensed external proof commands", asy
     `returned browser-run plannedInteractions includes ${EXPECTED_COUNTS.plannedInteractions} admin/player/moderator/error interactions`,
     `returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
     "all returned reserved status floors render at least 44px before promotion",
-    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
+    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to Games click/focus evidence",
     "returned role-smoke.json has status passed with referenced role-smoke screenshots",
     "bundle import writes imported role-smoke as imported-passed",
     "browser acceptance boundary marks in-app-file-browser-run proven",

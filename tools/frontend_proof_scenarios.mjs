@@ -136,7 +136,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
     lanes: ["iab"],
     targetSelector: '[data-testid="route-error-action"]',
     targetTestId: "route-error-action",
-    expectedText: "Back to board",
+    expectedText: "Back to Games",
     errorSurface: {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
       status: 403,

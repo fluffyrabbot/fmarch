@@ -144,7 +144,7 @@ const replayHelp = {
     `returned browser-run plannedInteractions includes ${EXPECTED_COUNTS.plannedInteractions} admin/player/moderator/error interactions`,
     `returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
     "all returned reserved status floors render at least 44px before promotion",
-    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
+    "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to Games click/focus evidence",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",
     "returned bundle includes localhost browser-run-*.png screenshot files for every proof viewport when localhost fixture browser-run passed",
     "returned role-smoke.json has status passed with referenced role-smoke screenshots",

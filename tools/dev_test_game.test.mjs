@@ -13822,7 +13822,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         url: `/g/${game}/c/private%3Amafia_day_chat`,
         submitPost: { state: "ack", message: "Ack: stream seqs 43" },
       },
-      denied: { status: 403, actionLabel: "Back to board" },
+      denied: { status: 403, actionLabel: "Back to Games" },
       stalePostAfterPhaseTransition: {
         status: "passed",
         laneId: coreLoopPrivateChannelStalePostLaneId,
@@ -18886,7 +18886,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("Factional kill visible: false"));
   assert(markdown.includes("Direct factional kill: Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Private Channel Proof"));
-  assert(markdown.includes("Denied route: 403 Back to board"));
+  assert(markdown.includes("Denied route: 403 Back to Games"));
   assert(markdown.includes("## Replacement Console Proof"));
   assert(markdown.includes("Host-issued invite: Replacement invite issued"));
   assert(

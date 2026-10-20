@@ -8518,7 +8518,7 @@ async function verifySeededPrivateChannel({
   const action = deniedPage.getByTestId("route-error-action");
   const actionLabel = await action.innerText();
   const actionHref = await action.getAttribute("href");
-  if (status !== 403 || actionLabel !== "Back to board" || actionHref !== "/") {
+  if (status !== 403 || actionLabel !== "Back to Games" || actionHref !== "/") {
     throw new Error(
       `private channel 403 recovery drifted: ${JSON.stringify({ status, actionLabel, actionHref })}`,
     );
@@ -8559,7 +8559,7 @@ async function verifySeededPrivateChannel({
     stalePostAfterPhaseTransition,
     completedGameRecovery,
     proof:
-      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, the denied player role URL rendered the 403 Back to board recovery for the same channel, a disposable private-channel role URL proved stale SubmitPost recovery after host phase resolution, and another disposable private-channel role URL proved completed-game stale SubmitPost recovery plus reload closure.",
+      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, the denied player role URL rendered the 403 Back to Games recovery for the same channel, a disposable private-channel role URL proved stale SubmitPost recovery after host phase resolution, and another disposable private-channel role URL proved completed-game stale SubmitPost recovery plus reload closure.",
   };
 }
 
@@ -15089,7 +15089,7 @@ async function verifyReplacementStalePrivateChannel({
     staleRoute.status !== 403 ||
     staleRoute.responseStatus !== 403 ||
     !staleRoute.message.includes("requires scoped channel capability") ||
-    staleRoute.actionLabel !== "Back to board" ||
+    staleRoute.actionLabel !== "Back to Games" ||
     staleRoute.actionHref !== "/" ||
     rowanRoute.channelContextId !== factionDayChatChannel ||
     rowanRoute.actorSlot !== "slot-7" ||
