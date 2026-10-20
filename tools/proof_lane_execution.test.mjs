@@ -1595,3 +1595,39 @@ test('browser capacity counts engines and only the production build owns the fro
   // Every other lane keeps Vite and SvelteKit state in FMARCH_FRONTEND_SCRATCH_DIR.
   assert.deepEqual(owners, ['test:frontend-csp-browser']);
 });
+
+test('an artifact consumer waits until its producer has finished cleanup', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const provider = {
+    async acquire({ laneId }) {
+      return {
+        database: `fmarch_proof_test_${laneId}`,
+        url: `postgres://local/fmarch_proof_test_${laneId}`,
+        // A slow drop under postgres-admin releases a lock (waking admission)
+        // while the producer already reads `passed`.
+        async release() { await new Promise((resolve) => setTimeout(resolve, 30)); },
+      };
+    },
+  };
+  const manifest = fixture({
+    producer: lane(['producer'], [
+      { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' },
+      { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
+    ]),
+    consumer: {
+      ...lane(['consumer'], [{ kind: 'artifact-input', from: 'producer', env: 'PRODUCER_DIR' }]),
+      depends_on: ['producer'],
+    },
+    other: lane(['other'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
+  }, { 'postgres-admin': 1 });
+  const result = await runExecutionPlan(['producer', 'consumer', 'other'], manifest, {
+    jobs: 3,
+    root,
+    databaseProvider: provider,
+    spawn: () => childThatCloses(0, 5),
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.consumer.state, 'passed', JSON.stringify(result.receipt.lanes.consumer));
+  assert.equal(result.success, true);
+});
