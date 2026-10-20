@@ -54,6 +54,7 @@
   import VoteSheet from "$lib/components/gameplay/VoteSheet.svelte";
   import ContextSheet from "$lib/components/gameplay/ContextSheet.svelte";
   import { buildPlayerCommandPanelViewModel } from "$lib/components/player-command/player-command-panel-model.mjs";
+  import { voteActionForSlot } from "$lib/components/player-command/player-vote-picker-model.mjs";
   import { buildPlayerActionSubmissionCheckpoint } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
   import {
     PLAYER_ROUTE_CONTRACT,
@@ -374,6 +375,13 @@
   let expandedPrivateItems = data.privateQueueExpandedItems;
   let expandedPrivateRouteKey = JSON.stringify(data.privateQueueExpandedItems);
   let selectedActionTargets = Object.freeze({});
+  // The vote row (or Unvote) armed for confirmation in the picker; a vote is
+  // dispatched only from that confirmation (RFC 0008, decision 3).
+  let selectedVoteAction = null;
+
+  function selectVote(action) {
+    selectedVoteAction = action;
+  }
 
   function selectActionTarget(templateId, slot) {
     selectedActionTargets = Object.freeze({
@@ -448,8 +456,12 @@
     player,
     commandPending: commandPending || !projectionCommandsReady,
     commandInterrupted: commandRecoveryRequired,
+    selectedVoteAction,
     roster: commandState?.roster ?? [],
   });
+  $: votableAuthorSlots = new Set(
+    playerActionView.votePicker.rows.filter((row) => row.selectable).map((row) => row.key),
+  );
   $: quoteEnabled =
     projectionCommandsReady &&
     player.readOnly !== true &&
@@ -935,7 +947,11 @@
   }
 
   function openPrivateQueue() { privateFilter = privateNewItemCount > 0 ? "new" : "all"; readerNavigation?.open("private"); }
-  function openVoteCount() { readerNavigation?.open("count"); }
+  function openVotePicker() { readerNavigation?.open("count"); }
+  function voteForAuthor(slotId) {
+    selectedVoteAction = voteActionForSlot(composer.voteCommands, slotId);
+    openVotePicker();
+  }
   function returnToThread() { readerNavigation?.returnToThread(); }
   function cancelReaderRecovery({ focusControl = false } = {}) {
     readerNavigation?.release();
@@ -1051,10 +1067,12 @@
       {liveOfficialPost}
       {threadPageStatus}
       {quoteEnabled}
+      {votableAuthorSlots}
       roster={commandState?.roster ?? []}
       onLoadOlder={loadOlderThread}
       onLoadNewer={loadNewerThread}
       onQuote={quotePlayerPost}
+      onVoteAuthor={voteForAuthor}
     >
       <svelte:fragment slot="recovery">
       {#if checkpointStatus === "error"}
@@ -1118,6 +1136,8 @@
       view={playerActionView}
       onCommand={submitPlayerCommand}
       onSelectTarget={selectActionTarget}
+      onSelectVote={selectVote}
+      pickerRequested={readerTrip?.destination === "count"}
     />
 
     <ContextSheet>
@@ -1184,9 +1204,8 @@
         commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
         privateNewCount={privateNewItemCount}
         onOpenPrivateQueue={openPrivateQueue}
-        onOpenVoteCount={openVoteCount}
+        onOpenVotePicker={openVotePicker}
         dayEventCount={composer.dayEventCommands?.length ?? 0}
-        onCommand={submitPlayerCommand}
       />
   </GameFrame>
 {/if}

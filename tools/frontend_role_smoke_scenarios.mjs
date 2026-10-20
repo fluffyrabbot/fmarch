@@ -384,7 +384,7 @@ export const roles = Object.freeze([
     capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
     requiredText: PLAYER_ROUTE_CONTRACT.requiredText,
     mobileViewportBudget: Object.freeze({
-      primaryActionSelector: '[data-action="submit_vote"]',
+      primaryActionSelector: '[data-testid="player-dock-vote"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 3.5,
     }),
@@ -481,8 +481,7 @@ export const roles = Object.freeze([
         testId: "player-primary-action-zone",
         zone: "player-primary-actions",
         targetSelectors: Object.freeze([
-          '[data-action="submit_vote"]',
-          '[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-dock-vote"]',
           '[data-testid="player-dock-reply"]',
         ]),
       }),

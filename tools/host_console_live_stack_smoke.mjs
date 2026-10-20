@@ -81,6 +81,7 @@ import {
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
 import { proofCargoArgs } from "./proof_cargo_builds.mjs";
+import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -3738,11 +3739,15 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicateVoteCommandId);
   await installVoteInsertDelayTrigger();
-  const voteButton = page.locator('[data-action="submit_vote"]');
+  // Arm both pickers first so the two confirmations race, not the arming taps.
+  const voteButton = await armPlayerVote(page, playerVoteOption(page, "submit_vote"));
   const voteButtonBox = await voteButton.boundingBox();
-  assertHitTarget(voteButtonBox, "player vote button");
-  const raceVoteButton = raceVoteSession.page.locator('[data-action="submit_vote"]');
-  assertHitTarget(await raceVoteButton.boundingBox(), "racing player vote button");
+  assertHitTarget(voteButtonBox, "player vote confirmation");
+  const raceVoteButton = await armPlayerVote(
+    raceVoteSession.page,
+    playerVoteOption(raceVoteSession.page, "submit_vote"),
+  );
+  assertHitTarget(await raceVoteButton.boundingBox(), "racing player vote confirmation");
   const raceStatus = raceVoteSession.page.getByTestId("player-command-status");
   const status = page.getByTestId("player-command-status");
   const voteBoundary = await capturePlayerLiveBoundary(page, { game, channelId: "main" });
@@ -4189,7 +4194,7 @@ async function playerVoteRaceDiagnostic(page) {
     liveStatus: window.__fmarchLiveProjectionStatus ?? null,
     liveEvents: (window.__fmarchLiveProjectionEvents ?? []).slice(-20),
     voteControl: (() => {
-      const control = document.querySelector('[data-action="submit_vote"]');
+      const control = document.querySelector('[data-vote-action="submit_vote"]');
       return control === null ? null : {
         disabled: control.disabled,
         text: control.textContent?.trim() ?? "",
@@ -4285,8 +4290,8 @@ async function openStalePlayerVoteBrowser(
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
   await capturePlayerLiveBoundary(page, { game, channelId: "main" });
-  await page.locator('[data-action="submit_vote"]').waitFor({
-    state: "visible",
+  await playerVoteOption(page, "submit_vote").waitFor({
+    state: "attached",
   });
   return {
     context,

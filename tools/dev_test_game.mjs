@@ -121,6 +121,13 @@ import {
 import {
   liveProjectionResyncMetricsAreConsistent,
 } from "./dev_test_game_live_projection_observability.mjs";
+import {
+  castPlayerVote,
+  castPlayerVoteFor,
+  playerVoteOption,
+  playerVoteOptionForTarget,
+  withdrawPlayerVote,
+} from "./player_vote_picker_driver.mjs";
 
 export {
   seedPreSetupCommandPlanForGame,
@@ -2598,7 +2605,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   );
   const playerLockedBeforeVote = playerCommandStateLockedBeforeVote?.phase;
   const lockedVoteControl = await playerCommandControlState(playerPage, "submit_vote");
-  await staleVotePage.locator('[data-action="submit_vote"]').click();
+  await castPlayerVote(staleVotePage, "submit_vote");
   await staleVotePage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -2607,7 +2614,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
   await staleVotePage.waitForFunction(
     () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
   );
-  await staleVotePage.locator('[data-action="submit_vote"]').waitFor({
+  await playerVoteOption(staleVotePage, "submit_vote").waitFor({
     state: "detached",
   });
   const rejectedVote = await staleVotePage.evaluate(
@@ -2808,15 +2815,15 @@ async function verifySeededDayVoteResolution({
       "withdraw_vote",
     );
     const voterVoteButtons = await voterPage
-      .locator('[data-action^="submit_vote"]')
+      .locator('[data-vote-action^="submit_vote"]')
       .evaluateAll((nodes) =>
         nodes.map((node) => ({
-          action: node.getAttribute("data-action"),
+          action: node.getAttribute("data-vote-action"),
           text: node.textContent?.trim() ?? "",
           disabled: node.disabled === true,
         })),
       );
-    await voterPage.locator('[data-action="submit_vote"]').click();
+    await castPlayerVote(voterPage, "submit_vote");
     await voterPage.waitForFunction(
       () => window.__fmarchPlayerCommandStatus?.state === "ack",
     );
@@ -2948,13 +2955,13 @@ async function verifySeededDayVoteResolution({
       !voterVoteButtons.some(
         (button) =>
           button.action === "submit_vote" &&
-          /^Vote .*· S2\b/u.test(button.text) &&
+          /· S2\b/u.test(button.text) &&
           button.disabled === false,
       ) ||
       !voterVoteButtons.some(
         (button) =>
           button.action === "submit_vote:no_lynch" &&
-          button.text.includes("Vote no lynch") &&
+          button.text.includes("No lynch") &&
           button.disabled === false,
       ) ||
       voterAfterVote?.currentVote?.kind !== "slot" ||
@@ -3642,7 +3649,7 @@ async function verifySeededDayVoteNoLynch({
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
     );
     await waitForEnabledNoLynchVoteControl(seedVoterEntry.page, "slot-2");
-    await miraVoterEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await castPlayerVote(miraVoterEntry.page, "submit_vote:no_lynch");
     await miraVoterEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -3659,7 +3666,7 @@ async function verifySeededDayVoteNoLynch({
       () => window.__fmarchPlayerProjection?.votecount ?? [],
     );
 
-    await seedVoterEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await castPlayerVote(seedVoterEntry.page, "submit_vote:no_lynch");
     await seedVoterEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -4759,10 +4766,7 @@ async function verifySeededD02VoteNightTransition({
         voteTarget,
       });
 
-    await actionEntry.page
-      .locator('[data-action="submit_vote"]', { hasText: voteTarget.label })
-      .first()
-      .click();
+    await castPlayerVoteFor(actionEntry.page, voteTarget);
     await actionEntry.page.waitForFunction(
       (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -6504,9 +6508,7 @@ async function freezeStaleD02VoteTransitionPage({ page, game, voteTarget }) {
     { targetSlot: voteTarget.slotId },
     { timeout: 15000 },
   );
-  await page.locator('[data-action="submit_vote"]', {
-    hasText: voteTarget.label,
-  }).first().waitFor({ state: "visible", timeout: 15000 });
+  await playerVoteOptionForTarget(page, voteTarget).waitFor({ state: "attached", timeout: 15000 });
   const roleUrl = page.url();
   const commandState = await page.evaluate(
     () => window.__fmarchPlayerProjection?.commandState,
@@ -6538,10 +6540,7 @@ async function freezeStaleD02VoteTransitionPage({ page, game, voteTarget }) {
 }
 
 async function submitStaleD02VoteAfterTransition({ page, voteTarget }) {
-  await page
-    .locator('[data-action="submit_vote"]', { hasText: voteTarget.label })
-    .first()
-    .click();
+  await castPlayerVoteFor(page, voteTarget);
   await page.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -12364,8 +12363,16 @@ async function playerProjectionSnapshot(
   return snapshot;
 }
 
+// Vote controls live in the roster picker: a row per legal target (armed, not
+// dispatched, by a tap) and an Unvote control. Other commands keep data-action.
+function playerCommandControlSelector(action) {
+  if (action === "withdraw_vote") return '[data-testid="player-vote-unvote"]';
+  if (String(action).startsWith("submit_vote")) return `[data-vote-action="${action}"]`;
+  return `[data-action="${action}"]`;
+}
+
 async function playerCommandControlState(page, action) {
-  const locator = page.locator(`[data-action="${action}"]`);
+  const locator = page.locator(playerCommandControlSelector(action));
   const count = await locator.count();
   if (count === 0) {
     return {
@@ -15675,8 +15682,8 @@ async function verifyReplacementReconnectRecovery({ replacementEntry, game }) {
 
 async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
   await gotoPlayerBoard(staleOutgoingPage, game);
-  await staleOutgoingPage.locator('[data-action="submit_vote"]').waitFor({
-    state: "visible",
+  await playerVoteOption(staleOutgoingPage, "submit_vote").waitFor({
+    state: "attached",
   });
   await staleOutgoingPage.waitForFunction(
     () =>
@@ -15700,7 +15707,7 @@ async function submitStaleOutgoingReplacementRecovery({
   staleOutgoingSetup,
   game,
 }) {
-  await staleOutgoingPage.locator('[data-action="submit_vote"]').click();
+  await castPlayerVote(staleOutgoingPage, "submit_vote");
   await staleOutgoingPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -19623,7 +19630,7 @@ async function verifyStalePlayerVoteRecovery({
     throw new Error(`stale vote setup lock did not ack: ${JSON.stringify(lock)}`);
   }
 
-  await playerPage.locator('[data-action="submit_vote"]').click();
+  await castPlayerVote(playerPage, "submit_vote");
   await playerPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -19632,7 +19639,7 @@ async function verifyStalePlayerVoteRecovery({
   await playerPage.waitForFunction(
     () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
   );
-  await playerPage.locator('[data-action="submit_vote"]').waitFor({ state: "detached" });
+  await playerVoteOption(playerPage, "submit_vote").waitFor({ state: "detached" });
   const reject = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
   if (!isStaleVotePhaseLockedMessage(reject.message)) {
     throw new Error(`stale player vote message drifted: ${JSON.stringify(reject)}`);
@@ -20131,7 +20138,7 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
       );
     }
 
-    await stalePlayerPage.locator('[data-action="withdraw_vote"]').click();
+    await withdrawPlayerVote(stalePlayerPage);
     await stalePlayerPage.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -20495,7 +20502,7 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
       );
     }
 
-    await playerEntry.page.locator('[data-action="withdraw_vote"]').click();
+    await withdrawPlayerVote(playerEntry.page);
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -26003,7 +26010,7 @@ async function waitForEnabledNoLynchVoteControl(page, actorSlot) {
   try {
     await page.waitForFunction((expectedActorSlot) => {
       const commandState = window.__fmarchPlayerProjection?.commandState;
-      const button = document.querySelector('[data-action="submit_vote:no_lynch"]');
+      const button = document.querySelector('[data-vote-action="submit_vote:no_lynch"]');
       return (
         commandState?.actorSlot === expectedActorSlot &&
         commandState?.actorAlive === true &&

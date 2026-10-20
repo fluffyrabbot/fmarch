@@ -175,6 +175,7 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import { castPlayerVote, openPlayerVotePicker } from "./player_vote_picker_driver.mjs";
 
 const proofRunPath = path.resolve(
   repoRoot,
@@ -1623,16 +1624,12 @@ async function proveDayThreePlayerVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03" &&
         document.querySelector(
-          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
+          '[data-testid="player-vote-picker"] [data-vote-action="submit_vote"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
-    const voteButton = page.locator(
-      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
-    );
-    await voteButton.waitFor({ state: "visible", timeout: 15000 });
-    await voteButton.click();
+    await castPlayerVote(page, "submit_vote");
     await page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -2380,16 +2377,12 @@ async function proveDayFourNoLynchVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D04" &&
         document.querySelector(
-          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-vote-picker"] [data-vote-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
-    const voteButton = page.locator(
-      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
-    );
-    await voteButton.waitFor({ state: "visible", timeout: 15000 });
-    await voteButton.click();
+    await castPlayerVote(page, "submit_vote:no_lynch");
     await page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -2600,16 +2593,12 @@ async function proveDayFiveNoLynchVoteSubmission({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
         document.querySelector(
-          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-vote-picker"] [data-vote-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
-    const voteButton = page.locator(
-      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
-    );
-    await voteButton.waitFor({ state: "visible", timeout: 15000 });
-    await voteButton.click();
+    await castPlayerVote(page, "submit_vote:no_lynch");
     await page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -2818,16 +2807,12 @@ async function proveStaleDayFiveVoteRecovery({
       () =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
         document.querySelector(
-          '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
+          '[data-testid="player-vote-picker"] [data-vote-action="submit_vote:no_lynch"]',
         ) !== null,
       null,
       { timeout: 15000 },
     );
-    const voteButton = page.locator(
-      '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote:no_lynch"]',
-    );
-    await voteButton.waitFor({ state: "visible", timeout: 15000 });
-    await voteButton.click();
+    await castPlayerVote(page, "submit_vote:no_lynch");
     await page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -3243,6 +3228,8 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
       { timeout: 15000 },
     );
     const commandButton = page.locator(scenario.commandButtonSelector);
+    // A vote is armed in the picker, then dispatched by its confirmation.
+    if (scenario.confirmButtonSelector !== undefined) await openPlayerVotePicker(page);
     await commandButton.waitFor({ state: "visible", timeout: 15000 });
     if (scenario.postBody !== undefined) {
       await page.locator('[data-testid="player-composer"] textarea').fill(
@@ -3250,6 +3237,9 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
       );
     }
     await commandButton.click();
+    if (scenario.confirmButtonSelector !== undefined) {
+      await page.locator(scenario.confirmButtonSelector).click();
+    }
     await page.waitForFunction(
       (commandKind) =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -3880,7 +3870,7 @@ async function provePostDayThreePlayerSurface({
       .getByTestId("player-private-boundary")
       .innerText();
     const voteButtonCount = await page.locator(
-      '[data-testid="player-quick-vote-actions"] button[data-action^="submit_vote"]',
+      '[data-testid="player-vote-picker"] [data-vote-action^="submit_vote"]',
     ).count();
     if (voteButtonCount !== expectedVoteButtonCount) {
       throw new Error(
@@ -4801,16 +4791,12 @@ async function provePlayerStaleVoteAfterTransition({
     () =>
       window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
       document.querySelector(
-        '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
+        '[data-testid="player-vote-picker"] [data-vote-action="submit_vote"]',
       ) !== null,
     null,
     { timeout: 15000 },
   );
-  const voteButton = page.locator(
-    '[data-testid="player-quick-vote-actions"] button[data-action="submit_vote"]',
-  );
-  await voteButton.waitFor({ state: "visible", timeout: 15000 });
-  await voteButton.click();
+  await castPlayerVote(page, "submit_vote");
   await page.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&

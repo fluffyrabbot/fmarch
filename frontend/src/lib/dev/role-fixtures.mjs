@@ -1,5 +1,12 @@
 import { FIXTURE_PRINCIPAL_IDS } from "../principal-id.mjs";
 
+// The midsummer table: thirteen named seats, so the vote picker is proven at a
+// realistic size (RFC 0008, slice 4 acceptance). Mira (slot-7) is the player.
+const MIDSUMMER_NAMES = Object.freeze([
+  "Juniper", "Ilya", "Rook", "Wren", "Lark", "Sable", "Mira",
+  "Fenn", "Ash", "Corin", "Tamsin", "Bram", "Odile",
+]);
+
 // Shared deterministic projections for browser proof and the UI workbench.
 export function createRoleMockState() {
   return {
@@ -276,7 +283,7 @@ export const fixtureApiRoutes = Object.freeze([
           phase_id: "D01",
           candidate_slot: "slot-2",
           count: 3,
-          majority: 5,
+          majority: 7,
         },
       },
     ]),
@@ -337,10 +344,7 @@ export const fixtureApiRoutes = Object.freeze([
       },
       actions: [],
       current_actions: [],
-      vote_targets: [
-        { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
-        { kind: "no_lynch", slot_id: null, label: "No lynch" },
-      ],
+      vote_targets: midsummerVoteTargets(),
       current_vote: null,
       mention_targets: [
         { channel_id: "main", slots: ["slot-2", "slot-3", "slot-7"] },
@@ -407,13 +411,22 @@ function rosterSeat(slotId, publicName, { alive = true, status = "alive" } = {})
   };
 }
 
-// The midsummer fixture's public roster: every seat that appears in its
-// thread, votecount, mentions and host console, named as the live API would.
+// The midsummer fixture's public roster, named as the live API would.
 export function midsummerRoster({ slot7Status = "alive" } = {}) {
+  return MIDSUMMER_NAMES.map((name, index) => {
+    const slotId = `slot-${index + 1}`;
+    return slotId === "slot-7"
+      ? rosterSeat(slotId, name, { alive: slot7Status === "alive", status: slot7Status })
+      : rosterSeat(slotId, name);
+  });
+}
+
+// Every living seat but the player's own, in the server's order, then No lynch.
+export function midsummerVoteTargets() {
   return [
-    rosterSeat("slot-1", "Juniper"),
-    rosterSeat("slot-2", "Ilya"),
-    rosterSeat("slot-3", "Rook"),
-    rosterSeat("slot-7", "Mira", { alive: slot7Status === "alive", status: slot7Status }),
+    ...MIDSUMMER_NAMES.flatMap((_, index) =>
+      index === 6 ? [] : [{ kind: "slot", slot_id: `slot-${index + 1}`, label: `Slot ${index + 1}` }],
+    ),
+    { kind: "no_lynch", slot_id: null, label: "No lynch" },
   ];
 }

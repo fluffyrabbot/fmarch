@@ -350,7 +350,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
       ],
       [
         "player",
-        [["player-primary-action-zone", "player-primary-actions", 3]],
+        [["player-primary-action-zone", "player-primary-actions", 2]],
       ],
       [
         "moderator",
@@ -374,7 +374,7 @@ test("role smoke pins collapsed support and mobile first-viewport budgets", () =
       maxDocumentHeightViewportRatio: 2.6,
     },
     player: {
-      primaryActionSelector: '[data-action="submit_vote"]',
+      primaryActionSelector: '[data-testid="player-dock-vote"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 3.5,
     },

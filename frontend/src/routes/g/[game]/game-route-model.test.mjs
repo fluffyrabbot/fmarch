@@ -110,7 +110,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     surfaceTestId: "player-surface",
     capabilityTestId: "player-capability",
     liveStatusTestId: "player-live-status",
-    requiredText: "Full votecount",
+    requiredText: "Votes",
   });
   assert.equal(data.player.slotId, "slot-7");
   assert.deepEqual(data.phase, {

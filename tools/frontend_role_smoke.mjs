@@ -1318,6 +1318,8 @@ function resolveFlowHook(name) {
     playerMediaNetwork: (page, ctx) =>
       assertPlayerMediaNetwork(page, { mediaRequests: ctx.mediaRequests }),
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
+    playerVotePicker: (page, ctx) =>
+      drivePlayerVotePicker(page, { commandRequests: ctx.commandRequests }),
     playerPrivateDisclosure: (page, ctx) =>
       drivePlayerPrivateDisclosure(page, {
         viewport: ctx.viewport,
@@ -2365,6 +2367,100 @@ async function driveModeratorHostPromptAck(page) {
     actionDetached: true,
     emptyLabelRendered: true,
   };
+}
+
+// Vote, change vote and unvote through the roster picker (RFC 0008, decision
+// 3). The page's own command mock rejects votes to prove the receipt, so this
+// hook answers vote commands itself and serves the resulting current vote.
+async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
+  const base = fixtureApiRoutes.find(
+    (route) => route.pattern instanceof RegExp && route.pattern.test("/games/midsummer/player-command-state"),
+  ).body;
+  let currentVote = null;
+  let seq = 600;
+  const commandRoute = "**/commands";
+  const stateRoute = /\/games\/[^/]+\/player-command-state(?:\?.*)?$/;
+  const answerVote = async (route) => {
+    const envelope = route.request().postDataJSON();
+    const command = envelope?.body?.body?.command;
+    if (command?.SubmitVote !== undefined) {
+      const target = command.SubmitVote.target;
+      currentVote = target === "NoLynch"
+        ? { kind: "no_lynch", slot_id: null, label: "No lynch" }
+        : { kind: "slot", slot_id: target.Slot, label: target.Slot };
+    } else if (command?.WithdrawVote !== undefined) {
+      currentVote = null;
+    } else {
+      await route.fallback();
+      return;
+    }
+    commandRequests.push(command);
+    seq += 1;
+    await route.fulfill({
+      json: { v: 3, id: envelope.id, body: { kind: "Ack", body: { stream_seqs: [seq] } } },
+    });
+  };
+  const serveState = (route) => route.fulfill({ json: { ...base, current_vote: currentVote } });
+  await page.route(commandRoute, answerVote);
+  await page.route(stateRoute, serveState);
+  try {
+    const dock = page.getByTestId("player-dock-vote");
+    const dockLabel = () => dock.innerText().then((text) => text.trim());
+    const steps = [];
+    const choose = async ({ testId, message, dockAfter }) => {
+      const before = commandRequests.length;
+      await dock.click();
+      const option = page.getByTestId(testId);
+      await option.waitFor({ state: "visible" });
+      await assertHitTarget(option, `vote picker ${testId}`);
+      await option.click();
+      const confirm = page.getByTestId("player-vote-confirm");
+      await confirm.waitFor({ state: "visible" });
+      await page.waitForFunction(() => document.activeElement?.dataset.testid === "player-vote-confirm");
+      const shown = (await page.getByTestId("player-vote-confirmation").innerText()).split("\n")[0].trim();
+      assert.equal(shown, message, `vote picker confirmation for ${testId}`);
+      assert.equal(commandRequests.length, before, `the first tap on ${testId} must not dispatch`);
+      await assertHitTarget(confirm, `vote picker confirm ${testId}`);
+      await confirm.click();
+      await page.waitForFunction(
+        (label) => document.querySelector('[data-testid="player-dock-vote"]')?.innerText.trim() === label,
+        dockAfter,
+      );
+      assert.equal(commandRequests.length, before + 1, `${testId} dispatches exactly once`);
+      steps.push({ testId, message, dock: await dockLabel(), command: Object.keys(commandRequests.at(-1))[0] });
+    };
+
+    await dock.click();
+    await page.getByTestId("player-vote-picker").waitFor({ state: "visible" });
+    const rows = await page
+      .locator('[data-testid="player-vote-picker"] [data-vote-key]')
+      .evaluateAll((nodes) => nodes.map((node) => node.dataset.voteKey));
+    assert.deepEqual(
+      rows,
+      ["slot-1", "slot-2", "slot-3", "slot-4", "slot-5", "slot-6", "slot-8", "slot-9", "slot-10",
+        "slot-11", "slot-12", "slot-13", "no_lynch"],
+      "the picker lists every other seat of the 13-seat table in seat order, then No lynch",
+    );
+    assert.equal(await page.getByTestId("player-vote-unvote").isDisabled(), true, "nothing to unvote yet");
+
+    await choose({ testId: "player-vote-option-slot-2", message: "Vote Ilya", dockAfter: "Voting Ilya" });
+    await choose({
+      testId: "player-vote-option-slot-3",
+      message: "Change vote: Ilya → Rook",
+      dockAfter: "Voting Rook",
+    });
+    await choose({ testId: "player-vote-unvote", message: "Remove your vote for Rook", dockAfter: "Vote" });
+
+    const returnToThread = page.getByTestId("return-to-thread");
+    if (await returnToThread.isVisible()) {
+      await returnToThread.focus();
+      await page.keyboard.press("Enter");
+    }
+    return { rows: rows.length, steps };
+  } finally {
+    await page.unroute(stateRoute, serveState);
+    await page.unroute(commandRoute, answerVote);
+  }
 }
 
 async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mockState } = {}) {
@@ -3879,9 +3975,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(() => document.querySelector('[data-testid="player-private-new-count"]')?.textContent === "2");
   const more = page.getByTestId("player-dock-more");
   await assertHitTarget(more, "private queue navigation");
-  const precedingTool = await page.getByTestId("player-dock-count").isVisible()
-    ? page.getByTestId("player-dock-count") : page.getByTestId("player-dock-events");
-  await precedingTool.focus();
+  await more.evaluate((element) => element.previousElementSibling.focus());
   await page.keyboard.press("Tab");
   await page.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
   await page.keyboard.press("Enter");
@@ -4010,7 +4104,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     assert.equal(await dock.locator("button").count(), 0);
     assert.equal(await dock.locator('[data-testid="player-dock-reply"], [data-testid="player-dock-act"], [data-testid="player-dock-events"]').count(), 0);
     assert.equal(await tab.locator('button[data-action]:enabled').count(), 0);
-    await tab.getByTestId("player-dock-count").focus();
+    await tab.getByTestId("player-dock-vote").focus();
     await tab.keyboard.press("Tab");
     await tab.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
     await tab.keyboard.press("Enter");
@@ -4052,7 +4146,7 @@ async function proveReadingReturn(page, baseUrl, routePath) {
       throw new Error(`${error.message}; expected top=${top}; return state=${JSON.stringify(state)}`);
     });
   }
-  await page.getByTestId("player-dock-count").focus();
+  await page.getByTestId("player-dock-vote").focus();
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.activeElement?.id === "player-actions");
   const post = (seq, body) => ({ game: "midsummer", source_seq: seq, stream_seq: seq,
@@ -4072,7 +4166,7 @@ async function proveReadingReturn(page, baseUrl, routePath) {
   await assertReturned();
   await page.getByTestId("player-dock-more").focus(); await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
-  await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
+  await page.getByTestId("player-dock-vote").focus(); await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.activeElement?.id === "player-actions");
   await page.getByTestId("return-to-thread").click(); await assertReturned();
 }
@@ -4131,7 +4225,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
       await origin.waitFor();
       await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
       const top = await origin.evaluate(el => el.getBoundingClientRect().top);
-      await page.getByTestId("player-dock-count").focus(); await page.keyboard.press("Enter");
+      await page.getByTestId("player-dock-vote").focus(); await page.keyboard.press("Enter");
       await page.waitForFunction(() => document.activeElement?.id === "player-actions");
       await reloadBrowserPage(page);
       assert.equal(await origin.count(), 0);

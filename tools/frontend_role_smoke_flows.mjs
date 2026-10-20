@@ -106,7 +106,7 @@ export const commandMockFallback = Object.freeze({
 });
 
 export { createRoleMockState, mockStateProjections, fixtureApiRoutes } from "../frontend/src/lib/dev/role-fixtures.mjs";
-import { midsummerRoster } from "../frontend/src/lib/dev/role-fixtures.mjs";
+import { midsummerRoster, midsummerVoteTargets } from "../frontend/src/lib/dev/role-fixtures.mjs";
 
 export const privateChannelCommandMockScenarios = Object.freeze([
   Object.freeze({
@@ -264,10 +264,7 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
       },
       actions: [],
       current_actions: [],
-      vote_targets: [
-        { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
-        { kind: "no_lynch", slot_id: null, label: "No lynch" },
-      ],
+      vote_targets: midsummerVoteTargets(),
       current_vote: null,
       day_events: [
         {
@@ -858,16 +855,25 @@ export const commandFlows = Object.freeze({
         },
       },
       { type: "wait-visible", target: { testId: "thread-post-440" } },
+      { type: "click", target: { testId: "player-dock-vote" } },
+      {
+        type: "wait-visible",
+        target: { within: "player-vote-picker", selector: '[data-vote-action="submit_vote"]' },
+      },
+      {
+        type: "click",
+        target: { within: "player-vote-picker", selector: '[data-vote-action="submit_vote"]' },
+      },
+      { type: "wait-visible", target: { testId: "player-vote-confirm" } },
+      // Measured from the armed picker: the receipt, not the opened sheet, is
+      // what the feedback budget bounds.
       {
         type: "capture-geometry-baseline",
         id: "feedbackGeometryBaseline",
         budgetRef: "interactionGeometryBudget.feedback",
         label: "player vote receipt",
       },
-      {
-        type: "click",
-        target: { within: "player-quick-vote-actions", selector: '[data-action="submit_vote"]' },
-      },
+      { type: "click", target: { testId: "player-vote-confirm" } },
       { type: "wait-visible", target: { testId: "player-command-status" } },
       {
         type: "wait-data-state",
@@ -1110,6 +1116,8 @@ export const commandFlows = Object.freeze({
       { type: "set-from-value", from: { id: "postRequest" }, resultPath: "postCommand.requestCommand" },
       { type: "set-result", resultPath: "postCommand.refreshedPostTestId", value: "thread-post-445" },
       { type: "set-from-value", from: { id: "postCommandReceipt" }, resultPath: "postCommandReceipt" },
+      { type: "hook", id: "votePicker", name: "playerVotePicker" },
+      { type: "set-from-value", from: { id: "votePicker" }, resultPath: "votePicker" },
     ]),
   }),
 });

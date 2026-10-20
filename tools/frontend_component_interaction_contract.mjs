@@ -105,13 +105,18 @@ async function proveSourceContracts() {
       ],
     }),
     await proveSourceContract({
-      component: "PlayerCommandPanel",
-      path: "frontend/src/lib/components/player-command/PlayerCommandPanel.svelte",
+      component: "VoteSheet",
+      path: "frontend/src/lib/components/gameplay/VoteSheet.svelte",
       requiredSnippets: [
         "await onCommand(action)",
-        "on:click={() => dispatchCommand(button.action)}",
-        "data-action={button.data.action}",
+        "on:click={() => confirmVote(row.action)}",
+        "data-action={row.action}",
       ],
+    }),
+    await proveSourceContract({
+      component: "ComposeSheet",
+      path: "frontend/src/lib/components/gameplay/ComposeSheet.svelte",
+      requiredSnippets: ["data-action={button.action}"],
     }),
     await proveSourceContract({
       component: "PlayerCommandReceipt",
@@ -204,7 +209,8 @@ async function proveAdminInteraction(bundle) {
 }
 
 async function provePlayerInteraction(bundle) {
-  const panel = await bundle.renderPlayerCommandPanel();
+  const voteSheet = await bundle.renderPlayerVoteSheet();
+  const unarmedVoteSheet = await bundle.renderPlayerVoteSheet({ selectedVoteAction: null });
   const voteAck = await bundle.renderPlayerCommandReceiptVoteAck();
   const postAck = await bundle.renderPlayerCommandReceiptPostAck();
   const invoked = [];
@@ -222,8 +228,13 @@ async function provePlayerInteraction(bundle) {
   );
   invoked.push(voteAction, postAction);
 
-  assertIncludes(panel.html, 'data-action="submit_vote"', "player submit vote button");
-  assertIncludes(panel.html, 'data-action="submit_post"', "player submit post button");
+  assertIncludes(voteSheet.html, 'data-testid="player-vote-confirm"', "player vote confirmation");
+  assertIncludes(voteSheet.html, 'data-action="submit_vote"', "player confirmed vote button");
+  assert.equal(
+    unarmedVoteSheet.html.includes('data-action="submit_vote'),
+    false,
+    "an unarmed vote picker exposes no dispatching vote control",
+  );
   assertIncludes(voteAck.html, 'data-testid="player-command-receipt-submit_vote"', "player vote ack row");
   assertIncludes(voteAck.html, 'data-state="ack"', "player vote ack state");
   assertIncludes(postAck.html, 'data-testid="player-command-receipt-submit_post"', "player post ack row");
@@ -234,7 +245,7 @@ async function provePlayerInteraction(bundle) {
   assert.equal(postReceipts[0].state, "pending");
 
   return {
-    component: "PlayerCommandPanel/PlayerCommandReceipt",
+    component: "VoteSheet/PlayerCommandReceipt",
     actions: [
       {
         action: invoked[0],
@@ -248,7 +259,7 @@ async function provePlayerInteraction(bundle) {
       },
     ],
     statusTestId: "player-command-status",
-    renderedPanelBytes: Buffer.byteLength(panel.html),
+    renderedPanelBytes: Buffer.byteLength(voteSheet.html),
     renderedVoteAckBytes: Buffer.byteLength(voteAck.html),
     renderedPostAckBytes: Buffer.byteLength(postAck.html),
   };
@@ -414,7 +425,8 @@ function renderEntrySource() {
 import AdminSetupGrid from "../src/lib/components/admin/AdminSetupGrid.svelte";
 import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.svelte";
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
-import PlayerCommandPanel from "../src/lib/components/player-command/PlayerCommandPanel.svelte";
+import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
+import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
 import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
@@ -543,21 +555,25 @@ export function renderAdminCommandActivityAck() {
   });
 }
 
-export function renderPlayerCommandPanel() {
-  return render(PlayerCommandPanel, {
+export function renderPlayerVoteSheet({ selectedVoteAction = "submit_vote" } = {}) {
+  return render(VoteSheet, {
     props: {
-      composer: {
-        label: "Post or vote",
-        defaultBody: "vote: slot-2",
-        voteTargetSlot: "slot-2",
-      },
-      phase: {
-        deadlineLabel: "June 19, 2026 at 9:00 PM PT",
-        label: "Day 2",
-        deadlineProjected: true,
-      },
-      votecount: [{ target: "slot-2", count: 2, needed: 4 }],
-      body: "vote: slot-2",
+      view: buildPlayerCommandPanelViewModel({
+        composer: {
+          voteCommands: [
+            { action: "submit_vote", label: "Vote Slot 2", voteTarget: { Slot: "slot-2" } },
+          ],
+          postCommandLabel: "Post",
+        },
+        phase: {
+          deadlineLabel: "June 19, 2026 at 9:00 PM PT",
+          label: "Day 2",
+          state: "open",
+        },
+        votecount: [{ target: "slot-2", count: 2, needed: 4 }],
+        player: { slotId: "slot-7", alive: true, status: "alive" },
+        selectedVoteAction,
+      }),
       onCommand: () => {},
     },
   });

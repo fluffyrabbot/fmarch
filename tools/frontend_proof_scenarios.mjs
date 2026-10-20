@@ -56,12 +56,12 @@ export const COMMAND_SCENARIOS = Object.freeze([
   {
     id: "player-submit-vote-click",
     role: "player",
-    render: "renderPlayerSurface",
+    render: "renderPlayerVoteConfirmation",
     lanes: ["iab", "no-bind"],
-    targetSelector: '[data-action="submit_vote"]',
+    targetSelector: '[data-testid="player-vote-confirm"]',
     targetAction: "submit_vote",
-    rootSelector: '[data-testid="player-surface"]',
-    expectedText: "Full votecount",
+    rootSelector: '[data-testid="player-vote-picker"]',
+    expectedText: "Vote Slot 2",
   },
   {
     id: "player-submit-post-click",

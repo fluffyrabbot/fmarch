@@ -322,7 +322,6 @@ function proveSharedAppCss(css) {
 
 function provePlayerRouteLayoutCss({ route, frame, dock }) {
   assertPlayerReadingOrder(route);
-  assert.doesNotMatch(route, /<PlayerCommandPanel\b/u);
   assert.doesNotMatch(route, /player-surface__command-stack/u);
   assert.match(frame, /max-inline-size:\s*var\(--fm-reading-width\)/u);
   assert.match(frame, /padding-block-end:\s*calc\(76px \+ env\(safe-area-inset-bottom\)\)/u);
@@ -615,8 +614,7 @@ async function proveThumbZonePlacement(bundle) {
           testId: "player-primary-action-zone",
           zone: "player-primary-actions",
           requiredDescendants: [
-            { kind: "data-action", value: "submit_vote" },
-            { kind: "data-action", value: "submit_vote:no_lynch" },
+            { kind: "testId", value: "player-dock-vote" },
             { kind: "testId", value: "player-dock-reply" },
           ],
         },

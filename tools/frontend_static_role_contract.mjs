@@ -1623,7 +1623,7 @@ async function provePlayerSurface() {
   assert.equal(commandPanel.context.deadline.value, data.phase.deadlineLabel);
   assert.equal(commandPanel.context.deadline.phaseLabel, data.phase.label);
   assert.equal(commandPanel.context.deadline.isProjected, true);
-  assert.equal(commandPanel.votecount.rows.length > 0, true);
+  assert.equal(commandPanel.votePicker.rows.length > 0, true);
   assert.equal(commandReceipt.root.data.component, "player-command-receipt");
   assert.equal(commandReceipt.items[0].testId, "player-command-receipt-submit_vote");
   assert.equal(commandReceipt.items[0].statusTestId, "player-command-status");
@@ -1638,7 +1638,7 @@ async function provePlayerSurface() {
   assert.equal(privateQueue.root.data.boundaryStatus, "principal-scoped-private-projections");
   assert.equal(channels.channels.every((channel) => channel.minTouchTargetPx >= 44), true);
   assertTouchTargets(
-    [...commandPanel.quickActions.buttons, ...commandPanel.composer.buttons].map(
+    commandPanel.composer.buttons.map(
       (button) => button.data.minTouchTargetPx,
     ),
   );
@@ -1805,13 +1805,13 @@ async function provePlayerSurface() {
           id: "action-dock",
           testId: "player-primary-action-zone",
           label: "Player actions",
-          value: `${commandPanel.quickActions.buttons.filter((button) => !button.disabled).length} immediate`,
-          detail: "Vote, reply, count, and private context remain reachable while reading.",
+          value: commandPanel.votePicker.dock.label,
+          detail: "Vote, reply and private context remain reachable while reading.",
           ...textFitSummary({
             id: "action-dock",
             label: "Player actions",
-            value: `${commandPanel.quickActions.buttons.filter((button) => !button.disabled).length} immediate`,
-            detail: "Vote, reply, count, and private context remain reachable while reading.",
+            value: commandPanel.votePicker.dock.label,
+            detail: "Vote, reply and private context remain reachable while reading.",
           }),
         },
       ],
@@ -1844,7 +1844,7 @@ async function provePlayerSurface() {
         originalUrlRendered: false,
         originalOnlyWithheld: true,
       },
-      votecountRows: commandPanel.votecount.rows.length,
+      votecountRows: commandPanel.votePicker.rows.length,
       deadline: {
         testId: commandPanel.context.deadline.testId,
         value: commandPanel.context.deadline.value,

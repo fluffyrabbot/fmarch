@@ -13,6 +13,9 @@
   export let onLoadOlder = () => {};
   export let onLoadNewer = () => {};
   export let onQuote = () => {};
+  /** Seats the viewer may vote for now; their posts offer "Vote" beside "Quote". */
+  export let votableAuthorSlots = new Set();
+  export let onVoteAuthor = () => {};
 
   let activeEmbedSeq = null;
   $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled, roster });
@@ -95,6 +98,18 @@
             >
               {post.permalink.label}{#if post.permalink.meta !== ""} · {post.permalink.meta}{/if}
             </a>
+          {/if}
+          {#if post.author.kind === "slot" && votableAuthorSlots.has(post.author.slotId)}
+            <button
+              type="button"
+              class="fm-touch-button fm-touch-button--secondary player-surface__quote-button"
+              data-min-touch-target-px="44"
+              data-testid={`player-vote-author-${post.seq}`}
+              aria-label={`Vote ${post.authorLabel}`}
+              on:click={() => onVoteAuthor(post.author.slotId)}
+            >
+              Vote
+            </button>
           {/if}
           {#if post.quoteEnabled}
             <button

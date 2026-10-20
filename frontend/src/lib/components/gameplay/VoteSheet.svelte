@@ -8,9 +8,39 @@
   export let view;
   export let onCommand = () => {};
   export let onSelectTarget = () => {};
+  /** Arm a vote row (or Unvote) for confirmation; `null` disarms it. */
+  export let onSelectVote = () => {};
+  export let initialConfirmingAction = null;
+  /** The dock or a post's Vote control asked for the picker. */
+  export let pickerRequested = false;
 
-  let confirmingAction = null;
+  let confirmingAction = initialConfirmingAction;
   let confirmElements = {};
+  let voteConfirmElement = null;
+
+  $: picker = view.votePicker;
+  let listOpen = false;
+  $: if (pickerRequested || picker.rows.some((row) => row.selected) || picker.unvote?.selected) {
+    listOpen = true;
+  }
+
+  async function selectVote(action) {
+    onSelectVote(action);
+    await tick();
+    voteConfirmElement?.focus();
+  }
+
+  async function confirmVote(action) {
+    onSelectVote(null);
+    await onCommand(action);
+  }
+
+  function onVoteConfirmationKeydown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onSelectVote(null);
+    }
+  }
 
   async function activateConfirmation(action) {
     confirmingAction = action.action;
@@ -38,7 +68,7 @@
   <header>
     <div>
       <p class="fm-eyebrow">Game state</p>
-      <h2>Vote and actions</h2>
+      <h2>Vote</h2>
     </div>
     <div class="vote-sheet__current" data-testid="player-vote-context">
       <span>{view.context.deadline.label}</span>
@@ -55,19 +85,104 @@
     </div>
   </header>
 
-  <div class="vote-sheet__count" data-testid={view.votecount.testId}>
-    <h3>{view.votecount.summary}</h3>
-    {#if view.votecount.rows.length === 0}
+  <details class="vote-picker" data-testid={picker.testId} data-has-vote={String(picker.hasVote)} bind:open={listOpen}>
+    <summary data-testid="player-vote-picker-toggle">
+      <strong>{picker.summary}</strong>
+      <span>{picker.dock.label === "Vote" ? "Choose a vote" : picker.dock.label}</span>
+    </summary>
+    {#if picker.rows.length === 0}
       <p>No votes have been recorded.</p>
     {:else}
-      {#each view.votecount.rows as row}
-        <div class="player-command-panel__vote-row">
-          <span>{row.label}</span>
-          <strong>{row.tally}</strong>
-        </div>
-      {/each}
+      <ul class="vote-picker__rows">
+        {#each picker.rows as row (row.key)}
+          <li class="vote-picker__row" data-current={String(row.current)} data-selected={String(row.selected)}>
+            <button
+              type="button"
+              class="vote-picker__option"
+              data-testid={row.testId}
+              data-vote-key={row.key}
+              data-vote-action={row.action}
+              disabled={!row.selectable}
+              aria-expanded={row.selectable ? String(row.selected) : undefined}
+              on:click={() => selectVote(row.selected ? null : row.action)}
+            >
+              <span class="vote-picker__name">{row.label}</span>
+              {#if row.note}<small>{row.note}</small>{/if}
+              <strong class="vote-picker__tally">{row.tally}</strong>
+            </button>
+            {#if row.confirmation}
+              <div
+                class="vote-picker__confirmation"
+                role="group"
+                aria-label={row.confirmation.message}
+                data-testid="player-vote-confirmation"
+                on:keydown={onVoteConfirmationKeydown}
+              >
+                <p>{row.confirmation.message}</p>
+                <div class="vote-picker__confirmation-actions">
+                  <button
+                    type="button"
+                    class="fm-touch-button"
+                    data-testid="player-vote-confirm"
+                    data-action={row.action}
+                    bind:this={voteConfirmElement}
+                    on:click={() => confirmVote(row.action)}
+                  >{row.confirmation.confirmLabel}</button>
+                  <button
+                    type="button"
+                    class="fm-touch-button fm-touch-button--secondary"
+                    data-testid="player-vote-cancel"
+                    on:click={() => onSelectVote(null)}
+                  >Cancel</button>
+                </div>
+              </div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
     {/if}
-  </div>
+    {#if picker.rows.length > 0}
+      <div class="vote-picker__unvote">
+        <button
+          type="button"
+          class="fm-touch-button fm-touch-button--secondary"
+          data-testid="player-vote-unvote"
+          disabled={picker.unvote.disabled}
+          data-disabled-reason={picker.unvote.reason}
+          aria-expanded={String(picker.unvote.selected)}
+          on:click={() => selectVote(picker.unvote.selected ? null : picker.unvote.action)}
+        >{picker.unvote.label}</button>
+        {#if picker.unvote.disabled && picker.unvote.reason}<small>{picker.unvote.reason}</small>{/if}
+        {#if picker.unvote.confirmation}
+          <div
+            class="vote-picker__confirmation"
+            role="group"
+            aria-label={picker.unvote.confirmation.message}
+            data-testid="player-vote-confirmation"
+            on:keydown={onVoteConfirmationKeydown}
+          >
+            <p>{picker.unvote.confirmation.message}</p>
+            <div class="vote-picker__confirmation-actions">
+              <button
+                type="button"
+                class="fm-touch-button"
+                data-testid="player-vote-confirm"
+                data-action={picker.unvote.action}
+                bind:this={voteConfirmElement}
+                on:click={() => confirmVote(picker.unvote.action)}
+              >{picker.unvote.confirmation.confirmLabel}</button>
+              <button
+                type="button"
+                class="fm-touch-button fm-touch-button--secondary"
+                data-testid="player-vote-cancel"
+                on:click={() => onSelectVote(null)}
+              >Cancel</button>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </details>
 
   {#if view.composer?.actionPicker?.actions?.length > 0}
     <div class="vote-sheet__phase-actions" id="player-phase-actions" data-testid="player-action-commands">
@@ -167,24 +282,108 @@
   }
 
   .vote-sheet__current span,
-  .vote-sheet__count > p {
+  .vote-picker > p,
+  .vote-picker small {
     color: var(--fm-ink-muted);
   }
 
-  .vote-sheet__count,
+  .vote-picker,
   .vote-sheet__phase-actions,
   .vote-sheet__phase-action {
     display: grid;
     gap: 10px;
   }
 
-  .player-command-panel__vote-row {
-    align-items: center;
-    border-block-start: 1px solid var(--fm-line-soft);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+  .vote-picker > summary {
+    align-items: baseline;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
     min-block-size: 44px;
-    padding-block: 8px;
+    padding-block: 10px;
+  }
+
+  .vote-picker > summary span {
+    color: var(--fm-ink-muted);
+    font-size: 13px;
+  }
+
+  .vote-picker__rows {
+    display: grid;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .vote-picker__row {
+    border-block-start: 1px solid var(--fm-line-soft);
+  }
+
+  /* Keep a row clear of the sticky top bar and the fixed action dock when it
+     is scrolled or focused into view. */
+  .vote-picker > summary,
+  .vote-picker__option,
+  .vote-picker__confirmation button,
+  .vote-picker__unvote button {
+    scroll-margin-block: calc(var(--fm-app-topbar-block-size) + 16px)
+      calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .vote-picker__option {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--fm-radius-control);
+    color: var(--fm-ink);
+    column-gap: 10px;
+    display: grid;
+    font: inherit;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    inline-size: 100%;
+    min-block-size: 44px;
+    padding: 8px 6px;
+    text-align: start;
+  }
+
+  .vote-picker__option:disabled {
+    color: var(--fm-ink-muted);
+    cursor: default;
+  }
+
+  .vote-picker__row[data-current="true"] .vote-picker__name,
+  .vote-picker__row[data-selected="true"] .vote-picker__name {
+    font-weight: 850;
+  }
+
+  .vote-picker__row[data-selected="true"] {
+    background: var(--fm-surface-tint);
+  }
+
+  .vote-picker__name {
+    overflow-wrap: anywhere;
+  }
+
+  .vote-picker__tally {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .vote-picker__confirmation {
+    display: grid;
+    gap: 8px;
+    padding: 4px 6px 12px;
+  }
+
+  .vote-picker__confirmation p {
+    font-weight: 750;
+  }
+
+  .vote-picker__confirmation-actions,
+  .vote-picker__unvote {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .vote-sheet__phase-actions {

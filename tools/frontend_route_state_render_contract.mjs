@@ -1545,7 +1545,10 @@ async function proveRenderedPlayerSurface(bundle) {
   assertIncludes(html, 'data-projected="true"', "player projected deadline flag");
   assertIncludes(html, "Jun 19, 2026, 9:00 PM", "player deadline label");
   assertIncludes(html, "Day 2", "player deadline phase label");
-  assertIncludes(html, "player-command-panel__vote-row", "player votecount rows");
+  assertIncludes(html, 'data-testid="player-vote-picker"', "player vote picker");
+  assertIncludes(html, "vote-picker__row", "player vote picker rows");
+  assertIncludes(html, 'data-testid="player-dock-vote"', "player dock vote state");
+  assertExcludes(html, 'data-action="submit_vote', "an unarmed picker dispatches no vote");
   assertExcludes(
     html,
     'data-component="player-command-receipt"',
@@ -2423,7 +2426,8 @@ import AdminRecoveryPanel from "../src/lib/components/admin/AdminRecoveryPanel.s
 import AdminCommandActivity from "../src/lib/components/admin/AdminCommandActivity.svelte";
 import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
-import PlayerCommandPanel from "../src/lib/components/player-command/PlayerCommandPanel.svelte";
+import VoteSheet from "../src/lib/components/gameplay/VoteSheet.svelte";
+import { buildPlayerCommandPanelViewModel } from "../src/lib/components/player-command/player-command-panel-model.mjs";
 import PlayerEndgameSummary from "../src/lib/components/player-endgame-summary/PlayerEndgameSummary.svelte";
 import { buildPlayerEndgameSummaryViewModel } from "../src/lib/components/player-endgame-summary/player-endgame-summary-model.mjs";
 import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
@@ -2699,6 +2703,27 @@ export async function renderScenario(role, state) {
 	  });
 	  return renderWithRootLayout({ page: "player", data, url: "http://localhost/g/midsummer" });
 	}
+
+export async function renderPlayerVoteConfirmation() {
+  const data = await buildGameRouteData({
+    game: "midsummer",
+    ...fixtureRouteInputForRole("player"),
+  });
+  return render(VoteSheet, {
+    props: {
+      view: buildPlayerCommandPanelViewModel({
+        composer: data.composer,
+        phase: data.phase,
+        votecount: data.votecount,
+        channel: { channel: "main", label: "Main thread" },
+        player: { slotId: data.commandState?.actorSlot, alive: true, status: "alive" },
+        selectedVoteAction: "submit_vote",
+        roster: data.commandState?.roster ?? [],
+      }),
+      onCommand: () => {},
+    },
+  });
+}
 
 export async function renderPlayerThreadPagerState(state) {
 	  const data = await buildGameRouteData({
@@ -3042,18 +3067,22 @@ export async function renderPlayerActionTargetConfirmation() {
     commandState,
     { factional_kill: "slot-2" },
   );
-  return render(PlayerCommandPanel, {
+  return render(VoteSheet, {
     props: {
-      composer,
-      phase: { label: "Night 2", state: "open", deadlineLabel: "" },
-      votecount: [],
-      channel: { channel: "main", label: "Main thread" },
-      player: {
-        slotId: commandState.actorSlot,
-        alive: true,
-        status: "alive",
-        capabilityLabel: "SlotOccupant(seeded-action-open)",
-      },
+      view: buildPlayerCommandPanelViewModel({
+        composer,
+        phase: { label: "Night 2", state: "open", deadlineLabel: "" },
+        votecount: [],
+        channel: { channel: "main", label: "Main thread" },
+        player: {
+          slotId: commandState.actorSlot,
+          alive: true,
+          status: "alive",
+          capabilityLabel: "SlotOccupant(seeded-action-open)",
+        },
+        confirmingAction: "submit_action:factional_kill",
+        roster: commandState.roster ?? [],
+      }),
       initialConfirmingAction: "submit_action:factional_kill",
       onCommand: () => {},
       onSelectTarget: () => {},
@@ -3074,18 +3103,22 @@ export async function renderPlayerActionWithdrawConfirmation() {
     commandState,
     {},
   );
-  return render(PlayerCommandPanel, {
+  return render(VoteSheet, {
     props: {
-      composer,
-      phase: { label: "Night 2", state: "open", deadlineLabel: "" },
-      votecount: [],
-      channel: { channel: "main", label: "Main thread" },
-      player: {
-        slotId: commandState.actorSlot,
-        alive: true,
-        status: "alive",
-        capabilityLabel: "SlotOccupant(seeded-action-submitted)",
-      },
+      view: buildPlayerCommandPanelViewModel({
+        composer,
+        phase: { label: "Night 2", state: "open", deadlineLabel: "" },
+        votecount: [],
+        channel: { channel: "main", label: "Main thread" },
+        player: {
+          slotId: commandState.actorSlot,
+          alive: true,
+          status: "alive",
+          capabilityLabel: "SlotOccupant(seeded-action-submitted)",
+        },
+        confirmingAction: "withdraw_action:factional_kill",
+        roster: commandState.roster ?? [],
+      }),
       initialConfirmingAction: "withdraw_action:factional_kill",
       onCommand: () => {},
       onSelectTarget: () => {},

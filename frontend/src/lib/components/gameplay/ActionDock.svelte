@@ -2,12 +2,11 @@
   export let view;
   export let commandsAvailable = false;
   export let privateNewCount = null;
-  export let onOpenVoteCount = () => {};
+  export let onOpenVotePicker = () => {};
   export let onOpenPrivateQueue = () => {};
   export let dayEventCount = 0;
-  export let onCommand = () => {};
 
-  $: quickActions = view?.quickActions?.buttons ?? [];
+  $: votePicker = view?.votePicker ?? null;
   $: hasPhaseActions = (view?.composer?.actionPicker?.actions?.length ?? 0) > 0;
 
   function focusDestination(destinationId) {
@@ -30,27 +29,16 @@
   data-action-priority="primary"
   data-testid="player-primary-action-zone"
 >
-  {#if commandsAvailable}
-  <div class="action-dock__actions" data-testid="player-quick-vote-actions">
-    {#each quickActions as button}
-      {#if !button.disabled || button.action === "withdraw_vote"}
-        <button
-          type="button"
-          class:action-dock__primary={button.className === "fm-touch-button"}
-          data-action={button.action}
-          data-command-recovery-return={button.action}
-          data-min-touch-target-px={button.data.minTouchTargetPx}
-          data-disabled-reason={button.reason}
-          disabled={button.disabled}
-          aria-disabled={button.disabled ? "true" : undefined}
-          on:click={() => onCommand(button.action)}
-        >
-          {button.label}
-        </button>
-      {/if}
-    {/each}
-  </div>
-  {/if}
+  <a
+    class="action-dock__vote"
+    class:action-dock__vote--cast={votePicker?.hasVote === true}
+    href="#player-actions"
+    data-testid="player-dock-vote"
+    data-has-vote={String(votePicker?.hasVote === true)}
+    on:click|preventDefault={onOpenVotePicker}
+  >
+    <span>{commandsAvailable ? votePicker?.dock.label ?? "Vote" : "Votes"}</span>
+  </a>
   {#if commandsAvailable && view?.composer?.readOnly !== true}
     <a
       class="action-dock__tool"
@@ -72,9 +60,6 @@
       <strong aria-label={`${dayEventCount} open events`}>{dayEventCount}</strong>
     </a>
   {/if}
-  <a class="action-dock__tool" href="#player-actions" data-testid="player-dock-count" on:click|preventDefault={onOpenVoteCount}>
-    <span>Count</span>
-  </a>
   <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
     aria-label={privateNewCount === null ? "More: open private queue" : `More: ${privateNewCount} new private ${privateNewCount === 1 ? "item" : "items"}`}
     on:click|preventDefault={onOpenPrivateQueue}>
@@ -102,15 +87,7 @@
     z-index: 12;
   }
 
-  .action-dock__actions {
-    display: flex;
-    flex: 1 1 auto;
-    gap: 4px;
-    min-inline-size: 0;
-    overflow-x: auto;
-  }
-
-  .action-dock button,
+  .action-dock__vote,
   .action-dock__tool {
     align-items: center;
     background: transparent;
@@ -129,18 +106,23 @@
     text-decoration: none;
   }
 
-  .action-dock button {
-    border: 1px solid var(--fm-line-strong);
-  }
-
-  .action-dock button.action-dock__primary {
+  .action-dock__vote {
     background: var(--fm-ink);
-    border-color: var(--fm-ink);
     color: var(--fm-action-ink);
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
 
-  .action-dock button:disabled {
-    display: none;
+  .action-dock__vote span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-dock__vote--cast {
+    background: transparent;
+    border: 1px solid var(--fm-ink);
+    color: var(--fm-ink);
   }
 
   .action-dock__tool {
@@ -166,13 +148,11 @@
       flex-wrap: wrap;
     }
 
-    .action-dock__actions {
+    .action-dock__vote {
       flex-basis: 100%;
-      min-block-size: 44px;
-      overflow-x: visible;
     }
 
-    .action-dock button,
+    .action-dock__vote,
     .action-dock__tool {
       font-size: 12px;
       min-inline-size: 44px;

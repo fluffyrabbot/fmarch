@@ -2166,8 +2166,12 @@ test("component interaction artifact records no-bind command component wiring", 
         "frontend/src/lib/components/admin/AdminRecoveryPanel.svelte",
       ],
       [
-        "PlayerCommandPanel",
-        "frontend/src/lib/components/player-command/PlayerCommandPanel.svelte",
+        "VoteSheet",
+        "frontend/src/lib/components/gameplay/VoteSheet.svelte",
+      ],
+      [
+        "ComposeSheet",
+        "frontend/src/lib/components/gameplay/ComposeSheet.svelte",
       ],
       [
         "PlayerCommandReceipt",
@@ -2213,7 +2217,7 @@ test("component interaction artifact records no-bind command component wiring", 
   }
   assert.equal(componentInteractions.interactions.admin.renderedAckBytes > 0, true);
   assert.deepEqual(componentInteractions.interactions.player, {
-    component: "PlayerCommandPanel/PlayerCommandReceipt",
+    component: "VoteSheet/PlayerCommandReceipt",
     actions: [
       {
         action: "submit_vote",
@@ -2334,8 +2338,8 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
   });
   assertNoBindInteractionEntries(noBindInteractions.interactions.player, {
     id: "player-submit-vote-click",
-    render: "renderPlayerSurface",
-    targetSelector: '[data-action="submit_vote"]',
+    render: "renderPlayerVoteConfirmation",
+    targetSelector: '[data-testid="player-vote-confirm"]',
     targetAction: "submit_vote",
   });
   assertNoBindInteractionEntries(noBindInteractions.interactions.player, {
@@ -2926,9 +2930,9 @@ test("in-app browser interaction page fixture records role command targets", asy
       [
         "player-submit-vote-click",
         "player",
-        "renderPlayerSurface",
+        "renderPlayerVoteConfirmation",
         undefined,
-        '[data-action="submit_vote"]',
+        '[data-testid="player-vote-confirm"]',
         undefined,
         "submit_vote",
       ],
@@ -5463,7 +5467,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         {
           id: "player-submit-vote-click",
           role: "player",
-          render: "renderPlayerSurface",
+          render: "renderPlayerVoteConfirmation",
           targetAction: "submit_vote",
         },
         {

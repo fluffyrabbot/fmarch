@@ -54,7 +54,7 @@ export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "player-surface",
   capabilityTestId: "player-capability",
   liveStatusTestId: "player-live-status",
-  requiredText: "Full votecount",
+  requiredText: "Votes",
 });
 
 export function resolvePlayerRouteContext({
@@ -455,6 +455,7 @@ export function buildPlayerComposerView(
       commandState?.currentVote ?? null,
       seatNames(commandState?.roster),
     ),
+    currentVote: commandState?.currentVote ?? null,
     hasCurrentVote: commandState?.currentVote != null,
     canWithdrawVote: withdrawState.canWithdrawVote,
     withdrawDisabledReason: withdrawState.reason,

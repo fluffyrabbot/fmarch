@@ -1,15 +1,12 @@
 import { buildPlayerActionTargetPicker } from "./player-action-target-picker.mjs";
-import { seatNames, voteTargetLabel } from "../../app/seat-presenter.mjs";
+import { seatNames } from "../../app/seat-presenter.mjs";
+import { buildPlayerVotePicker } from "./player-vote-picker-model.mjs";
 
 export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   rootClassName: "player-command-panel fm-card fm-primary-action-zone",
   componentName: "player-command-panel",
   actionPriority: "primary",
   contextClassName: "player-command-panel__context",
-  quickActionClassName: "player-command-panel__quick-actions fm-action-tray",
-  quickActionTestId: "player-quick-vote-actions",
-  votecountClassName: "player-command-panel__votecount fm-proof-disclosure",
-  votecountTestId: "player-full-votecount",
   thumbZone: "player-primary-actions",
   thumbZoneTestId: "player-primary-action-zone",
   channelContextTestId: "player-command-channel-context",
@@ -19,7 +16,7 @@ export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
 });
 
 export function buildPlayerCommandPanelViewModel({
-  composer,
+  composer = {},
   phase = {},
   votecount = [],
   channel = {},
@@ -27,6 +24,7 @@ export function buildPlayerCommandPanelViewModel({
   commandPending = false,
   commandInterrupted = false,
   confirmingAction = null,
+  selectedVoteAction = null,
   roster = [],
 }) {
   const names = seatNames(roster);
@@ -53,16 +51,17 @@ export function buildPlayerCommandPanelViewModel({
       }),
       heading: "Vote",
       context: buildActionContextViewModel({ phase, composer }),
-      votecount: buildVotecountViewModel(votecount, names),
+      votePicker: buildPlayerVotePicker({
+        voteCommands: composer.voteCommands ?? [],
+        currentVote: composer.currentVote ?? null,
+        votecount,
+        roster,
+        disabled: true,
+      }),
       composer: Object.freeze({
         readOnly: true,
         reason: readOnlyReason,
         channelContext,
-      }),
-      quickActions: Object.freeze({
-        className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
-        testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
-        buttons: Object.freeze([]),
       }),
     });
   }
@@ -72,19 +71,6 @@ export function buildPlayerCommandPanelViewModel({
   const postCommandDisabled =
     commandUnavailable || player.gameCompleted === true ||
     (player.alive === false && channelContext.channelId !== "dead");
-  const voteButtons = voteCommandButtons({
-    composer,
-    disabled: playerCommandsDisabled,
-  });
-  const withdrawButton = commandButton({
-    action: "withdraw_vote",
-    label: composer.withdrawCommandLabel,
-    disabled: playerCommandsDisabled || composer.canWithdrawVote !== true,
-    reason:
-      playerCommandsDisabled || composer.canWithdrawVote === true
-        ? ""
-        : composer.withdrawDisabledReason,
-  });
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
@@ -97,14 +83,18 @@ export function buildPlayerCommandPanelViewModel({
       ariaBusy: commandPending ? "true" : undefined,
       testId: PLAYER_COMMAND_PANEL_CONTRACT.thumbZoneTestId,
     }),
-    quickActions: Object.freeze({
-      className: PLAYER_COMMAND_PANEL_CONTRACT.quickActionClassName,
-      testId: PLAYER_COMMAND_PANEL_CONTRACT.quickActionTestId,
-      buttons: Object.freeze([...voteButtons, withdrawButton]),
-    }),
     heading: "Vote",
     context: buildActionContextViewModel({ phase, composer }),
-    votecount: buildVotecountViewModel(votecount, names),
+    votePicker: buildPlayerVotePicker({
+      voteCommands: composer.voteCommands ?? [],
+      currentVote: composer.currentVote ?? null,
+      votecount,
+      roster,
+      selectedAction: selectedVoteAction,
+      disabled: playerCommandsDisabled,
+      canWithdraw: composer.canWithdrawVote === true,
+      withdrawReason: composer.withdrawDisabledReason,
+    }),
     composer: Object.freeze({
       label: "Post body",
       defaultBody: String(composer.defaultBody ?? ""),
@@ -132,20 +122,6 @@ function buildActionContextViewModel({ phase = {}, composer = {} } = {}) {
     className: PLAYER_COMMAND_PANEL_CONTRACT.contextClassName,
     deadline: buildDeadlineViewModel(phase),
     currentVote: buildCurrentVoteViewModel(composer),
-  });
-}
-
-function buildVotecountViewModel(votecount = [], names = seatNames()) {
-  const rows = Object.freeze(votecount.map((row) => normalizeVotecountRow(row, names)));
-  return Object.freeze({
-    className: PLAYER_COMMAND_PANEL_CONTRACT.votecountClassName,
-    testId: PLAYER_COMMAND_PANEL_CONTRACT.votecountTestId,
-    summary:
-      rows.length === 1
-        ? "Full votecount · 1 target"
-        : `Full votecount · ${rows.length} targets`,
-    open: false,
-    rows,
   });
 }
 
@@ -203,14 +179,6 @@ function buildDeadlineViewModel(phase) {
   });
 }
 
-function normalizeVotecountRow(row, names = seatNames()) {
-  return Object.freeze({
-    target: String(row.target ?? "unknown"),
-    label: voteTargetLabel(row.target, names),
-    tally: `${Number(row.count ?? 0)}/${Number(row.needed ?? 0)}`,
-  });
-}
-
 function commandButton({
   action,
   label,
@@ -231,33 +199,4 @@ function commandButton({
       minTouchTargetPx: PLAYER_COMMAND_PANEL_CONTRACT.minTouchTargetPx,
     }),
   });
-}
-
-function voteCommandButtons({ composer, disabled }) {
-  const voteCommands = normalizeVoteCommands(composer);
-  return voteCommands.map((command, index) =>
-    commandButton({
-      action: command.action,
-      label: command.label,
-      primary: index === 0,
-      disabled,
-    }),
-  );
-}
-
-function normalizeVoteCommands(composer = {}) {
-  if (Array.isArray(composer.voteCommands)) {
-    return composer.voteCommands.map((command) =>
-      Object.freeze({
-        action: String(command?.action ?? "submit_vote"),
-        label: String(command?.label ?? command?.action ?? "submit_vote"),
-      }),
-    );
-  }
-  return Object.freeze([
-    Object.freeze({
-      action: "submit_vote",
-      label: composer.voteCommandLabel,
-    }),
-  ]);
 }
