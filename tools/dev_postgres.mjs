@@ -137,6 +137,7 @@ export function buildConfig(args = {}, env = process.env) {
     socketDir:
       args.socketDir ?? env.FMARCH_DEV_POSTGRES_SOCKET_DIR ?? socketDirectory(dataDir),
     logPath: args.logPath ?? env.FMARCH_DEV_POSTGRES_LOG ?? defaultLogPath,
+    disposable: args.disposable ?? env.FMARCH_DEV_POSTGRES_DISPOSABLE === "1",
     pgBin,
   };
 }
@@ -150,8 +151,15 @@ export function socketDirectory(dataDir) {
 // pooled databases (SQLx parent pools, live servers); 100 clients is too few.
 export const DEV_POSTGRES_MAX_CONNECTIONS = 400;
 
+// A disposable proof cluster never needs crash durability. SQLx tests create
+// and drop a database per test, each forcing an immediate cluster-wide
+// checkpoint; with fsync those checkpoints take seconds and stall every
+// concurrent lane. Developer clusters keep the durable defaults.
+const DISPOSABLE_DURABILITY = ["fsync=off", "synchronous_commit=off", "full_page_writes=off"];
+
 export function pgCtlStartOptions(config) {
-  return `-p ${config.port} -h ${config.host} -k ${quotePostgresArg(config.socketDir)} -c max_connections=${DEV_POSTGRES_MAX_CONNECTIONS}`;
+  const settings = [`max_connections=${DEV_POSTGRES_MAX_CONNECTIONS}`, ...(config.disposable ? DISPOSABLE_DURABILITY : [])];
+  return `-p ${config.port} -h ${config.host} -k ${quotePostgresArg(config.socketDir)} ${settings.map(setting => `-c ${setting}`).join(" ")}`;
 }
 
 export function quotePostgresArg(value) {
