@@ -2405,7 +2405,7 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mock
   // The host page learns a committed lifecycle change from its live socket,
   // as it does in production. Without this push it would only refetch when the
   // 30 s freshness lease expires.
-  await emitHostConsoleSlots(page, mockState);
+  await emitHostConsoleChange(page, mockState);
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="host-console-slot-lifecycle"]',
@@ -3289,33 +3289,47 @@ async function installLiveProjectionHarness(page, { roleId, channel = "main" }) 
   }, helloFrame);
 }
 
-/** Push the host console's current seats, as the server does after a change. */
-async function emitHostConsoleSlots(page, mockState) {
+/**
+ * Push the host console cells a committed command changes, as the server's
+ * snapshot diff does: header, seats, roster and the task queue. Unchanged cells
+ * are idempotent for the client, so each is sent whole from the mock state.
+ */
+async function emitHostConsoleChange(page, mockState) {
   if (mockState === undefined) {
-    throw new Error("host console slot push needs the role mock state");
+    throw new Error("host console push needs the role mock state");
   }
-  await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
-  const frame = [...encodeServerEnvelopeFrame({
-    v: 3,
-    id: 1,
-    body: {
-      kind: "Delta",
+  const state = mockStateProjections.hostConsoleState(mockState);
+  const cells = [
+    {
+      kind: "HostConsoleHeaderChanged",
       body: {
-        audience: { Host: { game: "midsummer" } },
-        delta: {
-          kind: "HostConsoleSlotsChanged",
-          body: {
-            game: "midsummer",
-            slots: mockStateProjections.hostConsoleState(mockState).slots,
-            removed_slot_ids: [],
-          },
-        },
+        game: state.game,
+        authority: state.authority,
+        completed: state.completed,
+        phase: state.phase,
       },
     },
-  })];
-  await page.evaluate((frameBytes) => {
-    window.__fmarchEmitLiveProjection(frameBytes);
-  }, frame);
+    {
+      kind: "HostConsoleSlotsChanged",
+      body: { game: state.game, slots: state.slots, removed_slot_ids: [] },
+    },
+    { kind: "HostConsoleRosterChanged", body: { game: state.game, roster: state.roster } },
+    { kind: "HostConsoleTasksChanged", body: { game: state.game, tasks: state.tasks } },
+  ];
+  await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
+  for (const delta of cells) {
+    const frame = [...encodeServerEnvelopeFrame({
+      v: 3,
+      id: 1,
+      body: {
+        kind: "Delta",
+        body: { audience: { Host: { game: "midsummer" } }, delta },
+      },
+    })];
+    await page.evaluate((frameBytes) => {
+      window.__fmarchEmitLiveProjection(frameBytes);
+    }, frame);
+  }
 }
 
 async function emitPlayerOfficialThreadPost(page) {
