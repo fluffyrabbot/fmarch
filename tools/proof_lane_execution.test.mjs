@@ -1631,3 +1631,23 @@ test('an artifact consumer waits until its producer has finished cleanup', async
   assert.equal(result.receipt.lanes.consumer.state, 'passed', JSON.stringify(result.receipt.lanes.consumer));
   assert.equal(result.success, true);
 });
+
+test('every compiling or test-running phase budgets its CPU against the worker quota', () => {
+  const manifest = loadManifest();
+  const { lock_capacities: capacities } = manifest.runner;
+  assert.equal(capacities.cpu, 12, 'the Cachy worker runs under CPUQuota=1200%');
+  for (const [id, entry] of Object.entries(manifest.lanes)) {
+    const { execution } = entry;
+    if (execution.exclusive) continue;
+    const cpu = (scope) => lockClaims(id, entry, capacities, scope).get('cpu') ?? 0;
+    if (execution.prebuild) assert.ok(cpu('build') >= 2, `${id} build phase runs CARGO_BUILD_JOBS=2 rustc processes`);
+    if (execution.prebuild === 'cargo-test') {
+      const explicit = execution.argv.map((arg) => /^--test-threads=(\d+)$/.exec(arg)?.[1]).find(Boolean);
+      const threads = Math.min(Number(explicit ?? 4), 4);
+      const postgres = execution.resources.some((resource) => resource.kind === 'postgres');
+      assert.ok(cpu('run') >= threads + (postgres ? 1 : 0), `${id} run phase must budget ${threads} test threads${postgres ? ' plus Postgres' : ''}`);
+    }
+    const engines = lockClaims(id, entry, capacities, 'run').get('browser') ?? 0;
+    assert.ok(cpu('run') >= 2 * engines, `${id} must budget two cores per browser engine`);
+  }
+});
