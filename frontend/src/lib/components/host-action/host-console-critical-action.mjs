@@ -268,9 +268,9 @@ function buildHostPromptActions(gameId, prompt, names) {
       id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
       label: "Resolve prompt",
       objectLabel: prompt.label,
-      outcomeLabel: prompt.description ?? "Apply this decision.",
+      outcomeLabel: prompt.value ?? "Apply this decision.",
       confirmationText:
-        `${prompt.label} ${prompt.description ?? "Apply this decision."}`,
+        `${prompt.label} ${prompt.value ?? "Apply this decision."}`,
       irreversible: true,
       payload: {
         kind: "resolve_host_prompt",

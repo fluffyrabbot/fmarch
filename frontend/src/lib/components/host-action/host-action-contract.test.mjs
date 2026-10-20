@@ -673,8 +673,7 @@ test("host console prompt rows become confirmable typed host actions", () => {
       {
         id: "D01:skip_next_day:slot_1",
         label: "Skip the next day?",
-        description: "A Beloved Princess died. Skip the next day.",
-        value: "beloved_princess_death",
+        value: "A Beloved Princess died. Skip the next day.",
         status: "pending",
         subjectSlot: "slot_1",
         decisionKind: "acknowledge",
