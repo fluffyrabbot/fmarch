@@ -139,6 +139,17 @@ privileges whichever targets fit. A one-step confirmation costs one tap and
 removes mis-taps on a touch device, which matter in a game where a vote can
 hammer.
 
+Slice 4 settles the details. The picker lists the server's legal targets
+(`vote_targets`) plus any seat already holding votes that the viewer cannot
+choose (their own seat), so it doubles as the full count; the current vote's
+row is marked and not offered again. Its rows sit in a disclosure that opens
+when the dock or a post's Vote control asks for it, which keeps the page
+within its compact budget at thirteen seats. Unvote stays visible and
+disabled, with its reason, when there is no vote, and confirms like a vote
+(`Remove your vote for Rook`). The dispatching control is the confirmation;
+picker rows carry `data-vote-action` so proofs address a vote by its action
+without clicking past the confirmation.
+
 ### 4. Interruptions speak about the player's intent, not the transport
 
 An interrupted or rejected command becomes a compact status line in the game
@@ -159,6 +170,13 @@ Messages (night results and notices; empty state "Nothing new"), and History.
 "Session", "checkpoint", "queue", "posture" and "projection" do not appear in
 player copy. The game bar shows the deadline as a countdown on every
 breakpoint.
+
+In slice 4 the sheet reads More, ordered role, messages, history. A seat
+before the deal reads "Your role arrives when the game starts". The night
+action card is renamed "Your night action"; its receipt and recovery rows are
+interruption copy and change with decision 4 in slice 5. The countdown reads
+"4h 12m left", "Passed" once due, and keeps the absolute time for screen
+readers and on hover.
 
 ### 6. The host queue holds decisions only; tools live in a menu
 
