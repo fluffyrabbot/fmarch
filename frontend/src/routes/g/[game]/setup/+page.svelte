@@ -1,5 +1,6 @@
 <script>
   import SetupPlayer from "./SetupPlayer.svelte";
+  import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
@@ -371,7 +372,7 @@
                     data-testid={`host-setup-slot-${slot.slotId}`}
                   >
                     <div class="host-setup__slot-summary">
-                      <div><p class="fm-eyebrow">Seat</p><h3>{slot.slotId.replace(/^slot[-_]?/i, "Slot ")}</h3></div>
+                      <div><p class="fm-eyebrow">Seat</p><h3>{seatLabel(slot.slotId, { name: slot.publicName })}</h3></div>
                       <span class="host-setup__slot-state" data-state={slot.personaId ? "ready" : "blocked"}>
                         {slot.personaId ? "seated" : "needs player"}
                       </span>
