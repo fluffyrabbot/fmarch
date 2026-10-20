@@ -4070,7 +4070,8 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await navigateBrowserPage(page, `${baseUrl}${routePath}`, { waitUntil: "networkidle" });
   const filter = page.getByTestId("private-attention-filter");
   await filter.selectOption("new");
-  assert.equal(await status.count(), 0);
+  // The filter re-renders after the change event; wait for it rather than race it.
+  await status.waitFor({ state: "detached" });
   await filter.selectOption("reviewed");
   await status.waitFor();
   await page.evaluate(id => document.getElementById(`private-item-${id}`).scrollIntoView({ block: "start" }), id);
