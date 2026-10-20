@@ -672,7 +672,8 @@ test("host console prompt rows become confirmable typed host actions", () => {
     hostPrompts: [
       {
         id: "D01:skip_next_day:slot_1",
-        label: "skip_next_day",
+        label: "Skip the next day?",
+        description: "A Beloved Princess died. Skip the next day.",
         value: "beloved_princess_death",
         status: "pending",
         subjectSlot: "slot_1",
@@ -689,12 +690,13 @@ test("host console prompt rows become confirmable typed host actions", () => {
   assert.equal(promptAction.payload.kind, "resolve_host_prompt");
   assert.equal(promptAction.payload.promptId, "D01:skip_next_day:slot_1");
   assert.deepEqual(promptAction.payload.decision, { kind: "acknowledge" });
-  assert.match(promptAction.confirmationText, /skip_next_day/);
-  assert.match(promptAction.confirmationText, /acknowledge prompt/);
+  assert.match(promptAction.confirmationText, /Skip the next day/);
+  assert.match(promptAction.confirmationText, /Beloved Princess died/);
 });
 
 test("host console HostDecides prompt exposes one typed choice per contender", () => {
   const actions = buildHostConsoleCriticalActions("game-a", {
+    roster: [["slot-2", "Ilya"], ["slot-4", "Mira"]].map(([slot_id, public_name]) => ({ slot_id, occupancies: [{ began_seq: 1, ended_seq: null, names: [{effective_seq: 1, public_name}] }] })),
     hostPrompts: [
       {
         id: "D01:pk:Tie",
@@ -724,12 +726,12 @@ test("host console HostDecides prompt exposes one typed choice per contender", (
     [
       [
         "resolve_host_prompt-D01-pk-Tie-slot-2",
-        "Eliminate slot-2",
+        "Eliminate Ilya · S2",
         { kind: "select_slot", slot: "slot-2" },
       ],
       [
         "resolve_host_prompt-D01-pk-Tie-slot-4",
-        "Eliminate slot-4",
+        "Eliminate Mira · S4",
         { kind: "select_slot", slot: "slot-4" },
       ],
     ],

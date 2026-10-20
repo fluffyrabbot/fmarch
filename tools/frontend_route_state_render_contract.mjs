@@ -1119,10 +1119,10 @@ async function proveRenderedModeratorHostPromptConfirmation(bundle) {
     'data-testid="critical-host-action-confirmation-message"',
     "host prompt confirmation message",
   );
-  assertIncludes(html, "Resolve Skip the next day?", "host prompt confirmation prompt label");
+  assertIncludes(html, "Skip the next day?", "host prompt confirmation prompt label");
   assertIncludes(
     html,
-    "acknowledge prompt and apply pack policy",
+    "A Beloved Princess died. Decide whether the next day should be skipped.",
     "host prompt confirmation outcome",
   );
   assertIncludes(

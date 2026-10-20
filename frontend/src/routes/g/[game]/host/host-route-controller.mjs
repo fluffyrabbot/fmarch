@@ -162,6 +162,7 @@ export function buildHostDerivedState({
     ? Object.freeze([])
     : buildHostConsoleCriticalActions(gameId, {
         hostPrompts,
+        roster: projection.roster,
         phase: projection.phase,
         replacement: replacementWithCandidate({
           gameId, replacement: projection.replacement, authority: projection.authority,

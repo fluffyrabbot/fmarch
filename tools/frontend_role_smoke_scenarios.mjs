@@ -536,6 +536,7 @@ export const roles = Object.freeze([
       afterFocusSelector:
         '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       statusSelector: '[data-testid="host-command-status-extend_deadline"]',
+      continuityAnchorSelector: '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
       maxScrollDeltaPx: 1,
       maxAnnouncementLatencyMs: 500,
       maxFocusSettleMs: 500,

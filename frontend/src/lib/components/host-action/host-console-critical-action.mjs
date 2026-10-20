@@ -1,5 +1,5 @@
 import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
-import { seatLabel } from "../../app/seat-presenter.mjs";
+import { seatLabel, seatNames } from "../../app/seat-presenter.mjs";
 import {
   FIXTURE_PRINCIPAL_IDS,
   canonicalPrincipalId,
@@ -31,6 +31,7 @@ export function buildHostConsoleCriticalActions(
   gameId,
   {
     hostPrompts = [],
+    roster = [],
     phase = null,
     replacement = null,
     completed = false,
@@ -79,7 +80,7 @@ export function buildHostConsoleCriticalActions(
     }),
     ...hostPrompts
       .filter((prompt) => prompt.status === "pending")
-      .flatMap((prompt) => buildHostPromptActions(gameId, prompt)),
+      .flatMap((prompt) => buildHostPromptActions(gameId, prompt, seatNames(roster))),
   ];
   return Object.freeze(
     actions.filter((action) =>
@@ -223,7 +224,7 @@ function formatDeadlinePacific(epochSeconds) {
   return `${day} at ${time} PT`;
 }
 
-function buildHostPromptActions(gameId, prompt) {
+function buildHostPromptActions(gameId, prompt, names) {
   if (isNoMajorityRevotePrompt(prompt)) {
     return noMajorityRevotePolicyActions.map((policy) =>
       freezeHostAction({
@@ -247,11 +248,11 @@ function buildHostPromptActions(gameId, prompt) {
     return hostPromptSlotChoices(prompt).map((slot) =>
       freezeHostAction({
         id: `resolve_host_prompt-${stableActionId(prompt.id)}-${stableActionId(slot)}`,
-        label: `Eliminate ${slot}`,
+        label: `Eliminate ${names.label(slot)}`,
         objectLabel: prompt.label,
-        outcomeLabel: `select ${slot} from the tied contenders`,
+        outcomeLabel: `select ${names.label(slot)} from the tied contenders`,
         confirmationText:
-          `Eliminate ${slot} for ${prompt.label}: select ${slot} from the tied contenders for ${prompt.label}.`,
+          `Eliminate ${names.label(slot)} from the tied contenders. ${prompt.label}`,
         irreversible: true,
         payload: {
           kind: "resolve_host_prompt",
@@ -267,9 +268,9 @@ function buildHostPromptActions(gameId, prompt) {
       id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
       label: "Resolve prompt",
       objectLabel: prompt.label,
-      outcomeLabel: "acknowledge prompt and apply pack policy",
+      outcomeLabel: prompt.description ?? "Apply this decision.",
       confirmationText:
-        `Resolve ${prompt.label}: acknowledge prompt and apply pack policy for ${prompt.label}.`,
+        `${prompt.label} ${prompt.description ?? "Apply this decision."}`,
       irreversible: true,
       payload: {
         kind: "resolve_host_prompt",

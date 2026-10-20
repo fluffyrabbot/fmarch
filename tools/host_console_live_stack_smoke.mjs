@@ -5823,7 +5823,7 @@ async function resolveHostPromptFromBrowser(page) {
   const confirmationMessage = await actionRoot
     .getByTestId("critical-host-action-confirmation-message")
     .innerText();
-  if (!confirmationMessage.includes("skip_next_day")) {
+  if (!confirmationMessage.includes("Skip the next day?")) {
     throw new Error(`host prompt confirmation did not name prompt: ${confirmationMessage}`);
   }
 

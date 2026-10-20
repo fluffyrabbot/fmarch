@@ -87,6 +87,7 @@ export function buildHostConsoleRouteData({
   ).length;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
+    roster: hostProjection.roster,
     phase: hostProjection.phase,
     replacement: hostProjection.replacement,
     completed: hostProjection.completed,
