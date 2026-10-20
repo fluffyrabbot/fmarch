@@ -7,6 +7,16 @@ import { sveltekit } from "@sveltejs/kit/vite";
 const scratch = process.env.FMARCH_FRONTEND_SCRATCH_DIR;
 
 export default {
-  ...(scratch ? { cacheDir: join(scratch, "vite-cache") } : {}),
+  ...(scratch
+    ? {
+        cacheDir: join(scratch, "vite-cache"),
+        // Such a server never reads the in-tree build state, which another
+        // process may be rewriting: a production build's sync rewrites
+        // .svelte-kit/tsconfig.json, and Vite answers any tsconfig change by
+        // invalidating every module, splitting in-flight SSR renders across
+        // two Svelte runtimes.
+        server: { watch: { ignored: ["**/.svelte-kit/**", "**/build/**"] } },
+      }
+    : {}),
   plugins: [sveltekit()],
 };
