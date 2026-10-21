@@ -178,12 +178,25 @@ The branch also fixes two defects in the Moonlit Den base commit. Below
 840px, the topbar's scoped styles overlapped the primary nav labels. The
 theme switch echoed refused paths into error pages.
 
+- **E. Role chips in thread posts** (follow-up). A system post carries
+  `role_reveals`: a slot and role key per seat it announces. Migration 0020
+  stores the list on `thread_view`, restricted to main. The projection fills
+  it after the resolution's inner events fold, and only for seats whose
+  `role_revealed` flag is set, so a Janitor, Flipless or alignment-only flip
+  carries none. The same gate now covers the `role:` clause in the
+  day-announcement body text, which used to print the victim's role whatever
+  its reveal mode. The API attaches each reveal's `RoleReference`. The player
+  thread and the public game page render it as a chip that opens the role
+  modal. The proof is `concealed_flips_carry_no_role_in_thread_posts`
+  (api vertical), the route-state SSR render, and the frontend model tests.
+
 Deferred, each a self-contained follow-up:
 
-- **Role chips in thread posts.** Flip posts are text, and `ThreadPost`
-  carries no structured role reveal. Chips there need a typed flip payload on
-  the post (from the `DayNoteRolePayload` announcement), gated by the same
-  reveal flags.
+- **Concealed roles in the day-note event.** `collect_night_victims_from_applied`
+  (crates/commands/src/lib.rs) copies the victim's role into
+  `DayAnnouncement.role_key` regardless of the death's `DeathRevealMode`. The
+  projection keeps it off every public surface, but the stored event should
+  carry no role the death concealed.
 - **Player action buttons.** These still use `action_label()` ("Submit
   <id>"), not the presentation's ability labels.
 - **Fallback for packs without presentation.** `humanizeRoleTag` remains in
