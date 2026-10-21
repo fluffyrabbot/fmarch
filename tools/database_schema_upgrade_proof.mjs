@@ -1305,6 +1305,39 @@ migrationFixtures.push({
   ],
 });
 
+// 0020 adds the reveal-gated role list a system post carries (RFC 0009).
+// A post written before it upgrades to the empty list.
+migrationFixtures.push({
+  version: 20,
+  seed: String.raw`
+    INSERT INTO thread_view
+      (game_id, source_seq, stream_seq, channel_id, author_kind, phase_id, body, occurred_at)
+    VALUES ('20000000-0000-4000-8000-000000000001', 20, 1, 'main', 'system', 'D01',
+      'Phase D01 announcement: slot_1 (day_vote).', 20);
+  `,
+  assertions: [
+    {
+      sql: String.raw`DO $proof$
+        BEGIN
+          IF (SELECT role_reveals FROM thread_view
+              WHERE game_id = '20000000-0000-4000-8000-000000000001' AND source_seq = 20)
+            IS DISTINCT FROM '[]'::jsonb THEN
+            RAISE EXCEPTION '0020 did not upgrade a pre-existing post to no role reveals';
+          END IF;
+        END
+        $proof$;`,
+      expected: "DO",
+      message: "0020 must upgrade a pre-existing post to the empty role reveal list",
+    },
+    {
+      rejectedSql: String.raw`UPDATE thread_view SET role_reveals = '{"slot_id": "slot_1"}'::jsonb
+        WHERE game_id = '20000000-0000-4000-8000-000000000001' AND source_seq = 20`,
+      expectedError: /thread_view_role_reveals_shape/iu,
+      message: "0020 must store role reveals only as a list",
+    },
+  ],
+});
+
 const postMigrationAuthorityInvariantSql = String.raw`
 DO $proof$
 BEGIN

@@ -269,7 +269,15 @@ export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint,
  * Seats this post addressed, decided at write time. Renderers walk this
  * list; they never scan the body for `@`.
  */
-mentions: Array<ThreadPostMention>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
+mentions: Array<ThreadPostMention>,
+/**
+ * Roles this post made public. The projection fills it only for seats
+ * whose role is revealed, so a concealed or alignment-only flip carries
+ * none; renderers never read a role out of the body.
+ */
+role_reveals: Array<ThreadPostRoleReveal>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
+
+export type ThreadPostRoleReveal = { slot_id: string, role_key: string, reference: RoleReference | null, };
 
 export type ThreadPostMedia = { content_id: string, alt: string, variants: { [key in string]: ThreadPostMediaVariant }, };
 

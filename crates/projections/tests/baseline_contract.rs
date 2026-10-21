@@ -991,6 +991,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "thread_view_body_private_kid_shape:c",
     "thread_view_body_storage:c",
     "thread_view_pkey:p",
+    "thread_view_role_reveals_shape:c",
     "visit_history_pkey:p",
     "vote_ballot_pkey:p",
     "workos_provider_session_external_identity_fkey:f",
