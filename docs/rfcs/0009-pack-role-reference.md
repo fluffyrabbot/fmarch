@@ -150,6 +150,45 @@ change to stored `GameCreated` artifacts. Six frozen areas re-arm, which makes
 this an expensive push. A forced full sweep is not required, because no
 frozen area changes semantics.
 
+## Implementation checkpoint
+
+Branch `ux/role-cards-20261021` delivers slices A–D:
+
+- **A.** Presentation sidecars for all five product packs (277 roles), registry
+  validation that is closed in both directions, and the projection. The
+  read-model types live in `game_platform::role_reference`, so no hub crate
+  gains a dependency edge (RFC 0006 ratchets unchanged). A snapshot of the
+  projection, `frontend/src/lib/dev/pack-role-reference.fixture.json`, feeds
+  fixture-mode pages. The registry test
+  `frontend_role_reference_fixture_matches_the_projection` holds it to the
+  projection; regenerate it with
+  `FMARCH_WRITE_ROLE_REFERENCE_FIXTURE=1 cargo test -p content_registry`.
+- **B.** `GET /packs` and `GET /packs/{key}/roles`, the wire types, and
+  `RoleReference` on the player's own role and on host setup options.
+- **C.** Role cards and `/roles` render from the reference. The page has a
+  pack selector and `?pack=&role=` deep links, and shows an explicit
+  unavailable state when the API cannot be reached. `role-catalog.mjs` is
+  deleted.
+- **D.** The player's own role renders as a bare full card inside its
+  disclosure. Endgame rows render revealed roles as chips that open the role
+  modal, and the server attaches a reference only to slots the projection
+  has revealed. Host setup shows compact cards. Roles joins the primary nav.
+
+The branch also fixes two defects in the Moonlit Den base commit. Below
+840px, the topbar's scoped styles overlapped the primary nav labels. The
+theme switch echoed refused paths into error pages.
+
+Deferred, each a self-contained follow-up:
+
+- **Role chips in thread posts.** Flip posts are text, and `ThreadPost`
+  carries no structured role reveal. Chips there need a typed flip payload on
+  the post (from the `DayNoteRolePayload` announcement), gated by the same
+  reveal flags.
+- **Player action buttons.** These still use `action_label()` ("Submit
+  <id>"), not the presentation's ability labels.
+- **Fallback for packs without presentation.** `humanizeRoleTag` remains in
+  the player card for test fixture packs, where no reference exists.
+
 ## Non-goals
 
 - Localization. The sidecar is single-language, but because it is a separate
