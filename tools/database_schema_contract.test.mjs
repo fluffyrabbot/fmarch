@@ -65,11 +65,11 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0018_typed_forum_journal.sql");
-  assert.equal(report.migration_file_count, 18);
+  assert.equal(report.migration_head, "0019_release_acceptance_accounts.sql");
+  assert.equal(report.migration_file_count, 19);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 108);
+  assert.equal(report.table_count, 109);
   assert.equal(report.trigger_count, 40);
   assert.equal(report.function_count, 17);
   assert.equal(report.view_count, 2);

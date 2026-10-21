@@ -67,12 +67,15 @@ pub use workos::{
     WorkosSessionId,
 };
 
-/// The two first-class sign-in methods. Wire and storage strings are the
-/// kind column values in authentication_method.
+/// Sign-in methods. Wire and storage strings are the kind column values in
+/// authentication_method. Classic password and WorkOS are the first-class
+/// member methods; a release acceptance method belongs only to one of the two
+/// staging acceptance principals and is exercised by the release coordinator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MethodKind {
     ClassicPassword,
     Workos,
+    ReleaseAcceptance,
 }
 
 impl MethodKind {
@@ -80,6 +83,7 @@ impl MethodKind {
         match self {
             MethodKind::ClassicPassword => "classic_password",
             MethodKind::Workos => "workos",
+            MethodKind::ReleaseAcceptance => "release_acceptance",
         }
     }
 
@@ -87,6 +91,7 @@ impl MethodKind {
         match value {
             "classic_password" => Some(MethodKind::ClassicPassword),
             "workos" => Some(MethodKind::Workos),
+            "release_acceptance" => Some(MethodKind::ReleaseAcceptance),
             _ => None,
         }
     }
@@ -98,6 +103,7 @@ impl MethodKind {
 pub enum Assurance {
     Password,
     ExternalSso,
+    ReleaseAcceptance,
     #[cfg(debug_assertions)]
     Dev,
 }
@@ -107,6 +113,7 @@ impl Assurance {
         match self {
             Assurance::Password => "password",
             Assurance::ExternalSso => "external_sso",
+            Assurance::ReleaseAcceptance => "release_acceptance",
             #[cfg(debug_assertions)]
             Assurance::Dev => "dev",
         }
@@ -116,6 +123,7 @@ impl Assurance {
         match value {
             "password" => Some(Assurance::Password),
             "external_sso" => Some(Assurance::ExternalSso),
+            "release_acceptance" => Some(Assurance::ReleaseAcceptance),
             #[cfg(debug_assertions)]
             "dev" => Some(Assurance::Dev),
             _ => None,

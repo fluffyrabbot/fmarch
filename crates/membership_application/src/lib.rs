@@ -220,6 +220,32 @@ pub async fn ensure_founder_membership_in_tx(
     Ok(membership_id)
 }
 
+/// Admit one staging release acceptance principal with no invitation and no
+/// sponsor, or return its existing membership. Any other existing membership
+/// for the principal, or one no longer active, is refused rather than reused.
+pub async fn ensure_release_acceptance_membership_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_id: PrincipalId,
+    now: i64,
+) -> Result<MembershipId, MembershipApplicationError> {
+    if let Some(existing) = load_membership_for_principal(tx, principal_id).await? {
+        if existing.origin != MembershipOrigin::ReleaseAcceptance
+            || existing.status != MembershipStatus::Active
+        {
+            return Err(MembershipApplicationError::Unavailable);
+        }
+        return Ok(existing.membership_id);
+    }
+    let membership_id = MembershipId::random();
+    let events = decide_membership(
+        membership_id,
+        None,
+        MembershipCommand::AdmitForReleaseAcceptance,
+    )?;
+    append_membership_events(tx, membership_id, principal_id, &events, now).await?;
+    Ok(membership_id)
+}
+
 pub async fn issue_invitation(
     pool: &sqlx::PgPool,
     target_index: &InvitationTargetIndex,
@@ -1005,6 +1031,30 @@ async fn append_membership_events_expected(
                 .execute(&mut **tx)
                 .await?;
             }
+            MembershipEvent::AdmittedForReleaseAcceptance => {
+                sqlx::query(
+                    r#"
+                    INSERT INTO community_membership (
+                        membership_id, active_principal_id, status, origin_kind,
+                        admission_invitation_id, sponsoring_membership_id,
+                        admitted_at, updated_at, revision, retained_alias
+                    )
+                    VALUES ($1, $2, 'active', 'release_acceptance', NULL, NULL, $3, $3, $4, NULL)
+                    "#,
+                )
+                .bind(membership_id.as_uuid())
+                .bind(principal_id.as_uuid())
+                .bind(now)
+                .bind(stored.stream_seq)
+                .execute(&mut **tx)
+                .await?;
+                sqlx::query(
+                    "INSERT INTO membership_ancestry (ancestor_membership_id, descendant_membership_id, depth) VALUES ($1, $1, 0)",
+                )
+                .bind(membership_id.as_uuid())
+                .execute(&mut **tx)
+                .await?;
+            }
             MembershipEvent::Admitted {
                 invitation_id,
                 sponsoring_membership_id,
@@ -1325,6 +1375,7 @@ fn membership_origin(
 ) -> Result<MembershipOrigin, MembershipApplicationError> {
     match (kind, invitation_id, sponsor_id) {
         ("founder", None, None) => Ok(MembershipOrigin::Founder),
+        ("release_acceptance", None, None) => Ok(MembershipOrigin::ReleaseAcceptance),
         ("invitation", Some(invitation_id), Some(sponsor_id)) => Ok(MembershipOrigin::Invitation {
             invitation_id: InvitationId::from_uuid(invitation_id),
             sponsoring_membership_id: MembershipId::from_uuid(sponsor_id),

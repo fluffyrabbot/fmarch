@@ -887,7 +887,7 @@ CREATE TABLE public.auth_session (
     workos_session_id text,
     local_proof_instance_id text,
     workos_signing_key_id text,
-    CONSTRAINT auth_session_assurance_check CHECK ((assurance = ANY (ARRAY['password'::text, 'external_sso'::text, 'dev'::text]))),
+    CONSTRAINT auth_session_assurance_check CHECK ((assurance = ANY (ARRAY['password'::text, 'external_sso'::text, 'dev'::text, 'release_acceptance'::text]))),
     CONSTRAINT auth_session_authenticated_at_check CHECK ((authenticated_at <= created_at)),
     CONSTRAINT auth_session_idle_expiry_check CHECK (((idle_expires_at > created_at) AND (idle_expires_at <= expires_at))),
     CONSTRAINT auth_session_local_proof_instance_shape_check CHECK ((((assurance = 'dev'::text) AND (local_proof_instance_id IS NOT NULL) AND (local_proof_instance_id ~ '^[0-9a-f]{64}$'::text)) OR ((assurance <> 'dev'::text) AND (local_proof_instance_id IS NULL)))),
@@ -932,7 +932,7 @@ CREATE TABLE public.authentication_method (
     disabled_at bigint,
     last_authenticated_at bigint,
     CONSTRAINT authentication_method_disabled_shape_check CHECK ((((status = 'active'::text) AND (disabled_at IS NULL)) OR ((status = 'disabled'::text) AND (disabled_at IS NOT NULL)))),
-    CONSTRAINT authentication_method_kind_check CHECK ((kind = ANY (ARRAY['classic_password'::text, 'workos'::text]))),
+    CONSTRAINT authentication_method_kind_check CHECK ((kind = ANY (ARRAY['classic_password'::text, 'workos'::text, 'release_acceptance'::text]))),
     CONSTRAINT authentication_method_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
 );
 
@@ -1005,7 +1005,7 @@ CREATE TABLE public.community_membership (
     updated_at bigint NOT NULL,
     revision bigint NOT NULL,
     retained_alias text,
-    CONSTRAINT community_membership_origin_shape_check CHECK ((((origin_kind = 'founder'::text) AND (admission_invitation_id IS NULL) AND (sponsoring_membership_id IS NULL)) OR ((origin_kind = 'invitation'::text) AND (admission_invitation_id IS NOT NULL) AND (sponsoring_membership_id IS NOT NULL) AND (sponsoring_membership_id <> membership_id)))),
+    CONSTRAINT community_membership_origin_shape_check CHECK ((((origin_kind = ANY (ARRAY['founder'::text, 'release_acceptance'::text])) AND (admission_invitation_id IS NULL) AND (sponsoring_membership_id IS NULL)) OR ((origin_kind = 'invitation'::text) AND (admission_invitation_id IS NOT NULL) AND (sponsoring_membership_id IS NOT NULL) AND (sponsoring_membership_id <> membership_id)))),
     CONSTRAINT community_membership_principal_shape_check CHECK ((((status = ANY (ARRAY['active'::text, 'suspended'::text])) AND (active_principal_id IS NOT NULL) AND (retained_alias IS NULL)) OR ((status = 'withdrawn'::text) AND (retained_alias IS NULL)) OR ((status = 'redacted'::text) AND (active_principal_id IS NULL) AND (retained_alias IS NOT NULL)))),
     CONSTRAINT community_membership_revision_check CHECK ((revision > 0)),
     CONSTRAINT community_membership_status_check CHECK ((status = ANY (ARRAY['active'::text, 'suspended'::text, 'withdrawn'::text, 'redacted'::text]))),
@@ -2250,6 +2250,21 @@ CREATE TABLE public.public_watch_period (
 
 
 --
+-- Name: release_acceptance_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.release_acceptance_account (
+    role text NOT NULL,
+    principal_id uuid NOT NULL,
+    method_id uuid NOT NULL,
+    method_kind text GENERATED ALWAYS AS ('release_acceptance'::text) STORED,
+    created_at bigint NOT NULL,
+    CONSTRAINT release_acceptance_account_created_at_check CHECK ((created_at > 0)),
+    CONSTRAINT release_acceptance_account_role_check CHECK ((role = ANY (ARRAY['member'::text, 'outsider'::text])))
+);
+
+
+--
 -- Name: sheriff_badge; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3460,6 +3475,30 @@ ALTER TABLE ONLY public.publication_surface
 
 
 --
+-- Name: release_acceptance_account release_acceptance_account_method_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.release_acceptance_account
+    ADD CONSTRAINT release_acceptance_account_method_key UNIQUE (method_id);
+
+
+--
+-- Name: release_acceptance_account release_acceptance_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.release_acceptance_account
+    ADD CONSTRAINT release_acceptance_account_pkey PRIMARY KEY (role);
+
+
+--
+-- Name: release_acceptance_account release_acceptance_account_principal_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.release_acceptance_account
+    ADD CONSTRAINT release_acceptance_account_principal_key UNIQUE (principal_id);
+
+
+--
 -- Name: sheriff_badge sheriff_badge_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3893,6 +3932,13 @@ CREATE UNIQUE INDEX authentication_method_classic_unique ON public.authenticatio
 --
 
 CREATE INDEX authentication_method_principal_idx ON public.authentication_method USING btree (principal_id, status);
+
+
+--
+-- Name: authentication_method_release_acceptance_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX authentication_method_release_acceptance_unique ON public.authentication_method USING btree (principal_id) WHERE (kind = 'release_acceptance'::text);
 
 
 --
@@ -5412,6 +5458,22 @@ ALTER TABLE ONLY public.public_search_document
 
 ALTER TABLE ONLY public.public_watch_period
     ADD CONSTRAINT public_watch_period_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.public_watch(subscription_id) ON DELETE CASCADE;
+
+
+--
+-- Name: release_acceptance_account release_acceptance_account_method_identity_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.release_acceptance_account
+    ADD CONSTRAINT release_acceptance_account_method_identity_fkey FOREIGN KEY (method_id, principal_id, method_kind) REFERENCES public.authentication_method(method_id, principal_id, kind) ON DELETE RESTRICT;
+
+
+--
+-- Name: release_acceptance_account release_acceptance_account_principal_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.release_acceptance_account
+    ADD CONSTRAINT release_acceptance_account_principal_fkey FOREIGN KEY (principal_id) REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT;
 
 
 --

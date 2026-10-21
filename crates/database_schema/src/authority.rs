@@ -738,6 +738,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "public_citation",
     "public_publication",
     "public_search_document",
+    "release_acceptance_account",
     "sheriff_badge",
     "slot_effect",
     "slot_mention_notification",

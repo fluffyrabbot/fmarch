@@ -575,6 +575,13 @@
       "namespace": "public"
     },
     {
+      "acl": "",
+      "kind": "relation",
+      "name": "authentication_method_release_acceptance_unique",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arw/$schema_owner}",
       "kind": "relation",
       "name": "command_receipt",
@@ -2314,6 +2321,34 @@
       "acl": "",
       "kind": "relation",
       "name": "publication_surface_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
+      "kind": "relation",
+      "name": "release_acceptance_account",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "release_acceptance_account_method_key",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "release_acceptance_account_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "release_acceptance_account_principal_key",
       "owner": "$schema_owner",
       "namespace": "public"
     },

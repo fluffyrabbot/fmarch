@@ -37,6 +37,8 @@ uuid_id!(InvitationId);
 
 pub const MEMBERSHIP_FOUNDED: &str = "MembershipFounded";
 pub const MEMBERSHIP_ADMITTED: &str = "MembershipAdmitted";
+pub const MEMBERSHIP_ADMITTED_FOR_RELEASE_ACCEPTANCE: &str =
+    "MembershipAdmittedForReleaseAcceptance";
 pub const MEMBERSHIP_SUSPENDED: &str = "MembershipSuspended";
 pub const MEMBERSHIP_RESTORED: &str = "MembershipRestored";
 pub const MEMBERSHIP_WITHDRAWN: &str = "MembershipWithdrawn";
@@ -68,6 +70,10 @@ pub enum MembershipOrigin {
         invitation_id: InvitationId,
         sponsoring_membership_id: MembershipId,
     },
+    /// A staging release acceptance principal, admitted by the release
+    /// coordinator's minting route rather than by any member. It has no place
+    /// in the sponsorship tree and can never sponsor.
+    ReleaseAcceptance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +84,13 @@ pub struct MembershipState {
     pub revision: i64,
 }
 
+impl MembershipState {
+    /// Sponsorship needs a live membership inside the member tree.
+    pub fn can_sponsor(&self) -> bool {
+        self.status.can_invite() && self.origin != MembershipOrigin::ReleaseAcceptance
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MembershipCommand {
     Found,
@@ -85,6 +98,7 @@ pub enum MembershipCommand {
         invitation_id: InvitationId,
         sponsoring_membership_id: MembershipId,
     },
+    AdmitForReleaseAcceptance,
     Suspend {
         reason: String,
     },
@@ -103,6 +117,7 @@ pub enum MembershipEvent {
         invitation_id: InvitationId,
         sponsoring_membership_id: MembershipId,
     },
+    AdmittedForReleaseAcceptance,
     Suspended {
         reason: String,
     },
@@ -118,6 +133,7 @@ impl MembershipEvent {
         match self {
             Self::Founded => MEMBERSHIP_FOUNDED,
             Self::Admitted { .. } => MEMBERSHIP_ADMITTED,
+            Self::AdmittedForReleaseAcceptance => MEMBERSHIP_ADMITTED_FOR_RELEASE_ACCEPTANCE,
             Self::Suspended { .. } => MEMBERSHIP_SUSPENDED,
             Self::Restored => MEMBERSHIP_RESTORED,
             Self::Withdrawn => MEMBERSHIP_WITHDRAWN,
@@ -127,7 +143,10 @@ impl MembershipEvent {
 
     pub fn payload(&self) -> serde_json::Value {
         match self {
-            Self::Founded | Self::Restored | Self::Withdrawn => serde_json::json!({}),
+            Self::Founded
+            | Self::AdmittedForReleaseAcceptance
+            | Self::Restored
+            | Self::Withdrawn => serde_json::json!({}),
             Self::Admitted {
                 invitation_id,
                 sponsoring_membership_id,
@@ -172,6 +191,9 @@ pub fn decide_membership(
 ) -> Result<Vec<MembershipEvent>, MembershipReject> {
     match (state, command) {
         (None, MembershipCommand::Found) => Ok(vec![MembershipEvent::Founded]),
+        (None, MembershipCommand::AdmitForReleaseAcceptance) => {
+            Ok(vec![MembershipEvent::AdmittedForReleaseAcceptance])
+        }
         (
             None,
             MembershipCommand::Admit {
@@ -188,9 +210,12 @@ pub fn decide_membership(
             }])
         }
         (None, _) => Err(MembershipReject::NotFound),
-        (Some(_), MembershipCommand::Found | MembershipCommand::Admit { .. }) => {
-            Err(MembershipReject::AlreadyExists)
-        }
+        (
+            Some(_),
+            MembershipCommand::Found
+            | MembershipCommand::Admit { .. }
+            | MembershipCommand::AdmitForReleaseAcceptance,
+        ) => Err(MembershipReject::AlreadyExists),
         (Some(state), MembershipCommand::Suspend { reason }) => {
             if state.status == MembershipStatus::Suspended {
                 return Err(MembershipReject::AlreadySuspended);
@@ -252,6 +277,12 @@ pub fn fold_membership(
             origin: MembershipOrigin::Founder,
             revision: next_revision,
         }),
+        (None, MembershipEvent::AdmittedForReleaseAcceptance) => Ok(MembershipState {
+            membership_id,
+            status: MembershipStatus::Active,
+            origin: MembershipOrigin::ReleaseAcceptance,
+            revision: next_revision,
+        }),
         (
             None,
             MembershipEvent::Admitted {
@@ -268,16 +299,21 @@ pub fn fold_membership(
             revision: next_revision,
         }),
         (None, _) => Err(MembershipReject::NotFound),
-        (Some(_), MembershipEvent::Founded | MembershipEvent::Admitted { .. }) => {
-            Err(MembershipReject::AlreadyExists)
-        }
+        (
+            Some(_),
+            MembershipEvent::Founded
+            | MembershipEvent::Admitted { .. }
+            | MembershipEvent::AdmittedForReleaseAcceptance,
+        ) => Err(MembershipReject::AlreadyExists),
         (Some(mut state), event) => {
             state.status = match event {
                 MembershipEvent::Suspended { .. } => MembershipStatus::Suspended,
                 MembershipEvent::Restored => MembershipStatus::Active,
                 MembershipEvent::Withdrawn => MembershipStatus::Withdrawn,
                 MembershipEvent::Redacted { .. } => MembershipStatus::Redacted,
-                MembershipEvent::Founded | MembershipEvent::Admitted { .. } => unreachable!(),
+                MembershipEvent::Founded
+                | MembershipEvent::Admitted { .. }
+                | MembershipEvent::AdmittedForReleaseAcceptance => unreachable!(),
             };
             state.revision = next_revision;
             Ok(state)
@@ -398,7 +434,7 @@ pub fn decide_invitation(
             },
         ) => {
             let sponsor = sponsor.filter(|state| {
-                state.membership_id == sponsoring_membership_id && state.status.can_invite()
+                state.membership_id == sponsoring_membership_id && state.can_sponsor()
             });
             if sponsor.is_none() {
                 return Err(InvitationReject::SponsorIneligible);
@@ -438,8 +474,7 @@ pub fn decide_invitation(
                 return Err(InvitationReject::Expired);
             }
             if sponsor.is_none_or(|sponsor| {
-                sponsor.membership_id != state.sponsoring_membership_id
-                    || !sponsor.status.can_invite()
+                sponsor.membership_id != state.sponsoring_membership_id || !sponsor.can_sponsor()
             }) {
                 return Err(InvitationReject::SponsorIneligible);
             }
@@ -623,6 +658,47 @@ mod tests {
                     admitted_membership_id: MembershipId::from_uuid(Uuid::from_u128(3)),
                     presented_target_index: "blind-target".to_string(),
                     now: 20,
+                },
+            ),
+            Err(InvitationReject::SponsorIneligible)
+        );
+    }
+
+    #[test]
+    fn release_acceptance_membership_is_sponsorless_and_cannot_sponsor() {
+        let membership_id = MembershipId::from_uuid(Uuid::from_u128(1));
+        let admitted = decide_membership(
+            membership_id,
+            None,
+            MembershipCommand::AdmitForReleaseAcceptance,
+        )
+        .unwrap();
+        assert_eq!(
+            admitted,
+            vec![MembershipEvent::AdmittedForReleaseAcceptance]
+        );
+        assert_eq!(admitted[0].payload(), serde_json::json!({}));
+        let state = fold_membership(membership_id, None, &admitted[0]).unwrap();
+        assert_eq!(state.status, MembershipStatus::Active);
+        assert_eq!(state.origin, MembershipOrigin::ReleaseAcceptance);
+        assert!(!state.can_sponsor());
+        assert_eq!(
+            decide_membership(
+                membership_id,
+                Some(&state),
+                MembershipCommand::AdmitForReleaseAcceptance,
+            ),
+            Err(MembershipReject::AlreadyExists)
+        );
+        assert_eq!(
+            decide_invitation(
+                None,
+                Some(&state),
+                InvitationCommand::Issue {
+                    sponsoring_membership_id: membership_id,
+                    target_index: "blind-target".to_string(),
+                    expires_at: 100,
+                    now: 10,
                 },
             ),
             Err(InvitationReject::SponsorIneligible)

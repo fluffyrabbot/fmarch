@@ -1410,6 +1410,10 @@ impl AuthorizationContext {
         let authority_shape_is_valid = match (&method, assurance, &workos_session_id) {
             (Some((_, MethodKind::ClassicPassword)), Assurance::Password, None)
             | (Some((_, MethodKind::Workos)), Assurance::ExternalSso, Some(_)) => true,
+            // Release acceptance principals never hold global authority.
+            (Some((_, MethodKind::ReleaseAcceptance)), Assurance::ReleaseAcceptance, None) => {
+                global_capabilities.is_empty()
+            }
             #[cfg(debug_assertions)]
             (None, Assurance::Dev, None) => true,
             _ => false,
@@ -2209,6 +2213,7 @@ async fn load_eligible_session(
             let expected_assurance = match kind {
                 MethodKind::ClassicPassword => Assurance::Password,
                 MethodKind::Workos => Assurance::ExternalSso,
+                MethodKind::ReleaseAcceptance => Assurance::ReleaseAcceptance,
             };
             if assurance != expected_assurance {
                 return Err(IdentityFlowError::Unauthorized);

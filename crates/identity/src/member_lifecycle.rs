@@ -1271,6 +1271,7 @@ pub(crate) async fn redact_community_membership_in_tx(
     };
     let origin = match (origin_kind.as_str(), invitation_id, sponsor_id) {
         ("founder", None, None) => MembershipOrigin::Founder,
+        ("release_acceptance", None, None) => MembershipOrigin::ReleaseAcceptance,
         ("invitation", Some(invitation_id), Some(sponsor_id)) => MembershipOrigin::Invitation {
             invitation_id: InvitationId::from_uuid(invitation_id),
             sponsoring_membership_id: MembershipId::from_uuid(sponsor_id),

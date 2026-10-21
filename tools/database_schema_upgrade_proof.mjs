@@ -1219,6 +1219,92 @@ migrationFixtures.push({
   ],
 });
 
+// 0019 widens three closed sets for release acceptance and adds the table
+// that pins exactly one member and one outsider principal to their method.
+migrationFixtures.push({
+  version: 19,
+  seed: String.raw`
+    INSERT INTO platform_principal (principal_id, created_at)
+    VALUES ('19000000-0000-4000-8000-000000000001', 19),
+           ('19000000-0000-4000-8000-000000000002', 19);
+    INSERT INTO authentication_method (method_id, principal_id, kind, created_at)
+    VALUES ('19100000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000002',
+      'classic_password', 19);
+  `,
+  assertions: [
+    {
+      sql: String.raw`DO $proof$
+        BEGIN
+          INSERT INTO authentication_method (method_id, principal_id, kind, created_at)
+          VALUES ('19100000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
+            'release_acceptance', 19)
+          ON CONFLICT DO NOTHING;
+          INSERT INTO release_acceptance_account (role, principal_id, method_id, created_at)
+          VALUES ('member', '19000000-0000-4000-8000-000000000001',
+            '19100000-0000-4000-8000-000000000001', 19)
+          ON CONFLICT DO NOTHING;
+          INSERT INTO community_membership
+            (membership_id, active_principal_id, status, origin_kind, admitted_at, updated_at, revision)
+          VALUES ('19200000-0000-4000-8000-000000000001', '19000000-0000-4000-8000-000000000001',
+            'active', 'release_acceptance', 19, 19, 1)
+          ON CONFLICT DO NOTHING;
+          INSERT INTO auth_session
+            (token_hash, principal_id, created_at, expires_at, authenticated_via_method_id,
+             idle_expires_at, assurance, authenticated_at)
+          VALUES (repeat('9', 64), '19000000-0000-4000-8000-000000000001', 19, 3619,
+            '19100000-0000-4000-8000-000000000001', 3619, 'release_acceptance', 19)
+          ON CONFLICT DO NOTHING;
+          IF (SELECT count(*) FROM release_acceptance_account WHERE method_kind = 'release_acceptance') <> 1
+            OR (SELECT kind FROM authentication_method
+              WHERE method_id = '19100000-0000-4000-8000-000000000002') IS DISTINCT FROM 'classic_password' THEN
+            RAISE EXCEPTION '0019 lost the acceptance account or a pre-existing method';
+          END IF;
+        END
+        $proof$;`,
+      expected: "DO",
+      message: "0019 must admit a release acceptance method, account, sponsorless membership, and session",
+    },
+    {
+      rejectedSql: String.raw`INSERT INTO authentication_method (method_id, principal_id, kind, created_at)
+        VALUES ('19100000-0000-4000-8000-000000000003', '19000000-0000-4000-8000-000000000001',
+          'release_acceptance', 19)`,
+      expectedError: /authentication_method_release_acceptance_unique/iu,
+      message: "0019 must allow one release acceptance method per principal",
+    },
+    {
+      rejectedSql: String.raw`INSERT INTO release_acceptance_account (role, principal_id, method_id, created_at)
+        VALUES ('admin', '19000000-0000-4000-8000-000000000002',
+          '19100000-0000-4000-8000-000000000002', 19)`,
+      expectedError: /release_acceptance_account_role_check/iu,
+      message: "0019 must admit only the member and outsider roles",
+    },
+    {
+      rejectedSql: String.raw`INSERT INTO release_acceptance_account (role, principal_id, method_id, created_at)
+        VALUES ('outsider', '19000000-0000-4000-8000-000000000002',
+          '19100000-0000-4000-8000-000000000002', 19)`,
+      expectedError: /release_acceptance_account_method_identity_fkey/iu,
+      message: "0019 must bind an acceptance account only to a release acceptance method",
+    },
+    {
+      rejectedSql: String.raw`INSERT INTO community_membership
+        (membership_id, active_principal_id, status, origin_kind, admission_invitation_id,
+         sponsoring_membership_id, admitted_at, updated_at, revision)
+        VALUES ('19200000-0000-4000-8000-000000000002', '19000000-0000-4000-8000-000000000002',
+          'active', 'release_acceptance', '19300000-0000-4000-8000-000000000001',
+          '19200000-0000-4000-8000-000000000001', 19, 19, 1)`,
+      expectedError: /community_membership_origin_shape_check/iu,
+      message: "0019 must refuse a release acceptance membership with an invitation or sponsor",
+    },
+    {
+      rejectedSql: String.raw`INSERT INTO auth_session
+        (token_hash, principal_id, created_at, expires_at, idle_expires_at, assurance, authenticated_at)
+        VALUES (repeat('8', 64), '19000000-0000-4000-8000-000000000002', 19, 3619, 3619, 'automation', 19)`,
+      expectedError: /auth_session_assurance_check/iu,
+      message: "0019 must keep the session assurance set closed",
+    },
+  ],
+});
+
 const postMigrationAuthorityInvariantSql = String.raw`
 DO $proof$
 BEGIN
