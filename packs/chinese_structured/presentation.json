@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "pack": "chinese_structured",
+  "name": "Chinese Structured Werewolf",
+  "alignments": {
+    "town": { "label": "Good", "family": "town", "win": "Wins when every Werewolf is gone." },
+    "wolf": { "label": "Werewolf", "family": "mafia", "win": "Wins when the Werewolves equal or outnumber everyone else." }
+  },
+  "effects": {},
+  "actions": {
+    "wolf_night_kill": "Wolf kill",
+    "day_self_destruct": "Self-destruct",
+    "beauty_mark": "Charm",
+    "heal_potion": "Heal potion",
+    "poison_potion": "Poison potion",
+    "night_guard": "Guard",
+    "hunter_retaliate": "Aim",
+    "link_lovers": "Link lovers",
+    "investigate_alignment": "Good or evil",
+    "knight_duel": "Duel",
+    "sheriff_election": "Run for Sheriff",
+    "sheriff_pass": "Pass the badge",
+    "sheriff_destroy": "Tear up the badge"
+  },
+  "roles": {
+    "villager": { "name": "Villager", "summary": "No night action. Wins with the good side through discussion and the vote." },
+    "wolf": { "name": "Werewolf", "summary": "Chooses the Werewolves' shared kill each night with the rest of the pack." },
+    "white_wolf_king": { "name": "White Wolf King", "summary": "Once, by day, may self-destruct to take one player down. Joins the wolf kill at night." },
+    "white_wolf_carry": { "name": "White Wolf (Carry)", "summary": "Passive. Leaves the pack a token that lets their next kill take an extra target." },
+    "wolf_beauty": { "name": "Wolf Beauty", "summary": "Charms one player each night. If lynched or poisoned by day, drags the charmed player down too." },
+    "witch": { "name": "Witch", "summary": "Holds one heal potion and one poison potion, each usable once." },
+    "guard": { "name": "Guard", "summary": "Each night, protects one player, possibly themselves, from the wolf kill." },
+    "hunter": { "name": "Hunter", "summary": "Picks a target. If the Hunter dies to an allowed cause, that target dies too." },
+    "idiot": { "name": "Idiot", "summary": "Survives their first lynch, but loses their vote." },
+    "cupid": { "name": "Cupid", "summary": "On the first night, links two players as lovers. If one dies, so does the other." },
+    "prophet": { "name": "Prophet", "summary": "Each night, checks one player and learns whether they are good or evil." },
+    "knight": { "name": "Knight", "summary": "Once per game, by day, duels a player. A Werewolf dies; anyone else, and the Knight dies." },
+    "sheriff_badge_helper": { "name": "Sheriff Badge", "summary": "The day actions for electing, passing and destroying the Sheriff's badge." }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "pack": "epicmafia",
+  "name": "EpicMafia",
+  "alignments": {
+    "town": { "label": "Village", "family": "town", "win": "Wins when every other faction is gone." },
+    "mafia": { "label": "Mafia", "family": "mafia", "win": "Wins when the Mafia equal or outnumber everyone else." },
+    "cult": { "label": "Cult", "family": "independent", "win": "Wins when the Cult equals or outnumbers everyone else." }
+  },
+  "effects": {
+    "loyal": { "text": "Cannot be recruited by the Cult", "short": "Unconvertible" },
+    "bomb": { "text": "Whoever kills them is killed in return", "short": "Explodes" }
+  },
+  "actions": {
+    "doctor_protect": "Protect",
+    "cop_investigate": "Alignment check",
+    "hooker_block": "Block",
+    "factional_kill": "Factional kill",
+    "cult_recruit": "Recruit",
+    "douse": "Douse",
+    "ignite": "Ignite"
+  },
+  "roles": {
+    "villager": { "name": "Villager", "summary": "No night action. Wins with the Village through discussion and the vote." },
+    "loyal_villager": { "name": "Loyal Villager", "summary": "A Villager the Cult cannot recruit." },
+    "doctor": { "name": "Doctor", "summary": "Each night, protects one player from a kill. A Strongman's kill still lands." },
+    "cop": { "name": "Cop", "summary": "Each night, investigates one player and learns whether they read Village or Scum." },
+    "hooker": { "name": "Hooker", "summary": "Each night, blocks one player's action from resolving." },
+    "bomb": { "name": "Bomb", "summary": "A Villager who takes their killer down with them." },
+    "mafia_goon": { "name": "Mafia Goon", "summary": "Carries the Mafia's shared kill, one per night." },
+    "cult_leader": { "name": "Cult Leader", "summary": "Each night, recruits one player into the Cult. Loyal players refuse." },
+    "cultist": { "name": "Cultist", "summary": "Recruited by the Cult Leader. Wins with the Cult." },
+    "arsonist": { "name": "Arsonist", "summary": "Douses one player a night, then may ignite to kill everyone doused at once." }
+  }
+}

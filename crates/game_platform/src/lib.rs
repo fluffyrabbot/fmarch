@@ -16,6 +16,7 @@ pub mod day_narrative;
 pub mod day_schedule;
 pub mod embed;
 pub mod persona;
+pub mod role_reference;
 
 pub use persona::{
     GamePersonaId, GamePersonaName, GamePersonaPresentation, OccupancyEndReason, OccupancyId,

@@ -800,7 +800,7 @@
     {
       "id": "crate:content-registry",
       "tier": "frozen",
-      "paths": ["crates/content_registry/"],
+      "paths": ["crates/content_registry/", "frontend/src/lib/dev/pack-role-reference.fixture.json"],
       "crate": "content_registry",
       "dependency_lanes": ["cargo:content-registry", "cargo:clippy-workspace"],
       "lanes": ["cargo:content-registry", "cargo:clippy-workspace", "test:exact-image-content"],

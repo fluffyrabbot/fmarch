@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "packs": [
-    { "key": "chinese_structured", "file": "chinese_structured/pack.json" },
-    { "key": "default_open", "file": "default_open/pack.json" },
-    { "key": "epicmafia", "file": "epicmafia/pack.json" },
-    { "key": "mafia_universe", "file": "mafia_universe/pack.json" },
-    { "key": "mafiascum", "file": "mafiascum/pack.json" }
+    { "key": "chinese_structured", "file": "chinese_structured/pack.json", "presentation": "chinese_structured/presentation.json" },
+    { "key": "default_open", "file": "default_open/pack.json", "presentation": "default_open/presentation.json" },
+    { "key": "epicmafia", "file": "epicmafia/pack.json", "presentation": "epicmafia/presentation.json" },
+    { "key": "mafia_universe", "file": "mafia_universe/pack.json", "presentation": "mafia_universe/presentation.json" },
+    { "key": "mafiascum", "file": "mafiascum/pack.json", "presentation": "mafiascum/presentation.json" }
   ]
 }

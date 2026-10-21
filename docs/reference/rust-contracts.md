@@ -518,7 +518,7 @@ Source: [crates/domain/src/events.rs](../../crates/domain/src/events.rs#L823) (s
 
 ## DayEventState
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L395) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L396) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -530,7 +530,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayEventResolutionMode
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L417) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L418) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -539,7 +539,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## ConcreteEffect
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L904) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L905) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -552,7 +552,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayProgram
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1067) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1068) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -565,7 +565,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayEventEvent
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1174) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1175) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -581,7 +581,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayEvent
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L985) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L986) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -599,7 +599,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## NarrativeTemplate
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L595) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L596) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -608,7 +608,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## EventChannelPolicy
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L640) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L641) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -617,7 +617,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## UnixSeconds
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L206) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L207) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -625,7 +625,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DurationSeconds
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L288) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L289) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -633,7 +633,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayEventSchedule
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L355) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L356) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -644,7 +644,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## ParticipationSpec
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L499) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L500) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -654,7 +654,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## RewardBinding
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L819) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L820) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -664,7 +664,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## RewardEffectTemplate
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L812) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L813) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -673,7 +673,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## EffectPlan
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L953) (struct).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L954) (struct).
 
 | Member | Rust declaration |
 |---|---|
@@ -683,7 +683,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## DayEventDecision
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1150) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L1151) (enum).
 
 | Member | Rust declaration |
 |---|---|
@@ -693,7 +693,7 @@ Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#
 
 ## ParticipationPayload
 
-Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L540) (enum).
+Source: [crates/game_platform/src/lib.rs](../../crates/game_platform/src/lib.rs#L541) (enum).
 
 | Member | Rust declaration |
 |---|---|
