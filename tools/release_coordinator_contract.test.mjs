@@ -1183,6 +1183,40 @@ test("journaled one-shots adopt exact IDs, retry only exact failure, and refuse 
   assert.equal(crossWorktreeHistoryReads, 1);
   assert.equal(crossWorktreeDispatches, 0);
 
+  // A resumed lease may dispatch generation 0 only when an absent dispatch is proven.
+  const provenRecords = new Map([["0:intent", intentForGeneration(0)]]);
+  const proofs = [];
+  const proven = await run(provenRecords, {
+    recoverMissingIntent: true,
+    provePreDispatch: async (intent) => {
+      proofs.push(intent.operation_id);
+      return true;
+    },
+    dispatch: async () => "proven-deployment",
+  });
+  assert.equal(proven.deployment.id, "proven-deployment");
+  assert.deepEqual(proofs, [intentForGeneration(0).operation_id]);
+  for (const provePreDispatch of [
+    async () => false,
+    async () => {
+      throw new Error("staging migrator deployment exists within or after the release window");
+    },
+  ]) {
+    let unprovenDispatches = 0;
+    await assert.rejects(
+      run(new Map([["0:intent", intentForGeneration(0)]]), {
+        recoverMissingIntent: true,
+        provePreDispatch,
+        dispatch: async () => {
+          unprovenDispatches += 1;
+          return "unsafe-redispatch";
+        },
+      }),
+      /must not be redispatched|within or after the release window/,
+    );
+    assert.equal(unprovenDispatches, 0);
+  }
+
   const ambiguousRecords = new Map();
   let ambiguousDispatches = 0;
   await assert.rejects(
@@ -1988,4 +2022,45 @@ test('failed migration retirement binds one crashed operation and refuses any ap
     now:()=>Date.parse(document.created_at)+ABANDONMENT_SETTLE_MS,assertStopped:()=>{},assertFence:()=>{},histories:()=>histories,
     publishEvidence:()=>{},archiveFence:()=>{},releaseFence:()=>{},publishResult:r=>result=r});
   assert.equal(result.status,'retired-after-failed-migration');
+});
+
+import {proveStagingMigratorNeverDispatched} from './release_coordinator.mjs';
+import {parseStoppedPid} from './staging_release_abandon.mjs';
+
+test('a resumed staging migrator dispatches only after settle with an empty release window', async () => {
+  const lease = '2026-10-21T05:26:57.787Z';
+  const old = {id: 'old', createdAt: '2026-09-24T07:18:28.611Z', status: 'SUCCESS'};
+  const recent = {id: 'recent', createdAt: '2026-10-21T05:30:00.000Z', status: 'FAILED'};
+  const published = Date.parse('2026-10-21T05:51:00.000Z');
+  const prove = (rows, clock, sleeps = []) => proveStagingMigratorNeverDispatched(
+    {environment: 'staging'},
+    {
+      leaseCreatedAt: () => lease,
+      intentPublishedAt: async () => published,
+      loadHistory: async () => rows,
+      now: () => clock.at,
+      sleep: async (milliseconds) => {sleeps.push(milliseconds); clock.at += milliseconds;},
+      log: () => {},
+    },
+  );
+  const sleeps = [];
+  assert.equal(await prove([old], {at: published + 60_000}, sleeps), true);
+  assert.deepEqual(sleeps, [5 * 60_000], 'proof waits out the remaining settle interval');
+  const settled = [];
+  assert.equal(await prove([old], {at: published + 7 * 60_000}, settled), true);
+  assert.deepEqual(settled, []);
+  await assert.rejects(prove([old, recent], {at: published + 7 * 60_000}), /within or after the release window/);
+  await assert.rejects(prove([{...old, status: 'DEPLOYING'}], {at: published + 7 * 60_000}), /nonterminal/);
+  await assert.rejects(prove([], {at: published + 7 * 60_000}), /empty staging migrator deployment history/);
+  await assert.rejects(
+    proveStagingMigratorNeverDispatched({environment: 'production'}, {}),
+    /only staging/,
+  );
+});
+
+test('abandonment records an uncaptured coordinator PID as unknown, never invented', () => {
+  assert.equal(parseStoppedPid(undefined), null);
+  assert.equal(parseStoppedPid('unknown'), 'unknown');
+  assert.equal(parseStoppedPid('4242'), 4242);
+  for (const invalid of ['1', '0', '-5', 'abc', String(process.pid)]) assert.throws(() => parseStoppedPid(invalid), /invalid stopped coordinator PID/);
 });

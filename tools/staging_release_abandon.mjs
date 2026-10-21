@@ -6,51 +6,19 @@ import {oneShotExecutionOutcome} from './release_coordinator.mjs';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {CANONICAL_RELEASE_TOPOLOGY as topology, receiptDigest, assertFullCommit} from './release_coordinator_contract.mjs';
 import {publishImmutableJson} from './immutable_json_receipt.mjs';
+import {assertNoDeploymentsInReleaseWindow, loadStagingServiceHistory, RAILWAY_REQUEST_SETTLE_MS, TERMINAL_DEPLOYMENT_STATUSES} from './railway_deployment_history.mjs';
 import {readStagingReleaseMutationLease, fenceStagingReleaseForAbandonment,
   readStagingAbandonmentFence, archiveStagingAbandonmentFence,
   releaseStagingReleaseMutationLease} from './release_git_authority.mjs';
 
-// Exceeds a coordinator Railway subprocess's five-minute request timeout.
-export const ABANDONMENT_SETTLE_MS = 6 * 60_000;
+export {completeHistory, deploymentHistoryQuery} from './railway_deployment_history.mjs';
+export const ABANDONMENT_SETTLE_MS = RAILWAY_REQUEST_SETTLE_MS;
 const root = fileURLToPath(new URL('..', import.meta.url));
-export const deploymentHistoryQuery = `query($input: DeploymentListInput!, $after: String) {
-  deployments(input:$input,first:100,after:$after) {
-    edges {node {id createdAt status projectId environmentId serviceId meta deploymentStopped instances {id status}}} pageInfo {hasNextPage endCursor}
-  }
-}`;
-
-export async function completeHistory(fetchPage) {
-  const rows = [], cursors = new Set(), ids = new Set();
-  let after = null;
-  for (let page = 0; page < 1000; page++) {
-    const result = await fetchPage(after);
-    assert.ok(Array.isArray(result?.edges), 'deployment history missing edges');
-    assert.equal(typeof result.pageInfo?.hasNextPage, 'boolean', 'history completeness unknown');
-    for (const {node} of result.edges) {
-      assert.ok(node?.id && !ids.has(node.id), 'duplicate or missing deployment identity');
-      ids.add(node.id); rows.push(node);
-    }
-    if (!result.pageInfo.hasNextPage) return rows.sort((a,b)=>a.id.localeCompare(b.id));
-    after = result.pageInfo.endCursor;
-    assert.ok(typeof after === 'string' && after && !cursors.has(after), 'history cursor stalled');
-    cursors.add(after);
-  }
-  throw new Error('deployment history exceeded bounded complete scan');
-}
 
 export function assertNoReleaseDeployments(intent, histories) {
   assert.equal(intent.operation_kind, 'release-coordinator', 'only coordinator leases can be abandoned');
-  const cutoff = Date.parse(intent.created_at) - 5 * 60_000;
-  assert.ok(Number.isFinite(cutoff));
   assert.deepEqual(Object.keys(histories).sort(), Object.values(topology.services).sort());
-  for (const rows of Object.values(histories)) {
-    assert.ok(Array.isArray(rows) && rows.length > 0, 'empty deployment history cannot prove abandonment');
-    for (const row of rows) {
-      assert.ok(Number.isFinite(Date.parse(row.createdAt)), 'deployment time missing');
-      assert.ok(Date.parse(row.createdAt) < cutoff, 'deployment exists within or after the release window');
-      assert.ok(['SUCCESS','FAILED','CRASHED','REMOVED','SKIPPED'].includes(row.status), 'nonterminal deployment prevents abandonment');
-    }
-  }
+  for (const rows of Object.values(histories)) assertNoDeploymentsInReleaseWindow(intent.created_at, rows);
   return histories;
 }
 
@@ -82,7 +50,7 @@ export function assertFailedMigration(intent, histories, failure) {
     assert.ok(rows.length>0, 'empty history cannot prove failed release retirement');
     for(const row of rows) {
       assert.ok(Number.isFinite(Date.parse(row.createdAt)));
-      assert.ok(['SUCCESS','FAILED','CRASHED','REMOVED','SKIPPED'].includes(row.status), 'nonterminal deployment prevents retirement');
+      assert.ok(TERMINAL_DEPLOYMENT_STATUSES.includes(row.status), 'nonterminal deployment prevents retirement');
       if(Date.parse(row.createdAt)<cutoff) continue;
       assert.equal(serviceId, topology.services.migrator, 'application deployment prevents failed migration retirement');
       assert.equal(row.id, failure.deployment_id, 'additional release-window deployment prevents retirement');
@@ -108,8 +76,22 @@ function assertRecoveryHistories(intent, histories, failure) {
 }
 const recoveryStatus = document => document.failed_migration ? 'retired-after-failed-migration' : 'abandoned-before-deployment';
 
+/**
+ * The coordinator PID is evidence for this Mac's process table. When it was
+ * never captured (for example a coordinator run from a background shell),
+ * `unknown` records that honestly; the process-table scan still refuses any
+ * live coordinator and the operator confirmation covers every host.
+ */
+export function parseStoppedPid(value) {
+  if (value === undefined) return null;
+  if (value === 'unknown') return 'unknown';
+  const pid = Number(value);
+  assert.ok(Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid, 'invalid stopped coordinator PID');
+  return pid;
+}
+
 function assertStopped(pid) {
-  if(pid !== null) {
+  if(typeof pid === 'number') {
     assert.ok(Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid, 'invalid stopped coordinator PID');
     try {process.kill(pid,0); assert.fail('coordinator PID is still alive');}
     catch (error) {if(error.code !== 'ESRCH') throw error;}
@@ -122,15 +104,7 @@ function assertStopped(pid) {
 async function histories() {
   const result = {};
   for (const serviceId of Object.values(topology.services)) {
-    result[serviceId] = await completeHistory(async after => {
-      const output = execFileSync('railway',['api',deploymentHistoryQuery,'--variables',JSON.stringify({after,input:{
-        projectId:topology.project_id,environmentId:topology.environments.staging.id,serviceId,includeDeleted:true,
-      }}),'--compact'],{cwd:root,encoding:'utf8',timeout:300_000,stdio:['ignore','pipe','pipe'],env:{...process.env,
-        RAILWAY_CALLER:'skill:use-railway@1.5.5',RAILWAY_AGENT_SESSION:`fmarch-abandon-${process.pid}`}});
-      const response=JSON.parse(output);
-      assert.equal(response.errors,undefined,'Railway history query failed');
-      return response.data?.deployments;
-    });
+    result[serviceId] = await loadStagingServiceHistory(serviceId, `fmarch-abandon-${process.pid}`);
   }
   return result;
 }
@@ -157,8 +131,8 @@ export async function main(argv=process.argv.slice(2)) {
     else {assert.ok(['--lease','--commit','--stopped-pid','--confirm-stopped','--resume-fence','--failed-migrator','--failure-intent'].includes(argv[i]),'unknown recovery option');args[argv[i].slice(2)]=argv[++i];}
   }
   const token=assertFullCommit(args.lease), releaseCommit=assertFullCommit(args.commit);
-  const pid=args['stopped-pid'] === undefined ? null : Number(args['stopped-pid']);
-  assert.ok(pid !== null || args['failed-migrator'] || args['resume-fence'], 'pre-deployment abandonment requires the stopped PID');
+  const pid=parseStoppedPid(args['stopped-pid']);
+  assert.ok(pid !== null || args['failed-migrator'] || args['resume-fence'], 'pre-deployment abandonment requires --stopped-pid <pid|unknown>');
   assert.equal(args['confirm-stopped'],token,'confirm all coordinators for this exact lease are stopped');
   assertStopped(pid);
   let fence=args['resume-fence'];

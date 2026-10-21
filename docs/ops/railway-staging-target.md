@@ -698,10 +698,21 @@ envelope before comparing the report with two deterministic executions of the
 immutable runtime image. Image validation never invokes host Cargo; a missing
 source report fails closed before any container subprocess.
 
+A coordinator that failed before the migrator was dispatched (for example an
+image build failure) can simply be resumed with `--resume-lease`. On a resumed
+lease the first migrator generation without a matching deployment is dispatched
+only after the six-minute settle interval from its intent, and only when the
+migrator's complete history, including deleted entries, holds no deployment from
+five minutes before the lease onward; any other state remains an unknown outcome
+that is never redispatched.
+
 For a coordinator failure before any deployment exists, first stop all
 coordinators for the exact lease. `node tools/staging_release_abandon.mjs
 --lease <lease> --commit <lease-source-commit> --stopped-pid <old-local-pid>
---confirm-stopped <lease>` performs read-only eligibility checks. It scans every
+--confirm-stopped <lease>` performs read-only eligibility checks. When the old
+PID was never captured, pass `--stopped-pid unknown`; the fence records
+`unknown` rather than an invented PID, and the process-table scan for a live
+coordinator still runs. It scans every
 page of all three staging services' deployment history, including deleted
 entries, and refuses empty/incomplete history, unfinished deployments, or any
 deployment within five minutes before the lease or later. It verifies the

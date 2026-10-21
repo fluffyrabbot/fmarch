@@ -8,7 +8,7 @@ import {
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -16,6 +16,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadCompletionRegistry, validateRegistry } from "./completeness_scorecard.mjs";
 import { defaultFleetPublicKeyPath, loadFleetReleaseProof } from "./fleet_release_proof.mjs";
 import { publishImmutableJson } from "./immutable_json_receipt.mjs";
+import {
+  assertNoDeploymentsInReleaseWindow,
+  loadStagingServiceHistory,
+  RAILWAY_REQUEST_SETTLE_MS,
+} from "./railway_deployment_history.mjs";
 import { revalidateCanonicalProductionHostedVariables } from "./release_hosted_variable_authority.mjs";
 import {
   TERMINAL_DEPLOYMENT_STATES,
@@ -48,6 +53,7 @@ import {
   acquireStagingReleaseMutationLease,
   canonicalReleaseFetchArguments,
   createStagingReleaseMutationLeaseIntent,
+  readStagingReleaseMutationLease,
   releaseStagingReleaseMutationLease,
   releaseGitEnvironment,
   resumeStagingReleaseMutationLease,
@@ -1226,6 +1232,7 @@ async function runJournaledDatabaseOneShotGenerations({
   label,
   maxGenerations = MAX_ONE_SHOT_GENERATIONS,
   recoverMissingIntent = false,
+  provePreDispatch = null,
 }) {
   assert.equal(typeof intentForGeneration, "function");
   assert.ok(Number.isSafeInteger(maxGenerations) && maxGenerations > 0);
@@ -1259,7 +1266,7 @@ async function runJournaledDatabaseOneShotGenerations({
       );
       let deploymentId;
       if (matches.length === 1) deploymentId = matches[0].id;
-      else if (recovering) {
+      else if (recovering && !(generation === 0 && provePreDispatch && (await provePreDispatch(intent)))) {
         throw new Error(
           `${label} has a durable intent but no exact deployment; outcome is unknown and must not be redispatched`,
         );
@@ -1497,7 +1504,48 @@ async function coordinateDatabaseOneShot({
     label,
     recoverMissingIntent:
       config.environment === "staging" && config.stagingMutationLease?.resumed === true,
+    provePreDispatch:
+      config.environment === "staging" && config.stagingMutationLease?.resumed === true
+        ? (intent) =>
+          proveStagingMigratorNeverDispatched(config, {
+            intentPath: oneShotRecordPath(directory, intent.generation, "intent"),
+          })
+        : null,
   });
+}
+
+/**
+ * A resumed staging lease whose first migrator generation has no deployment
+ * may still be safe to dispatch: when its last possible dispatch has had time
+ * to reach Railway and the migrator's complete history (including deleted
+ * entries) holds nothing in this lease's release window, no dispatch of any
+ * operation happened. Otherwise the outcome stays unknown.
+ */
+export async function proveStagingMigratorNeverDispatched(
+  config,
+  {
+    intentPath,
+    leaseCreatedAt = () =>
+      readStagingReleaseMutationLease({
+        token: config.stagingMutationLease.token,
+        releaseCommit: config.stagingMutationLease.releaseCommit,
+      }).created_at,
+    intentPublishedAt = async () => (await stat(intentPath)).mtimeMs,
+    loadHistory = () =>
+      loadStagingServiceHistory(config.migratorServiceId, callerSession),
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    log = (message) => console.log(message),
+  } = {},
+) {
+  assert.equal(config.environment, "staging", "only staging resumes may prove an absent dispatch");
+  const settledAt = (await intentPublishedAt()) + RAILWAY_REQUEST_SETTLE_MS;
+  if (now() < settledAt) {
+    log(`staging migrator: waiting ${Math.ceil((settledAt - now()) / 1_000)} s for any lost dispatch to reach Railway before proving none happened`);
+    await sleep(settledAt - now());
+  }
+  assertNoDeploymentsInReleaseWindow(await leaseCreatedAt(), await loadHistory(), "staging migrator");
+  return true;
 }
 
 export function parseResetLogRows(output) {
