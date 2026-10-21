@@ -101,5 +101,12 @@
   .fm-app-shell__daylight-option svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }
   @media (max-width: 560px) { .fm-app-shell__daylight-option span { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; } .fm-app-shell__daylight-option { padding: 0 10px; } }
   @media (forced-colors: active) { .fm-app-shell__daylight-option[aria-pressed="true"] { outline: 2px solid Highlight; } }
+  /* Narrow screens: the switch keeps the first row; the primary nav takes a
+     full-width second row and scrolls rather than overlapping its labels. */
+  @media (max-width: 840px) {
+    .fm-app-shell__topbar { flex-wrap: wrap; row-gap: 4px; }
+    .fm-app-shell__nav--primary { flex: 1 0 100%; order: 2; overflow-x: auto; scrollbar-width: none; }
+    .fm-app-shell__nav--primary .fm-app-shell__nav-item { flex: 1 0 auto; white-space: nowrap; }
+  }
   :global(.fm-app-shell[data-surface="player"]) { --fm-app-topbar-block-size: 0px; }
 </style>
