@@ -66,24 +66,6 @@
         {/if}
       </header>
 
-      {#if roster.length > 0}
-        <section class="public-game-roster" aria-labelledby="public-game-roster-title" data-testid="public-game-roster">
-          <header>
-            <h2 id="public-game-roster-title">The village</h2>
-            <span>{aliveCount} of {roster.length} alive</span>
-          </header>
-          <ul>
-            {#each roster as seat (seat.slotId)}
-              <li class="public-game-seat" data-alive={seat.alive ? "true" : "false"} data-status={seat.status}>
-                <span class="public-game-seat__name">{seat.name}</span>
-                {#if seat.formerly}<span class="public-game-seat__note">formerly {seat.formerly}</span>{/if}
-                {#if seat.replaced}<span class="public-game-seat__note">replaced {seat.replaced}</span>{/if}
-                <span class="public-game-seat__status">{seat.statusLabel}</span>
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/if}
 
       {#if data.publicGame.posts.length > 0}
         <a class="public-game-skip-posts" href={`#thread-post-${data.publicGame.posts[0].source_seq}`} data-testid={data.publication.readingLane.skipPostsTestId}>
@@ -210,6 +192,26 @@
           <a class="fm-touch-button fm-touch-button--secondary public-game-older" href={`?before_seq=${data.publicGame.nextBeforeSeq}#${data.publication.readingLane.headingId}`} data-testid="public-game-older">Older posts</a>
         {/if}
       </section>
+
+      <!-- The village follows the thread so the reading lane stays in the first viewport. -->
+      {#if roster.length > 0}
+        <section class="public-game-roster" aria-labelledby="public-game-roster-title" data-testid="public-game-roster">
+          <header>
+            <h2 id="public-game-roster-title">The village</h2>
+            <span>{aliveCount} of {roster.length} alive</span>
+          </header>
+          <ul>
+            {#each roster as seat (seat.slotId)}
+              <li class="public-game-seat" data-alive={seat.alive ? "true" : "false"} data-status={seat.status}>
+                <span class="public-game-seat__name">{seat.name}</span>
+                {#if seat.formerly}<span class="public-game-seat__note">formerly {seat.formerly}</span>{/if}
+                {#if seat.replaced}<span class="public-game-seat__note">replaced {seat.replaced}</span>{/if}
+                <span class="public-game-seat__status">{seat.statusLabel}</span>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
       <footer class="public-game-colophon">
         This publication contains only the public main thread. Private channels and role data are excluded.
