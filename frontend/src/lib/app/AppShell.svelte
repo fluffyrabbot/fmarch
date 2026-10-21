@@ -54,7 +54,8 @@
         </nav>
         <form class="fm-app-shell__daylight" method="POST" action="/appearance" aria-label="Day or night" data-testid="app-shell-daylight">
           <input type="hidden" name="themeId" value={theme.themeId} />
-          <input type="hidden" name="return_to" value={`${$page.url.pathname}${$page.url.search}`} />
+          <!-- An error page never echoes the path it refused; the switch returns to Games. -->
+          <input type="hidden" name="return_to" value={$page.error ? "/" : `${$page.url.pathname}${$page.url.search}`} />
           {#each QUICK_SCHEMES as option}
             <button
               class="fm-app-shell__daylight-option"
