@@ -221,6 +221,7 @@ function proveBoardSurface() {
       ["community", "link"],
       ["inbox", "link"],
       ["search", "link"],
+      ["roles", "link"],
       ["player", "link"],
       ["moderator", "blocked"],
       ["admin", "blocked"],
