@@ -32,7 +32,7 @@ import {
   databaseOneShotDisarmInput,
   databaseIdentityVariables,
   oneShotDatabaseVariables,
-  assertStagingBootstrapConfirmation,
+  apiReleaseVariables,
   parseArguments,
   publishFreshImage,
   parseMigrationCompletion,
@@ -1739,7 +1739,7 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
   );
 });
 
-test("staging bootstrap records a distinct receipt kind that promotion and replay reject", () => {
+test("every staging release carries authenticated acceptance and only staging receives the key digest", () => {
   const health = {
     api: {
       ok: true,
@@ -1789,75 +1789,28 @@ test("staging bootstrap records a distinct receipt kind that promotion and repla
   assert.throws(
     () => buildReleaseReceipt(inputs),
     assert.AssertionError,
-    "an ordinary staging release still requires authenticated journeys",
+    "a staging release requires authenticated journeys",
   );
-  const receipt = buildReleaseReceipt({ ...inputs, bootstrap: true });
-  assert.equal(receipt.kind, "fmarch-staging-bootstrap-release");
-  assert.equal(assertReleaseReceipt(receipt, { bootstrap: true }), receipt);
-  assert.throws(() => assertReleaseReceipt(receipt), /kind drifted/);
-  assert.throws(
-    () => assertFreshStagingReleaseReceipt(receipt, { now: releaseNow }),
-    /kind drifted/,
-    "production promotion must never consume a bootstrap receipt",
-  );
-  assert.throws(
-    () => validateCompletedStagingReleaseReceipt(receipt, {
-      commit,
-      lease: { token: receipt.staging_mutation_lease_commit },
-      fleetProof,
-    }),
-    /kind drifted/,
-    "a full staging release must not replay a bootstrap receipt",
-  );
-  assert.throws(
-    () => buildReleaseReceipt({
-      ...inputs,
-      bootstrap: true,
-      hostedAcceptance: {
-        ...publicOnly,
-        authenticatedJourneys: { status: "passed" },
-      },
-    }),
-    /must not claim authenticated journeys/,
-  );
-  assert.throws(
-    () => buildReleaseReceipt({ ...inputs, environment: "production", bootstrap: true }),
-    /only staging may record a bootstrap release/,
-  );
-});
-
-test("staging bootstrap is staging-only, confirmed per commit, and bound into the lease", () => {
-  assert.equal(parseArguments(["--bootstrap-staging"]).bootstrapStaging, true);
-  assert.throws(
-    () => parseArguments(["--environment", "production", "--bootstrap-staging"]),
-    /staging-only/,
-  );
-  assert.throws(() => assertStagingBootstrapConfirmation(commit, {}), /FMARCH_STAGING_BOOTSTRAP_CONFIRM/);
-  assert.throws(
-    () => assertStagingBootstrapConfirmation(commit, {
-      FMARCH_STAGING_BOOTSTRAP_CONFIRM: `staging-bootstrap:${"f".repeat(40)}`,
-    }),
-    /FMARCH_STAGING_BOOTSTRAP_CONFIRM/,
-  );
-  assert.doesNotThrow(() => assertStagingBootstrapConfirmation(commit, {
-    FMARCH_STAGING_BOOTSTRAP_CONFIRM: `staging-bootstrap:${commit}`,
-  }));
-  assert.equal(
-    stagingCoordinatorMutationLeaseBindings({ fleetProof, bootstrap: true }).acceptance_mode,
-    "bootstrap",
-  );
+  assert.throws(() => parseArguments(["--bootstrap-staging"]), /unknown release coordinator argument/);
   assert.equal(
     stagingCoordinatorMutationLeaseBindings({ fleetProof }).acceptance_mode,
     "authenticated",
   );
   const lease = { token: "e".repeat(40) };
-  const ordinary = releaseOutputPath({ environment: "staging", stagingMutationLease: lease }, commit);
-  const bootstrapPath = releaseOutputPath(
-    { environment: "staging", stagingMutationLease: lease, stagingBootstrap: true },
-    commit,
+  assert.equal(
+    path.basename(releaseOutputPath({ environment: "staging", stagingMutationLease: lease }, commit)),
+    `${commit}.${lease.token}.json`,
   );
-  assert.notEqual(ordinary, bootstrapPath);
-  assert.match(path.basename(bootstrapPath), /^bootstrap\./u);
+  const acceptanceKey = "c".repeat(64);
+  const staging = { environment: "staging", projectId: "p", environmentId: "s" };
+  assert.deepEqual(apiReleaseVariables(staging, acceptanceKey), {
+    ...databaseIdentityVariables(staging),
+    FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256: createHash("sha256").update(acceptanceKey).digest("hex"),
+  });
+  assert.throws(() => apiReleaseVariables(staging, null), /requires the release acceptance key/);
+  const production = { environment: "production", projectId: "p", environmentId: "q" };
+  assert.deepEqual(apiReleaseVariables(production), databaseIdentityVariables(production));
+  assert.throws(() => apiReleaseVariables(production, acceptanceKey), /only staging/);
 });
 
 // These helpers are pure; the actual coordinator authenticates the envelope first.

@@ -691,6 +691,28 @@ test("hosted variables require isolated production identity credentials", async 
     }),
   );
   assert.doesNotThrow(() => validateDatabaseAuthorityVariables(ready));
+  const acceptanceDigest = { FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256: "a".repeat(64) };
+  assert.doesNotThrow(() =>
+    validateDatabaseAuthorityVariables({
+      ...ready,
+      stagingApi: { ...stagingApi, ...acceptanceDigest },
+    }),
+  );
+  for (const [key, process] of [
+    ["productionApi", "production API"],
+    ["stagingMigrator", "staging migrator"],
+    ["stagingFrontend", "staging frontend"],
+    ["productionFrontend", "production frontend"],
+  ]) {
+    assert.throws(
+      () =>
+        validateDatabaseAuthorityVariables({
+          ...ready,
+          [key]: { ...ready[key], ...acceptanceDigest },
+        }),
+      new RegExp(`${process} must not receive FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256`),
+    );
+  }
   assert.doesNotThrow(() =>
     validateDatabaseAuthorityVariables({
       ...ready,

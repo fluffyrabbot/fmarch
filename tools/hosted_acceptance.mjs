@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertFullCommit, validateHealth } from './release_coordinator_contract.mjs';
-import {prepareAuthenticatedAcceptance, runAuthenticatedAcceptance} from './hosted_authenticated_acceptance.mjs';
+import {mintAcceptanceSessions, provisionAcceptanceGame, runAuthenticatedAcceptance, signOutAcceptanceSessions} from './hosted_authenticated_acceptance.mjs';
+import {readReleaseAcceptanceKey, releaseAcceptanceKeyPath} from './release_acceptance_key.mjs';
 import { isExternallyHostedUrl } from './dev_test_game_hosted_target_url_policy.mjs';
 
 export function hostedAcceptanceConfig(env) {
@@ -32,6 +33,23 @@ export async function checkHostedReadiness(config, fetcher = fetch) {
   return checks;
 }
 
+// Mint both sessions, create this run's game, run the journeys, then end the
+// sessions even when a journey fails (a sign-out failure never masks it).
+async function runMintedAcceptance(browser, config, acceptanceKey) {
+  const sessions = await mintAcceptanceSessions(config, acceptanceKey);
+  let journeyFailed = true;
+  try {
+    const {game, channel} = await provisionAcceptanceGame(config, sessions.member);
+    const result = await runAuthenticatedAcceptance(browser, config, {game, channel, ...sessions});
+    journeyFailed = false;
+    return {...result, game};
+  } finally {
+    await signOutAcceptanceSessions(config, [sessions.member, sessions.outsider]).catch(error => {
+      if (!journeyFailed) throw error;
+    });
+  }
+}
+
 export async function runHostedAcceptance(env = process.env) {
   const config = hostedAcceptanceConfig(env);
   const git = (...args) => execFileSync('git', args, {cwd: new URL('../', import.meta.url), encoding: 'utf8', timeout: 10_000}).trim();
@@ -39,7 +57,7 @@ export async function runHostedAcceptance(env = process.env) {
   const checkerCommit = assertFullCommit(git('rev-parse', 'HEAD'));
   const {chromium} = await import('playwright');
   const {BOARD_ROUTE_CONTRACT} = await import('../frontend/src/lib/app/app-shell-model.mjs');
-  const prepared = env.FMARCH_HOSTED_AUTHENTICATED === '1' ? await prepareAuthenticatedAcceptance(env, config) : null;
+  const acceptanceKey = env.FMARCH_HOSTED_AUTHENTICATED === '1' ? await readReleaseAcceptanceKey(releaseAcceptanceKeyPath(env)) : null;
   const checks = await checkHostedReadiness(config);
   let authenticated = null;
   const browser = await chromium.launch();
@@ -55,7 +73,7 @@ export async function runHostedAcceptance(env = process.env) {
     assert.equal(await page.getByTestId(BOARD_ROUTE_CONTRACT.unavailableTestId).count(), 0, 'hosted game index is degraded');
     assert.deepEqual(errors, [], 'hosted frontend JavaScript errors');
     checks.push({kind: 'browser', status: 'passed', version: browser.version()});
-    if (prepared) authenticated = await runAuthenticatedAcceptance(browser, config, prepared);
+    if (acceptanceKey) authenticated = await runMintedAcceptance(browser, config, acceptanceKey);
     // Detect a deployment moving during browser acceptance.
     await checkHostedReadiness(config);
   } finally { await browser.close(); }

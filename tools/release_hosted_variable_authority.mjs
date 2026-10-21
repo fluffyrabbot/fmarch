@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { DATABASE_ONE_SHOT_TIMEOUT_VARIABLES } from "./database_one_shot_policy.mjs";
 import { CANONICAL_RELEASE_TOPOLOGY } from "./release_coordinator_contract.mjs";
+import { RELEASE_ACCEPTANCE_KEY_DIGEST_VARIABLE } from "./release_acceptance_key.mjs";
 
 const DEFAULTS = Object.freeze({
   projectId: CANONICAL_RELEASE_TOPOLOGY.project_id,
@@ -47,6 +48,18 @@ export function validateEnvironmentDatabaseAuthorityVariables({
     assertSecretRelation(
       frontend[key] === undefined,
       `${environment} frontend must not receive ${key}`,
+    );
+  }
+
+  // Release acceptance minting is a staging API authority only.
+  for (const [process, variables] of [
+    ["migrator", migrator],
+    ["frontend", frontend],
+    ...(environment === "staging" ? [] : [["API", api]]),
+  ]) {
+    assertSecretRelation(
+      variables[RELEASE_ACCEPTANCE_KEY_DIGEST_VARIABLE] === undefined,
+      `${environment} ${process} must not receive ${RELEASE_ACCEPTANCE_KEY_DIGEST_VARIABLE}`,
     );
   }
 

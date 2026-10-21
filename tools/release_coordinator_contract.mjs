@@ -10,10 +10,6 @@ export {
 export const RELEASE_RECEIPT_VERSION = 7;
 export const STAGING_RELEASE_RECEIPT_VERSION = 8;
 export const RELEASE_RECEIPT_KIND = "fmarch-exact-commit-release";
-// A bootstrap receipt deploys staging without authenticated acceptance so the
-// first admitted accounts can exist. It is a distinct kind: promotion, staging
-// replay, and every other consumer of assertReleaseReceipt reject it.
-export const STAGING_BOOTSTRAP_RECEIPT_KIND = "fmarch-staging-bootstrap-release";
 export const RELEASE_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 export const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 export const CANONICAL_RELEASE_TOPOLOGY = Object.freeze({
@@ -532,10 +528,8 @@ export function buildReleaseReceipt({
   schemaEpochReset = null,
   topology = canonicalReleaseTopology(environment),
   generatedAt = new Date(),
-  bootstrap = false,
 }) {
   assertFullCommit(commit);
-  assert.ok(!bootstrap || environment === "staging", "only staging may record a bootstrap release");
   assertImageDigest(runtimeDigest, "runtime digest");
   assertImageDigest(frontendDigest, "frontend digest");
   assertRuntimeValidationAttestation(runtimeValidation, runtimeDigest);
@@ -566,7 +560,7 @@ export function buildReleaseReceipt({
   if (environment === "staging") {
     assert.equal(releaseReadiness, null, "staging must not claim production release readiness");
     assert.equal(sentinel?.status, "passed", "staging release requires a passed search sentinel");
-    assertHostedReleaseAcceptance(hostedAcceptance, commit, { bootstrap });
+    assertHostedReleaseAcceptance(hostedAcceptance, commit);
   } else {
     assertProductionReleaseReadiness(releaseReadiness);
     assert.equal(sentinel, null, "production release must not run the synthetic staging sentinel");
@@ -575,7 +569,7 @@ export function buildReleaseReceipt({
   const base = {
     version:
       environment === "staging" ? STAGING_RELEASE_RECEIPT_VERSION : RELEASE_RECEIPT_VERSION,
-    kind: bootstrap ? STAGING_BOOTSTRAP_RECEIPT_KIND : RELEASE_RECEIPT_KIND,
+    kind: RELEASE_RECEIPT_KIND,
     environment,
     commit,
     generated_at: generatedAt.toISOString(),
@@ -608,17 +602,12 @@ export function buildReleaseReceipt({
   return { ...base, receipt_sha256: receiptDigest(base) };
 }
 
-export function assertReleaseReceipt(receipt, { bootstrap = false } = {}) {
+export function assertReleaseReceipt(receipt) {
   const expectedVersion = receipt?.environment === "staging"
     ? STAGING_RELEASE_RECEIPT_VERSION
     : RELEASE_RECEIPT_VERSION;
   assert.equal(receipt?.version, expectedVersion, "release receipt version drifted");
-  assert.equal(
-    receipt.kind,
-    bootstrap ? STAGING_BOOTSTRAP_RECEIPT_KIND : RELEASE_RECEIPT_KIND,
-    "release receipt kind drifted",
-  );
-  assert.ok(!bootstrap || receipt.environment === "staging", "only staging may record a bootstrap release");
+  assert.equal(receipt.kind, RELEASE_RECEIPT_KIND, "release receipt kind drifted");
   assert.ok(["staging", "production"].includes(receipt.environment), "unsupported release environment");
   assertFullCommit(receipt.commit);
   assertCanonicalReleaseTopology(receipt.topology, receipt.environment);
@@ -674,7 +663,7 @@ export function assertReleaseReceipt(receipt, { bootstrap = false } = {}) {
   if (receipt.environment === "staging") {
     assert.equal(receipt.release_readiness, null);
     assert.equal(receipt.sentinel?.status, "passed", "staging release requires a passed search sentinel");
-    assertHostedReleaseAcceptance(receipt.hosted_acceptance, receipt.commit, { bootstrap });
+    assertHostedReleaseAcceptance(receipt.hosted_acceptance, receipt.commit);
   } else if (receipt.environment === "production") {
     assertProductionReleaseReadiness(receipt.release_readiness);
     assert.equal(receipt.sentinel, null, "production release must not contain a staging sentinel");
@@ -759,23 +748,13 @@ function assertSchemaEpochReset(reset, receipt) {
   assert.equal(actual, receiptDigest(base), "schema epoch reset receipt was tampered with");
 }
 
-export function assertHostedReleaseAcceptance(receipt, commit, { bootstrap = false } = {}) {
+export function assertHostedReleaseAcceptance(receipt, commit) {
   assert.equal(receipt?.status, 'passed', 'Staging release requires live hosted acceptance');
   assert.equal(receipt.checkerCommit, commit, 'Hosted checker must match release commit');
   assert.equal(receipt.target?.commit, commit, 'Hosted target must match release commit');
   assert.equal(receipt.target?.api, stagingOrigins.api);
   assert.equal(receipt.target?.frontend, stagingOrigins.frontend);
   canonicalInstant(receipt.generatedAt, "hosted acceptance generation time");
-  if (bootstrap) {
-    // Bootstrap proves the public readiness and browser surface only; the
-    // authenticated journeys are deferred to the next full staging release.
-    assert.equal(
-      receipt.authenticatedJourneys,
-      "unproven",
-      "bootstrap acceptance must not claim authenticated journeys",
-    );
-  } else {
-    assertAuthenticatedReceipt(receipt.authenticatedJourneys);
-  }
+  assertAuthenticatedReceipt(receipt.authenticatedJourneys);
   return receipt;
 }

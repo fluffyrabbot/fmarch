@@ -198,9 +198,7 @@
     "test:documentation": "node --test tools/documentation_check.test.mjs tools/rust_reference.test.mjs && node tools/documentation_check.mjs && npm run check:rust-reference",
     "test:frontend-themes": "node tools/frontend_themes.mjs",
     "test:frontend-cross-browser": "node tools/frontend_cross_browser.mjs",
-    "proof:hosted": "node tools/hosted_acceptance.mjs",
-    "proof:hosted:login": "node tools/hosted_session_capture.mjs",
-    "proof:hosted:prepare": "node tools/hosted_test_game.mjs"
+    "proof:hosted": "node tools/hosted_acceptance.mjs"
   },
   "devDependencies": {
     "github-slugger": "2.0.0",
