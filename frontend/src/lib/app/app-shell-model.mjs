@@ -24,7 +24,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   topbarStickyTopPx: 0,
   topbarBlockSizePx: 64,
   stickyRailGapPx: 16,
-  surfaceOrder: Object.freeze(["board", "community", "inbox", "search", "player", "moderator", "admin"]),
+  surfaceOrder: Object.freeze(["board", "community", "inbox", "search", "roles", "player", "moderator", "admin"]),
   navTestIdPrefix: "role-nav",
   minTouchTargetPx: 44,
 });
@@ -97,6 +97,14 @@ export function buildAppShell({
       label: "Search",
       href: "/search",
       active: activeSurface === "search",
+      allowed: true,
+      group: "primary",
+    }),
+    surfaceItem({
+      id: "roles",
+      label: "Roles",
+      href: "/roles",
+      active: activeSurface === "roles",
       allowed: true,
       group: "primary",
     }),

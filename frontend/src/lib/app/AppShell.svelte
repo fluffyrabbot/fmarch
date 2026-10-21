@@ -99,7 +99,17 @@
   .fm-app-shell__daylight-option:hover { background: var(--fm-surface-muted); color: var(--fm-ink); }
   .fm-app-shell__daylight-option[aria-pressed="true"] { background: var(--fm-accent); color: var(--fm-raised); }
   .fm-app-shell__daylight-option svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }
-  @media (max-width: 560px) { .fm-app-shell__daylight-option span { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; } .fm-app-shell__daylight-option { padding: 0 10px; } }
+  @media (max-width: 560px) {
+    /* Phones reach appearance through the account menu; the nav keeps the room. */
+    .fm-app-shell__daylight { display: none; }
+    .fm-app-shell__topbar { gap: 6px; padding-inline: 10px; }
+    .fm-app-shell__nav-item { font-size: 14px; padding-inline: 4px; }
+  }
+  @media (max-width: 560px) { :global(.fm-app-shell:not([data-surface="player"])) { --fm-app-topbar-block-size: 60px; } }
   @media (forced-colors: active) { .fm-app-shell__daylight-option[aria-pressed="true"] { outline: 2px solid Highlight; } }
+  /* One row at every width: the primary nav takes the room the switch and
+     account menu leave and scrolls rather than letting labels overlap. */
+  .fm-app-shell__nav--primary { flex: 1 1 auto; min-inline-size: 0; overflow-x: auto; scrollbar-width: none; }
+  .fm-app-shell__nav--primary .fm-app-shell__nav-item { flex: none; white-space: nowrap; }
   :global(.fm-app-shell[data-surface="player"]) { --fm-app-topbar-block-size: 0px; }
 </style>

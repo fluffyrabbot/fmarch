@@ -21,6 +21,7 @@
     {#each shell.surfaces.filter(surface => surface.allowed && (includeNavigation || surface.group === 'workspace') && surface.id !== 'player') as surface}
       <a href={surface.href} data-testid={surface.testId} data-capability-kind={surface.capability?.kind} aria-current={surface.active ? 'page' : undefined}>{surface.label}</a>
     {/each}
+    <a href="/appearance" data-testid="account-menu-appearance">Appearance</a>
     <a href={shell.session.href} data-testid={shell.session.testId}>{shell.session.actionLabel}</a>
   </nav>
 </details>

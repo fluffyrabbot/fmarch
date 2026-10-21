@@ -232,6 +232,7 @@ test("board smoke scenario renders only the viewer's board actions", () => {
     board: "link",
     community: "link",
     search: "link",
+    roles: "link",
     inbox: "link",
     player: "link",
     moderator: "blocked",
@@ -514,10 +515,11 @@ test("forbidden route scenarios cover denied admin, moderator, and signed-out pl
 });
 
 function assertRoleNav(nav, roleId) {
-  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "community", "inbox", "moderator", "player", "search"]);
+  assert.deepEqual(Object.keys(nav).sort(), ["admin", "board", "community", "inbox", "moderator", "player", "roles", "search"]);
   assert.equal(nav.board, "link");
   assert.equal(nav.community, "link");
   assert.equal(nav.search, "link");
+  assert.equal(nav.roles, "link");
   assert.equal(nav[roleId], "link");
   assert.equal(Object.values(nav).includes("blocked"), true);
   for (const navigation of Object.values(nav)) {

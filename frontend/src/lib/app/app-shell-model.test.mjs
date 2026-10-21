@@ -91,6 +91,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
       ["community", true, "role-nav-community", 44],
       ["inbox", true, "role-nav-inbox", 44],
       ["search", true, "role-nav-search", 44],
+      ["roles", true, "role-nav-roles", 44],
       ["player", true, "role-nav-player", 44],
       ["moderator", false, "role-nav-moderator", 44],
       ["admin", false, "role-nav-admin", 44],
@@ -101,11 +102,13 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(shell.surfaces[1].navigation, "link");
   assert.equal(shell.surfaces[2].href, "/inbox");
   assert.equal(shell.surfaces[3].href, "/search");
-  assert.equal(shell.surfaces[4].href, "/g/midsummer");
-  assert.equal(shell.surfaces[5].navigation, "blocked");
-  assert.equal(shell.surfaces[5].capability, null);
-  assert.equal("blockedReason" in shell.surfaces[5], false);
+  assert.equal(shell.surfaces[4].href, "/roles");
+  assert.equal(shell.surfaces[4].group, "primary");
+  assert.equal(shell.surfaces[5].href, "/g/midsummer");
   assert.equal(shell.surfaces[6].navigation, "blocked");
+  assert.equal(shell.surfaces[6].capability, null);
+  assert.equal("blockedReason" in shell.surfaces[6], false);
+  assert.equal(shell.surfaces[7].navigation, "blocked");
 });
 
 test("app shell session summary models signed-out and multi-capability states", () => {

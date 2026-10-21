@@ -279,6 +279,10 @@
   margin-inline-end: 6px;
 }
 .fm-app-shell[data-theme="den"] .fm-app-shell__daylight { border-width: 2px; }
+@media (max-width: 560px) {
+  /* Phones keep one topbar row; the mascot yields its width to the nav. */
+  .fm-app-shell[data-theme="den"] .fm-app-shell__nav--primary::before { display: none; }
+}
 .fm-app-shell[data-theme="den"] .fm-app-shell__daylight-option[aria-pressed="true"] { color: var(--den-on-accent); }
 .fm-app-shell[data-theme="den"] .board-hero__stars { fill: var(--den-star); }
 .fm-app-shell[data-theme="den"] .fm-app-shell__nav-item[aria-current="page"] { border-width: 2px; }
