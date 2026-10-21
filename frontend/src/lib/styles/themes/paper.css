@@ -55,6 +55,14 @@
   /* official host post accent */
   --fm-official: #d2a63c;
   --fm-official-ink: #4a3a08;
+
+  /* role alignment: ink passes 4.5:1 on its wash and on raised */
+  --fm-align-town: #2f5f86;
+  --fm-align-town-wash: #e2ebf3;
+  --fm-align-mafia: #a63d32;
+  --fm-align-mafia-wash: #f7e1dc;
+  --fm-align-independent: #5b3fa0;
+  --fm-align-independent-wash: #ebe5f6;
 }
 [data-theme="paper"][data-palette="night"] {
   --fm-ink: #e9e6dc;
@@ -108,6 +116,14 @@
 
   --fm-official: #d2a63c;
   --fm-official-ink: #4a3a08;
+
+  /* role alignment: ink passes 4.5:1 on its wash and on raised */
+  --fm-align-town: #9cc4e6;
+  --fm-align-town-wash: #1f3247;
+  --fm-align-mafia: #f0a090;
+  --fm-align-mafia-wash: #3e2428;
+  --fm-align-independent: #c6b4f0;
+  --fm-align-independent-wash: #2e2a48;
 }
 [data-theme="paper"][data-palette="twilight"] {
   --fm-ink: #efe5e0;
@@ -160,4 +176,12 @@
 
   --fm-official: #d2a63c;
   --fm-official-ink: #4a3a08;
+
+  /* role alignment: ink passes 4.5:1 on its wash and on raised */
+  --fm-align-town: #a9cdee;
+  --fm-align-town-wash: #2c3048;
+  --fm-align-mafia: #f4a596;
+  --fm-align-mafia-wash: #4a2229;
+  --fm-align-independent: #d2c0f5;
+  --fm-align-independent-wash: #3a2a4a;
 }
