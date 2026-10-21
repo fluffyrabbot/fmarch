@@ -117,3 +117,48 @@ export function buildPublicGamePosts(posts = [], citationPages = {}, gameId, ros
 function countLabel(count, singular, plural) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
+
+const SEAT_STATUS_LABELS = Object.freeze({
+  alive: "Alive",
+  dead: "Found at dawn",
+  modkilled: "Removed by host",
+});
+
+/**
+ * The public village roster: each seat's current public name, its rename and
+ * replacement history, and its lifecycle. `alive` decides presentation;
+ * `status` only names it, and unknown statuses are shown as written.
+ */
+export function buildPublicRoster(roster = []) {
+  const seats = Array.isArray(roster) ? roster : [];
+  return Object.freeze(
+    seats
+      .filter((seat) => typeof seat?.slot_id === "string" && seat.slot_id.trim() !== "")
+      .map((seat) => {
+        const occupancies = Array.isArray(seat.occupancies) ? seat.occupancies : [];
+        const current = occupancies.find((occupancy) => occupancy?.ended_seq == null) ?? occupancies.at(-1) ?? null;
+        const names = occupancyNames(current);
+        const previous = occupancies.filter((occupancy) => occupancy !== current);
+        const replaced = occupancyNames(previous.at(-1)).at(-1) ?? null;
+        const alive = seat.alive === true;
+        const status = typeof seat.status === "string" && seat.status.trim() !== ""
+          ? seat.status.trim()
+          : alive ? "alive" : "dead";
+        return Object.freeze({
+          slotId: seat.slot_id,
+          name: names.at(-1) ?? "Unknown seat",
+          formerly: names.length > 1 ? names[0] : null,
+          replaced,
+          alive,
+          status,
+          statusLabel: SEAT_STATUS_LABELS[status] ?? humanize(status),
+        });
+      }),
+  );
+}
+
+function occupancyNames(occupancy) {
+  return (Array.isArray(occupancy?.names) ? occupancy.names : [])
+    .map((entry) => (typeof entry?.public_name === "string" ? entry.public_name.trim() : ""))
+    .filter((name) => name !== "");
+}

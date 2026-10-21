@@ -1,5 +1,5 @@
 /* Paper owns a complete palette for each resolved appearance. */
-:root, [data-theme="paper"][data-palette="day"] {
+[data-theme="paper"][data-palette="day"] {
   /* ink — text on paper grounds */
   --fm-ink: #1c2620;
   --fm-ink-muted: #57645c;

@@ -40,8 +40,8 @@
     </nav>
 
     <section class="fm-panel" aria-label="Discussion thread" data-testid="discussion-thread">
-      <p class="fm-eyebrow">
-        {#if thread.topic.pinned === true}<span data-testid="discussion-topic-pinned">Pinned</span> · {/if}{thread.topic.posting_state}
+      <p class="fm-eyebrow discussion-tags">
+        {#if thread.topic.pinned === true}<span class="discussion-state discussion-state--pinned" data-testid="discussion-topic-pinned">Pinned</span>{/if}<span class="discussion-state" data-posting-state={thread.topic.posting_state}>{thread.topic.posting_state}</span>
       </p>
       <h2 data-testid="discussion-topic-heading">{thread.topic.title}</h2>
       {#if thread.topic.spawned_games?.length > 0}
@@ -282,6 +282,10 @@
   .discussion-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .discussion-post p { margin-block-end: 0; white-space: pre-wrap; }
   .discussion-post__permalink { color: var(--fm-ink-muted); font-size: 13px; }
+  .discussion-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .discussion-state { background: var(--fm-surface-muted); border-radius: var(--fm-radius-small); color: var(--fm-ink-muted); padding: 2px 10px; }
+  .discussion-state[data-posting-state="open"] { background: var(--fm-accent-wash); color: var(--fm-accent-ink); }
+  .discussion-state--pinned { background: var(--fm-accent-wash-strong); color: var(--fm-accent-ink); }
   .discussion-post__edited { color: var(--fm-ink-muted); font-size: 13px; font-style: italic; }
   .discussion-post__retracted { color: var(--fm-ink-muted); font-style: italic; }
   .discussion-edit { flex-basis: 100%; }

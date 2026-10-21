@@ -7,6 +7,7 @@ import { accessTokenForRequest } from "../../../lib/server/session-capabilities.
 import {
   GAME_CITATION_PREVIEW_LIMIT,
   buildPublicGamePosts,
+  buildPublicRoster,
   buildPublicGamePublication,
 } from "./public-game-publication.mjs";
 
@@ -72,6 +73,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
       nextAfterSeq: optionalSequence(page?.next_after_seq),
       hasSession: typeof locals.principalId === "string",
       subscription,
+      roster: available ? buildPublicRoster(page.roster) : [],
     },
   };
 }

@@ -1,6 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
-import { THEMES, THEME_SCHEMES, THEME_COOKIE, encodeThemePreference } from "../../lib/app/theme.mjs";
+import { THEMES, THEME_SCHEMES, THEME_COOKIE, encodeThemePreference, safeReturnPath } from "../../lib/app/theme.mjs";
 
 export function load({ locals }) {
   return { shellOwner: "layout", shell: buildAppShell({ activeSurface: "appearance", principalId: locals.principalId,
@@ -17,6 +17,7 @@ export const actions = {
     cookies.set(THEME_COOKIE, encodeThemePreference({ themeId, scheme }), {
       path: "/", httpOnly: true, sameSite: "lax", secure: url.protocol === "https:", maxAge: 31536000,
     });
-    throw redirect(303, "/appearance");
+    throw redirect(303, safeReturnPath(form.get("return_to")));
   },
 };
+

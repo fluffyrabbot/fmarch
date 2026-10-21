@@ -1,5 +1,6 @@
 import { normalizeCapabilities, resolveSurfaceAccess } from "./capabilities.mjs";
 import { canonicalPhaseId, phaseLabelFromId } from "../phase-id.mjs";
+import { phaseThemeKey } from "./phase-theme.mjs";
 
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
@@ -281,6 +282,8 @@ function normalizeBoardGameIndexEntry(entry) {
     status,
     statusLabel: status === "active" ? "Active" : "Completed",
     phaseId,
+    // Presentation key for phase chips: derived from the canonical id only.
+    phaseKind: status === "completed" ? "completed" : phaseThemeKey(phaseId) ?? "waiting",
     phaseLabel:
       status === "completed"
         ? "Completed"
@@ -305,6 +308,13 @@ function boardGameCard({ entry, capabilities }) {
   return Object.freeze({
     ...entry,
     relation: playing ? "You're playing" : hosting ? "You're hosting" : null,
+    relationKind: playing || hosting ? "mine" : "none",
+    // Paw pips stay legible only for ordinary table sizes; larger games show the count alone.
+    seatPips:
+      Number.isInteger(entry.seatsFilled) && Number.isInteger(entry.seatsTotal) &&
+      entry.seatsTotal > 0 && entry.seatsTotal <= 16
+        ? Object.freeze(Array.from({ length: entry.seatsTotal }, (_, index) => index < entry.seatsFilled))
+        : null,
     actions: Object.freeze(
       actions.map((action, index) =>
         Object.freeze({

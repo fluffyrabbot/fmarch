@@ -24,9 +24,9 @@
         <p data-testid="discussion-topic-empty">No discussion topics yet.</p>
       {:else}
         {#each discussion.topics as topic}
-          <article class="fm-panel" data-testid={`discussion-topic-${topic.topic}`} data-pinned={topic.pinned === true ? "true" : "false"}>
-            <p class="fm-eyebrow">
-              {#if topic.pinned === true}<span class="discussion-topic__pinned" data-testid={`discussion-topic-pinned-${topic.topic}`}>Pinned</span> · {/if}{topic.posting_state}
+          <article class="fm-panel discussion-topic-card" data-testid={`discussion-topic-${topic.topic}`} data-posting-state={topic.posting_state} data-pinned={topic.pinned === true ? "true" : "false"}>
+            <p class="fm-eyebrow discussion-tags">
+              {#if topic.pinned === true}<span class="discussion-topic__pinned discussion-state" data-testid={`discussion-topic-pinned-${topic.topic}`}>Pinned</span>{/if}<span class="discussion-state" data-posting-state={topic.posting_state}>{topic.posting_state}</span>
             </p>
             <h2>{topic.title}</h2>
             <p>
@@ -73,5 +73,10 @@
 <style>
   .discussion-form { display: grid; gap: 12px; }
   .discussion-topic__pinned { font-weight: 600; }
+  .discussion-topic-card h2 { overflow-wrap: anywhere; }
+  .discussion-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .discussion-state { background: var(--fm-surface-muted); border-radius: var(--fm-radius-small); color: var(--fm-ink-muted); padding: 2px 10px; }
+  .discussion-state[data-posting-state="open"] { background: var(--fm-accent-wash); color: var(--fm-accent-ink); }
+  .discussion-topic__pinned { background: var(--fm-accent-wash-strong); color: var(--fm-accent-ink); }
   textarea { min-block-size: 112px; resize: vertical; }
 </style>

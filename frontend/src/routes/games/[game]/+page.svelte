@@ -2,11 +2,22 @@
   import { afterNavigate } from "$app/navigation";
   import { tick } from "svelte";
   import { postHref, focusAddressedPost } from "$lib/app/post-address.mjs";
+  import { phaseLabelFromId } from "$lib/phase-id.mjs";
+  import { phaseThemeKey } from "$lib/app/phase-theme.mjs";
   afterNavigate(async ({ to }) => { await tick(); if (to) focusAddressedPost(to.url); });
   export let data;
   export let form;
 
   let activeEmbedSeq = null;
+
+  $: roster = data.publicGame?.roster ?? [];
+  $: aliveCount = roster.filter((seat) => seat.alive).length;
+  // A divider opens each run of posts from one phase; ids that do not parse read as pre-game.
+  function phaseBreak(posts, index) {
+    const phaseId = posts[index]?.phase_id;
+    if (phaseId === undefined || (index > 0 && posts[index - 1]?.phase_id === phaseId)) return null;
+    return { kind: phaseThemeKey(phaseId) ?? "waiting", label: phaseLabelFromId(phaseId) ?? "Before the game" };
+  }
 
   function occurredAt(value) {
     const seconds = Number(value);
@@ -55,6 +66,25 @@
         {/if}
       </header>
 
+      {#if roster.length > 0}
+        <section class="public-game-roster" aria-labelledby="public-game-roster-title" data-testid="public-game-roster">
+          <header>
+            <h2 id="public-game-roster-title">The village</h2>
+            <span>{aliveCount} of {roster.length} alive</span>
+          </header>
+          <ul>
+            {#each roster as seat (seat.slotId)}
+              <li class="public-game-seat" data-alive={seat.alive ? "true" : "false"} data-status={seat.status}>
+                <span class="public-game-seat__name">{seat.name}</span>
+                {#if seat.formerly}<span class="public-game-seat__note">formerly {seat.formerly}</span>{/if}
+                {#if seat.replaced}<span class="public-game-seat__note">replaced {seat.replaced}</span>{/if}
+                <span class="public-game-seat__status">{seat.statusLabel}</span>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
       {#if data.publicGame.posts.length > 0}
         <a class="public-game-skip-posts" href={`#thread-post-${data.publicGame.posts[0].source_seq}`} data-testid={data.publication.readingLane.skipPostsTestId}>
           Skip to first public post
@@ -77,10 +107,15 @@
         {#if data.publicGame.posts.length === 0}
           <p class="public-game-empty" data-testid="public-game-thread-empty">No public main-thread posts yet.</p>
         {:else}
-          {#each data.publicGame.posts as post}
+          {#each data.publicGame.posts as post, index}
+            {@const phase = phaseBreak(data.publicGame.posts, index)}
+            {#if phase}
+              <p class="public-game-phase" data-phase-kind={phase.kind}><span>{phase.label}</span></p>
+            {/if}
             <article
               id={`thread-post-${post.source_seq}`}
               class="public-game-post"
+              data-author-kind={post.author?.kind ?? "unknown"}
               aria-labelledby={`public-game-post-author-${post.source_seq} public-game-post-meta-${post.source_seq}`}
               tabindex="-1"
               data-testid={`public-game-post-${post.source_seq}`}
@@ -204,6 +239,24 @@
   .public-game-thread-heading { align-items: baseline; display: flex; justify-content: space-between; padding-block-end: 12px; }
   .public-game-thread-heading h2 { font-family: var(--fm-font-display); font-size: 28px; margin: 0; }
   .public-game-thread-heading span { color: var(--fm-ink-muted); font-size: 13px; font-weight: 750; }
+  .public-game-roster { display: grid; gap: 10px; margin-inline: auto; max-inline-size: 760px; width: 100%; }
+  .public-game-roster header { align-items: baseline; display: flex; justify-content: space-between; gap: 8px; }
+  .public-game-roster h2 { font-family: var(--fm-font-display); font-size: 22px; margin: 0; }
+  .public-game-roster header span { color: var(--fm-ok); font-size: 14px; font-weight: 800; }
+  .public-game-roster ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .public-game-seat { align-items: baseline; border: 1px solid var(--fm-line); border-radius: var(--fm-radius-control); display: inline-flex; flex-wrap: wrap; gap: 2px 8px; padding: 6px 12px; }
+  .public-game-seat__name { font-weight: 800; overflow-wrap: anywhere; }
+  .public-game-seat__note { color: var(--fm-ink-muted); font-size: 12px; }
+  .public-game-seat__status { color: var(--fm-ok); font-size: 12px; font-weight: 800; }
+  .public-game-seat[data-alive="false"] { background: var(--fm-surface-muted); }
+  .public-game-seat[data-alive="false"] .public-game-seat__name { color: var(--fm-ink-muted); text-decoration: line-through; }
+  .public-game-seat[data-alive="false"] .public-game-seat__status { color: var(--fm-danger-ink); }
+  .public-game-seat[data-status="modkilled"] .public-game-seat__status { color: var(--fm-ink-muted); }
+  .public-game-phase { align-items: center; display: flex; gap: 14px; margin: 18px 0 6px; }
+  .public-game-phase::before, .public-game-phase::after { border-block-start: 2px dashed var(--fm-line-strong); content: ""; flex: 1 1 auto; }
+  .public-game-phase span { background: var(--fm-surface-muted); border-radius: 999px; color: var(--fm-ink); font-size: 14px; font-weight: 800; padding: 5px 16px; }
+  .public-game-post[data-author-kind="host_narrator"] { background: var(--fm-accent-wash); border-inline-start: 4px solid var(--fm-official); padding-inline: 16px; }
+  .public-game-post[data-author-kind="system"] { background: var(--fm-surface-cool); border-inline-start: 4px solid var(--fm-info); padding-inline: 16px; }
   .public-game-post { border-block-start: 1px solid var(--fm-line); padding-block: 20px 24px; scroll-margin-block-start: 88px; }
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post header a { color: var(--fm-ink-muted); font-size: 13px; }

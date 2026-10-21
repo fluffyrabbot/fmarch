@@ -1,0 +1,416 @@
+/* Moonlit Den: a cozy werewolf-village theme on the shared semantic contract.
+ * Palettes follow the game clock (day / night / twilight) like every theme;
+ * the decorative chrome below only keys off data attributes the wire already
+ * provides, so unknown or missing values fall back to the neutral styling. */
+/* Self-hosted (CSP font-src 'self'), SIL OFL 1.1 — see ../fonts/OFL-*.txt. Latin subset;
+ * other scripts fall through to the rounded system stack. */
+@font-face {
+  font-display: swap;
+  font-family: "Den Fredoka";
+  font-style: normal;
+  font-weight: 500 700;
+  src: url("../fonts/fredoka-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-display: swap;
+  font-family: "Den Nunito";
+  font-style: normal;
+  font-weight: 400 800;
+  src: url("../fonts/nunito-latin-wght.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root, [data-theme="den"] {
+  --fm-font-ui:
+    "Den Nunito", ui-rounded, "SF Pro Rounded", "Varela Round", Quicksand, ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fm-font-display:
+    "Den Fredoka", "Den Nunito", ui-rounded, "SF Pro Rounded", "Varela Round", ui-sans-serif,
+    system-ui, sans-serif;
+  --fm-radius-small: 10px;
+  --fm-radius-control: 14px;
+  --fm-radius-dock: 18px;
+  --fm-radius-panel: 22px;
+  --fm-space-card: 18px;
+  --fm-space-well: 12px 14px;
+  --fm-space-reading: 26px;
+  --fm-reading-width: 760px;
+  --fm-size-label: 14px;
+  --fm-size-title: 40px;
+  --fm-weight-heading: 700;
+  --fm-shadow-floating: 0 10px 30px color-mix(in srgb, var(--fm-ground) 50%, transparent);
+  --den-pill: 999px;
+  --den-chip-day-bg: #ffe6a8;
+  --den-chip-day-ink: #5a3a00;
+  --den-chip-night-bg: #2e2a66;
+  --den-chip-night-ink: #e6e0ff;
+  --den-chip-night-ring: #6b63c4;
+  --den-chip-dusk-bg: #ffd0bf;
+  --den-chip-dusk-ink: #6a2412;
+}
+
+:root, [data-theme="den"][data-palette="day"] {
+  --den-star: #e9b949;
+  /* ink — plum on warm parchment */
+  --fm-ink: #2a2240;
+  --fm-ink-muted: #5f5672;
+  --fm-ink-subtle: #4b4360;
+  --fm-ink-disabled: #6e6582;
+
+  /* grounds — firelit parchment */
+  --fm-ground: #fbf3e3;
+  --fm-raised: #fffaf1;
+  --fm-raised-veil: rgba(255, 250, 241, 0.78);
+  --fm-surface-muted: #f3e6cc;
+  --fm-surface-cool: #f1ebe0;
+  --fm-surface-tint: #f8eedb;
+  --fm-topbar-veil: rgba(251, 243, 227, 0.95);
+  --fm-wash-top: #fdf6e9;
+  --fm-wash-mid: #fbf3e3;
+  --fm-wash-warm: #f9ecd6;
+
+  /* lines */
+  --fm-line: #e4d3b2;
+  --fm-line-strong: #c9b38a;
+  --fm-line-heavy: #a8916a;
+  --fm-line-soft: #efe2c8;
+  --fm-line-cool: #ddd5c6;
+  --fm-line-warm: #e6cfa3;
+  --fm-control-border: #5f5672;
+
+  /* accent — lantern amber */
+  --fm-accent: #9c4b0c;
+  --fm-accent-soft: #c07a3f;
+  --fm-accent-ink: #7a3a08;
+  --fm-accent-wash: #fbe0bd;
+  --fm-accent-wash-strong: #f7d2a3;
+
+  /* on-dark — text over ink-filled surfaces */
+  --fm-action-ink: #ffffff;
+  --fm-action-ink-muted: #e6e0f0;
+  --fm-action-ink-accent: #f5c98f;
+
+  /* status */
+  --fm-ok: #2f7a50;
+  --fm-pending: #9a5d12;
+  --fm-pending-soft: #b97d3a;
+  --fm-pending-wash: #fbecd6;
+  --fm-confirm-wash: #f9f0d8;
+  --fm-danger: #b3261e;
+  --fm-danger-ink: #8f1e17;
+  --fm-danger-soft: #c8665e;
+  --fm-danger-wash: #fde3df;
+  --fm-info: #2c4f9e;
+  --fm-focus-ring: #a8325f;
+
+  /* official host post accent */
+  --fm-official: #e9a54a;
+  --fm-official-ink: #3d2402;
+
+  /* den-only decoration */
+  --den-blush: #a8325f;
+  --den-blush-wash: #fbe1ea;
+  --den-on-accent: #ffffff;
+  --den-mascot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M11 22 14 5 23 14Z' fill='%238f8270'/%3E%3Cpath d='M37 22 34 5 25 14Z' fill='%238f8270'/%3E%3Cpath d='M14.5 17 15.6 10 20 14Z' fill='%23e48aa8'/%3E%3Cpath d='M33.5 17 32.4 10 28 14Z' fill='%23e48aa8'/%3E%3Ccircle cx='24' cy='26' r='14' fill='%238f8270'/%3E%3Cellipse cx='24' cy='31.5' rx='7.5' ry='5.5' fill='%23f7efe2'/%3E%3Cellipse cx='24' cy='28.6' rx='2.6' ry='1.8' fill='%232a2240'/%3E%3Ccircle cx='18.5' cy='23' r='2' fill='%232a2240'/%3E%3Ccircle cx='29.5' cy='23' r='2' fill='%232a2240'/%3E%3Ccircle cx='19.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='30.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='14.8' cy='29.5' r='2.2' fill='%23e48aa8' fill-opacity='.55'/%3E%3Ccircle cx='33.2' cy='29.5' r='2.2' fill='%23e48aa8' fill-opacity='.55'/%3E%3Cpath d='M17 40.5 24 43 31 40.5V47L24 44.5 17 47Z' fill='%239c4b0c'/%3E%3C/svg%3E");
+}
+
+[data-theme="den"][data-palette="night"] {
+  --den-star: #fff1c2;
+  --fm-ink: #f6efdc;
+  --fm-ink-muted: #c6bedc;
+  --fm-ink-subtle: #d6cfe8;
+  --fm-ink-disabled: #9a93b8;
+
+  --fm-ground: #17142f;
+  --fm-raised: #221e45;
+  --fm-raised-veil: rgba(34, 30, 69, 0.78);
+  --fm-surface-muted: #2b2757;
+  --fm-surface-cool: #252150;
+  --fm-surface-tint: #1f1b3d;
+  --fm-topbar-veil: rgba(23, 20, 47, 0.94);
+  --fm-wash-top: #1c1838;
+  --fm-wash-mid: #17142f;
+  --fm-wash-warm: #1f1733;
+
+  --fm-line: #3a3570;
+  --fm-line-strong: #5b5499;
+  --fm-line-heavy: #6d66ad;
+  --fm-line-soft: #2f2a5e;
+  --fm-line-cool: #363a72;
+  --fm-line-warm: #4d3b5e;
+  --fm-control-border: #c6bedc;
+
+  --fm-accent: #f5b95f;
+  --fm-accent-soft: #c9955a;
+  --fm-accent-ink: #f8cd8a;
+  --fm-accent-wash: #3b2f45;
+  --fm-accent-wash-strong: #46354f;
+
+  /* night ink is light, so on-dark flips to the midnight ground */
+  --fm-action-ink: #17142f;
+  --fm-action-ink-muted: #3a3570;
+  --fm-action-ink-accent: #6b4a1c;
+
+  --fm-ok: #94e3bd;
+  --fm-pending: #f0b56a;
+  --fm-pending-soft: #d9a368;
+  --fm-pending-wash: #3a2c33;
+  --fm-confirm-wash: #3a3338;
+  --fm-danger: #ff9a8f;
+  --fm-danger-ink: #ffb4ab;
+  --fm-danger-soft: #d98c8a;
+  --fm-danger-wash: #46223a;
+  --fm-info: #aecbff;
+  --fm-focus-ring: #f7a8c4;
+
+  --fm-official: #f5b95f;
+  --fm-official-ink: #2b1a04;
+
+  /* den-only decoration */
+  --den-blush: #f7a8c4;
+  --den-blush-wash: #43284e;
+  --den-on-accent: #2b1a04;
+  --den-mascot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M11 22 14 5 23 14Z' fill='%23a69ed4'/%3E%3Cpath d='M37 22 34 5 25 14Z' fill='%23a69ed4'/%3E%3Cpath d='M14.5 17 15.6 10 20 14Z' fill='%23f7a8c4'/%3E%3Cpath d='M33.5 17 32.4 10 28 14Z' fill='%23f7a8c4'/%3E%3Ccircle cx='24' cy='26' r='14' fill='%23a69ed4'/%3E%3Cellipse cx='24' cy='31.5' rx='7.5' ry='5.5' fill='%23ece6f7'/%3E%3Cellipse cx='24' cy='28.6' rx='2.6' ry='1.8' fill='%231b1834'/%3E%3Ccircle cx='18.5' cy='23' r='2' fill='%231b1834'/%3E%3Ccircle cx='29.5' cy='23' r='2' fill='%231b1834'/%3E%3Ccircle cx='19.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='30.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='14.8' cy='29.5' r='2.2' fill='%23f7a8c4' fill-opacity='.55'/%3E%3Ccircle cx='33.2' cy='29.5' r='2.2' fill='%23f7a8c4' fill-opacity='.55'/%3E%3Cpath d='M17 40.5 24 43 31 40.5V47L24 44.5 17 47Z' fill='%23f5b95f'/%3E%3C/svg%3E");
+}
+
+[data-theme="den"][data-palette="twilight"] {
+  --den-star: #ffd9a8;
+  --fm-ink: #fdeee6;
+  --fm-ink-muted: #dcc3d3;
+  --fm-ink-subtle: #e6d0dc;
+  --fm-ink-disabled: #b39ab8;
+
+  --fm-ground: #2a1d3e;
+  --fm-raised: #36284f;
+  --fm-raised-veil: rgba(54, 40, 79, 0.78);
+  --fm-surface-muted: #43315f;
+  --fm-surface-cool: #3a2c56;
+  --fm-surface-tint: #31244a;
+  --fm-topbar-veil: rgba(42, 29, 62, 0.94);
+  --fm-wash-top: #2f2145;
+  --fm-wash-mid: #2a1d3e;
+  --fm-wash-warm: #33203c;
+
+  --fm-line: #59437a;
+  --fm-line-strong: #7a62a0;
+  --fm-line-heavy: #8c74b2;
+  --fm-line-soft: #4a3768;
+  --fm-line-cool: #504476;
+  --fm-line-warm: #6a4766;
+  --fm-control-border: #dcc3d3;
+
+  --fm-accent: #ffa47e;
+  --fm-accent-soft: #d98a6e;
+  --fm-accent-ink: #ffc2a8;
+  --fm-accent-wash: #4a2f4a;
+  --fm-accent-wash-strong: #573652;
+
+  --fm-action-ink: #2a1d3e;
+  --fm-action-ink-muted: #43315f;
+  --fm-action-ink-accent: #6a3020;
+
+  --fm-ok: #9fe6c3;
+  --fm-pending: #ffc27a;
+  --fm-pending-soft: #e0a46e;
+  --fm-pending-wash: #47304a;
+  --fm-confirm-wash: #463a4a;
+  --fm-danger: #ff9a8f;
+  --fm-danger-ink: #ffb4ab;
+  --fm-danger-soft: #e08e8e;
+  --fm-danger-wash: #4c2540;
+  --fm-info: #b9cfff;
+  --fm-focus-ring: #ffb6d2;
+
+  --fm-official: #ffa47e;
+  --fm-official-ink: #2d1408;
+
+  /* den-only decoration */
+  --den-blush: #ffb6d2;
+  --den-blush-wash: #4f2d55;
+  --den-on-accent: #2d1408;
+  --den-mascot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M11 22 14 5 23 14Z' fill='%23c09ac8'/%3E%3Cpath d='M37 22 34 5 25 14Z' fill='%23c09ac8'/%3E%3Cpath d='M14.5 17 15.6 10 20 14Z' fill='%23ffb6d2'/%3E%3Cpath d='M33.5 17 32.4 10 28 14Z' fill='%23ffb6d2'/%3E%3Ccircle cx='24' cy='26' r='14' fill='%23c09ac8'/%3E%3Cellipse cx='24' cy='31.5' rx='7.5' ry='5.5' fill='%23f6e6f0'/%3E%3Cellipse cx='24' cy='28.6' rx='2.6' ry='1.8' fill='%23241933'/%3E%3Ccircle cx='18.5' cy='23' r='2' fill='%23241933'/%3E%3Ccircle cx='29.5' cy='23' r='2' fill='%23241933'/%3E%3Ccircle cx='19.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='30.1' cy='22.4' r='.6' fill='%23fff'/%3E%3Ccircle cx='14.8' cy='29.5' r='2.2' fill='%23ffb6d2' fill-opacity='.55'/%3E%3Ccircle cx='33.2' cy='29.5' r='2.2' fill='%23ffb6d2' fill-opacity='.55'/%3E%3Cpath d='M17 40.5 24 43 31 40.5V47L24 44.5 17 47Z' fill='%23ffa47e'/%3E%3C/svg%3E");
+}
+
+/* Chrome rules carry the shell class so they outrank route-scoped component styles. */
+/* ---- shell ---- */
+[data-theme="den"].fm-app-shell { background: var(--fm-ground); }
+.fm-app-shell[data-theme="den"] .fm-app-shell__topbar { border-block-end-width: 2px; }
+.fm-app-shell[data-theme="den"] .fm-app-shell__brand { font-weight: 700; gap: 8px; }
+.fm-app-shell[data-theme="den"] .fm-app-shell__brand::before {
+  background: var(--den-mascot) center / contain no-repeat;
+  block-size: 36px;
+  content: "";
+  flex: 0 0 36px;
+  inline-size: 36px;
+}
+.fm-app-shell[data-theme="den"] .fm-app-shell__nav-item { border-radius: var(--den-pill); }
+.fm-app-shell[data-theme="den"] .fm-app-shell__nav--primary { align-items: center; gap: 4px; }
+.fm-app-shell[data-theme="den"] .fm-app-shell__nav--primary::before {
+  background: var(--den-mascot) center / contain no-repeat;
+  block-size: 40px;
+  content: "";
+  flex: 0 0 40px;
+  inline-size: 40px;
+  margin-inline-end: 6px;
+}
+.fm-app-shell[data-theme="den"] .fm-app-shell__daylight { border-width: 2px; }
+.fm-app-shell[data-theme="den"] .fm-app-shell__daylight-option[aria-pressed="true"] { color: var(--den-on-accent); }
+.fm-app-shell[data-theme="den"] .board-hero__stars { fill: var(--den-star); }
+.fm-app-shell[data-theme="den"] .fm-app-shell__nav-item[aria-current="page"] { border-width: 2px; }
+.fm-app-shell[data-theme="den"] .fm-app-shell__avatar {
+  background: var(--den-blush-wash);
+  border: 2px solid var(--den-blush);
+  color: var(--den-blush);
+}
+.fm-app-shell[data-theme="den"] .fm-surface h1 { letter-spacing: -0.01em; }
+
+/* ---- buttons: lantern pills ---- */
+.fm-app-shell[data-theme="den"] .fm-touch-button:not(.fm-touch-button--secondary):not(.fm-touch-button--danger):not([data-danger="true"]) {
+  background: var(--fm-accent);
+  border-color: var(--fm-accent);
+  box-shadow: 0 3px 0 var(--fm-line-strong);
+  color: var(--den-on-accent);
+}
+.fm-app-shell[data-theme="den"] .fm-touch-button { border-radius: var(--den-pill); }
+.fm-app-shell[data-theme="den"] .fm-touch-button.fm-touch-button--secondary {
+  background: transparent;
+  border: 2px solid var(--fm-line-strong);
+  color: var(--fm-ink);
+}
+.fm-app-shell[data-theme="den"] .fm-touch-button.fm-touch-button--secondary:hover { background: var(--fm-surface-muted); }
+
+/* ---- cards ---- */
+.fm-app-shell[data-theme="den"] .fm-panel {
+  background: var(--fm-raised);
+  border: 2px solid var(--fm-line);
+  border-radius: var(--fm-radius-panel);
+  padding: 18px 20px;
+}
+.fm-app-shell[data-theme="den"] .fm-panel[data-tone="warn"] { border-color: var(--fm-pending); }
+.fm-app-shell[data-theme="den"] .fm-panel[data-tone="danger"] { border-color: var(--fm-danger); }
+
+/* Wolf ears on lobby and topic cards. Pure CSS shapes, so they follow tokens. */
+.fm-app-shell[data-theme="den"] .board-card,
+.fm-app-shell[data-theme="den"] .discussion-topic-card { margin-block-start: 12px; position: relative; }
+.fm-app-shell[data-theme="den"] .board-card::before,
+.fm-app-shell[data-theme="den"] .board-card::after,
+.fm-app-shell[data-theme="den"] .discussion-topic-card::before,
+.fm-app-shell[data-theme="den"] .discussion-topic-card::after {
+  background: var(--fm-line-strong);
+  block-size: 15px;
+  clip-path: polygon(0 100%, 42% 0, 100% 100%);
+  content: "";
+  inline-size: 20px;
+  inset-block-start: -15px;
+  position: absolute;
+}
+.fm-app-shell[data-theme="den"] .board-card::before,
+.fm-app-shell[data-theme="den"] .discussion-topic-card::before { inset-inline-start: 22px; }
+.fm-app-shell[data-theme="den"] .board-card::after,
+.fm-app-shell[data-theme="den"] .discussion-topic-card::after { inset-inline-start: 58px; transform: scaleX(-1); }
+.fm-app-shell[data-theme="den"] .board-card[data-relation="mine"] { border-color: var(--den-blush); }
+.fm-app-shell[data-theme="den"] .board-card[data-relation="mine"]::before,
+.fm-app-shell[data-theme="den"] .board-card[data-relation="mine"]::after { background: var(--den-blush); }
+.fm-app-shell[data-theme="den"] .discussion-topic-card[data-pinned="true"] {
+  background: var(--fm-surface-tint);
+  border-color: var(--fm-accent);
+}
+.fm-app-shell[data-theme="den"] .discussion-topic-card[data-pinned="true"]::before,
+.fm-app-shell[data-theme="den"] .discussion-topic-card[data-pinned="true"]::after { background: var(--fm-accent); }
+
+/* ---- phase chips follow the game clock ---- */
+.fm-app-shell[data-theme="den"] .board-phase {
+  border-radius: var(--den-pill);
+  padding: 4px 12px;
+  text-transform: none;
+}
+.fm-app-shell[data-theme="den"] .board-phase[data-phase-kind="day"] { background: var(--den-chip-day-bg); color: var(--den-chip-day-ink); }
+.fm-app-shell[data-theme="den"] .board-phase[data-phase-kind="night"] {
+  background: var(--den-chip-night-bg);
+  box-shadow: inset 0 0 0 1.5px var(--den-chip-night-ring);
+  color: var(--den-chip-night-ink);
+}
+.fm-app-shell[data-theme="den"] .board-phase[data-phase-kind="twilight"] { background: var(--den-chip-dusk-bg); color: var(--den-chip-dusk-ink); }
+.fm-app-shell[data-theme="den"] .board-seats__pip[data-filled="true"] { color: var(--fm-accent); }
+.fm-app-shell[data-theme="den"] .board-relation { background: var(--den-blush-wash); color: var(--den-blush); }
+
+/* ---- forum ---- */
+.fm-app-shell[data-theme="den"] .discussion-state { border-radius: var(--den-pill); }
+.fm-app-shell[data-theme="den"] .discussion-post {
+  background: var(--fm-raised);
+  border: 2px solid var(--fm-line);
+  border-radius: var(--fm-radius-panel);
+  padding: 16px 20px;
+}
+.fm-app-shell[data-theme="den"] .discussion-mention {
+  background: var(--den-blush-wash);
+  border-radius: var(--den-pill);
+  color: var(--den-blush);
+  font-weight: 800;
+  padding: 1px 8px;
+  text-decoration: none;
+}
+.fm-app-shell[data-theme="den"] .discussion-mention--unresolved {
+  background: var(--fm-surface-muted);
+  color: var(--fm-ink-muted);
+  font-style: italic;
+  font-weight: 600;
+}
+.fm-app-shell[data-theme="den"] .discussion-quote,
+.fm-app-shell[data-theme="den"] .public-game-quote {
+  background: var(--fm-surface-tint);
+  border: 2px solid var(--fm-line);
+  border-inline-start: 6px solid var(--fm-accent);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+.fm-app-shell[data-theme="den"] .discussion-post__retracted {
+  border: 2px dashed var(--fm-line-strong);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+/* ---- public game thread ---- */
+.fm-app-shell[data-theme="den"] .public-game-masthead { border-block-end-width: 2px; }
+.fm-app-shell[data-theme="den"] .public-game-post {
+  background: var(--fm-raised);
+  border: 2px solid var(--fm-line);
+  border-radius: var(--fm-radius-panel);
+  margin-block-end: 14px;
+  padding: 16px 20px 20px;
+}
+
+.fm-app-shell[data-theme="den"] .public-game-post[data-author-kind="host_narrator"] {
+  background: var(--fm-accent-wash);
+  border: 2px solid var(--fm-accent);
+}
+.fm-app-shell[data-theme="den"] .public-game-post[data-author-kind="system"] {
+  background: var(--fm-surface-tint);
+  border: 2px dashed var(--fm-line-strong);
+  border-radius: 16px;
+  padding-block: 12px;
+}
+.fm-app-shell[data-theme="den"] .public-game-phase span { border-radius: var(--den-pill); }
+.fm-app-shell[data-theme="den"] .public-game-phase[data-phase-kind="day"] span { background: var(--den-chip-day-bg); color: var(--den-chip-day-ink); }
+.fm-app-shell[data-theme="den"] .public-game-phase[data-phase-kind="night"] span {
+  background: var(--den-chip-night-bg);
+  box-shadow: inset 0 0 0 1.5px var(--den-chip-night-ring);
+  color: var(--den-chip-night-ink);
+}
+.fm-app-shell[data-theme="den"] .public-game-phase[data-phase-kind="twilight"] span { background: var(--den-chip-dusk-bg); color: var(--den-chip-dusk-ink); }
+.fm-app-shell[data-theme="den"] .public-game-roster {
+  background: var(--fm-raised);
+  border: 2px solid var(--fm-line);
+  border-radius: var(--fm-radius-panel);
+  padding: 16px 18px;
+}
+.fm-app-shell[data-theme="den"] .public-game-seat { border-radius: var(--den-pill); border-width: 2px; }
+.fm-app-shell[data-theme="den"] .public-game-seat[data-alive="true"] { background: var(--fm-surface-tint); }
+
+@media (forced-colors: active) {
+  .fm-app-shell[data-theme="den"] .board-card::before,
+  .fm-app-shell[data-theme="den"] .board-card::after,
+  .fm-app-shell[data-theme="den"] .discussion-topic-card::before,
+  .fm-app-shell[data-theme="den"] .discussion-topic-card::after { display: none; }
+}

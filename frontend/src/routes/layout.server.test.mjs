@@ -15,7 +15,7 @@ test("root layout exposes resolved session context for error surfaces", () => {
 
   assert.deepEqual(data, {
     preview: null,
-    themePreference: { themeId: "paper", scheme: "game" },
+    themePreference: { themeId: "den", scheme: "game" },
     appSession: {
       principalId: "player_mira",
       viewerProfile: null,
@@ -29,7 +29,7 @@ test("root layout exposes resolved session context for error surfaces", () => {
 test("root layout fails closed without authenticated locals", () => {
   assert.deepEqual(load({ locals: {} }), {
     preview: null,
-    themePreference: { themeId: "paper", scheme: "game" },
+    themePreference: { themeId: "den", scheme: "game" },
     appSession: {
       principalId: null,
       viewerProfile: null,

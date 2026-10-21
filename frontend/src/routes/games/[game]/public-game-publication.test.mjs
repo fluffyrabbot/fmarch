@@ -4,6 +4,7 @@ import {
   PUBLIC_GAME_PUBLICATION_CONTRACT,
   buildPublicGamePosts,
   buildPublicGamePublication,
+  buildPublicRoster,
 } from "./public-game-publication.mjs";
 
 test("public game publication creates a reading-first live record", () => {
@@ -65,4 +66,25 @@ test("a pre-phase public game remains distinct from a completed record", () => {
     game: { pack: "mafiascum", status: "setup", phase_id: null },
   });
   assert.equal(view.metadata.phaseLabel, "Awaiting first phase");
+});
+
+test("public roster names seats robustly from occupancy history", () => {
+  const occupancy = (began, ended, ...names) => ({ began_seq: began, ended_seq: ended, names: names.map((public_name, i) => ({ effective_seq: began + i, public_name })) });
+  const roster = buildPublicRoster([
+    { slot_id: "s1", alive: true, status: "alive", occupancies: [occupancy(1, null, "Clover", "Sir Clover")] },
+    { slot_id: "s2", alive: true, status: "alive", occupancies: [occupancy(1, 9, "Wisp"), occupancy(9, null, "Pip")] },
+    { slot_id: "s3", alive: false, status: "dead", occupancies: [occupancy(1, null, "Thistle")] },
+    { slot_id: "s4", alive: false, status: "modkilled", occupancies: [] },
+    { slot_id: "s5", alive: true, status: "on_leave", occupancies: [occupancy(1, null, " ")] },
+    { slot_id: "", alive: true, status: "alive", occupancies: [] },
+    null,
+  ]);
+  assert.deepEqual(roster.map(({ name, formerly, replaced, alive, statusLabel }) => [name, formerly, replaced, alive, statusLabel]), [
+    ["Sir Clover", "Clover", null, true, "Alive"],
+    ["Pip", null, "Wisp", true, "Alive"],
+    ["Thistle", null, null, false, "Found at dawn"],
+    ["Unknown seat", null, null, false, "Removed by host"],
+    ["Unknown seat", null, null, true, "On leave"],
+  ]);
+  assert.deepEqual(buildPublicRoster(undefined), []);
 });

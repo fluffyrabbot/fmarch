@@ -17,7 +17,7 @@ test("follow-game preserves phase palettes and uses system outside games", () =>
   }
 });
 test("untrusted preferences cannot select arbitrary theme identifiers", () => {
-  assert.deepEqual(decodeThemePreference("evil:unexpected"), { themeId: "paper", scheme: "game" });
+  assert.deepEqual(decodeThemePreference("evil:unexpected"), { themeId: "den", scheme: "game" });
   assert.equal(encodeThemePreference(decodeThemePreference("slate:dark")), "slate:dark");
 });
 test("late route teardown and updates cannot overwrite the successor", () => {
@@ -40,6 +40,6 @@ test("theme contexts are isolated between roots and requests", () => {
   const first = createThemeContext(), second = createThemeContext();
   first.setRoute("/g/one", "N01");
   first.preferences.set({ themeId: "slate", scheme: "dark" });
-  assert.equal(get(second.resolved).themeId, "paper");
+  assert.equal(get(second.resolved).themeId, "den");
   assert.equal(get(second.resolved).phase, null);
 });
