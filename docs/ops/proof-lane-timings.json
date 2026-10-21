@@ -2,292 +2,292 @@
   "version": 1,
   "lanes": {
     "test:proof-lane-contract": {
-      "seconds": 29.8,
-      "measured_at": "2026-10-20T10:36:55.467Z",
+      "seconds": 32.2,
+      "measured_at": "2026-10-20T23:59:12.203Z",
       "command": "npm run test:proof-lane-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:proof-cache-maintenance": {
       "seconds": 0.1,
-      "measured_at": "2026-10-20T10:36:24.284Z",
+      "measured_at": "2026-10-20T23:58:46.473Z",
       "command": "npm run test:proof-cache-maintenance",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:completeness-scorecard": {
-      "seconds": 0.8,
-      "measured_at": "2026-10-20T10:36:26.407Z",
+      "seconds": 0.6,
+      "measured_at": "2026-10-20T23:58:43.549Z",
       "command": "npm run test:completeness-scorecard",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:dev-postgres-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:26.799Z",
+      "seconds": 0.5,
+      "measured_at": "2026-10-20T23:58:45.947Z",
       "command": "npm run test:dev-postgres-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:dev-test-game-contract": {
-      "seconds": 16.3,
-      "measured_at": "2026-10-20T10:36:40.486Z",
+      "seconds": 16.4,
+      "measured_at": "2026-10-20T23:58:56.434Z",
       "command": "npm run test:dev-test-game-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:database-schema:static": {
-      "seconds": 0.8,
-      "measured_at": "2026-10-20T10:36:25.743Z",
+      "seconds": 0.4,
+      "measured_at": "2026-10-20T23:58:42.909Z",
       "command": "npm run test:database-schema:static",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "check:build-posture": {
-      "seconds": 0.6,
-      "measured_at": "2026-10-20T10:36:24.957Z",
+      "seconds": 0.2,
+      "measured_at": "2026-10-20T23:58:43.781Z",
       "command": "npm run check:build-posture",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:projections": {
-      "seconds": 88,
-      "measured_at": "2026-10-20T09:58:28.701Z",
+      "seconds": 63.3,
+      "measured_at": "2026-10-21T00:10:17.989Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test --no-fail-fast -p projections --lib --test baseline_contract --test e2e --test encryption_replay --test private_projection_reseal --test projection_family_boundary --test publication_adapter_contract --test quotation_citation --test mention_delivery --test discussion_post_editing --test discussion_topic_curation --test moderation_revision_evidence --test slot_mention_delivery --test subject_privacy -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 51s, run 37s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 22.6 s, run 40.7 s."
     },
     "test:frontend-route-state-render": {
-      "seconds": 0.3,
-      "measured_at": "2026-08-19T06:57:09.645Z",
+      "seconds": 1.7,
+      "measured_at": "2026-10-20T23:58:43.612Z",
       "command": "npm run test:frontend-route-state-render",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.4
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:frontend-tablet-interaction": {
-      "seconds": 0.6,
-      "measured_at": "2026-08-19T06:57:14.292Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-20T23:58:43.929Z",
       "command": "npm run test:frontend-tablet-interaction",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.6
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:frontend-role-dom-smoke": {
-      "seconds": 0.6,
-      "measured_at": "2026-08-19T06:57:16.332Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-20T23:58:44.122Z",
       "command": "npm run test:frontend-role-dom-smoke",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.6
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:host-console-live-stack-contract": {
-      "seconds": 0.4,
-      "measured_at": "2026-10-20T10:36:26.783Z",
+      "seconds": 0.6,
+      "measured_at": "2026-10-20T23:58:44.715Z",
       "command": "npm run test:host-console-live-stack-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:host-console-day-event-room-live-stack": {
-      "seconds": 15.9,
-      "measured_at": "2026-10-20T10:39:40.004Z",
+      "seconds": 16.2,
+      "measured_at": "2026-10-21T00:12:41.970Z",
       "command": "npm run test:host-console-day-event-room-live-stack",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 15.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.9 s, run 15.3 s."
     },
     "test:frontend-static-role-contract": {
-      "seconds": 0.5,
-      "measured_at": "2026-10-20T10:36:26.265Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-20T23:58:44.214Z",
       "command": "npm run test:frontend-static-role-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:game-platform": {
-      "seconds": 8.1,
-      "measured_at": "2026-08-19T07:08:21.284Z",
+      "seconds": 9.3,
+      "measured_at": "2026-10-21T00:13:16.732Z",
       "command": "cargo test -p game_platform --all-features",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 28.5
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 9.3 s, run 0 s."
     },
     "cargo:identity": {
-      "seconds": 27.7,
-      "measured_at": "2026-08-19T07:06:10.925Z",
+      "seconds": 22.4,
+      "measured_at": "2026-10-21T00:12:12.627Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 177.9
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 7.3 s, run 15.1 s."
     },
     "test:auth-invite-role-proof": {
-      "seconds": 81.7,
-      "measured_at": "2026-10-20T10:41:18.308Z",
+      "seconds": 87.3,
+      "measured_at": "2026-10-21T00:12:27.503Z",
       "command": "npm run test:auth-invite-role-proof",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.3s, run 81.4s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.4 s, run 86.9 s."
     },
     "cargo:api": {
-      "seconds": 230.6,
-      "measured_at": "2026-10-20T09:58:31.855Z",
+      "seconds": 136.9,
+      "measured_at": "2026-10-21T00:11:00.135Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api --lib --test auth_http_boundary --test auth_methods --test authenticated_transport --test command_http_boundary --test embed_http_boundary --test encryption_thread_read --test game_http_boundary --test identity_delivery_boundary --test identity_delivery_reseal --test live_delivery_boundary --test live_projection_boundary --test membership_http_boundary --test public_platform_http_boundary --test readiness --test vertical -- --test-threads=4",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 134.4s, run 96.2s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 54.8 s, run 82.1 s."
     },
     "test:mash-scale-acceptance": {
-      "seconds": 40.9,
-      "measured_at": "2026-10-20T10:46:57.591Z",
+      "seconds": 34.4,
+      "measured_at": "2026-10-21T00:14:10.903Z",
       "command": "npm run test:mash-scale-acceptance",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:server": {
-      "seconds": 66.8,
-      "measured_at": "2026-10-20T09:59:40.053Z",
+      "seconds": 54.9,
+      "measured_at": "2026-10-21T00:00:05.837Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server --lib --bin fmarch-event-key-admin --bin fmarch-profile-index-admin --bin fmarch-schema-epoch-reset --bin fmarch-schema-gate --bin server --test event_key_admin_rehearsal --test profile_index_admin_rehearsal --test runtime_composition_boundary --test schema_epoch_reset_recovery --test staging_search_corpus -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 55.7s, run 11.1s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 43.9 s, run 11 s."
     },
     "test:frontend-contract": {
-      "seconds": 3.6,
-      "measured_at": "2026-10-20T10:36:27.789Z",
+      "seconds": 4.1,
+      "measured_at": "2026-10-20T23:58:44.154Z",
       "command": "npm run test:frontend-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:production-promotion": {
-      "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:27.197Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-20T23:58:46.236Z",
       "command": "npm run test:production-promotion",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:railway-staging-target": {
       "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:27.008Z",
+      "measured_at": "2026-10-20T23:58:46.432Z",
       "command": "npm run test:railway-staging-target",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "check:command-goldens": {
       "seconds": 2.1,
-      "measured_at": "2026-10-20T10:00:39.502Z",
+      "measured_at": "2026-10-21T00:13:33.241Z",
       "command": "cargo run -p commands --bin check_goldens -- --check",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "check:wire-types": {
-      "seconds": 0.1,
-      "measured_at": "2026-10-20T10:03:34.807Z",
+      "seconds": 14.7,
+      "measured_at": "2026-10-21T00:00:45.462Z",
       "command": "cargo run -p wire --bin export_types -- --check",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:commands-unit": {
-      "seconds": 5.1,
-      "measured_at": "2026-10-20T10:03:34.865Z",
+      "seconds": 3.9,
+      "measured_at": "2026-10-21T00:13:25.122Z",
       "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 4.9s, run 0.2s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 3.7 s, run 0.2 s."
     },
     "cargo:commands-pg": {
-      "seconds": 68.7,
-      "measured_at": "2026-10-20T09:55:18.752Z",
+      "seconds": 20.7,
+      "measured_at": "2026-10-21T00:11:25.533Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test pipeline -- --test-threads=4",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 22.7s, run 46s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.2 s, run 20.5 s."
     },
     "cargo:commands-concurrency": {
       "seconds": 3.8,
-      "measured_at": "2026-10-20T10:00:43.381Z",
+      "measured_at": "2026-10-21T00:13:30.887Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test runtime_cancellation -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 2.7s, run 1.1s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 2.5 s, run 1.3 s."
     },
     "cargo:commands-audit": {
-      "seconds": 316.4,
-      "measured_at": "2026-10-20T09:57:44.361Z",
+      "seconds": 284.1,
+      "measured_at": "2026-10-21T00:07:05.340Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test semantic_audit -- --test-threads=4 --nocapture",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 44s, run 272.4s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 20.2 s, run 263.9 s."
     },
     "cargo:operator-proof": {
-      "seconds": 27.4,
-      "measured_at": "2026-10-20T09:59:56.278Z",
+      "seconds": 13.4,
+      "measured_at": "2026-10-21T00:12:11.074Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_proof --lib --bin prove_command_projection_resolution --bin prove_game_specific_audits --test boundary -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 26.9s, run 0.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 12.7 s, run 0.7 s."
     },
     "cargo:caps": {
       "seconds": 0.9,
-      "measured_at": "2026-10-20T10:00:20.413Z",
+      "measured_at": "2026-10-21T00:13:35.476Z",
       "command": "cargo test -p caps --lib",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 0.9s, run 0s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.9 s, run 0 s."
     },
     "test:frontend-route-live-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:26.973Z",
+      "seconds": 0.5,
+      "measured_at": "2026-10-20T23:58:45.611Z",
       "command": "npm run test:frontend-route-live-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:workos-oidc-preflight": {
-      "seconds": 0.3,
-      "measured_at": "2026-08-19T06:57:12.534Z",
+      "seconds": 0.4,
+      "measured_at": "2026-10-20T23:58:45.106Z",
       "command": "npm run test:workos-oidc-preflight",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.2
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:security-release-baseline": {
-      "seconds": 0.3,
-      "measured_at": "2026-10-20T10:36:26.561Z",
+      "seconds": 1.1,
+      "measured_at": "2026-10-20T23:58:45.906Z",
       "command": "npm run test:security-release-baseline",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:frontend-role-smoke": {
-      "seconds": 305.1,
-      "measured_at": "2026-10-20T10:45:19.534Z",
+      "seconds": 272.7,
+      "measured_at": "2026-10-21T00:07:51.816Z",
       "command": "npm run test:frontend-role-smoke",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:frontend-visual-regression": {
       "seconds": 0.5,
-      "measured_at": "2026-10-20T10:45:20.048Z",
+      "measured_at": "2026-10-21T00:07:52.314Z",
       "command": "npm run test:frontend-visual-regression",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:dependency-policy:offline": {
       "seconds": 1.4,
@@ -314,193 +314,196 @@
       "warmup_seconds": 0.1
     },
     "cargo:content-registry": {
-      "seconds": 10.6,
-      "measured_at": "2026-10-20T10:00:30.946Z",
+      "seconds": 8.1,
+      "measured_at": "2026-10-21T00:13:02.888Z",
       "command": "cargo test -p content_registry --lib",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 10.5s, run 0.1s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 8 s, run 0.1 s."
     },
     "cargo:media": {
-      "seconds": 19.8,
-      "measured_at": "2026-10-20T09:58:48.609Z",
+      "seconds": 20.7,
+      "measured_at": "2026-10-21T00:12:42.077Z",
       "command": "cargo test -p media --lib --test variant_read_boundary",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 3.1s, run 16.7s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 4.3 s, run 16.4 s."
     },
     "cargo:wire": {
-      "seconds": 23.7,
-      "measured_at": "2026-10-20T10:00:19.530Z",
+      "seconds": 7,
+      "measured_at": "2026-10-21T00:12:20.923Z",
       "command": "cargo test -p wire --lib --bin export_types --test live_protocol --test replacement_candidate --test typescript",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 23.7s, run 0s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 7 s, run 0 s."
     },
     "cargo:eventstore": {
-      "seconds": 10.2,
-      "measured_at": "2026-10-20T09:58:37.785Z",
+      "seconds": 8.6,
+      "measured_at": "2026-10-21T00:13:11.790Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p eventstore --lib --test concurrency -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 5.6s, run 4.6s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 3.9 s, run 4.7 s."
     },
     "cargo:domain": {
-      "seconds": 12.7,
-      "measured_at": "2026-08-19T07:08:34.101Z",
+      "seconds": 12.5,
+      "measured_at": "2026-10-21T00:12:54.843Z",
       "command": "cargo test -p domain",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.1
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 10.3 s, run 2.2 s."
     },
     "test:database-tls-boundary": {
-      "seconds": 201.3,
-      "measured_at": "2026-10-20T10:43:18.225Z",
+      "seconds": 80,
+      "measured_at": "2026-10-21T00:09:21.889Z",
       "command": "npm run test:database-tls-boundary",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 196.7s, run 4.6s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 72.7 s, run 7.3 s."
     },
     "test:frontend-csp-browser": {
-      "seconds": 148.3,
-      "measured_at": "2026-10-20T10:43:46.664Z",
+      "seconds": 153.6,
+      "measured_at": "2026-10-21T00:03:19.084Z",
       "command": "npm run test:frontend-csp-browser",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:operator_api": {
-      "seconds": 34.2,
-      "measured_at": "2026-10-20T09:58:32.075Z",
+      "seconds": 28.8,
+      "measured_at": "2026-10-21T00:11:54.984Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_api --lib --test operator_routes --test vertical -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 29.7s, run 4.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 24 s, run 4.8 s."
     },
     "test:exact-image-content": {
       "seconds": 0.2,
-      "measured_at": "2026-08-27T21:45:00.000Z",
+      "measured_at": "2026-10-20T23:58:46.479Z",
       "command": "npm run test:exact-image-content",
       "status": 0,
-      "method": "resource-aware-isolated",
-      "warmup_seconds": 0.2
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:database-schema": {
-      "seconds": 3.9,
-      "measured_at": "2026-10-20T09:57:55.701Z",
+      "seconds": 3,
+      "measured_at": "2026-10-21T00:13:27.932Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p database_schema --test database_authority -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 2.9s, run 1s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 2.1 s, run 0.9 s."
     },
     "cargo:principal": {
-      "seconds": 20.7,
-      "measured_at": "2026-08-27T20:00:35.192Z",
+      "seconds": 0.5,
+      "measured_at": "2026-10-21T00:12:21.407Z",
       "command": "cargo test -p principal",
       "status": 0,
-      "method": "promoted-full-observation"
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.5 s, run 0 s."
     },
     "cargo:game-persona-application": {
-      "seconds": 67.3,
-      "measured_at": "2026-08-27T20:00:35.192Z",
+      "seconds": 4.3,
+      "measured_at": "2026-10-21T00:11:12.096Z",
       "command": "cargo test -p game_persona_application",
       "status": 0,
-      "method": "promoted-full-observation"
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 4.3 s, run 0 s."
     },
     "cargo:public-platform": {
-      "seconds": 3.4,
-      "measured_at": "2026-10-20T09:58:31.912Z",
+      "seconds": 1.2,
+      "measured_at": "2026-10-21T00:13:31.163Z",
       "command": "cargo test -p attention -p forum -p social -p trust_safety --lib",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 3.4s, run 0s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 1.2 s, run 0 s."
     },
     "cargo:profile-handle-index": {
-      "seconds": 23.9,
-      "measured_at": "2026-08-27T20:00:35.192Z",
+      "seconds": 3.5,
+      "measured_at": "2026-10-21T00:12:13.877Z",
       "command": "cargo test -p profile_handle_index",
       "status": 0,
-      "method": "promoted-full-observation"
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 3.5 s, run 0 s."
     },
     "test:public-search-role-proof": {
-      "seconds": 8.7,
-      "measured_at": "2026-10-20T10:40:01.273Z",
+      "seconds": 8.9,
+      "measured_at": "2026-10-21T00:13:15.936Z",
       "command": "npm run test:public-search-role-proof",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 8.3s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.4 s, run 8.5 s."
     },
     "test:database-schema-upgrade": {
-      "seconds": 54.9,
-      "measured_at": "2026-10-20T10:37:19.211Z",
+      "seconds": 2.9,
+      "measured_at": "2026-10-21T00:11:28.602Z",
       "command": "npm run test:database-schema-upgrade",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 52.4s, run 2.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.2 s, run 2.7 s."
     },
     "check:event-key-rotation-evidence": {
       "seconds": 0,
-      "measured_at": "2026-10-20T09:59:40.103Z",
+      "measured_at": "2026-10-21T00:00:05.880Z",
       "command": "node tools/proof_test_evidence.mjs --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:live-stack-backup-restore-drill": {
-      "seconds": 11.4,
-      "measured_at": "2026-10-20T10:38:42.425Z",
+      "seconds": 11.3,
+      "measured_at": "2026-10-21T00:13:04.038Z",
       "command": "npm run test:live-stack-backup-restore-drill",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 11s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.4 s, run 10.9 s."
     },
     "test:capacity-overload-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:27.243Z",
+      "seconds": 0.5,
+      "measured_at": "2026-10-20T23:58:46.124Z",
       "command": "npm run test:capacity-overload-contract",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:public-search-staging-sentinel": {
-      "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:27.396Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-20T23:58:46.177Z",
       "command": "npm run test:public-search-staging-sentinel",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:capacity-overload": {
-      "seconds": 12.3,
-      "measured_at": "2026-10-20T10:46:16.674Z",
+      "seconds": 13.3,
+      "measured_at": "2026-10-21T00:14:24.259Z",
       "command": "npm run test:capacity-overload",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:release-coordinator": {
-      "seconds": 0.4,
-      "measured_at": "2026-10-20T10:36:27.671Z",
+      "seconds": 1.2,
+      "measured_at": "2026-10-20T23:58:45.400Z",
       "command": "npm run test:release-coordinator",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:schema-epoch-reset": {
       "seconds": 0.2,
-      "measured_at": "2026-10-20T10:36:27.572Z",
+      "measured_at": "2026-10-20T23:58:46.325Z",
       "command": "npm run test:schema-epoch-reset",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "check:release-topology-evidence": {
       "seconds": 0,
-      "measured_at": "2026-10-20T09:58:48.660Z",
+      "measured_at": "2026-10-21T00:12:42.115Z",
       "command": "node tools/proof_test_evidence.mjs --claim FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent --claim FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:clippy-workspace": {
       "seconds": 193.6,
@@ -511,122 +514,124 @@
       "note": "Cost scales with the edit: 193.6s after touching crates/domain (DAG root), 54.4s after touching crates/api (leaf). Recorded worst case; a repeat-run measurement of this lane reads ~0.2s and is meaningless."
     },
     "cargo:community-membership": {
-      "seconds": 0.2,
-      "measured_at": "2026-08-29T18:29:55.944Z",
+      "seconds": 0.3,
+      "measured_at": "2026-10-21T00:13:36.414Z",
       "command": "cargo test -p community_membership --lib",
       "status": 0,
-      "method": "resource-aware-record"
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.3 s, run 0 s."
     },
     "cargo:membership-application": {
-      "seconds": 1.3,
-      "measured_at": "2026-08-29T18:29:58.339Z",
+      "seconds": 2.5,
+      "measured_at": "2026-10-21T00:13:35.775Z",
       "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p membership_application --test admission -- --test-threads=1",
       "status": 0,
-      "method": "resource-aware-record"
+      "method": "cachy-push-observation",
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 1.3 s, run 1.2 s."
     },
     "cargo:day-event-runtime": {
-      "seconds": 11,
-      "measured_at": "2026-10-20T09:57:53.958Z",
+      "seconds": 27.3,
+      "measured_at": "2026-10-21T00:00:36.125Z",
       "command": "cargo test -p commands --test pipeline scheduler_ -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 1.5s, run 9.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 18.3 s, run 9 s."
     },
     "cargo:forum-postgres": {
-      "seconds": 15.9,
-      "measured_at": "2026-10-20T09:55:26.404Z",
+      "seconds": 17.6,
+      "measured_at": "2026-10-21T00:00:12.267Z",
       "command": "cargo test -p forum_postgres --test authority --test mention_authority -- --test-threads=1",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 8.4s, run 7.5s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 14.1 s, run 3.5 s."
     },
     "test:event-body-authority": {
-      "seconds": 1.2,
-      "measured_at": "2026-10-20T09:52:29.004Z",
+      "seconds": 0.8,
+      "measured_at": "2026-10-20T23:58:42.547Z",
       "command": "npm run test:event-body-authority",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "cargo:command-transport": {
-      "seconds": 6.3,
-      "measured_at": "2026-10-20T10:00:37.192Z",
+      "seconds": 4.5,
+      "measured_at": "2026-10-21T00:13:21.288Z",
       "command": "cargo test -p command_transport --lib --test command_parity --test mentions",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020095227814-2b9cc345 at 43fbc010, --jobs 6 with cpu budget and disposable Postgres (build 6.3s, run 0s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 4.5 s, run 0 s."
     },
     "test:frontend-themes": {
-      "seconds": 95.5,
-      "measured_at": "2026-10-20T10:38:30.946Z",
+      "seconds": 95.6,
+      "measured_at": "2026-10-21T00:02:41.338Z",
       "command": "npm run test:frontend-themes",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:dev-test-game-completed-export": {
-      "seconds": 3.5,
-      "measured_at": "2026-10-20T10:40:04.423Z",
+      "seconds": 3.3,
+      "measured_at": "2026-10-21T00:13:33.019Z",
       "command": "npm run test:dev-test-game-completed-export",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 3.1s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.3 s, run 3 s."
     },
     "test:dev-test-game-profile": {
-      "seconds": 10.3,
-      "measured_at": "2026-10-20T10:40:14.418Z",
+      "seconds": 10.5,
+      "measured_at": "2026-10-21T00:13:13.426Z",
       "command": "npm run test:dev-test-game-profile",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 9.9s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.3 s, run 10.2 s."
     },
     "test:dev-test-game-game-index": {
-      "seconds": 13.2,
-      "measured_at": "2026-10-20T10:39:52.928Z",
+      "seconds": 13.5,
+      "measured_at": "2026-10-21T00:12:55.572Z",
       "command": "npm run test:dev-test-game-game-index",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.3s, run 12.9s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.3 s, run 13.2 s."
     },
     "test:dev-test-game-community-moderation": {
-      "seconds": 14.7,
-      "measured_at": "2026-10-20T10:39:24.401Z",
+      "seconds": 14.9,
+      "measured_at": "2026-10-21T00:12:42.441Z",
       "command": "npm run test:dev-test-game-community-moderation",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.3s, run 14.4s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.4 s, run 14.5 s."
     },
     "test:dev-test-game-community-subscriptions": {
-      "seconds": 39.2,
-      "measured_at": "2026-10-20T10:39:09.954Z",
+      "seconds": 43.6,
+      "measured_at": "2026-10-21T00:12:09.694Z",
       "command": "npm run test:dev-test-game-community-subscriptions",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.3s, run 38.9s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.3 s, run 43.3 s."
     },
     "test:dev-test-game-discussion": {
-      "seconds": 86.2,
-      "measured_at": "2026-10-20T10:39:56.842Z",
+      "seconds": 90.2,
+      "measured_at": "2026-10-21T00:11:07.453Z",
       "command": "npm run test:dev-test-game-discussion",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 0.4s, run 85.8s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 0.9 s, run 89.3 s."
     },
     "test:frontend-cross-browser": {
-      "seconds": 137.6,
-      "measured_at": "2026-10-20T10:46:04.301Z",
+      "seconds": 143.5,
+      "measured_at": "2026-10-21T00:05:04.927Z",
       "command": "npm run test:frontend-cross-browser",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission."
     },
     "test:host-console-live-stack-smoke": {
-      "seconds": 272.8,
-      "measured_at": "2026-10-20T10:42:35.353Z",
+      "seconds": 246.6,
+      "measured_at": "2026-10-21T00:11:12.049Z",
       "command": "npm run test:host-console-live-stack-smoke",
       "status": 0,
       "method": "cachy-push-observation",
-      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020103624078-e25897b5 at de7d11c1, --jobs 6 with cpu budget and disposable Postgres (build 28.6s, run 244.2s)."
+      "note": "Cachy (16 cores, CPUQuota=1200%, environment 7d5d22eb91dc), run-20261020235840025-6a9deca6 at b7cfb8f2, forced full sweep with every lane executing, --jobs 6, CARGO_BUILD_JOBS=6, browser capacity 6, critical-path admission. Build 1.8 s, run 244.8 s."
     }
   }
 }
