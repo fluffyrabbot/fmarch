@@ -743,6 +743,17 @@ Railway can report a deployment as `SUCCESS` while its stopped instance is
 instance evidence when classifying a one-shot failure. A clean exit still
 requires the exact operation's completion record.
 
+If a release deployed but its hosted acceptance failed, the lease is bound to a
+commit whose acceptance cannot pass, so it must be retired before a fixed commit
+can be released. After stopping every coordinator, run the same recovery command
+with `--stopped-pid <pid|unknown> --failed-acceptance
+target/releases/staging/<commit>.<lease>.attempt.json`. It requires every
+release-window deployment on all three services to be terminal and to run
+exactly an image of that attempt receipt, refuses a lease with no release
+deployment, and emits `retired-after-failed-acceptance` after the usual fence,
+settle interval, and history recheck. Staging keeps serving the retired images,
+without a release receipt, until the next release replaces them.
+
 If the first migration fails before any API/frontend deployment and the release
 must be retired to repair a prerequisite, the same recovery command accepts
 `--failed-migrator <deployment-id> --failure-intent <generation-00-intent.json>`.

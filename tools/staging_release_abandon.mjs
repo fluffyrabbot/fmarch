@@ -6,7 +6,7 @@ import {oneShotExecutionOutcome} from './release_coordinator.mjs';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {CANONICAL_RELEASE_TOPOLOGY as topology, receiptDigest, assertFullCommit} from './release_coordinator_contract.mjs';
 import {publishImmutableJson} from './immutable_json_receipt.mjs';
-import {assertNoDeploymentsInReleaseWindow, loadStagingServiceHistory, RAILWAY_REQUEST_SETTLE_MS, TERMINAL_DEPLOYMENT_STATUSES} from './railway_deployment_history.mjs';
+import {assertNoDeploymentsInReleaseWindow, loadStagingServiceHistory, RAILWAY_REQUEST_SETTLE_MS, RELEASE_WINDOW_LEAD_MS, TERMINAL_DEPLOYMENT_STATUSES} from './railway_deployment_history.mjs';
 import {readStagingReleaseMutationLease, fenceStagingReleaseForAbandonment,
   readStagingAbandonmentFence, archiveStagingAbandonmentFence,
   releaseStagingReleaseMutationLease} from './release_git_authority.mjs';
@@ -71,10 +71,55 @@ export function assertFailedMigration(intent, histories, failure) {
   return histories;
 }
 
-function assertRecoveryHistories(intent, histories, failure) {
-  return failure ? assertFailedMigration(intent,histories,failure) : assertNoReleaseDeployments(intent,histories);
+/**
+ * Retire a lease whose release deployed but whose acceptance failed. Every
+ * deployment in the release window must be terminal and must run exactly an
+ * image of the lease's own attempt receipt, so nothing foreign or in flight is
+ * hidden by the retirement. Staging keeps serving those images; the next
+ * release replaces them.
+ */
+export function assertFailedAcceptance(intent, histories, failure) {
+  assert.equal(intent.operation_kind, 'release-coordinator', 'only coordinator leases can be retired');
+  const attempt = failure.attempt;
+  const {receipt_sha256, ...base} = attempt ?? {};
+  assert.equal(receipt_sha256, receiptDigest(base), 'release attempt digest mismatch');
+  assert.equal(attempt.kind, 'fmarch-release-attempt');
+  assert.equal(attempt.environment, 'staging');
+  assert.equal(attempt.commit, intent.release_commit, 'release attempt commit differs from the lease');
+  assert.equal(attempt.staging_mutation_lease_commit, failure.lease, 'release attempt belongs to another lease');
+  assert.deepEqual(attempt.topology?.services, topology.services, 'release attempt topology drifted');
+  const runtime = `${topology.images.runtime}@${attempt.images?.runtime}`;
+  const images = {
+    [topology.services.migrator]: runtime,
+    [topology.services.api]: runtime,
+    [topology.services.frontend]: `${topology.images.frontend}@${attempt.images?.frontend}`,
+  };
+  const cutoff = Date.parse(intent.created_at) - RELEASE_WINDOW_LEAD_MS;
+  assert.ok(Number.isFinite(cutoff));
+  assert.deepEqual(Object.keys(histories).sort(), Object.values(topology.services).sort());
+  let released = 0;
+  for (const [serviceId, rows] of Object.entries(histories)) {
+    assert.ok(Array.isArray(rows) && rows.length > 0, 'empty history cannot prove failed acceptance retirement');
+    for (const row of rows) {
+      assert.ok(Number.isFinite(Date.parse(row.createdAt)), 'deployment time missing');
+      assert.ok(TERMINAL_DEPLOYMENT_STATUSES.includes(row.status), 'nonterminal deployment prevents retirement');
+      if (Date.parse(row.createdAt) < cutoff) continue;
+      assert.equal(row.serviceId, serviceId);
+      assert.equal(row.meta?.image, images[serviceId], 'release-window deployment is not this lease\'s release image');
+      released++;
+    }
+  }
+  assert.ok(released > 0, 'no release deployment exists; use pre-deployment abandonment');
+  return histories;
 }
-const recoveryStatus = document => document.failed_migration ? 'retired-after-failed-migration' : 'abandoned-before-deployment';
+
+function assertRecoveryHistories(intent, histories, document) {
+  if (document?.failed_migration) return assertFailedMigration(intent, histories, document.failed_migration);
+  if (document?.failed_acceptance) return assertFailedAcceptance(intent, histories, document.failed_acceptance);
+  return assertNoReleaseDeployments(intent, histories);
+}
+const recoveryStatus = document => document.failed_migration ? 'retired-after-failed-migration'
+  : document.failed_acceptance ? 'retired-after-failed-acceptance' : 'abandoned-before-deployment';
 
 /**
  * The coordinator PID is evidence for this Mac's process table. When it was
@@ -113,7 +158,7 @@ export async function finishAbandonment({document, token, fence, releaseCommit},
   assert.ok(operations.now() >= Date.parse(document.created_at) + ABANDONMENT_SETTLE_MS, 'recovery settle interval has not elapsed');
   await operations.assertStopped();
   await operations.assertFence();
-  const after = assertRecoveryHistories(document.original_intent, await operations.histories(), document.failed_migration);
+  const after = assertRecoveryHistories(document.original_intent, await operations.histories(), document);
   assert.equal(receiptDigest(after), document.history_sha256, 'deployment history changed under recovery fence');
   await operations.publishEvidence({kind:'fmarch-staging-abandonment-evidence', token, fence,
     release_commit:releaseCommit, history_sha256:receiptDigest(after), histories:after});
@@ -128,7 +173,7 @@ export async function main(argv=process.argv.slice(2)) {
   const args = {};
   for(let i=0;i<argv.length;i++) {
     if(argv[i]==='--apply') args.apply=true;
-    else {assert.ok(['--lease','--commit','--stopped-pid','--confirm-stopped','--resume-fence','--failed-migrator','--failure-intent'].includes(argv[i]),'unknown recovery option');args[argv[i].slice(2)]=argv[++i];}
+    else {assert.ok(['--lease','--commit','--stopped-pid','--confirm-stopped','--resume-fence','--failed-migrator','--failure-intent','--failed-acceptance'].includes(argv[i]),'unknown recovery option');args[argv[i].slice(2)]=argv[++i];}
   }
   const token=assertFullCommit(args.lease), releaseCommit=assertFullCommit(args.commit);
   const pid=parseStoppedPid(args['stopped-pid']);
@@ -148,10 +193,17 @@ export async function main(argv=process.argv.slice(2)) {
     failure=proposed;
   }
   if(failure) assert.equal(failure.lease,token);
-  const before=assertRecoveryHistories(intent,await histories(),failure);
+  let acceptance = document?.failed_acceptance ?? null;
+  if(args['failed-acceptance']) {
+    assert.equal(failure, null, 'a lease retires for one failure only');
+    const proposed={lease:token, attempt:JSON.parse(await readFile(args['failed-acceptance'],'utf8'))};
+    if(acceptance) assert.deepEqual(proposed,acceptance,'failed acceptance recovery changed');
+    acceptance=proposed;
+  }
+  const before=assertRecoveryHistories(intent,await histories(),{failed_migration:failure, failed_acceptance:acceptance});
   if(!args.apply) {console.log(JSON.stringify({status:'eligible',token,releaseCommit,history_sha256:receiptDigest(before)}));return;}
   if(!fence) {
-    const result=fenceStagingReleaseForAbandonment({token,releaseCommit,stoppedPid:pid,historySha256:receiptDigest(before),failedMigration:failure});
+    const result=fenceStagingReleaseForAbandonment({token,releaseCommit,stoppedPid:pid,historySha256:receiptDigest(before),failedMigration:failure,failedAcceptance:acceptance});
     fence=result.fence; document=result.document;
   }
   const directory=path.join(root,'target/releases/staging/recoveries',`${token}.${fence}`);

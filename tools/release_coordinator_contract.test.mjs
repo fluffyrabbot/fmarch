@@ -2064,3 +2064,34 @@ test('abandonment records an uncaptured coordinator PID as unknown, never invent
   assert.equal(parseStoppedPid('4242'), 4242);
   for (const invalid of ['1', '0', '-5', 'abc', String(process.pid)]) assert.throws(() => parseStoppedPid(invalid), /invalid stopped coordinator PID/);
 });
+
+import {assertFailedAcceptance} from './staging_release_abandon.mjs';
+
+test('a lease whose acceptance failed retires only over its own terminal release images', () => {
+  const services = CANONICAL_RELEASE_TOPOLOGY.services;
+  const lease = 'c'.repeat(40), commit = 'd'.repeat(40);
+  const intent = {operation_kind: 'release-coordinator', release_commit: commit, created_at: '2026-10-21T06:40:00.000Z'};
+  const base = {version: 4, kind: 'fmarch-release-attempt', environment: 'staging', commit,
+    images: {runtime: `sha256:${'1'.repeat(64)}`, frontend: `sha256:${'2'.repeat(64)}`},
+    topology: {services}, staging_mutation_lease_commit: lease};
+  const attempt = {...base, receipt_sha256: receiptDigest(base)};
+  const runtime = `${CANONICAL_RELEASE_TOPOLOGY.images.runtime}@${base.images.runtime}`;
+  const frontend = `${CANONICAL_RELEASE_TOPOLOGY.images.frontend}@${base.images.frontend}`;
+  const old = id => ({id, createdAt: '2026-09-24T07:18:28.611Z', status: 'REMOVED', meta: {image: 'old'}});
+  const release = (id, serviceId, image, status = 'SUCCESS') => ({id, serviceId, createdAt: '2026-10-21T06:50:00.000Z', status, meta: {image}});
+  const histories = () => ({
+    [services.migrator]: [old('m0'), release('m1', services.migrator, runtime)],
+    [services.api]: [old('a0'), release('a1', services.api, runtime)],
+    [services.frontend]: [old('f0'), release('f1', services.frontend, frontend)],
+  });
+  const failure = {lease, attempt};
+  assert.ok(assertFailedAcceptance(intent, histories(), failure));
+  const foreign = histories(); foreign[services.api].push(release('a2', services.api, `${CANONICAL_RELEASE_TOPOLOGY.images.runtime}@sha256:${'9'.repeat(64)}`));
+  assert.throws(() => assertFailedAcceptance(intent, foreign, failure), /not this lease's release image/);
+  const inFlight = histories(); inFlight[services.frontend][1].status = 'DEPLOYING';
+  assert.throws(() => assertFailedAcceptance(intent, inFlight, failure), /nonterminal/);
+  const untouched = {[services.migrator]: [old('m0')], [services.api]: [old('a0')], [services.frontend]: [old('f0')]};
+  assert.throws(() => assertFailedAcceptance(intent, untouched, failure), /pre-deployment abandonment/);
+  assert.throws(() => assertFailedAcceptance(intent, histories(), {lease: 'e'.repeat(40), attempt}), /another lease/);
+  assert.throws(() => assertFailedAcceptance(intent, histories(), {lease, attempt: {...attempt, commit: 'f'.repeat(40)}}), /digest mismatch/);
+});
