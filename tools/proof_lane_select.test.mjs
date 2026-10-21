@@ -4,6 +4,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 import './proof_lane_select_live_ownership.test.mjs';
+import { reusableLaneIds } from './proof_lane_cache.mjs';
 import { validateCacheInputContract } from './proof_lane_inputs.mjs';
 
 import {
@@ -443,6 +444,16 @@ test('remote trunk is canonical and the push sentinel set fits its measured budg
     measuredSeconds <= manifest.push_sentinel_budget_seconds,
     `push sentinels cost ${measuredSeconds}s, over ${manifest.push_sentinel_budget_seconds}s budget`,
   );
+});
+
+test('every push runs the dependency advisories fresh', () => {
+  // A newly published advisory turns these red with no code change, so a
+  // cached pass or a frozen-tier skip would hide it until the next full sweep.
+  const reusable = reusableLaneIds(manifest);
+  for (const lane of ['test:dependency-policy:offline', 'test:dependency-policy:audit']) {
+    assert.ok(manifest.push_sentinels.includes(lane), `${lane} must be a push sentinel`);
+    assert.ok(!reusable.has(lane), `${lane} must never reuse a cached pass`);
+  }
 });
 
 test('remote trunk avoids false history when a worktree-local main ref is stale', () => {

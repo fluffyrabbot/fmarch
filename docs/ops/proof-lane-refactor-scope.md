@@ -445,7 +445,10 @@ baseline recorder measured 129.9 seconds with four isolated SQLx workers.
 
 The selector now compares against `origin/main`, so another worktree's stale
 local `main` ref cannot manufacture a large historical diff. Push mode is the
-touched closure plus two measured sentinels with a 60-second budget. The former
+touched closure plus a measured sentinel set with a 60-second budget. The set
+includes both dependency-policy lanes: they never reuse cached results, and a
+newly published advisory turns them red with no code change, so a frozen tree
+would otherwise hide it until the next full sweep. The former
 all-active behavior is explicit sprint mode; full mode still runs every leaf.
 Every `--run` records timing observations under ignored
 `target/proof-lanes/timings.json`, while `--record` remains the deliberate path

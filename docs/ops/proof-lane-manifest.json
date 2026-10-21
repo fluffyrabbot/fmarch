@@ -19,7 +19,7 @@
     "Proof-cache dependencies are declared separately from behavioral area ownership. Broad cache_inputs context is separate from typed execution_inputs shared by selection and cache keys; package supplements follow the complete Cargo closure while target supplements stay with directly selected harnesses or binaries. Broad node-proof-tools, application-runtime and repository-contracts groups conservatively cover dynamic imports, fixture reads and source-inspecting audits without invalidating pure Rust lanes for unrelated frontend/tool edits."
   ],
   "push_sentinel_budget_seconds": 60,
-  "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract", "test:proof-cache-maintenance"],
+  "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract", "test:proof-cache-maintenance", "test:dependency-policy:offline", "test:dependency-policy:audit"],
   "quarantine": [],
   "runner": {
     "max_parallel": 6,
