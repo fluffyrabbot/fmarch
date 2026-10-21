@@ -34,6 +34,7 @@ struct RuntimeConfig {
     classic_enabled: bool,
     dev_auth_requested: bool,
     local_proof_secret: Option<String>,
+    release_acceptance: Option<identity::ReleaseAcceptanceAuthority>,
     identity_delivery_gateway: std::sync::Arc<dyn api::identity_delivery::IdentityDeliveryGateway>,
 }
 
@@ -130,6 +131,10 @@ impl RuntimeConfig {
         let classic_enabled = strict_bool_env("FMARCH_CLASSIC_AUTH", true)?;
         let dev_auth_requested = strict_bool_env("FMARCH_DEV_AUTH", false)?;
         let local_proof_secret = optional_env("FMARCH_LOCAL_PROOF_SECRET")?;
+        let release_acceptance = release_acceptance_from_values(
+            optional_env("FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256")?.as_deref(),
+            database_identity.as_ref(),
+        )?;
         let media = media_config_from_env()?;
         let database = DatabaseCapacity {
             max_connections: bounded_env(
@@ -447,6 +452,7 @@ impl RuntimeConfig {
             classic_enabled,
             dev_auth_requested,
             local_proof_secret,
+            release_acceptance,
             identity_delivery_gateway,
         };
         config.validate_cross_budgets()?;
@@ -1214,6 +1220,36 @@ fn local_proof_auth_from_values(
     Ok(Some(verifier))
 }
 
+/// Release acceptance minting is a staging-only authority. The configured
+/// key digest is refused unless this process is bound to the durable staging
+/// database identity; startup then verifies that identity against the
+/// database marker before the authority reaches the API.
+fn release_acceptance_from_values(
+    key_sha256: Option<&str>,
+    database_identity: Option<&server::DatabaseEnvironmentIdentity>,
+) -> Result<Option<identity::ReleaseAcceptanceAuthority>, std::io::Error> {
+    let Some(key_sha256) = key_sha256 else {
+        return Ok(None);
+    };
+    match database_identity {
+        Some(identity) if identity.environment == "staging" => {}
+        _ => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256 is permitted only with the durable staging database identity",
+            ))
+        }
+    }
+    identity::ReleaseAcceptanceAuthority::from_key_sha256(key_sha256)
+        .map(Some)
+        .map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256 must be the lowercase-hex SHA-256 of the release acceptance key",
+            )
+        })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -1427,6 +1463,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_worker_health(worker_health.clone());
     if let Some(identity) = database_identity {
         api_state = api_state.with_database_environment_identity(identity);
+    }
+    if let Some(authority) = config.release_acceptance.clone() {
+        api_state = api_state
+            .with_release_acceptance_authority(authority)
+            .map_err(|message| {
+                std::io::Error::new(std::io::ErrorKind::PermissionDenied, message)
+            })?;
+        tracing::info!("release acceptance sessions are enabled for this staging server");
     }
     if let Some(verifier) = local_proof_auth {
         api_state = api_state.with_local_proof_auth(verifier);
@@ -1645,8 +1689,8 @@ async fn process_shutdown_signal() -> Result<&'static str, std::io::Error> {
 mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
-        local_proof_auth_from_values, required_bounded_env, strict_bool_env,
-        validate_http_shutdown_budget, validate_identity_delivery_http_budget,
+        local_proof_auth_from_values, release_acceptance_from_values, required_bounded_env,
+        strict_bool_env, validate_http_shutdown_budget, validate_identity_delivery_http_budget,
         virtual_hosted_style_from_value, wait_for_shutdown_request, IdentityDeliveryMode,
         MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
@@ -1749,6 +1793,42 @@ mod tests {
             bind_from_values(None, None).unwrap().to_string(),
             "127.0.0.1:4000"
         );
+    }
+
+    #[test]
+    fn release_acceptance_is_staging_only_and_fail_closed() {
+        let key_sha256 = "a".repeat(64);
+        let identity = |environment: &str| {
+            server::DatabaseEnvironmentIdentity::new(
+                environment,
+                "9d285d67-c11b-4508-9efb-fad042787b4c",
+                "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+            )
+            .unwrap()
+        };
+        assert!(release_acceptance_from_values(None, None)
+            .unwrap()
+            .is_none());
+        assert!(
+            release_acceptance_from_values(None, Some(&identity("production")))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            release_acceptance_from_values(Some(&key_sha256), Some(&identity("staging")))
+                .unwrap()
+                .is_some()
+        );
+        for refused in [None, Some(identity("production"))] {
+            let error =
+                release_acceptance_from_values(Some(&key_sha256), refused.as_ref()).unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+        for malformed in ["", "not-a-digest", &"A".repeat(64), &"a".repeat(63)] {
+            let error = release_acceptance_from_values(Some(malformed), Some(&identity("staging")))
+                .unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        }
     }
 
     #[test]

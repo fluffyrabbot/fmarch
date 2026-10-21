@@ -1233,6 +1233,200 @@ pub async fn issue_community_admission_session(
     ))
 }
 
+/// Upper bound for one release acceptance session. The release coordinator
+/// mints, uses, and signs out these sessions within a single acceptance run.
+pub const RELEASE_ACCEPTANCE_SESSION_TTL_SECONDS: i64 = 60 * 60;
+
+/// The two stable staging acceptance principals: an admitted member seated in
+/// the run's game, and an admitted outsider who must be denied its channels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseAcceptanceRole {
+    Member,
+    Outsider,
+}
+
+impl ReleaseAcceptanceRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReleaseAcceptanceRole::Member => "member",
+            ReleaseAcceptanceRole::Outsider => "outsider",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "member" => Some(ReleaseAcceptanceRole::Member),
+            "outsider" => Some(ReleaseAcceptanceRole::Outsider),
+            _ => None,
+        }
+    }
+}
+
+/// One-way verifier for the release acceptance key. A staging server holds
+/// only the SHA-256 of the key; the 32-byte key itself never leaves the
+/// release machine, so a leaked server variable grants nothing.
+#[derive(Clone)]
+pub struct ReleaseAcceptanceAuthority {
+    key_sha256: String,
+}
+
+impl ReleaseAcceptanceAuthority {
+    pub fn from_key_sha256(value: &str) -> Result<Self, IdentityFlowError> {
+        if !is_lower_hex_256(value) {
+            return Err(IdentityFlowError::Invalid(
+                "release acceptance key digest must be a lowercase-hex SHA-256".to_string(),
+            ));
+        }
+        Ok(Self {
+            key_sha256: value.to_string(),
+        })
+    }
+
+    /// Admit exactly the key whose digest this server holds. The comparison
+    /// covers every digest byte regardless of where a mismatch occurs.
+    pub fn authorize(
+        &self,
+        presented_key: &str,
+        role: ReleaseAcceptanceRole,
+    ) -> Result<ReleaseAcceptanceGrant, IdentityFlowError> {
+        if !is_lower_hex_256(presented_key) {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+        let presented = hash_token(presented_key);
+        let difference = self
+            .key_sha256
+            .bytes()
+            .zip(presented.bytes())
+            .fold(0_u8, |difference, (expected, actual)| {
+                difference | (expected ^ actual)
+            });
+        if difference != 0 {
+            return Err(IdentityFlowError::Unauthorized);
+        }
+        Ok(ReleaseAcceptanceGrant { role })
+    }
+}
+
+impl std::fmt::Debug for ReleaseAcceptanceAuthority {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ReleaseAcceptanceAuthority(<redacted>)")
+    }
+}
+
+/// Evidence that the caller presented the release acceptance key for one role.
+/// Only [`ReleaseAcceptanceAuthority::authorize`] constructs it.
+#[derive(Debug)]
+pub struct ReleaseAcceptanceGrant {
+    role: ReleaseAcceptanceRole,
+}
+
+impl ReleaseAcceptanceGrant {
+    pub fn role(&self) -> ReleaseAcceptanceRole {
+        self.role
+    }
+}
+
+/// Mint a session for the role's stable acceptance principal, creating the
+/// principal and its release acceptance method on first use. Every earlier
+/// session of that principal is revoked in the same transaction, so at most
+/// one acceptance run holds it. The session never carries global authority
+/// and lives at most [`RELEASE_ACCEPTANCE_SESSION_TTL_SECONDS`].
+pub async fn issue_release_acceptance_session(
+    conn: &mut PgConnection,
+    grant: ReleaseAcceptanceGrant,
+    policy: &SessionPolicy,
+    now: i64,
+) -> Result<SessionIssuance, IdentityFlowError> {
+    let role = grant.role;
+    // Serialize first use of a role so two concurrent mints cannot both
+    // create a principal for it.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("release_acceptance_account:{}", role.as_str()))
+        .execute(&mut *conn)
+        .await?;
+    let existing = sqlx::query_as::<_, (Uuid, Uuid)>(
+        "SELECT principal_id, method_id FROM release_acceptance_account WHERE role = $1",
+    )
+    .bind(role.as_str())
+    .fetch_optional(&mut *conn)
+    .await?;
+    let (principal_id, method_id) = match existing {
+        Some((principal_id, method_id)) => (PrincipalId::from_uuid(principal_id), method_id),
+        None => {
+            let principal_id = PrincipalId::from_uuid(Uuid::new_v4());
+            crate::methods::ensure_principal(conn, &principal_id, &[], now).await?;
+            let method_id = crate::methods::create_method(
+                conn,
+                &principal_id,
+                MethodKind::ReleaseAcceptance,
+                now,
+            )
+            .await?;
+            sqlx::query(
+                r#"
+                INSERT INTO release_acceptance_account (role, principal_id, method_id, created_at)
+                VALUES ($1, $2, $3, $4)
+                "#,
+            )
+            .bind(role.as_str())
+            .bind(principal_id.as_uuid())
+            .bind(method_id)
+            .bind(now)
+            .execute(&mut *conn)
+            .await?;
+            (principal_id, method_id)
+        }
+    };
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    if !owner.global_capabilities.is_empty() {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let method = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT kind, status
+        FROM authentication_method
+        WHERE method_id = $1 AND principal_id = $2
+        FOR UPDATE
+        "#,
+    )
+    .bind(method_id)
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    if method.0 != MethodKind::ReleaseAcceptance.as_str() || method.1 != "active" {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    revoke_sessions_for_method(conn, method_id, now).await?;
+    crate::methods::touch_method(conn, method_id, now).await?;
+    let expires_at = policy
+        .classic_expiry(now)
+        .min(now.saturating_add(RELEASE_ACCEPTANCE_SESSION_TTL_SECONDS));
+    let issued = issue_session_raw(
+        conn,
+        SessionSpec {
+            principal_id: &principal_id,
+            authenticated_via_method_id: Some(method_id),
+            assurance: Assurance::ReleaseAcceptance,
+            local_proof_instance_id: None,
+            workos_session_id: None,
+            workos_signing_key_id: None,
+            authenticated_at: now,
+            expires_at,
+            idle_expires_at: policy.idle_expiry(now, expires_at),
+        },
+        now,
+    )
+    .await?;
+    Ok(session_issuance(issued, method_id, Vec::new()))
+}
+
 async fn issue_session_raw(
     conn: &mut PgConnection,
     spec: SessionSpec<'_>,
@@ -2727,8 +2921,38 @@ pub async fn retire_workos_signing_key(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_canonical_app_session_token, is_canonical_session_reference};
+    use super::{
+        is_canonical_app_session_token, is_canonical_session_reference, ReleaseAcceptanceAuthority,
+        ReleaseAcceptanceRole,
+    };
     use crate::token::{generate_session_token, hash_token};
+
+    #[test]
+    fn release_acceptance_authority_admits_only_the_exact_key() {
+        let key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let authority = ReleaseAcceptanceAuthority::from_key_sha256(&hash_token(key)).unwrap();
+        let grant = authority
+            .authorize(key, ReleaseAcceptanceRole::Outsider)
+            .unwrap();
+        assert_eq!(grant.role(), ReleaseAcceptanceRole::Outsider);
+        for refused in [
+            "",
+            "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            hash_token(key).as_str(),
+        ] {
+            assert!(authority
+                .authorize(refused, ReleaseAcceptanceRole::Member)
+                .is_err());
+        }
+        assert!(ReleaseAcceptanceAuthority::from_key_sha256(key.to_uppercase().as_str()).is_err());
+        assert!(!format!("{authority:?}").contains(&hash_token(key)));
+        assert_eq!(
+            ReleaseAcceptanceRole::parse("member"),
+            Some(ReleaseAcceptanceRole::Member)
+        );
+        assert_eq!(ReleaseAcceptanceRole::parse("admin"), None);
+    }
 
     #[test]
     fn raw_validation_accepts_only_the_server_token_shape() {

@@ -3837,3 +3837,217 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
     assert_erased_without_eligible_sessions(&pool, principal).await;
 }
+
+const TEST_RELEASE_ACCEPTANCE_KEY: &str =
+    "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+fn staging_identity(environment: &str) -> database_schema::DatabaseEnvironmentIdentity {
+    database_schema::DatabaseEnvironmentIdentity::new(
+        environment,
+        "9d285d67-c11b-4508-9efb-fad042787b4c",
+        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    )
+    .unwrap()
+}
+
+fn release_acceptance_authority() -> identity::ReleaseAcceptanceAuthority {
+    identity::ReleaseAcceptanceAuthority::from_key_sha256(
+        identity::token::hash_token(TEST_RELEASE_ACCEPTANCE_KEY).as_str(),
+    )
+    .unwrap()
+}
+
+async fn mint_release_acceptance_session(
+    app: &axum::Router,
+    key: Option<&str>,
+    role: &str,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/auth/release-acceptance-sessions")
+        .header("content-type", "application/json");
+    if let Some(key) = key {
+        request = request.header(api::RELEASE_ACCEPTANCE_KEY_HEADER, key);
+    }
+    app.clone()
+        .oneshot(
+            request
+                .body(Body::from(serde_json::json!({ "role": role }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn release_acceptance_route_is_inert_outside_a_verified_staging_server(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let state = test_state(pool.clone(), &root).await;
+    let app = api::router_with_state(state.clone());
+    let response =
+        mint_release_acceptance_session(&app, Some(TEST_RELEASE_ACCEPTANCE_KEY), "member").await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    assert!(state
+        .clone()
+        .with_release_acceptance_authority(release_acceptance_authority())
+        .is_err());
+    assert!(state
+        .with_database_environment_identity(staging_identity("production"))
+        .with_release_acceptance_authority(release_acceptance_authority())
+        .is_err());
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM release_acceptance_account")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn release_acceptance_sessions_are_keyed_stable_exclusive_and_powerless(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .await
+            .with_registration_source_limit(20)
+            .with_database_environment_identity(staging_identity("staging"))
+            .with_release_acceptance_authority(release_acceptance_authority())
+            .unwrap(),
+    );
+
+    let wrong_key = "0".repeat(64);
+    for (key, role, status) in [
+        (None, "member", StatusCode::UNAUTHORIZED),
+        (Some(wrong_key.as_str()), "member", StatusCode::UNAUTHORIZED),
+        (Some("not-a-key"), "member", StatusCode::UNAUTHORIZED),
+        (
+            Some(TEST_RELEASE_ACCEPTANCE_KEY),
+            "admin",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = mint_release_acceptance_session(&app, key, role).await;
+        assert_eq!(response.status(), status, "key {key:?}, role {role}");
+    }
+    let refused: i64 = sqlx::query_scalar("SELECT count(*) FROM release_acceptance_account")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(refused, 0, "a refused mint must not create an account");
+
+    let now = unix_now_seconds();
+    let first =
+        mint_release_acceptance_session(&app, Some(TEST_RELEASE_ACCEPTANCE_KEY), "member").await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let first = json_body(first).await;
+    let member = response_principal_id(&first);
+    let first_token = first["session_token"].as_str().unwrap().to_string();
+    assert_eq!(first["capabilities"], serde_json::json!([]));
+    let expires_at = first["expires_at"].as_i64().unwrap();
+    assert!(expires_at > now);
+    assert!(expires_at <= now + identity::RELEASE_ACCEPTANCE_SESSION_TTL_SECONDS + 5);
+    assert_eq!(
+        get_session(&app, &first_token).await.status(),
+        StatusCode::OK
+    );
+
+    let second =
+        mint_release_acceptance_session(&app, Some(TEST_RELEASE_ACCEPTANCE_KEY), "member").await;
+    assert_eq!(second.status(), StatusCode::OK);
+    let second = json_body(second).await;
+    assert_eq!(response_principal_id(&second), member);
+    let second_token = second["session_token"].as_str().unwrap().to_string();
+    assert_ne!(second_token, first_token);
+    assert_eq!(
+        get_session(&app, &first_token).await.status(),
+        StatusCode::UNAUTHORIZED,
+        "a new mint revokes the role's earlier session"
+    );
+    assert_eq!(
+        get_session(&app, &second_token).await.status(),
+        StatusCode::OK
+    );
+
+    let outsider =
+        mint_release_acceptance_session(&app, Some(TEST_RELEASE_ACCEPTANCE_KEY), "outsider").await;
+    assert_eq!(outsider.status(), StatusCode::OK);
+    let outsider = response_principal_id(&json_body(outsider).await);
+    assert_ne!(outsider, member);
+
+    for principal in [member, outsider] {
+        let (kind, origin, status, capabilities): (String, String, String, Vec<String>) =
+            sqlx::query_as(
+                r#"
+                SELECT method.kind, membership.origin_kind, membership.status,
+                       principal.global_capabilities
+                FROM release_acceptance_account AS account
+                JOIN authentication_method AS method ON method.method_id = account.method_id
+                JOIN community_membership AS membership
+                  ON membership.active_principal_id = account.principal_id
+                JOIN platform_principal AS principal
+                  ON principal.principal_id = account.principal_id
+                WHERE account.principal_id = $1
+                "#,
+            )
+            .bind(principal.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            (kind.as_str(), origin.as_str(), status.as_str()),
+            ("release_acceptance", "release_acceptance", "active")
+        );
+        assert!(capabilities.is_empty());
+    }
+    let audited: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM identity_lifecycle_audit WHERE event_kind = 'release_acceptance_session_created'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audited, 3);
+
+    let invitation = post_json(
+        &app,
+        "/community/invitations",
+        Some(second_token.as_str()),
+        serde_json::json!({
+            "account_id": "acceptance-sponsored@example.test",
+            "expires_at": now + 3_600
+        }),
+    )
+    .await;
+    assert_ne!(invitation.status(), StatusCode::OK);
+    let sponsored: i64 = sqlx::query_scalar("SELECT count(*) FROM community_invitation")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(sponsored, 0, "release acceptance members cannot sponsor");
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn release_acceptance_key_attempts_are_source_budgeted(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool, &root)
+            .await
+            .with_registration_source_limit(2)
+            .with_database_environment_identity(staging_identity("staging"))
+            .with_release_acceptance_authority(release_acceptance_authority())
+            .unwrap(),
+    );
+    let wrong_key = "1".repeat(64);
+    let mut statuses = Vec::new();
+    for _ in 0..3 {
+        statuses.push(
+            mint_release_acceptance_session(&app, Some(wrong_key.as_str()), "member")
+                .await
+                .status(),
+        );
+    }
+    assert_eq!(statuses[0], StatusCode::UNAUTHORIZED);
+    assert_eq!(statuses[2], StatusCode::TOO_MANY_REQUESTS);
+    let limited =
+        mint_release_acceptance_session(&app, Some(TEST_RELEASE_ACCEPTANCE_KEY), "member").await;
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+}

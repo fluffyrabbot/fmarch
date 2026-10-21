@@ -166,6 +166,26 @@ pub(super) async fn enforce_workos_verification_source_limit(
     .await
 }
 
+/// Bound release acceptance key attempts per source before the key is
+/// compared. A release run mints two sessions, so the registration budget
+/// leaves room for a retry while keeping guessing impractical.
+pub(super) async fn enforce_release_acceptance_source_limit(
+    state: &AuthHttpState,
+    headers: &HeaderMap,
+) -> Result<(), ApiError> {
+    let policy = state.auth_attempt_policy.clone();
+    let normalized_source = normalized_auth_attempt_source(headers, &policy);
+    let source_hash =
+        hash_session_token(format!("release-acceptance-source:\0{normalized_source}").as_str());
+    enforce_public_request_limit(
+        state,
+        source_hash.as_str(),
+        policy.registration_max_per_source,
+        &policy,
+    )
+    .await
+}
+
 pub(super) async fn enforce_recovery_request_limit(
     state: &AuthHttpState,
     headers: &HeaderMap,

@@ -25,7 +25,7 @@ mod runtime_health;
 
 pub use auth_http::{
     bootstrap_classic_global_admin, bootstrap_workos_global_admin, LocalProofAuthVerifier,
-    LOCAL_PROOF_AUTH_HEADER,
+    LOCAL_PROOF_AUTH_HEADER, RELEASE_ACCEPTANCE_KEY_HEADER,
 };
 pub use embed_http::YoutubeSnapshotLookup;
 pub use game_http::{
@@ -204,6 +204,22 @@ impl ApiState {
     ) -> Self {
         self.database_identity = Some(identity);
         self
+    }
+
+    /// Enable release acceptance session minting. Only a server whose
+    /// verified database identity is staging may hold this authority; call
+    /// [`Self::with_database_environment_identity`] first.
+    pub fn with_release_acceptance_authority(
+        mut self,
+        authority: identity::ReleaseAcceptanceAuthority,
+    ) -> Result<Self, &'static str> {
+        match self.database_identity.as_ref() {
+            Some(identity) if identity.environment == "staging" => {
+                self.auth.release_acceptance = Some(authority);
+                Ok(self)
+            }
+            _ => Err("release acceptance sessions require a verified staging database identity"),
+        }
     }
 
     pub fn with_local_proof_auth(mut self, verifier: LocalProofAuthVerifier) -> Self {

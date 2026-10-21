@@ -4,9 +4,9 @@ use super::{acquire_workload_slot, ApiError, ApiState, AuthBudget, WebSocketBudg
 use crate::authentication::{
     cancel_auth_delivery_intent, clear_auth_attempt_failures, deliver_auth_credential,
     enforce_auth_attempt_limit, enforce_recovery_request_limit, enforce_registration_source_limit,
-    enforce_workos_verification_source_limit, record_failed_auth_attempt,
-    require_identity_delivery_enabled, require_identity_delivery_operable_now, AuthAttemptPolicy,
-    AuthCredentialDeliveryRequest,
+    enforce_release_acceptance_source_limit, enforce_workos_verification_source_limit,
+    record_failed_auth_attempt, require_identity_delivery_enabled,
+    require_identity_delivery_operable_now, AuthAttemptPolicy, AuthCredentialDeliveryRequest,
 };
 use crate::identity_delivery::{
     identity_delivery_provider_status, probe_identity_delivery_provider_with_config,
@@ -35,6 +35,7 @@ use uuid::Uuid;
 use wire::{CapabilityGrant, RejectCode};
 
 pub const LOCAL_PROOF_AUTH_HEADER: &str = "x-fmarch-local-proof-secret";
+pub const RELEASE_ACCEPTANCE_KEY_HEADER: &str = "x-fmarch-release-acceptance-key";
 
 /// A one-way verifier for the per-process local-proof credential. The raw
 /// secret remains in the launching proof harness and crosses the HTTP boundary
@@ -98,6 +99,8 @@ impl std::fmt::Debug for LocalProofAuthVerifier {
 pub(super) struct AuthHttpState {
     pub(super) pool: PgPool,
     pub(super) local_proof_auth: Option<LocalProofAuthVerifier>,
+    /// Present only on a server whose verified database identity is staging.
+    pub(super) release_acceptance: Option<identity::ReleaseAcceptanceAuthority>,
     pub(super) auth_attempt_policy: AuthAttemptPolicy,
     pub(super) identity_delivery_gateway: Arc<dyn IdentityDeliveryGateway>,
     pub(super) identity_delivery_worker_config: IdentityDeliveryWorkerConfig,
@@ -122,6 +125,7 @@ impl AuthHttpState {
         Self {
             pool,
             local_proof_auth: None,
+            release_acceptance: None,
             auth_attempt_policy: AuthAttemptPolicy {
                 account_max_failures: budget.rate_limit_account_max_failures,
                 source_max_failures: budget.rate_limit_source_max_failures,
@@ -205,6 +209,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         )
         .route("/auth/session", get(auth_session))
         .route("/auth/sessions", post(create_auth_session))
+        .route(
+            "/auth/release-acceptance-sessions",
+            post(create_release_acceptance_session),
+        )
         .route("/auth/account/methods", get(list_account_methods))
         .route(
             "/auth/account/personal-exports",
@@ -391,6 +399,12 @@ struct AuthSessionResponse {
     idle_expires_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rotation_required: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateReleaseAcceptanceSession {
+    role: String,
 }
 
 #[cfg(debug_assertions)]
@@ -1061,6 +1075,98 @@ async fn create_local_proof_auth_session(
         auth_session_response(&state, request.principal_id, None, global_capabilities).await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
+    Ok(Json(response))
+}
+
+/// Mint a session for one of the two staging release acceptance principals.
+/// The route is inert (404) unless the server was started with the key
+/// digest against a verified staging database; the presented key is charged
+/// to a source budget before it is checked.
+async fn create_release_acceptance_session(
+    State(state): State<AuthHttpState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateReleaseAcceptanceSession>,
+) -> Result<Json<AuthSessionResponse>, ApiError> {
+    let authority = state
+        .release_acceptance
+        .as_ref()
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "release acceptance session endpoint is disabled".to_string(),
+        })?;
+    enforce_release_acceptance_source_limit(&state, &headers).await?;
+    let role = identity::ReleaseAcceptanceRole::parse(request.role.as_str()).ok_or_else(|| {
+        ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "release acceptance role must be member or outsider".to_string(),
+        }
+    })?;
+    let grant = headers
+        .get(RELEASE_ACCEPTANCE_KEY_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(unauthorized_session)
+        .and_then(|presented| {
+            authority
+                .authorize(presented, role)
+                .map_err(|_| unauthorized_session())
+        })?;
+
+    let now = unix_now_seconds();
+    let mut tx = identity::session::begin_authority_transaction(&state.pool).await?;
+    let issuance =
+        identity::issue_release_acceptance_session(&mut tx, grant, &state.session_policy, now)
+            .await?;
+    let principal_id = issuance.principal_id();
+    membership_application::ensure_release_acceptance_membership_in_tx(&mut tx, principal_id, now)
+        .await
+        .map_err(|error| match error {
+            membership_application::MembershipApplicationError::Database(error) => {
+                ApiError::from(error)
+            }
+            membership_application::MembershipApplicationError::Unavailable => ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::NotAuthorized,
+                message: "release acceptance principal has no active acceptance membership"
+                    .to_string(),
+            },
+            other => internal_auth_error(format!("release acceptance admission failed: {other}")),
+        })?;
+    let issued = issuance.into_issued();
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_principal_id,
+            principal_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'release_acceptance_session_created', NULL, $2, $3, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_id.as_uuid())
+    .bind(issued.token_hash.as_str())
+    .bind(
+        serde_json::json!({
+            "role": role.as_str(),
+            "session_expires_at": issued.expires_at,
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    let mut response = auth_session_response(&state, principal_id, None, Vec::new()).await?;
+    response.session_token = Some(issued.session_token);
+    response.created_at = Some(now);
+    response.expires_at = Some(issued.expires_at);
+    response.idle_expires_at = Some(issued.idle_expires_at);
     Ok(Json(response))
 }
 

@@ -36,15 +36,17 @@ pub use private_claims::{
 };
 pub use session::{
     authorize_workos_session, issue_classic_password_session, issue_community_admission_session,
-    issue_session_after_classic_method_added, issue_workos_session,
-    redeem_game_invitation_and_issue_session, redeem_recovery_credential_and_issue_session,
-    require_active_workos_signing_key, retire_workos_signing_key,
-    revalidate_initiating_session_after_owner_lock, revoke_local_proof_sessions_for_startup,
-    validate_session_reference_for_update, AuthenticatedSession, AuthorizationContext,
-    ClassicPasswordProof, CompletedWorkosLogout, GameInvitationSessionIssuance, InitiatingSession,
-    IssuedSession, LocalProofInstanceId, LocalProofStartupRevocation, LogoutSessionState,
-    RecoverySessionIssuance, RotatedSession, SessionIssuance, SessionPolicy, WorkosSessionGrant,
-    WorkosSigningKeyId, WorkosSigningKeyRetirement,
+    issue_release_acceptance_session, issue_session_after_classic_method_added,
+    issue_workos_session, redeem_game_invitation_and_issue_session,
+    redeem_recovery_credential_and_issue_session, require_active_workos_signing_key,
+    retire_workos_signing_key, revalidate_initiating_session_after_owner_lock,
+    revoke_local_proof_sessions_for_startup, validate_session_reference_for_update,
+    AuthenticatedSession, AuthorizationContext, ClassicPasswordProof, CompletedWorkosLogout,
+    GameInvitationSessionIssuance, InitiatingSession, IssuedSession, LocalProofInstanceId,
+    LocalProofStartupRevocation, LogoutSessionState, RecoverySessionIssuance,
+    ReleaseAcceptanceAuthority, ReleaseAcceptanceGrant, ReleaseAcceptanceRole, RotatedSession,
+    SessionIssuance, SessionPolicy, WorkosSessionGrant, WorkosSigningKeyId,
+    WorkosSigningKeyRetirement, RELEASE_ACCEPTANCE_SESSION_TTL_SECONDS,
 };
 #[cfg(debug_assertions)]
 pub use session::{
