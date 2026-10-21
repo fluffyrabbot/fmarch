@@ -213,7 +213,11 @@ impl PackArtifact {
     }
 
     pub fn summary(&self) -> PackSummary {
-        self.role_reference().pack
+        PackSummary {
+            key: self.pack_ref.key.clone(),
+            name: self.presentation.name.clone(),
+            role_count: u32::try_from(self.document.roles.len()).unwrap_or(u32::MAX),
+        }
     }
 
     pub fn role_reference(&self) -> PackRoleReference {
