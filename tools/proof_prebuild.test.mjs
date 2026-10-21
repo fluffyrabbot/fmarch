@@ -9,6 +9,7 @@ import test from 'node:test';
 import { loadManifest } from './proof_lane_select.mjs';
 import { PREBUILT_PLAN_ENV, prebuiltBinary, proofBinarySpawn } from './proof_cargo_builds.mjs';
 import {
+  CARGO_DEPS_DIR_ENV,
   RUN_PHASE_CARGO_EXIT_CODE,
   buildBinaries,
   buildTests,
@@ -165,6 +166,8 @@ test('run-tests reproduces cargo test execution without Cargo', async (t) => {
     assert.equal(entry.options.env.RUST_TEST_THREADS, '4', '.cargo/config.toml [env] applies when unset');
     assert.equal(entry.options.env['CARGO_BIN_EXE_fmarch-admin'],
       join(root, 'lane', 'prebuilt', 'bin', 'commands', 'fmarch-admin'));
+    assert.equal(entry.options.env[CARGO_DEPS_DIR_ENV], join(root, 'target', 'debug', 'deps'),
+      'a relocated test can still find the rlibs Cargo built beside it');
   }
   assert.equal(runs[0].options.env.CARGO_CRATE_NAME, 'commands');
   assert.equal(runs[1].options.env.CARGO_CRATE_NAME, 'pipeline');

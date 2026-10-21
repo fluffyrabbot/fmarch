@@ -37,6 +37,7 @@ import {
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const PREBUILD_KINDS = new Set(['cargo-test', 'cargo-builds']);
 export const RUN_PHASE_CARGO_EXIT_CODE = 97;
+export const CARGO_DEPS_DIR_ENV = 'FMARCH_PROOF_CARGO_DEPS_DIR';
 
 // `cargo test` options that consume the following argument.
 const VALUE_OPTIONS = new Set([
@@ -336,7 +337,7 @@ export function cargoConfigEnvironment(text) {
   return entries;
 }
 
-export function testProcessEnvironment({ env, packageEnv, binaries, packageName, crateName, cargoEnv }) {
+export function testProcessEnvironment({ env, packageEnv, binaries, packageName, crateName, cargoEnv, sourceExecutable }) {
   const child = { ...env };
   for (const [name, entry] of Object.entries(cargoEnv)) {
     if (entry.force || child[name] === undefined) child[name] = entry.value;
@@ -347,6 +348,9 @@ export function testProcessEnvironment({ env, packageEnv, binaries, packageName,
     // Runtime CARGO_BIN_EXE_* point integration tests at this lane's links.
     if (owner === packageName) child[`CARGO_BIN_EXE_${name}`] = path;
   }
+  // The linked executable no longer sits beside the rlibs Cargo built with it,
+  // so a test that drives rustc against its own crate learns their directory here.
+  if (sourceExecutable !== undefined) child[CARGO_DEPS_DIR_ENV] = dirname(sourceExecutable);
   return child;
 }
 
@@ -379,6 +383,7 @@ export async function runTests({
     log(`     Running ${label} (${relative(root, entry.source_executable)})`);
     const childEnv = testProcessEnvironment({
       env, packageEnv, binaries: plan.binaries, packageName: entry.package, crateName: entry.name, cargoEnv,
+      sourceExecutable: entry.source_executable,
     });
     const result = await runExecutable(entry.path, forwarded, { cwd: packageEnv.CARGO_MANIFEST_DIR, env: childEnv }, spawn);
     if (result.status !== 0) {

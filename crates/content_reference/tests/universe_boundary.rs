@@ -100,8 +100,13 @@ fn compile(fixture: &str) -> std::process::Output {
 }
 
 /// `target/<profile>/deps`, discovered from this test binary rather than
-/// assumed, so a shared or relocated `CARGO_TARGET_DIR` still resolves.
+/// assumed, so a shared or relocated `CARGO_TARGET_DIR` still resolves. The
+/// proof runner links prebuilt test binaries away from their rlibs and names
+/// the directory Cargo built them in.
 fn deps_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("FMARCH_PROOF_CARGO_DEPS_DIR") {
+        return PathBuf::from(dir);
+    }
     std::env::current_exe()
         .expect("test binary path")
         .parent()
