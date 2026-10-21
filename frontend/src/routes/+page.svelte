@@ -146,6 +146,8 @@
 <style>
   .board-surface { align-content: start; }
   .board-hero { align-items: center; border-block-end: 2px solid var(--fm-line); display: flex; flex-wrap: wrap; gap: 20px 32px; isolation: isolate; margin: -22px -22px 0; overflow: hidden; padding: 36px 22px 48px; position: relative; }
+  /* The bleed matches the surface's narrow padding (16px below 840px). */
+  @media (max-width: 840px) { .board-hero { margin: -16px -16px 0; padding-inline: 16px; } }
   .board-hero__sky { block-size: 100%; inline-size: 100%; inset: 0; position: absolute; z-index: -1; }
   .board-hero__stars { fill: var(--fm-accent-soft); }
   .board-hero__hills { fill: var(--fm-surface-muted); }
