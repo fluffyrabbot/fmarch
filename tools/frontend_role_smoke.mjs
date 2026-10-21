@@ -3829,7 +3829,8 @@ async function assertRouteStateScenario(page, { scenario, viewport, baseUrl }) {
 
   const root = page.getByTestId(scenario.rootTestId);
   const rootBox = await assertVisibleBox(root, `${scenario.id} route state`);
-  if (rootBox.height < 220) {
+  // Layout boxes are fractional; a 220px min-height may measure 219.99996px.
+  if (rootBox.height < 220 - 0.01) {
     throw new Error(
       `${scenario.id} route state rendered ${rootBox.height}px high, expected at least 220px`,
     );
