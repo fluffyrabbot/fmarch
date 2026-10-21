@@ -117,7 +117,7 @@
                   <th scope="row">
                     <a class="roles-table__role" href={row.href} aria-current={row.selected ? "true" : undefined} on:click={(event) => selectRow(event, row)}>
                       <span class="roles-crest" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" focusable="false"><path d={row.alignment.icon} /></svg></span>
-                      <span class="roles-table__name"><span>{row.name}</span><code>{row.key}</code></span>
+                      <span class="roles-table__name"><span>{row.name}</span><code data-legibility="technical">{row.key}</code></span>
                     </a>
                   </th>
                   <td><span class="roles-alignment">{row.alignment.label}</span></td>
