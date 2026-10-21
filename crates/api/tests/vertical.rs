@@ -4384,7 +4384,12 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         .pack
         .roles
         .iter()
-        .any(|role| role.key == "vanilla_townie" && role.label == "Vanilla Townie"));
+        .any(|role| role.key == "vanilla_townie"
+            && role.label == "Vanilla Townie"
+            && role
+                .reference
+                .as_ref()
+                .is_some_and(|reference| reference.name == role.label)));
     assert!(setup.pack.start_phase_options.contains(&"D01".to_string()));
     assert!(setup.program_catalog.iter().any(|option| {
         option.program_ref == raffle_program_ref
@@ -4563,6 +4568,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         .as_str()
         .unwrap()
         .contains("factional kill"));
+    assert_eq!(state["role"]["reference"]["name"], "Mafia Goon");
+    assert_eq!(
+        state["role"]["reference"]["actions"][0]["label"],
+        "Factional kill"
+    );
+    assert_eq!(state["role"]["reference"]["alignment"]["family"], "mafia");
     assert_eq!(state["phase"]["phase_id"], "N01");
     assert!(state["phase"].get("phase_kind").is_none());
     assert_eq!(state["actions"][0]["template_id"], "factional_kill");
@@ -6387,6 +6398,85 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         .collect::<Vec<_>>();
     assert!(pack_keys.contains(&"mafiascum"));
     assert!(pack_keys.iter().all(|key| !key.starts_with("test_")));
+
+    // RFC 0009: the role reference is public, cacheable, and game-free.
+    let catalog = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/packs")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(catalog.status(), StatusCode::OK);
+    assert_eq!(catalog.headers()["cache-control"], "public, max-age=300");
+    let etag = catalog.headers()["etag"].to_str().unwrap().to_string();
+    let bytes = to_bytes(catalog.into_body(), usize::MAX).await.unwrap();
+    let catalog: wire::PackCatalogPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(catalog.packs.len(), 5);
+    assert!(catalog
+        .packs
+        .iter()
+        .any(|pack| pack.key == "mafia_universe" && pack.name == "Mafia Universe"));
+
+    let roles = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/packs/mafia_universe/roles")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(roles.status(), StatusCode::OK);
+    let bytes = to_bytes(roles.into_body(), usize::MAX).await.unwrap();
+    let serialized_roles = String::from_utf8(bytes.to_vec()).unwrap();
+    for game_state in ["slot_id", "occupant", "principal", "\"game\""] {
+        assert!(!serialized_roles.contains(game_state), "{game_state}");
+    }
+    let roles: game_platform::role_reference::PackRoleReference =
+        serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(roles.pack.key, "mafia_universe");
+    let godfather = roles
+        .roles
+        .iter()
+        .find(|role| role.key == "godfather")
+        .unwrap();
+    assert_eq!(godfather.name, "Godfather");
+    assert_eq!(godfather.alignment.as_ref().unwrap().label, "Mafia");
+    assert_eq!(godfather.traits[0].short, "Reads Town");
+
+    let revalidated = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/packs/mafia_universe/roles")
+                .header("if-none-match", etag.as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(revalidated.status(), StatusCode::NOT_MODIFIED);
+
+    let unknown = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/packs/test_twilight_window/roles")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
 
     let invalid = app
         .oneshot(

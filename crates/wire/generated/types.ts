@@ -287,6 +287,26 @@ export type GameIndexEntry = { deadline: bigint | null, seats_filled: bigint, se
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
+export type AlignmentFamily = "town" | "mafia" | "independent";
+
+export type PackSummary = { key: string, name: string, role_count: number, };
+
+export type PackCatalogPage = { packs: Array<PackSummary>, };
+
+export type AlignmentReference = { key: string, label: string, family: AlignmentFamily, win: string, };
+
+export type RoleActionTargets = { kind: string, max: number, self_allowed: boolean, self_only: boolean, label: string, };
+
+export type RoleActionReference = { id: string, label: string, abilities: Array<string>, window: string, targets: RoleActionTargets, roleblockable: boolean, priority: number, uses: number | null, notes: Array<string>, };
+
+export type RoleTrait = { text: string, short: string, };
+
+export type RoleChannel = { id: string, label: string, confirms_town: boolean, };
+
+export type RoleReference = { key: string, pack_key: string, pack_name: string, name: string, summary: string, alignment: AlignmentReference | null, win: string, actions: Array<RoleActionReference>, traits: Array<RoleTrait>, channels: Array<RoleChannel>, };
+
+export type PackRoleReference = { pack: PackSummary, alignments: Array<AlignmentReference>, win_families: Array<string>, roles: Array<RoleReference>, };
+
 export type GameRosterName = { effective_seq: bigint, public_name: string, };
 
 export type GameRosterOccupancy = { began_seq: bigint, ended_seq: bigint | null,

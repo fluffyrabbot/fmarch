@@ -947,6 +947,10 @@ pub struct PlayerCommandRoleView {
     pub key: String,
     pub alignment: Option<String>,
     pub description: String,
+    /// The role's public reference (RFC 0009): mechanics from this game's own
+    /// pack snapshot, copy from the product presentation. `None` for packs
+    /// without presentation.
+    pub reference: Option<game_platform::role_reference::RoleReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1326,6 +1330,7 @@ fn player_role_view(pack: &domain::Pack, role_key: &str) -> Option<PlayerCommand
         key: role_key.to_string(),
         alignment: role.alignment.clone(),
         description: role.description.clone(),
+        reference: content_registry::product_role_reference(pack, role_key),
     })
 }
 
@@ -1965,6 +1970,7 @@ pub struct HostSetupRoleOption {
     pub key: String,
     pub label: String,
     pub description: String,
+    pub reference: Option<game_platform::role_reference::RoleReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2568,10 +2574,19 @@ async fn load_host_setup_state(
         .document()
         .roles
         .iter()
-        .map(|(key, role)| HostSetupRoleOption {
-            key: key.clone(),
-            label: role_label(key, role.description.as_str()),
-            description: role.description.clone(),
+        .map(|(key, role)| {
+            let reference = content_registry::product_role_reference(pack.document(), key);
+            HostSetupRoleOption {
+                key: key.clone(),
+                label: reference
+                    .as_ref()
+                    .map_or_else(|| key.clone(), |reference| reference.name.clone()),
+                description: reference.as_ref().map_or_else(
+                    || role.description.clone(),
+                    |reference| reference.summary.clone(),
+                ),
+                reference,
+            }
         })
         .collect();
 
@@ -2836,36 +2851,11 @@ fn product_pack_catalog() -> Result<Vec<AdminGameBootstrapPack>, ApiError> {
     for artifact in registry.packs() {
         packs.push(AdminGameBootstrapPack {
             key: artifact.pack_ref.key.clone(),
-            name: humanize_identifier(artifact.document.name.as_str()),
+            name: artifact.presentation.name.clone(),
         });
     }
     packs.sort_by(|left, right| left.name.cmp(&right.name).then(left.key.cmp(&right.key)));
     Ok(packs)
-}
-
-fn role_label(key: &str, description: &str) -> String {
-    description
-        .split('.')
-        .next()
-        .map(str::trim)
-        .filter(|value| !value.is_empty() && value.len() <= 80)
-        .map(str::to_string)
-        .unwrap_or_else(|| humanize_identifier(key))
-}
-
-fn humanize_identifier(value: &str) -> String {
-    value
-        .split(['_', '-'])
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut characters = part.chars();
-            match characters.next() {
-                Some(first) => first.to_uppercase().chain(characters).collect(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {

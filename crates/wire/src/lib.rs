@@ -2872,6 +2872,13 @@ pub struct GameIndexPage {
     pub next_cursor: Option<String>,
 }
 
+/// `GET /packs`: the product rule packs a reader can browse in the role
+/// reference. Rules only; no game state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PackCatalogPage {
+    pub packs: Vec<game_platform::role_reference::PackSummary>,
+}
+
 impl From<projections::GameIndexRow> for GameIndexEntry {
     fn from(row: projections::GameIndexRow) -> Self {
         GameIndexEntry {
@@ -3847,6 +3854,10 @@ fn canonicalize_capabilities(capabilities: &mut Vec<CapabilityGrant>) -> Result<
 
 pub mod typescript {
     use domain::phase::PhaseId;
+    use game_platform::role_reference::{
+        AlignmentFamily, AlignmentReference, PackRoleReference, PackSummary, RoleActionReference,
+        RoleActionTargets, RoleChannel, RoleReference, RoleTrait,
+    };
     use game_platform::{
         ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventAuditSeed, DayEventDecision,
         DayEventEvent, DayEventId, DayEventResolutionEvidence, DayEventResolutionMode,
@@ -3882,7 +3893,7 @@ pub mod typescript {
         MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
         ModerationCasePage, ModerationContentRevision, ModerationContentSnapshot,
         ModerationEvidence, ModerationHistory, ModerationProfileMention, ModerationReport,
-        ModerationReportReceipt, ModerationSlotMention, PlayerInvestigationResult,
+        ModerationReportReceipt, ModerationSlotMention, PackCatalogPage, PlayerInvestigationResult,
         PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
         PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
         PrivatePostCitationBatch, ProfileEditor, ProjectionDelta, PublicContentRef,
@@ -4028,6 +4039,16 @@ pub mod typescript {
         push::<SpawnedGame>(&mut out, &config);
         push::<GameIndexEntry>(&mut out, &config);
         push::<GameIndexPage>(&mut out, &config);
+        push::<AlignmentFamily>(&mut out, &config);
+        push::<PackSummary>(&mut out, &config);
+        push::<PackCatalogPage>(&mut out, &config);
+        push::<AlignmentReference>(&mut out, &config);
+        push::<RoleActionTargets>(&mut out, &config);
+        push::<RoleActionReference>(&mut out, &config);
+        push::<RoleTrait>(&mut out, &config);
+        push::<RoleChannel>(&mut out, &config);
+        push::<RoleReference>(&mut out, &config);
+        push::<PackRoleReference>(&mut out, &config);
         push::<GameRosterName>(&mut out, &config);
         push::<GameRosterOccupancy>(&mut out, &config);
         push::<GameRosterSeat>(&mut out, &config);

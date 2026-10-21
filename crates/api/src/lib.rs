@@ -17,6 +17,7 @@ mod live_projection;
 pub mod mash_scale;
 mod media_http;
 mod membership_http;
+mod pack_http;
 pub mod program_library;
 mod public_citations;
 mod public_platform_http;
@@ -474,6 +475,7 @@ pub fn router_with_state(state: ApiState) -> Router {
     let public_platform_routes = public_platform_http::routes(&state);
     let embed_routes = embed_http::routes();
     let game_routes = game_http::routes(&state);
+    let pack_routes = pack_http::routes();
     let live_delivery_routes = live_delivery::routes(&state);
     let membership_routes = membership_http::routes(&state);
     let app = Router::new()
@@ -486,6 +488,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .merge(public_platform_routes)
         .merge(embed_routes)
         .merge(game_routes)
+        .merge(pack_routes)
         .merge(live_delivery_routes);
     let app = app.merge(membership_routes);
     app.with_state(state)
