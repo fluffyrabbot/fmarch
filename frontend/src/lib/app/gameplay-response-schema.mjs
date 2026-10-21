@@ -166,6 +166,8 @@ function isThreadPostFor(value, { game, channel }) {
     value.quotations.every(isQuotation) &&
     (value.mentions === undefined ||
       (Array.isArray(value.mentions) && value.mentions.every(isThreadPostMention))) &&
+    (value.role_reveals === undefined ||
+      (Array.isArray(value.role_reveals) && value.role_reveals.every(isThreadPostRoleReveal))) &&
     (value.embed == null || isPostEmbed(value.embed)) &&
     isSafeInteger(value.citation_count) &&
     isSafeInteger(value.occurred_at)
@@ -178,6 +180,15 @@ function isThreadPostMention(mention) {
     nonEmptyString(mention.slot_id) &&
     Number.isSafeInteger(mention.offset) && mention.offset >= 0 &&
     Number.isSafeInteger(mention.len) && mention.len > 0
+  );
+}
+
+function isThreadPostRoleReveal(reveal) {
+  return (
+    isPlainObject(reveal) &&
+    nonEmptyString(reveal.slot_id) &&
+    nonEmptyString(reveal.role_key) &&
+    (reveal.reference === null || isPlainObject(reveal.reference))
   );
 }
 

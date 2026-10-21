@@ -4,6 +4,7 @@
   import { postHref, focusAddressedPost } from "$lib/app/post-address.mjs";
   import { phaseLabelFromId } from "$lib/phase-id.mjs";
   import { phaseThemeKey } from "$lib/app/phase-theme.mjs";
+  import ThreadRoleReveals from "$lib/components/role-card/ThreadRoleReveals.svelte";
   afterNavigate(async ({ to }) => { await tick(); if (to) focusAddressedPost(to.url); });
   export let data;
   export let form;
@@ -125,6 +126,7 @@
                 </blockquote>
               {/each}
               <p>{post.body}</p>
+              <ThreadRoleReveals reveals={post.roleReveals} testId={`public-game-post-roles-${post.source_seq}`} />
               {#if post.embed !== null}
                 <div class="public-game-embed" data-testid={`public-game-embed-${post.source_seq}`}>
                   {#if activeEmbedSeq === post.source_seq}
