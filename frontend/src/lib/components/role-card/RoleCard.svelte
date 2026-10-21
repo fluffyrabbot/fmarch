@@ -45,7 +45,7 @@
             <p class="role-card__eyebrow">{card.alignment.label} · {card.packName}</p>
           {/if}
           <svelte:element this={`h${headingLevel}`} class="role-card__name" data-testid={card.contract.nameTestId}>{card.name}</svelte:element>
-          <code class="role-card__key">{card.key}</code>
+          <code class="role-card__key" data-legibility="technical">{card.key}</code>
         </div>
         {#if card.variant === "compact"}
           <span class="role-card__alignment">{card.alignment.label}</span>
