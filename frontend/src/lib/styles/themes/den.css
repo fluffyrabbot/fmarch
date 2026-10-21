@@ -432,9 +432,41 @@
 .fm-app-shell[data-theme="den"] .public-game-seat { border-radius: var(--den-pill); border-width: 2px; }
 .fm-app-shell[data-theme="den"] .public-game-seat[data-alive="true"] { background: var(--fm-surface-tint); }
 
+/* ---- role cards: ears and phase chips ---- */
+.fm-app-shell[data-theme="den"] .role-card[data-framed="true"] { margin-block-start: 16px; }
+.fm-app-shell[data-theme="den"] .role-modal__panel { overflow: visible; position: relative; }
+.fm-app-shell[data-theme="den"] .role-card[data-framed="true"]::before,
+.fm-app-shell[data-theme="den"] .role-card[data-framed="true"]::after,
+.fm-app-shell[data-theme="den"] .role-modal__panel::before,
+.fm-app-shell[data-theme="den"] .role-modal__panel::after {
+  background: var(--role-ink);
+  block-size: 16px;
+  clip-path: polygon(0 100%, 42% 0, 100% 100%);
+  content: "";
+  inline-size: 22px;
+  inset-block-start: -17px;
+  position: absolute;
+}
+.fm-app-shell[data-theme="den"] .role-card[data-framed="true"]::before,
+.fm-app-shell[data-theme="den"] .role-modal__panel::before { inset-inline-start: 26px; }
+.fm-app-shell[data-theme="den"] .role-card[data-framed="true"]::after,
+.fm-app-shell[data-theme="den"] .role-modal__panel::after { inset-inline-start: 64px; transform: scaleX(-1); }
+.fm-app-shell[data-theme="den"] .role-card,
+.fm-app-shell[data-theme="den"] .role-modal__panel { border-radius: var(--fm-radius-panel); }
+.fm-app-shell[data-theme="den"] .role-window[data-window="day"] { background: var(--den-chip-day-bg); box-shadow: none; color: var(--den-chip-day-ink); }
+.fm-app-shell[data-theme="den"] .role-window[data-window="night"] {
+  background: var(--den-chip-night-bg);
+  box-shadow: inset 0 0 0 1.5px var(--den-chip-night-ring);
+  color: var(--den-chip-night-ink);
+}
+
 @media (forced-colors: active) {
   .fm-app-shell[data-theme="den"] .board-card::before,
   .fm-app-shell[data-theme="den"] .board-card::after,
   .fm-app-shell[data-theme="den"] .discussion-topic-card::before,
-  .fm-app-shell[data-theme="den"] .discussion-topic-card::after { display: none; }
+  .fm-app-shell[data-theme="den"] .discussion-topic-card::after,
+  .fm-app-shell[data-theme="den"] .role-card::before,
+  .fm-app-shell[data-theme="den"] .role-card::after,
+  .fm-app-shell[data-theme="den"] .role-modal__panel::before,
+  .fm-app-shell[data-theme="den"] .role-modal__panel::after { display: none; }
 }
