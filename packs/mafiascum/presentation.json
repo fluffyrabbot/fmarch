@@ -1,0 +1,769 @@
+{
+  "schema_version": 1,
+  "pack": "mafiascum",
+  "name": "Mafiascum",
+  "alignments": {
+    "town": {
+      "label": "Town",
+      "family": "town",
+      "win": "Wins when every other faction is gone."
+    },
+    "mafia": {
+      "label": "Mafia",
+      "family": "mafia",
+      "win": "Wins when the Mafia equal or outnumber everyone else, unless an independent killer is still alive."
+    },
+    "independent": {
+      "label": "Independent",
+      "family": "independent",
+      "win": "Wins when every other faction is gone."
+    },
+    "cult": {
+      "label": "Cult",
+      "family": "independent",
+      "win": "This pack sets no win condition for the Cult; the host decides it."
+    },
+    "jester": {
+      "label": "Jester",
+      "family": "independent",
+      "win": "Wins by getting lynched."
+    },
+    "executioner": {
+      "label": "Executioner",
+      "family": "independent",
+      "win": "Wins if their chosen target is lynched."
+    },
+    "condemner": {
+      "label": "Condemner",
+      "family": "independent",
+      "win": "Wins if their chosen target is lynched."
+    }
+  },
+  "effects": {
+    "bomb": {
+      "text": "Their night killer dies with them",
+      "short": "Explodes"
+    },
+    "hero": {
+      "text": "Kills whoever eliminates them by duel",
+      "short": "Duel revenge"
+    },
+    "miller": {
+      "text": "Reads as Scum to alignment checks",
+      "short": "Reads Scum"
+    },
+    "bulletproof": {
+      "text": "Survives one ordinary kill",
+      "short": "Bulletproof"
+    },
+    "ascetic": {
+      "text": "Unaffected by non-lethal actions",
+      "short": "Ascetic"
+    },
+    "untargetable": {
+      "text": "Cannot be targeted",
+      "short": "Untargetable"
+    },
+    "macho": {
+      "text": "Cannot be protected",
+      "short": "Unprotectable"
+    },
+    "mason": {
+      "text": "Mason chat confirms members as Town",
+      "short": "Confirmed chat"
+    },
+    "neighbor": {
+      "text": "Neighbor chat confirms nothing",
+      "short": "Private chat"
+    },
+    "visitor_kill_target": {
+      "text": "Selective Visit Killers react to their visits",
+      "short": "Marked"
+    },
+    "godfather": {
+      "text": "Reads as Town to alignment checks",
+      "short": "Reads Town"
+    },
+    "flipless": {
+      "text": "Flips with role and alignment hidden",
+      "short": "Flipless"
+    },
+    "alignment_only_flip": {
+      "text": "Flips with alignment only",
+      "short": "Alignment flip"
+    },
+    "backup:cop": {
+      "text": "Inherits the Cop role",
+      "short": "Backup"
+    },
+    "vengeful": {
+      "text": "Their killer dies with them",
+      "short": "Vengeful"
+    },
+    "death_curse": {
+      "text": "Whoever causes their death dies too",
+      "short": "Death curse"
+    },
+    "phase_end_doomed": {
+      "text": "Doomed at a phase boundary",
+      "short": "Doomed"
+    },
+    "win_witness": {
+      "text": "Reacts just before a faction wins",
+      "short": "Win witness"
+    },
+    "unstoppable_vengeful": {
+      "text": "Their killer dies with them, through protection",
+      "short": "Unstoppable revenge"
+    },
+    "super_saint": {
+      "text": "The voter who lynches them dies",
+      "short": "Super-saint"
+    },
+    "pgo": {
+      "text": "Shoots every night visitor",
+      "short": "Shoots visitors"
+    },
+    "visitor_kill": {
+      "text": "Shoots marked night visitors",
+      "short": "Shoots marked"
+    }
+  },
+  "actions": {
+    "reveal_town": "Reveal as Town",
+    "duel": "Challenge",
+    "day_self_destruct": "Self-destruct",
+    "night_kill": "Kill",
+    "day_vigilante_kill": "Day shot",
+    "veto": "Veto",
+    "rolestop": "Rolestop",
+    "shield": "Shield",
+    "cop_investigate": "Alignment check",
+    "investigate_vanilla": "Vanilla check",
+    "neapolitan": "Neapolitan check",
+    "gunsmith": "Gun check",
+    "investigate_killer": "Killer check",
+    "investigate_specialist": "Specialist check",
+    "investigate_pt": "Private-topic check",
+    "role_scan": "Role check",
+    "inspect_corpse": "Autopsy",
+    "strong_willed_investigate": "Alignment check",
+    "compare_parity": "Compare",
+    "doctor_protect": "Protect",
+    "faith_healer_protect": "Pray",
+    "bodyguard": "Guard",
+    "huntsman_guard": "Guard",
+    "martyr_protect": "Protect",
+    "cpr_protect": "CPR",
+    "babysit": "Babysit",
+    "jail": "Jail",
+    "roleblocker_block": "Block",
+    "track": "Track",
+    "catastrophic_block": "Block everything",
+    "commute": "Commute",
+    "follow": "Follow",
+    "watch": "Watch",
+    "role_watcher": "Role watch",
+    "role_guard": "Role guard",
+    "security_guard": "Guard watch",
+    "investigate_alignment": "Alignment check",
+    "motion_detector": "Motion check",
+    "visit": "Visit",
+    "friendly_neighbor": "Visit",
+    "neighborize": "Neighborize",
+    "mailman": "Deliver mail",
+    "observe": "Observe",
+    "report": "Report",
+    "send_fruit": "Send fruit",
+    "visitor_kill_target_visit": "Visit",
+    "prior_motion": "Traffic check",
+    "bus_driver_swap": "Swap",
+    "mass_redirect": "Rotate",
+    "redirect": "Redirect",
+    "factional_kill": "Factional kill",
+    "frame": "Frame",
+    "lawyer_cover": "Cover",
+    "poison": "Poison",
+    "cure_poison": "Cure",
+    "douse": "Douse",
+    "ignite": "Ignite",
+    "cleanse": "Cleanse",
+    "strongman_kill": "Strongman kill",
+    "janitor_kill": "Clean kill",
+    "motivate": "Motivate",
+    "grant_item": "Give item",
+    "grant_vest_item": "Give vest",
+    "cult_recruit": "Recruit",
+    "disloyal_cult_recruit": "Recruit",
+    "deprogram": "Deprogram",
+    "vanillaize": "Vanillaise",
+    "target_backup": "Choose a source",
+    "death_mark": "Death mark",
+    "executioner_target": "Choose target",
+    "condemner_target": "Choose target",
+    "link_lovers": "Link lovers",
+    "hunter_retaliate": "Aim",
+    "hide": "Hide"
+  },
+  "roles": {
+    "vanilla_townie": {
+      "name": "Vanilla Townie",
+      "summary": "No special power. Wins with the Town through discussion and the vote."
+    },
+    "bomb": {
+      "name": "Bomb",
+      "summary": "A Townie who takes their night killer down with them."
+    },
+    "doublevoter": {
+      "name": "Doublevoter",
+      "summary": "Their vote counts twice."
+    },
+    "triplevoter": {
+      "name": "Triplevoter",
+      "summary": "Their vote counts three times."
+    },
+    "x_voter": {
+      "name": "X-Voter",
+      "summary": "Their vote counts for more than one; in this pack, two."
+    },
+    "voteless": {
+      "name": "Voteless",
+      "summary": "May cast a vote, but it counts for nothing."
+    },
+    "tiebreaker": {
+      "name": "Tiebreaker",
+      "summary": "If tied for elimination, they are the one eliminated."
+    },
+    "innocent_child": {
+      "name": "Innocent Child",
+      "summary": "During the day, may publicly confirm they are Town without revealing their role."
+    },
+    "gladiator": {
+      "name": "Gladiator",
+      "summary": "By day, may challenge one player so only the two of them can be voted out that day."
+    },
+    "hero": {
+      "name": "Hero",
+      "summary": "If eliminated by a duel-style day power, kills whoever started it."
+    },
+    "day_self_destructor": {
+      "name": "Day Self-Destructor",
+      "summary": "Once, by day, may self-destruct to take one player down before the vote."
+    },
+    "white_wolf_king": {
+      "name": "White Wolf King",
+      "summary": "By day, may self-destruct to take one player down. By night, has a kill of their own."
+    },
+    "day_vigilante": {
+      "name": "Day Vigilante",
+      "summary": "Each day, may kill one player before the vote resolves."
+    },
+    "governor": {
+      "name": "Governor",
+      "summary": "Once, after the vote is counted, may veto the day's elimination."
+    },
+    "loved": {
+      "name": "Loved",
+      "summary": "Takes one extra vote to eliminate."
+    },
+    "hated": {
+      "name": "Hated",
+      "summary": "A Mafia member who takes one fewer vote to eliminate."
+    },
+    "miller": {
+      "name": "Miller",
+      "summary": "A Townie who reads as Scum to alignment checks."
+    },
+    "bulletproof": {
+      "name": "Bulletproof",
+      "summary": "Survives one ordinary kill. A Strongman's kill still lands."
+    },
+    "ascetic": {
+      "name": "Ascetic",
+      "summary": "Immune to the pack's non-lethal actions, helpful or harmful."
+    },
+    "rolestopper": {
+      "name": "Rolestopper",
+      "summary": "Cannot be targeted, and each night may make one other player untargetable for that night."
+    },
+    "shield": {
+      "name": "Shield",
+      "summary": "Each night, shields several players from targeted actions for that night."
+    },
+    "macho_townie": {
+      "name": "Macho Townie",
+      "summary": "Cannot be protected: kills aimed at them always land."
+    },
+    "cop": {
+      "name": "Cop",
+      "summary": "Each night, investigates one player and learns whether they read Town or Scum."
+    },
+    "vanilla_cop": {
+      "name": "Vanilla Cop",
+      "summary": "Each night, checks whether one player has no special power."
+    },
+    "neapolitan": {
+      "name": "Neapolitan",
+      "summary": "Each night, checks whether one player is a Vanilla Townie."
+    },
+    "gunsmith": {
+      "name": "Gunsmith",
+      "summary": "Each night, checks whether one player's role carries a gun."
+    },
+    "psychologist": {
+      "name": "Psychologist",
+      "summary": "Each night, checks whether one player's role can kill."
+    },
+    "specialist": {
+      "name": "Specialist",
+      "summary": "Each night, checks whether one player holds one of the setup's specialist roles."
+    },
+    "pt_cop": {
+      "name": "PT Cop",
+      "summary": "Each night, learns which private topics one player can read."
+    },
+    "role_cop": {
+      "name": "Role Cop",
+      "summary": "Each night, learns one player's role."
+    },
+    "coroner": {
+      "name": "Coroner",
+      "summary": "Each night, examines one dead player and learns their role and alignment."
+    },
+    "strong_willed_cop": {
+      "name": "Strong-Willed Cop",
+      "summary": "Investigates like a Cop, and roleblocks cannot stop it."
+    },
+    "comparison_cop": {
+      "name": "Comparison Cop",
+      "summary": "Investigates one player, then on later checks learns whether their result has changed."
+    },
+    "doctor": {
+      "name": "Doctor",
+      "summary": "Each night, protects one player from a kill. A Strongman's kill still lands."
+    },
+    "faith_healer": {
+      "name": "Faith Healer",
+      "summary": "Each night, has an even chance to protect one player from an ordinary kill."
+    },
+    "bodyguard": {
+      "name": "Bodyguard",
+      "summary": "Each night, guards one player and dies stopping a kill aimed at them."
+    },
+    "huntsman": {
+      "name": "Huntsman",
+      "summary": "Each night, guards one player; if they are attacked, dies stopping it and kills the attacker."
+    },
+    "martyr": {
+      "name": "Martyr",
+      "summary": "Each night, protects one player and dies in their place if they are attacked."
+    },
+    "cpr_doctor": {
+      "name": "CPR Doctor",
+      "summary": "Each night, saves one player if they are attacked, but kills them if they are not."
+    },
+    "babysitter": {
+      "name": "Babysitter",
+      "summary": "Each night, protects one player, who dies too if the Babysitter dies."
+    },
+    "jailkeeper": {
+      "name": "Jailkeeper",
+      "summary": "Each night, jails one player: they are blocked and protected by the same action."
+    },
+    "roleblocker": {
+      "name": "Roleblocker",
+      "summary": "Each night, blocks one player so their blockable action fails."
+    },
+    "hooker": {
+      "name": "Hooker",
+      "summary": "A Mafia roleblocker: each night, blocks one player's blockable action."
+    },
+    "jailer": {
+      "name": "Jailer",
+      "summary": "Each night, blocks one player so their blockable action fails."
+    },
+    "mafia_roleblocker": {
+      "name": "Mafia Roleblocker",
+      "summary": "Each night, blocks one player so their blockable action fails."
+    },
+    "jack_of_all_trades": {
+      "name": "Jack of All Trades",
+      "summary": "Holds four one-shot powers: an alignment check, a protection, a block and a track."
+    },
+    "catastrophic_roleblocker": {
+      "name": "Catastrophic Roleblocker",
+      "summary": "Each night, blocks every action one player submits."
+    },
+    "commuter": {
+      "name": "Commuter",
+      "summary": "Each night, may leave town and cannot be targeted that night."
+    },
+    "tracker": {
+      "name": "Tracker",
+      "summary": "Each night, follows one player and learns whom they visited."
+    },
+    "follower": {
+      "name": "Follower",
+      "summary": "Each night, follows one player and learns what kind of action they took."
+    },
+    "watcher": {
+      "name": "Watcher",
+      "summary": "Each night, watches one player and learns who visited them."
+    },
+    "role_watcher": {
+      "name": "Role Watcher",
+      "summary": "Each night, watches one player and learns the roles, not the names, of their visitors."
+    },
+    "role_guard": {
+      "name": "Role Guard",
+      "summary": "Each night, tells one player the roles, not the names, of whoever targeted them."
+    },
+    "security_guard": {
+      "name": "Security Guard",
+      "summary": "Each night, tells one player who visited them."
+    },
+    "odd_night_cop": {
+      "name": "Odd Night Cop",
+      "summary": "A Cop who can investigate only on odd-numbered nights."
+    },
+    "even_night_cop": {
+      "name": "Even Night Cop",
+      "summary": "A Cop who can investigate only on even-numbered nights."
+    },
+    "odd_cycle_cop": {
+      "name": "Odd Cycle Cop",
+      "summary": "A Cop who can investigate only in odd-numbered cycles."
+    },
+    "even_cycle_cop": {
+      "name": "Even Cycle Cop",
+      "summary": "A Cop who can investigate only in even-numbered cycles."
+    },
+    "weak_cop": {
+      "name": "Weak Cop",
+      "summary": "A Cop who dies on finding Scum."
+    },
+    "lazy_cop": {
+      "name": "Lazy Cop",
+      "summary": "A Cop who cannot act once only one non-Town player is left alive."
+    },
+    "loud_cop": {
+      "name": "Loud Cop",
+      "summary": "A Cop whose investigations are announced publicly."
+    },
+    "announcing_cop": {
+      "name": "Announcing Cop",
+      "summary": "A Cop who publicly announces each investigation."
+    },
+    "non_consecutive_cop": {
+      "name": "Non-Consecutive Cop",
+      "summary": "A Cop who cannot check the same player on back-to-back nights."
+    },
+    "indecisive_cop": {
+      "name": "Indecisive Cop",
+      "summary": "A Cop who cannot check the same player two nights running."
+    },
+    "cooldown_cop": {
+      "name": "Cooldown Cop",
+      "summary": "A Cop who must rest one night after each investigation."
+    },
+    "long_cooldown_cop": {
+      "name": "Long Cooldown Cop",
+      "summary": "A Cop who must rest two nights after each investigation."
+    },
+    "uncooperative_cop": {
+      "name": "Uncooperative Cop",
+      "summary": "A Cop whose results come back vague, as the setup defines."
+    },
+    "roaming_cop": {
+      "name": "Roaming Cop",
+      "summary": "A Cop who can never check the same player twice."
+    },
+    "disabled_endgame_cop": {
+      "name": "Disabled Endgame Cop",
+      "summary": "A Cop who cannot act once three or fewer players are alive."
+    },
+    "novice_cop": {
+      "name": "Novice Cop",
+      "summary": "A Cop whose investigations start on Night 2."
+    },
+    "activated_cop": {
+      "name": "Activated Cop",
+      "summary": "A Cop whose investigation switches on from Night 2."
+    },
+    "compulsive_cop": {
+      "name": "Compulsive Cop",
+      "summary": "A Cop who must investigate every night."
+    },
+    "vigilante": {
+      "name": "Vigilante",
+      "summary": "Once per game, may kill one player at night."
+    },
+    "two_shot_vigilante": {
+      "name": "Two-Shot Vigilante",
+      "summary": "Twice per game, may kill one player at night."
+    },
+    "simultaneous_vigilante": {
+      "name": "Simultaneous Vigilante",
+      "summary": "May kill several players in the same night."
+    },
+    "motion_detector": {
+      "name": "Motion Detector",
+      "summary": "Each night, learns whether one player acted or was visited."
+    },
+    "visitor": {
+      "name": "Visitor",
+      "summary": "Each night, visits one player. The visit does nothing, but others can see it."
+    },
+    "friendly_neighbor": {
+      "name": "Friendly Neighbor",
+      "summary": "Each night, visits one player as a social gesture of Town trust."
+    },
+    "neighborizer": {
+      "name": "Neighborizer",
+      "summary": "Each night, visits one player to draw them into a private neighbourhood."
+    },
+    "mailman": {
+      "name": "Mailman",
+      "summary": "Each night, delivers an anonymous private message to one player."
+    },
+    "observer": {
+      "name": "Observer",
+      "summary": "Each night, privately learns an observation about one player."
+    },
+    "reporter": {
+      "name": "Reporter",
+      "summary": "Each night, privately files a report about one player."
+    },
+    "fruit_vendor": {
+      "name": "Fruit Vendor",
+      "summary": "Each night, sends one player fruit. It has no effect beyond the gesture."
+    },
+    "mason": {
+      "name": "Mason",
+      "summary": "Shares a private chat whose members are confirmed Town to each other."
+    },
+    "neighbor": {
+      "name": "Neighbor",
+      "summary": "Shares a private chat, but its members learn nothing about each other's alignment.",
+      "win": "Has no alignment of their own; the host's setup decides how they win."
+    },
+    "visitor_kill_target_visitor": {
+      "name": "Marked Visitor",
+      "summary": "Each night, visits one player, and carries a mark that a Selective Visit Killer reacts to."
+    },
+    "traffic_analyst": {
+      "name": "Traffic Analyst",
+      "summary": "Each night, learns whether one player had any visits before tonight."
+    },
+    "bus_driver": {
+      "name": "Bus Driver",
+      "summary": "Each night, swaps two players: actions aimed at one land on the other."
+    },
+    "traffic_controller": {
+      "name": "Traffic Controller",
+      "summary": "Each night, rotates actions among three or more chosen players."
+    },
+    "lightning_rod": {
+      "name": "Lightning Rod",
+      "summary": "Each night, draws targeted actions onto themselves."
+    },
+    "redirector": {
+      "name": "Redirector",
+      "summary": "Each night, sends actions aimed at the first chosen player to the second."
+    },
+    "mafia_goon": {
+      "name": "Mafia Goon",
+      "summary": "A Mafia member with no power of their own, who may carry the factional kill."
+    },
+    "encryptor": {
+      "name": "Encryptor",
+      "summary": "A Mafia member whose presence opens a Mafia day chat while they live."
+    },
+    "traitor": {
+      "name": "Traitor",
+      "summary": "Wins with the Mafia but works alone: no Mafia chat and no factional kill."
+    },
+    "lost_mafia_goon": {
+      "name": "Lost Mafia Goon",
+      "summary": "A Mafia member who may carry the factional kill only once no other Mafia are alive."
+    },
+    "recluse_mafia_goon": {
+      "name": "Recluse Mafia Goon",
+      "summary": "A Mafia member who may carry the factional kill only if every living teammate is also a Recluse."
+    },
+    "framer": {
+      "name": "Framer",
+      "summary": "Each night, frames one player so an alignment check that night reads Scum."
+    },
+    "lawyer": {
+      "name": "Lawyer",
+      "summary": "Each night, covers one player so an alignment check that night reads Town."
+    },
+    "poisoner": {
+      "name": "Poisoner",
+      "summary": "Each night, poisons one player, who dies the next night unless cured."
+    },
+    "poison_doctor": {
+      "name": "Poison Doctor",
+      "summary": "Each night, cures one poisoned player before the poison kills them."
+    },
+    "arsonist": {
+      "name": "Arsonist",
+      "summary": "Douses one player a night, then may ignite to kill everyone doused at once."
+    },
+    "cleanser": {
+      "name": "Cleanser",
+      "summary": "Each night, washes the douse off one player before an ignite."
+    },
+    "godfather": {
+      "name": "Godfather",
+      "summary": "Leads the Mafia, may carry the factional kill, and reads as Town to alignment checks."
+    },
+    "ninja": {
+      "name": "Ninja",
+      "summary": "May carry the factional kill without showing up to trackers or watchers."
+    },
+    "serial_killer": {
+      "name": "Serial Killer",
+      "summary": "Kills one player each night. Wins only as the last faction standing."
+    },
+    "survivor": {
+      "name": "Survivor",
+      "summary": "No power. Wins alongside whoever wins, as long as they are alive at the end.",
+      "win": "Wins alongside whoever wins, as long as they are alive at the end."
+    },
+    "strongman": {
+      "name": "Strongman",
+      "summary": "May carry the factional kill, which goes through protection."
+    },
+    "mafia_janitor": {
+      "name": "Janitor",
+      "summary": "May kill one player at night whose role stays hidden when they flip."
+    },
+    "flipless_townie": {
+      "name": "Flipless Townie",
+      "summary": "A Townie whose role and alignment stay hidden when they die."
+    },
+    "alignment_only_townie": {
+      "name": "Alignment-Only Townie",
+      "summary": "A Townie whose death reveals their alignment but not their role."
+    },
+    "motivator": {
+      "name": "Motivator",
+      "summary": "Each night, gives one player a single extra action."
+    },
+    "inventor": {
+      "name": "Inventor",
+      "summary": "Each night, gives one player a single-use item or a bulletproof vest."
+    },
+    "cultist": {
+      "name": "Cultist",
+      "summary": "Recruited by a Cult Leader. Wins with the Cult."
+    },
+    "cult_leader": {
+      "name": "Cult Leader",
+      "summary": "Each night, converts one player into a Cultist."
+    },
+    "disloyal_cult_leader": {
+      "name": "Disloyal Cult Leader",
+      "summary": "Each night, may convert one player, but only one outside the Cult."
+    },
+    "deprogrammer": {
+      "name": "Deprogrammer",
+      "summary": "Each night, restores one converted player to their original role and alignment."
+    },
+    "vanillaiser": {
+      "name": "Vanillaiser",
+      "summary": "Each night, turns one player into a Vanilla Townie. A Deprogrammer can undo it."
+    },
+    "vanillizer": {
+      "name": "Vanillizer",
+      "summary": "Each night, turns one player into a Vanilla Townie. A Deprogrammer can undo it."
+    },
+    "backup_cop": {
+      "name": "Backup Cop",
+      "summary": "Becomes the Cop if the Cop dies."
+    },
+    "universal_backup": {
+      "name": "Universal Backup",
+      "summary": "Chooses one player and inherits their role if they die."
+    },
+    "vengeful": {
+      "name": "Vengeful",
+      "summary": "When killed, takes their killer down with them."
+    },
+    "death_cursed_townie": {
+      "name": "Death-Cursed Townie",
+      "summary": "Whatever kills them, the one responsible dies too."
+    },
+    "death_marker": {
+      "name": "Death Marker",
+      "summary": "Each night, marks one player for death."
+    },
+    "phase_end_doomed_townie": {
+      "name": "Doomed Townie",
+      "summary": "Carries a doom that triggers when a phase ends."
+    },
+    "win_witness_townie": {
+      "name": "Win Witness",
+      "summary": "Carries a passive power that triggers just before a faction wins."
+    },
+    "unstoppable_vengeful_townie": {
+      "name": "Unstoppable Vengeful",
+      "summary": "When killed, takes their killer down, through any protection."
+    },
+    "super_saint": {
+      "name": "Super-Saint",
+      "summary": "If lynched, the voter who sealed the lynch dies too."
+    },
+    "beloved_princess": {
+      "name": "Beloved Princess",
+      "summary": "When killed, the host may skip the next day."
+    },
+    "virgin": {
+      "name": "Virgin",
+      "summary": "When killed, the host may skip the next day."
+    },
+    "jester": {
+      "name": "Jester",
+      "summary": "Wins by getting lynched."
+    },
+    "executioner": {
+      "name": "Executioner",
+      "summary": "Picks a target, and wins if that target is lynched."
+    },
+    "condemner": {
+      "name": "Condemner",
+      "summary": "Picks a target, and wins if that target is lynched."
+    },
+    "paranoid_gun_owner": {
+      "name": "Paranoid Gun Owner",
+      "summary": "Shoots everyone who visits them at night."
+    },
+    "selective_visit_killer": {
+      "name": "Selective Visit Killer",
+      "summary": "Kills only visitors who carry a Marked Visitor's mark."
+    },
+    "cupid": {
+      "name": "Cupid",
+      "summary": "Links two players as lovers. If one dies, so does the other."
+    },
+    "lover": {
+      "name": "Lover",
+      "summary": "Bound to another Lover. If either dies, by any means, so does the other.",
+      "win": "Lives and dies with their partner; the host's setup decides how they win."
+    },
+    "saulus": {
+      "name": "Saulus",
+      "summary": "Starts as Mafia. Survives their first lynch by turning Town."
+    },
+    "hunter": {
+      "name": "Hunter",
+      "summary": "Picks a target each night. If the Hunter dies, that target dies too."
+    },
+    "hider": {
+      "name": "Hider",
+      "summary": "Each night, hides behind one player: safe from direct targeting if they are not Mafia, but dies if they die."
+    }
+  }
+}
