@@ -1,5 +1,6 @@
 <script>
   import SetupPlayer from "./SetupPlayer.svelte";
+  import RoleCard from "$lib/components/role-card/RoleCard.svelte";
   import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import AppStatus from "$lib/app/AppStatus.svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
@@ -193,6 +194,10 @@
 
   function roleLabel(roleKey) {
     return roleOptions.find((role) => role.key === roleKey)?.label ?? "No role assigned";
+  }
+
+  function roleCard(roleKey) {
+    return roleOptions.find((role) => role.key === roleKey)?.card ?? null;
   }
 
   async function submitSetupCommand(actionId, formData) {
@@ -429,13 +434,16 @@
                 {#each setupState.slots as slot}
                   <article class="host-setup__role-card" data-testid={`host-setup-role-${slot.slotId}`}>
                     <div><p class="fm-eyebrow">{slot.publicName ?? "Unseated"}</p><h3>{roleLabel(slot.roleKey)}</h3></div>
+                    {#if roleCard(slot.roleKey)}
+                      <RoleCard card={roleCard(slot.roleKey)} headingLevel={4} />
+                    {/if}
                     <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-role")}>
                       <input type="hidden" name="slotId" value={slot.slotId} />
                       <label class="fm-field">
                         <span>Role</span>
                         <select name="roleKey">
                           {#each roleOptions as role}
-                            <option value={role.key} selected={slot.roleKey === role.key}>{role.label}</option>
+                            <option value={role.key} selected={slot.roleKey === role.key}>{role.optionLabel}</option>
                           {/each}
                         </select>
                       </label>

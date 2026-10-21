@@ -9,6 +9,7 @@ import { canonicalPhaseId, phaseLabelFromId } from "../../../../lib/phase-id.mjs
 import { resolveHostConsoleAccess } from "../host/host-route-model.mjs";
 import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
 import { seatLabel } from "../../../../lib/app/seat-presenter.mjs";
+import { buildRoleCardViewModel } from "../../../../lib/components/role-card/role-card-model.mjs";
 
 export const HOST_SETUP_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "host-setup-surface",
@@ -111,15 +112,13 @@ export function normalizeHostSetupState(raw, { game }) {
       ),
       roles: Object.freeze(
         Array.isArray(pack.roles) && pack.roles.length > 0
-          ? pack.roles.map((role) => Object.freeze({
-              key: normalizeId(role.key, "pack.roles.key"),
-              label: normalizeOptionalText(role.label) ?? humanizeIdentifier(role.key),
-              description: normalizeOptionalText(role.description) ?? "",
-            }))
+          ? pack.roles.map(normalizeSetupRoleOption)
           : (Array.isArray(pack.role_keys) ? pack.role_keys : []).map((key) => Object.freeze({
               key: String(key),
-              label: humanizeIdentifier(key),
+              label: String(key),
+              optionLabel: String(key),
               description: "",
+              card: null,
             })),
       ),
       startPhaseOptions: Object.freeze(
@@ -439,6 +438,21 @@ function authenticatedReadHeaders(sessionToken) {
   return typeof sessionToken === "string" && sessionToken.trim() !== ""
     ? Object.freeze({ authorization: `Bearer ${sessionToken}` })
     : null;
+}
+
+// The server owns role labels (RFC 0009); the compact card renders the same
+// reference the public /roles page does.
+function normalizeSetupRoleOption(role) {
+  const key = normalizeId(role.key, "pack.roles.key");
+  const label = normalizeOptionalText(role.label) ?? key;
+  const card = buildRoleCardViewModel({ reference: role.reference ?? null, variant: "compact" });
+  return Object.freeze({
+    key,
+    label,
+    optionLabel: card === null ? label : `${label} · ${card.alignment.label}`,
+    description: normalizeOptionalText(role.description) ?? "",
+    card,
+  });
 }
 
 function humanizeIdentifier(value) {

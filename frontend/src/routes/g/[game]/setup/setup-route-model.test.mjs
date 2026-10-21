@@ -345,3 +345,33 @@ function jsonResponse(body) {
     },
   };
 }
+
+test("setup role options carry server labels and compact cards from the role reference", async () => {
+  const { fixturePackRoleReference } = await import("../../../../lib/dev/pack-role-reference-fixture.mjs");
+  const doctor = fixturePackRoleReference("mafiascum").roles.find((role) => role.key === "doctor");
+  const state = normalizeHostSetupState(
+    {
+      game,
+      created: true,
+      pack: {
+        key: "mafiascum",
+        name: "Mafiascum",
+        valid: true,
+        role_keys: ["doctor", "test_only"],
+        roles: [
+          { key: "doctor", label: "Doctor", description: doctor.summary, reference: doctor },
+          { key: "test_only", label: "test_only", description: "", reference: null },
+        ],
+        start_phase_options: ["D01"],
+      },
+      slots: [],
+    },
+    { game },
+  );
+  const [withReference, withoutReference] = state.pack.roles;
+  assert.equal(withReference.optionLabel, "Doctor · Town");
+  assert.equal(withReference.card.variant, "compact");
+  assert.equal(withReference.card.abilities[0].label, "Protect");
+  assert.equal(withoutReference.card, null);
+  assert.equal(withoutReference.optionLabel, "test_only");
+});
