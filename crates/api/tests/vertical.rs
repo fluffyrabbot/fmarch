@@ -1,5 +1,7 @@
 #[path = "vertical/discussion_citations.rs"]
 mod discussion_citations;
+#[path = "vertical/flip_role_reveals.rs"]
+mod flip_role_reveals;
 #[path = "vertical/posting_budget.rs"]
 mod posting_budget;
 #[path = "vertical/public_game_citations.rs"]

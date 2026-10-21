@@ -2627,6 +2627,19 @@ test("Rust-style CBOR int64 values retain safe numeric envelope ids", async () =
   assert.equal(normalizeServerEnvelopeMessage(unsafe), null);
 });
 
+test("live thread DTO accepts projection-decided role reveals", () => {
+  const reveal = { slot_id: "slot-2", role_key: "vanilla_townie", reference: null };
+  const frame = deltaEnvelope("ThreadPostsChanged", { game: "midsummer", posts: [canonicalThreadPost({ role_reveals: [reveal] })] });
+  assert.equal(normalizeServerEnvelopeMessage(frame)?.kind, "delta");
+  const post = frame.body.body.delta.body.posts[0];
+  post.role_reveals = [];
+  assert.equal(normalizeServerEnvelopeMessage(frame)?.kind, "delta");
+  for (const role_reveals of [null, [{}], [{ ...reveal, slot_id: "" }], [{ ...reveal, reference: "Vanilla" }], [{ ...reveal, extra: true }]]) {
+    post.role_reveals = role_reveals;
+    assert.equal(normalizeServerEnvelopeMessage(frame), null);
+  }
+});
+
 test("live thread DTO accepts Rust's null embed and decided mention spans", () => {
   const frame = deltaEnvelope("ThreadPostsChanged", { game: "midsummer", posts: [canonicalThreadPost({ embed: null, mentions: [{ slot_id: "slot-2", offset: 0, len: 7 }] })] });
   assert.equal(normalizeServerEnvelopeMessage(frame)?.kind, "delta");

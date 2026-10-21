@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "2f5464c74f8fbf8d13ff32f6b6d54b148513d31ccceb77da7aca43845c5d70fc",
+  "current_schema_sha256": "5b5dfb146e7dfe2d47f8ad88ab2602fac32fc5edf73bfaa9347cd85c4e8fc990",
   "migrations": [
     {
       "version": 1,
@@ -97,6 +97,11 @@
       "version": 19,
       "filename": "0019_release_acceptance_accounts.sql",
       "sha256": "8e82f5dfef973cddf074787cb223e8c1baa44f6309c05a2c927c5a0ba94ee1d6"
+    },
+    {
+      "version": 20,
+      "filename": "0020_thread_role_reveals.sql",
+      "sha256": "8924dd6a8e8925fbeb5e239facb44daf2235da2888d0530905a0a48a9278aec4"
     }
   ],
   "authority_fingerprint_sha256": "8377002a79cab2c29ee600b7df4b31e9b11cf7e37a017ef9fd83401807fa5da5"

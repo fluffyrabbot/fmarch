@@ -552,9 +552,22 @@ pub struct ThreadPostRow {
     /// Seats this post addressed, decided at write time. Renderers walk this
     /// list; they never scan the body for `@`.
     pub mentions: Vec<SlotMention>,
+    /// Roles this post made public, decided at write time from the
+    /// projection's own reveal flags. A seat appears here only while its
+    /// `role_revealed` flag is set, so a concealed or alignment-only flip
+    /// never carries a role.
+    pub role_reveals: Vec<ThreadRoleReveal>,
     pub embed: Option<game_platform::embed::PostEmbed>,
     pub citation_count: i64,
     pub occurred_at: i64,
+}
+
+/// One seat whose role a system post made public.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThreadRoleReveal {
+    pub slot_id: String,
+    pub role_key: String,
 }
 
 /// Public attribution carried by a game-thread post.
@@ -1467,6 +1480,7 @@ async fn fold_event(
                     media,
                     quotations: quotations.clone(),
                     mentions: mentions.clone(),
+                    role_reveals: Vec::new(),
                     embed,
                     occurred_at: ev.occurred_at,
                 },
@@ -1540,7 +1554,10 @@ async fn fold_event(
                 )
                 .await?;
             }
-            if let Some(body) = resolution_thread_announcement_body(&applied) {
+            let public_roles = publicly_revealed_roles(tx, game_id, &applied).await?;
+            if let Some((body, role_reveals)) =
+                resolution_thread_announcement(&applied, &public_roles)
+            {
                 insert_thread_post(
                     tx,
                     ThreadPostInsert {
@@ -1554,6 +1571,7 @@ async fn fold_event(
                         media: serde_json::json!([]),
                         quotations: Vec::new(),
                         mentions: Vec::new(),
+                        role_reveals,
                         embed: None,
                         occurred_at: ev.occurred_at,
                     },
@@ -9553,7 +9571,7 @@ async fn thread_view_for_channel_with_visibility(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_kind,
                author_slot_id, phase_id, body, body_private, media, quotations, mentions, embed,
-               occurred_at,
+               occurred_at, role_reveals,
                CASE WHEN channel_id <> 'main' THEN (
                    SELECT COUNT(*)::bigint FROM game_private_citation AS citation
                    JOIN thread_view AS quoting ON quoting.game_id = citation.game_id
@@ -9653,6 +9671,12 @@ async fn thread_view_for_channel_with_visibility(
                 media: r.get("media"),
                 quotations,
                 mentions,
+                role_reveals: serde_json::from_value(r.get("role_reveals")).map_err(|source| {
+                    ProjectionError::Payload {
+                        kind: "ResolutionApplied".into(),
+                        source,
+                    }
+                })?,
                 embed: match r.get::<Option<serde_json::Value>, _>("embed") {
                     None | Some(serde_json::Value::Null) => None,
                     Some(value) => serde_json::from_value(value).map_err(|source| {
@@ -11107,6 +11131,7 @@ struct ThreadPostInsert {
     media: serde_json::Value,
     quotations: Vec<Quotation>,
     mentions: Vec<SlotMention>,
+    role_reveals: Vec<ThreadRoleReveal>,
     embed: Option<game_platform::embed::PostEmbed>,
     occurred_at: i64,
 }
@@ -11131,6 +11156,11 @@ async fn insert_thread_post(
         kind: "PostSubmitted".into(),
         source,
     })?;
+    let role_reveals =
+        serde_json::to_value(&post.role_reveals).map_err(|source| ProjectionError::Payload {
+            kind: "ResolutionApplied".into(),
+            source,
+        })?;
     let (author_kind, author_slot_id) = match post.author {
         GameThreadAuthor::Slot { slot_id } => ("slot", Some(slot_id)),
         GameThreadAuthor::HostNarrator => ("host_narrator", None),
@@ -11140,6 +11170,14 @@ async fn insert_thread_post(
     // them in a plaintext column would disclose that room's membership to any
     // surface readable from main, so the decided list travels inside the sealed
     // envelope exactly as quotations already do.
+    // Only the public main thread announces a flip; a role reveal can never
+    // ride a private room's plaintext column.
+    if post.channel_id != "main" && !post.role_reveals.is_empty() {
+        return Err(ProjectionError::Payload {
+            kind: "ResolutionApplied".into(),
+            source: serde::de::Error::custom("a role reveal may only be posted to main"),
+        });
+    }
     let (body, body_private, stored_quotations, stored_mentions) = if post.channel_id == "main" {
         (Some(post.body.as_str()), None, quotations, mentions)
     } else {
@@ -11167,9 +11205,9 @@ async fn insert_thread_post(
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_kind,
             author_slot_id, phase_id, body, body_private, media, quotations, mentions, embed,
-            occurred_at
+            occurred_at, role_reveals
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -11187,6 +11225,7 @@ async fn insert_thread_post(
     .bind(&stored_mentions)
     .bind(&embed)
     .bind(post.occurred_at)
+    .bind(&role_reveals)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -11223,7 +11262,71 @@ async fn upsert_post_policy(
     Ok(())
 }
 
-fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> Option<String> {
+/// Seats an announcement in `applied` names, in announcement order.
+fn resolution_announced_slots(applied: &domain::ResolutionApplied) -> Vec<&str> {
+    let mut slots = Vec::new();
+    for indexed in &applied.events {
+        match &indexed.event {
+            domain::InnerEvent::DayAnnouncement(note) => slots.push(note.player_id.as_str()),
+            domain::InnerEvent::RoleRevealed { slot_id, .. } => slots.push(slot_id.as_str()),
+            domain::InnerEvent::PhaseAnnouncement(announcement) => slots.extend(
+                announcement
+                    .deaths
+                    .iter()
+                    .map(|death| death.slot_id.as_str()),
+            ),
+            _ => {}
+        }
+    }
+    slots
+}
+
+/// The public role of every seat `applied` announces, read after its inner
+/// events have folded. Only `role_revealed` seats appear: the reveal mode a
+/// death folded with (`reveal_slot_death`) is the sole authority, so a
+/// Janitor, Flipless or alignment-only flip yields no role here.
+async fn publicly_revealed_roles(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    applied: &domain::ResolutionApplied,
+) -> Result<BTreeMap<String, String>, ProjectionError> {
+    let announced: BTreeSet<&str> = resolution_announced_slots(applied).into_iter().collect();
+    if announced.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    Ok(slot_state(&mut **tx, game_id)
+        .await?
+        .into_iter()
+        .filter(|slot| slot.role_revealed && announced.contains(slot.slot_id.as_str()))
+        .filter_map(|slot| slot.role_key.map(|role_key| (slot.slot_id, role_key)))
+        .collect())
+}
+
+/// The system post a resolution publishes to main, with the roles it made
+/// public. `public_roles` is the projection's reveal-gated role per seat.
+fn resolution_thread_announcement(
+    applied: &domain::ResolutionApplied,
+    public_roles: &BTreeMap<String, String>,
+) -> Option<(String, Vec<ThreadRoleReveal>)> {
+    let body = resolution_thread_announcement_body(applied, public_roles)?;
+    let mut seen = BTreeSet::new();
+    let role_reveals = resolution_announced_slots(applied)
+        .into_iter()
+        .filter(|slot_id| seen.insert(*slot_id))
+        .filter_map(|slot_id| {
+            public_roles.get(slot_id).map(|role_key| ThreadRoleReveal {
+                slot_id: slot_id.to_string(),
+                role_key: role_key.clone(),
+            })
+        })
+        .collect();
+    Some((body, role_reveals))
+}
+
+fn resolution_thread_announcement_body(
+    applied: &domain::ResolutionApplied,
+    public_roles: &BTreeMap<String, String>,
+) -> Option<String> {
     let mut lines = Vec::new();
     for indexed in &applied.events {
         match &indexed.event {
@@ -11233,9 +11336,12 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                 } else {
                     format!("attackers: {}", note.attackers.join(", "))
                 };
+                // The announcement names a role only when the death folded
+                // with a public role; a concealed flip says nothing more.
                 let role = note
                     .role_key
                     .as_deref()
+                    .filter(|_| public_roles.contains_key(note.player_id.as_str()))
                     .map(|role| format!("; role: {role}"))
                     .unwrap_or_default();
                 let template = note

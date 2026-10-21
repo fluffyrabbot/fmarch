@@ -1408,7 +1408,7 @@ function isCanonicalThreadPost(post) {
         "citation_count",
         "occurred_at",
       ],
-      ["embed", "mentions"],
+      ["embed", "mentions", "role_reveals"],
     ) ||
     !isIdentifier(post.game) ||
     !isPositiveSafeInteger(post.source_seq) ||
@@ -1423,6 +1423,8 @@ function isCanonicalThreadPost(post) {
     !post.quotations.every(isCanonicalQuotation) ||
     (post.mentions !== undefined &&
       (!Array.isArray(post.mentions) || !post.mentions.every(isCanonicalThreadPostMention))) ||
+    (post.role_reveals !== undefined &&
+      (!Array.isArray(post.role_reveals) || !post.role_reveals.every(isCanonicalThreadPostRoleReveal))) ||
     !isNonNegativeSafeInteger(post.citation_count) ||
     !isNonNegativeSafeInteger(post.occurred_at)
   ) {
@@ -1437,6 +1439,17 @@ function isCanonicalThreadPostMention(mention) {
     isIdentifier(mention.slot_id) &&
     isNonNegativeSafeInteger(mention.offset) &&
     isPositiveSafeInteger(mention.len)
+  );
+}
+
+// The reference is the server's projection of a public pack role; its shape is
+// owned by normalizeRoleReference, which turns anything malformed into no chip.
+function isCanonicalThreadPostRoleReveal(reveal) {
+  return (
+    hasExactKeys(reveal, ["slot_id", "role_key", "reference"]) &&
+    isIdentifier(reveal.slot_id) &&
+    isIdentifier(reveal.role_key) &&
+    (reveal.reference === null || isPlainRecord(reveal.reference))
   );
 }
 

@@ -453,10 +453,12 @@ async fn public_game_thread(
     .await?
     .ok_or_else(post_unavailable)?;
     let roster = load_game_roster(&state.pool, game).await?;
+    let mut posts: Vec<ThreadPost> = page.posts.into_iter().map(ThreadPost::from).collect();
+    attach_role_references(&state.pool, game, &mut posts).await?;
     Ok(Json(PublicGameThreadPage {
         next_after_seq: page.next_after_seq,
         game: GameIndexEntry::from(game_row),
-        posts: page.posts.into_iter().map(ThreadPost::from).collect(),
+        posts,
         next_before_seq: page.next_before_seq,
         roster,
     }))
@@ -525,7 +527,37 @@ async fn channel_thread_view(
     )
     .await?
     .ok_or_else(post_unavailable)?;
-    Ok(Json(ThreadPage::from(page)))
+    let mut page = ThreadPage::from(page);
+    attach_role_references(&state.pool, game, &mut page.posts).await?;
+    Ok(Json(page))
+}
+
+/// Attach the pack's presentation to every role a post revealed. The reveal
+/// list is already gated by the projection's reveal flags; this only names
+/// what is public. An unloadable pack degrades to reveals without a
+/// reference, as the endgame summary does.
+async fn attach_role_references(
+    pool: &PgPool,
+    game: Uuid,
+    posts: &mut [ThreadPost],
+) -> Result<(), projections::ProjectionError> {
+    if posts.iter().all(|post| post.role_reveals.is_empty()) {
+        return Ok(());
+    }
+    let Some(artifact) = projections::game_pack_artifact(pool, game).await? else {
+        return Ok(());
+    };
+    let Ok(pack) = resolve_pack_artifact(&artifact) else {
+        return Ok(());
+    };
+    for reveal in posts
+        .iter_mut()
+        .flat_map(|post| post.role_reveals.iter_mut())
+    {
+        reveal.reference =
+            content_registry::product_role_reference(pack.document(), &reveal.role_key);
+    }
+    Ok(())
 }
 
 fn post_unavailable() -> ApiError {
@@ -626,9 +658,11 @@ pub(super) async fn current_thread_posts_delta(
     } else {
         projections::thread_view_for_channel(pool, game, channel, None, 50).await?
     };
+    let mut posts: Vec<ThreadPost> = page.posts.into_iter().map(ThreadPost::from).collect();
+    attach_role_references(pool, game, &mut posts).await?;
     Ok(ProjectionDelta::ThreadPostsChanged(ThreadPostsDelta {
         game,
-        posts: page.posts.into_iter().map(ThreadPost::from).collect(),
+        posts,
     }))
 }
 
@@ -646,11 +680,10 @@ pub(super) async fn current_thread_posts_after_delta(
     if page.posts.is_empty() {
         return Ok(None);
     }
+    let mut posts: Vec<ThreadPost> = page.posts.into_iter().map(ThreadPost::from).collect();
+    attach_role_references(pool, game, &mut posts).await?;
     Ok(Some(ProjectionDelta::ThreadPostsChanged(
-        ThreadPostsDelta {
-            game,
-            posts: page.posts.into_iter().map(ThreadPost::from).collect(),
-        },
+        ThreadPostsDelta { game, posts },
     )))
 }
 

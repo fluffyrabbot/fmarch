@@ -1384,9 +1384,11 @@ CREATE TABLE public.thread_view (
     body_private_kid text GENERATED ALWAYS AS ((body_private ->> 'kid'::text)) STORED,
     embed jsonb,
     mentions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    role_reveals jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT thread_view_author_shape CHECK ((((author_kind = 'slot'::text) AND (author_slot_id IS NOT NULL) AND (btrim(author_slot_id) <> ''::text)) OR ((author_kind = ANY (ARRAY['host_narrator'::text, 'system'::text])) AND (author_slot_id IS NULL)))),
     CONSTRAINT thread_view_body_private_kid_shape CHECK ((((body_private IS NULL) AND (body_private_kid IS NULL)) OR ((body_private IS NOT NULL) AND (body_private_kid IS NOT NULL)))),
-    CONSTRAINT thread_view_body_storage CHECK ((((channel_id = 'main'::text) AND (body IS NOT NULL) AND (body_private IS NULL)) OR ((channel_id <> 'main'::text) AND (body IS NULL) AND (body_private IS NOT NULL))))
+    CONSTRAINT thread_view_body_storage CHECK ((((channel_id = 'main'::text) AND (body IS NOT NULL) AND (body_private IS NULL)) OR ((channel_id <> 'main'::text) AND (body IS NULL) AND (body_private IS NOT NULL)))),
+    CONSTRAINT thread_view_role_reveals_shape CHECK (((jsonb_typeof(role_reveals) = 'array'::text) AND ((channel_id = 'main'::text) OR (role_reveals = '[]'::jsonb))))
 );
 
 
