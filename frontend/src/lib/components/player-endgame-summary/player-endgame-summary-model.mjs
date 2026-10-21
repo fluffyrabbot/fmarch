@@ -1,3 +1,4 @@
+import { buildRoleCardViewModel } from "../role-card/role-card-model.mjs";
 export const PLAYER_ENDGAME_SUMMARY_CONTRACT = Object.freeze({
   componentName: "player-endgame-summary",
   rootClassName: "player-endgame-summary fm-card",
@@ -29,6 +30,11 @@ export function buildPlayerEndgameSummaryViewModel({
   }
   const summary = endgameSummary?.completed === true ? endgameSummary : null;
   const winner = summary?.winner ?? null;
+  const revealedRole = (slot) =>
+    slot.roleRevealed && slot.role != null ? slot.role : null;
+  const winnerAlignment = (summary?.slots ?? [])
+    .map(revealedRole)
+    .find((role) => role !== null && role.alignment.key === winner?.alignment)?.alignment;
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_ENDGAME_SUMMARY_CONTRACT.rootClassName,
@@ -46,7 +52,7 @@ export function buildPlayerEndgameSummaryViewModel({
       label:
         winner === null
           ? "Result pending"
-          : `${humanizeTag(winner.alignment)} wins`,
+          : `${winnerAlignment?.label ?? humanizeTag(winner.alignment)} wins`,
       detail:
         winner === null
           ? "The result is not public yet; it appears here once the host completes the reveal."
@@ -61,12 +67,22 @@ export function buildPlayerEndgameSummaryViewModel({
           className: PLAYER_ENDGAME_SUMMARY_CONTRACT.rowClassName,
           slotLabel: names.label(slot.slotId),
           roleLabel:
-            slot.roleRevealed && slot.roleKey !== null
+            revealedRole(slot)?.name ??
+            (slot.roleRevealed && slot.roleKey !== null
               ? humanizeTag(slot.roleKey)
-              : "Unrevealed",
+              : "Unrevealed"),
+          // Chip and modal cards exist only for roles the projection revealed.
+          roleChip:
+            revealedRole(slot) === null
+              ? null
+              : buildRoleCardViewModel({ role: revealedRole(slot), variant: "chip" }),
+          roleCard:
+            revealedRole(slot) === null
+              ? null
+              : buildRoleCardViewModel({ role: revealedRole(slot), variant: "full" }),
           alignmentLabel:
             slot.alignmentRevealed && slot.alignment !== null
-              ? humanizeTag(slot.alignment)
+              ? revealedRole(slot)?.alignment.label ?? humanizeTag(slot.alignment)
               : "Unrevealed",
           fateLabel: slot.alive ? "Survived" : humanizeTag(slot.status || "dead"),
           minTouchTargetPx: PLAYER_ENDGAME_SUMMARY_CONTRACT.minTouchTargetPx,

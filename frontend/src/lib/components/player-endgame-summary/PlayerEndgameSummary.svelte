@@ -1,5 +1,10 @@
 <script>
+  import RoleCard from "../role-card/RoleCard.svelte";
+  import RoleModal from "../role-card/RoleModal.svelte";
+
   export let view;
+
+  let openRole = null;
 </script>
 
 {#if view}
@@ -34,7 +39,19 @@
             data-min-touch-target-px={row.minTouchTargetPx}
           >
             <span>{row.slotLabel}</span>
-            <strong>{row.roleLabel}</strong>
+            {#if row.roleChip}
+              <button
+                class="player-endgame-summary__role"
+                type="button"
+                aria-haspopup="dialog"
+                aria-label={`${row.roleLabel}: open role card`}
+                on:click={() => (openRole = row.roleCard)}
+              >
+                <RoleCard card={row.roleChip} />
+              </button>
+            {:else}
+              <strong>{row.roleLabel}</strong>
+            {/if}
             <span>{row.alignmentLabel}</span>
             <small>{row.fateLabel}</small>
           </div>
@@ -71,5 +88,27 @@
     <p class="player-endgame-summary__boundary" data-testid={view.boundary.testId}>
       {view.boundary.message}
     </p>
+
+    <RoleModal
+      card={openRole}
+      open={openRole !== null}
+      eyebrow="Revealed role"
+      testId="player-endgame-role-modal"
+      onClose={() => (openRole = null)}
+    />
   </section>
 {/if}
+
+<style>
+  .player-endgame-summary__role {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    min-block-size: 44px;
+    padding: 0;
+  }
+</style>

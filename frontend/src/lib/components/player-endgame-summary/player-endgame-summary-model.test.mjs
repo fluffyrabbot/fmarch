@@ -158,3 +158,31 @@ test("unrevealed slots stay unrevealed in the table", () => {
     [["Unrevealed", "Unrevealed"]],
   );
 });
+
+test("only roles the projection revealed become role chips with a modal card", async () => {
+  const { fixturePackRoleReference } = await import("../../dev/pack-role-reference-fixture.mjs");
+  const { normalizeRoleReference } = await import("../role-card/role-reference-model.mjs");
+  const role = (key) =>
+    normalizeRoleReference(fixturePackRoleReference("default_open").roles.find((item) => item.key === key));
+  const view = buildPlayerEndgameSummaryViewModel({
+    gameCompleted: true,
+    endgameSummary: {
+      completed: true,
+      winner: { alignment: "town", reason: "Mafia eliminated", phaseId: "D02" },
+      slots: [
+        { slotId: "slot_1", alive: false, status: "dead", roleKey: "agent", alignment: "mafia", roleRevealed: true, alignmentRevealed: true, role: role("agent") },
+        { slotId: "slot_2", alive: true, status: "alive", roleKey: null, alignment: null, roleRevealed: false, alignmentRevealed: false, role: role("seer") },
+      ],
+      voteHistory: [],
+      boundary: "",
+    },
+  });
+  const [revealed, hidden] = view.rows;
+  assert.equal(revealed.roleLabel, "Agent");
+  assert.equal(revealed.roleChip.variant, "chip");
+  assert.equal(revealed.roleCard.variant, "full");
+  assert.equal(revealed.alignmentLabel, "Mafia");
+  assert.equal(hidden.roleLabel, "Unrevealed");
+  assert.equal(hidden.roleChip, null, "an unrevealed slot never carries a role card");
+  assert.equal(hidden.roleCard, null);
+});

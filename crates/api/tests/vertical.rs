@@ -4087,6 +4087,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
     );
     assert!(
         ongoing.slots.iter().all(|slot| slot.role_key.is_none()
+            && slot.role.is_none()
             && slot.alignment.is_none()
             && !slot.role_revealed
             && !slot.alignment_revealed),
@@ -4150,6 +4151,11 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
     assert!(!citizen.alive, "the night kill folds into the summary");
     assert_eq!(citizen.role_key.as_deref(), Some("citizen"));
     assert_eq!(citizen.alignment.as_deref(), Some("town"));
+    assert_eq!(
+        citizen.role.as_ref().map(|role| role.name.as_str()),
+        Some("Citizen"),
+        "a revealed role carries its public reference"
+    );
     let agent = won
         .slots
         .iter()

@@ -697,6 +697,11 @@ export function normalizeEndgameSummary(payload, fallback = null) {
               slot.role_revealed === true || slot.roleRevealed === true,
             alignmentRevealed:
               slot.alignment_revealed === true || slot.alignmentRevealed === true,
+            // A reference is only ever attached to a role the projection made public.
+            role:
+              slot.role_revealed === true || slot.roleRevealed === true
+                ? normalizeRoleReference(slot.role ?? null)
+                : null,
           }),
         ),
     ),

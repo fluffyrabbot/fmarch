@@ -213,6 +213,10 @@ pub struct EndgameSlotReveal {
     pub alignment: Option<String>,
     pub role_revealed: bool,
     pub alignment_revealed: bool,
+    /// The revealed role's public reference (RFC 0009); present only when the
+    /// projection has made this slot's role public.
+    #[serde(default)]
+    pub role: Option<game_platform::role_reference::RoleReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -260,10 +264,23 @@ async fn endgame_summary(
     } else {
         Vec::new()
     };
-    let slots = projections::slot_state(&state.pool, game)
-        .await?
+    let slot_rows = projections::slot_state(&state.pool, game).await?;
+    // Only a public role is ever projected; an unloadable pack degrades to no
+    // reference rather than failing the reveal-gated summary.
+    let pack = if slot_rows.iter().any(|slot| slot.role_revealed) {
+        load_pack_for_game(&state, game).await.ok()
+    } else {
+        None
+    };
+    let slots = slot_rows
         .into_iter()
         .map(|slot| EndgameSlotReveal {
+            role: match (&pack, slot.role_revealed, slot.role_key.as_deref()) {
+                (Some(pack), true, Some(key)) => {
+                    content_registry::product_role_reference(pack.document(), key)
+                }
+                _ => None,
+            },
             slot_id: slot.slot_id,
             alive: slot.alive,
             status: slot.status,
