@@ -147,6 +147,7 @@ try {
   const adminAuditDetailSurface = await proveRenderedAdminAuditDetailSurface(bundle);
   const playerSurface = await proveRenderedPlayerSurface(bundle);
   const playerThreadPagerStates = await proveRenderedPlayerThreadPagerStates(bundle);
+  const playerThreadRoleReveals = await proveRenderedPlayerThreadRoleReveals(bundle);
   const playerPrivateReviewRoute = await proveRenderedPlayerPrivateReviewRoute(bundle);
   const playerPrivateChannelRoute = await proveRenderedPlayerPrivateChannelRoute(bundle);
   const moderatorSurface = await proveRenderedModeratorSurface(bundle);
@@ -191,6 +192,7 @@ try {
     adminAuditDetailSurface,
     playerSurface,
     playerThreadPagerStates,
+    playerThreadRoleReveals,
     playerPrivateReviewRoute,
     playerPrivateChannelRoute,
     moderatorSurface,
@@ -1653,6 +1655,24 @@ async function proveRenderedPlayerSurface(bundle) {
   };
 }
 
+async function proveRenderedPlayerThreadRoleReveals(bundle) {
+  const { html } = await bundle.renderPlayerThreadRoleReveals();
+  assertIncludes(html, 'data-testid="thread-post-roles-41"', "flip post role reveal list");
+  assertIncludes(html, 'data-testid="thread-post-role-41-slot_1-open"', "flip post role chip button");
+  assertIncludes(html, 'aria-haspopup="dialog"', "role chip opens a dialog");
+  assertIncludes(html, 'data-variant="chip"', "role chip renders the chip card variant");
+  assertIncludes(html, 'data-role-key="vanilla_townie"', "role chip names the revealed role");
+  assertIncludes(html, 'data-testid="thread-post-roles-41-modal"', "role chip modal");
+  assertExcludes(html, 'data-testid="thread-post-roles-42"', "a concealed flip renders no role list");
+  assertExcludes(html, "flipless_townie", "a concealed flip never names its role");
+  return {
+    boundary:
+      "Build-mode Svelte SSR renders a flip post's projection-decided role reveal as a chip button that opens the role modal, and a concealed flip post with no role list. Opening the dialog is covered by browser lanes.",
+    revealedPost: 41,
+    concealedPost: 42,
+  };
+}
+
 async function proveRenderedPlayerThreadPagerStates(bundle) {
   const pending = await assertRenderedPlayerThreadPagerState({
     bundle,
@@ -2210,6 +2230,8 @@ import { buildPlayerEndgameSummaryViewModel } from "../src/lib/components/player
 import PlayerFeedback from "../src/lib/components/player-command/PlayerFeedback.svelte";
 import PlayerPrivateQueue from "../src/lib/components/player-private-queue/PlayerPrivateQueue.svelte";
 import PlayerThread from "../src/lib/components/player-thread/PlayerThread.svelte";
+import { normalizeThreadPost } from "../src/lib/app/cold-load.mjs";
+import { fixturePackRoleReference } from "../src/lib/dev/pack-role-reference-fixture.mjs";
 import {
   buildAdminAuditDetailData,
   buildAdminRouteData,
@@ -2498,6 +2520,40 @@ export async function renderPlayerVoteConfirmation() {
         roster: data.commandState?.roster ?? [],
       }),
       onCommand: () => {},
+    },
+  });
+}
+
+export async function renderPlayerThreadRoleReveals() {
+  const reference = fixturePackRoleReference("mafiascum").roles.find((role) => role.key === "vanilla_townie");
+  const flip = (sourceSeq, body, roleReveals) => normalizeThreadPost({
+    game: "midsummer",
+    source_seq: sourceSeq,
+    stream_seq: sourceSeq,
+    channel_id: "main",
+    author: { kind: "system" },
+    phase_id: "N01",
+    body,
+    media: [],
+    quotations: [],
+    mentions: [],
+    role_reveals: roleReveals,
+    citation_count: 0,
+    occurred_at: 1,
+  });
+  return render(PlayerThread, {
+    props: {
+      thread: {
+        nextBeforeSeq: null,
+        posts: [
+          flip(41, "Phase N01 announcement: slot_1 (night_kill).", [
+            { slot_id: "slot_1", role_key: "vanilla_townie", reference },
+          ]),
+          flip(42, "Phase N01 announcement: slot_3 (janitor_kill).", []),
+        ],
+      },
+      liveOfficialPost: null,
+      threadPageStatus: null,
     },
   });
 }

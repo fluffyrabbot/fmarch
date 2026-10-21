@@ -1,5 +1,6 @@
 <script>
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import ThreadRoleReveals from "$lib/components/role-card/ThreadRoleReveals.svelte";
   import {
     PLAYER_THREAD_MEDIA_CONTRACT,
     buildPlayerThreadViewModel,
@@ -159,6 +160,7 @@
           {:else}{segment.text}{/if}
         {/each}
       </p>
+      <ThreadRoleReveals reveals={post.roleReveals} testId={`thread-post-roles-${post.seq}`} />
       {#if post.embed !== null}
         <div class="player-surface__embed" data-testid={`thread-post-embed-${post.seq}`}>
           {#if activeEmbedSeq === post.seq}
