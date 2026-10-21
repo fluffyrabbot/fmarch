@@ -10,6 +10,7 @@ import {
 import { buildPlayerThreadEmbedView } from "../../../lib/app/youtube-embed.mjs";
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 import { seatNames } from "../../../lib/app/seat-presenter.mjs";
+import { buildThreadRoleRevealViews } from "../../../lib/components/role-card/thread-role-reveals.mjs";
 
 export { GAME_CITATION_PREVIEW_LIMIT };
 
@@ -109,6 +110,12 @@ export function buildPublicGamePosts(posts = [], citationPages = {}, gameId, ros
         citationCount,
         incomingCitations,
         moreCitationCount: Math.max(0, citationCount - incomingCitations.length),
+        // Chips walk the projection's decided reveals, never the body.
+        roleReveals: buildThreadRoleRevealViews(post.role_reveals, {
+          names,
+          at: Number(post.source_seq),
+          testIdPrefix: `public-game-post-role-${post.source_seq}`,
+        }),
       });
     }),
   );

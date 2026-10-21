@@ -6,6 +6,7 @@ import {
   buildPublicGamePublication,
   buildPublicRoster,
 } from "./public-game-publication.mjs";
+import { fixturePackRoleReference } from "../../../lib/dev/pack-role-reference-fixture.mjs";
 
 test("public game publication creates a reading-first live record", () => {
   const view = buildPublicGamePublication({
@@ -87,4 +88,22 @@ test("public roster names seats robustly from occupancy history", () => {
     ["Unknown seat", null, null, true, "On leave"],
   ]);
   assert.deepEqual(buildPublicRoster(undefined), []);
+});
+
+test("public flip posts render only the roles the projection revealed", () => {
+  const reference = fixturePackRoleReference("mafiascum").roles.find((role) => role.key === "mafia_goon");
+  const [revealed, concealed] = buildPublicGamePosts([
+    {
+      source_seq: 7,
+      author: { kind: "system" },
+      body: "Phase D01 announcement: slot_2 (day_vote).",
+      role_reveals: [{ slot_id: "slot_2", role_key: "mafia_goon", reference }],
+    },
+    { source_seq: 8, author: { kind: "system" }, body: "Phase N01 announcement: slot_3 (janitor_kill)." },
+  ], {}, "game-1");
+  assert.deepEqual(
+    revealed.roleReveals.map((reveal) => [reveal.testId, reveal.roleLabel, reveal.chip.variant]),
+    [["public-game-post-role-7-slot_2", "Mafia Goon", "chip"]],
+  );
+  assert.deepEqual(concealed.roleReveals, []);
 });

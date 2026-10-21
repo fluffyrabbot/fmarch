@@ -11,6 +11,7 @@ import {
 import { seatNames } from "../../app/seat-presenter.mjs";
 import { buildSlotMentionSegments } from "../../app/slot-mention-model.mjs";
 import { buildPlayerThreadEmbedView } from "../../app/youtube-embed.mjs";
+import { buildThreadRoleRevealViews } from "../role-card/thread-role-reveals.mjs";
 
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
   component: "player-thread-media",
@@ -151,6 +152,12 @@ export function buildPlayerThreadPostViewModel(
     incomingCitations: quote.incomingCitations,
     moreCitationCount: quote.moreCitationCount,
     quoteEnabled: quoteEnabled === true && excerpt !== "",
+    // A flip post's chips walk the projection's decided reveals, never the body.
+    roleReveals: buildThreadRoleRevealViews(post.roleReveals, {
+      names,
+      at,
+      testIdPrefix: `thread-post-role-${post.seq}`,
+    }),
     // The renderer walks the decided list; it never scans the body for `@`.
     // A chip shows the addressed persona as of the post, not the stored span.
     bodySegments: buildSlotMentionSegments(post.body, post.mentions).map((segment) =>

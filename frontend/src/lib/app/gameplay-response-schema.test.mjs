@@ -655,6 +655,15 @@ test("thread DTO accepts absent and null optional embeds but rejects malformed e
   }
 });
 
+test("thread DTO checks projection-decided role reveals", () => {
+  for (const role_reveals of [undefined, [], [{ slot_id: "slot-2", role_key: "vanilla_townie", reference: null }], [{ slot_id: "slot-2", role_key: "vanilla_townie", reference: { key: "vanilla_townie" } }]]) {
+    assert.equal(validateGameplayThreadPageResponse({ ...threadPage(), posts: [{ ...threadPost(), role_reveals }] }, { game: "midsummer" }), true);
+  }
+  for (const role_reveals of [null, [{}], [{ slot_id: "", role_key: "vanilla_townie", reference: null }], [{ slot_id: "slot-2", role_key: "", reference: null }], [{ slot_id: "slot-2", role_key: "vanilla_townie", reference: "Vanilla" }]]) {
+    assert.equal(validateGameplayThreadPageResponse({ ...threadPage(), posts: [{ ...threadPost(), role_reveals }] }, { game: "midsummer" }), false);
+  }
+});
+
 test("thread DTO checks decided mention span fields", () => {
   for (const mentions of [[], [{ slot_id: "slot-2", offset: 0, len: 7 }]]) {
     assert.equal(validateGameplayThreadPageResponse({ ...threadPage(), posts: [{ ...threadPost(), mentions }] }, { game: "midsummer" }), true);
