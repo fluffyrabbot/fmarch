@@ -3,6 +3,7 @@ import { normalizeGameThreadAuthor } from "./game-thread-author.mjs";
 import { canonicalPrincipalId } from "../principal-id.mjs";
 import { canonicalPhaseId } from "../phase-id.mjs";
 import { normalizeRoleReference } from "../components/role-card/role-reference-model.mjs";
+import { normalizeThreadRoleReveals } from "../components/role-card/thread-role-reveals.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
@@ -169,6 +170,9 @@ export function normalizeThreadPage(page, fallback) {
 export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
   const media = normalizeThreadPostMedia(post?.media);
   const author = normalizeGameThreadAuthor(post?.author);
+  // Only roles the projection made public arrive here; a post without one
+  // keeps the shape every such post has always had.
+  const roleReveals = normalizeThreadRoleReveals(post?.role_reveals ?? post?.roleReveals);
   return Object.freeze({
     seq: post?.source_seq ?? post?.sourceSeq ?? post?.seq ?? null,
     streamSeq: post?.stream_seq ?? post?.streamSeq ?? null,
@@ -186,6 +190,7 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
       }),
     ...(media.length === 0 ? {} : { media }),
     ...(post?.embed == null ? {} : { embed: post.embed }),
+    ...(roleReveals.length === 0 ? {} : { roleReveals }),
   });
 }
 
