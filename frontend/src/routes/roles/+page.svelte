@@ -38,12 +38,28 @@
       <h1>Roles</h1>
       <p class="roles-hero__lede">Every role this pack can deal, what it does, and when it acts. Pick one to read its card.</p>
     </div>
-    <ul class="roles-hero__counts" aria-label="Roles by alignment">
-      {#each roles.counts as count}
-        <li data-alignment={count.id}><strong>{count.count}</strong><span>{count.label}</span></li>
-      {/each}
-    </ul>
+    {#if roles.status === "ready"}
+      <ul class="roles-hero__counts" aria-label="Roles by alignment">
+        {#each roles.counts as count}
+          <li data-alignment={count.family}><strong>{count.count}</strong><span>{count.label}</span></li>
+        {/each}
+      </ul>
+    {/if}
   </header>
+
+  {#if roles.status !== "ready"}
+    <div class="roles-empty" data-testid={contract.unavailableTestId} role="status">
+      <p>The role reference is unavailable right now. Try again in a moment.</p>
+      <a class="fm-touch-button fm-touch-button--secondary" href={contract.path}>Retry</a>
+    </div>
+  {:else}
+  <nav class="roles-packs" aria-label="Rule pack" data-testid={contract.packsTestId}>
+    {#each roles.packOptions as pack}
+      <a href={pack.href} aria-current={pack.current ? "page" : undefined} data-pack={pack.id}>
+        <span>{pack.label}</span><small>{pack.roleCount} roles</small>
+      </a>
+    {/each}
+  </nav>
 
   <div class="roles-filters">
     <form class="roles-search" method="GET" role="search" data-testid={contract.searchTestId}>
@@ -51,6 +67,7 @@
         <span>Search roles</span>
         <input name="q" type="search" maxlength="80" value={roles.query.q} placeholder="Doctor, block, reads…" />
       </label>
+      {#if roles.query.pack !== "mafia_universe"}<input type="hidden" name="pack" value={roles.query.pack} />{/if}
       {#if roles.query.alignment !== "all"}<input type="hidden" name="alignment" value={roles.query.alignment} />{/if}
       {#if roles.query.acts !== "any"}<input type="hidden" name="acts" value={roles.query.acts} />{/if}
       {#if roles.query.view !== "table"}<input type="hidden" name="view" value={roles.query.view} />{/if}
@@ -137,6 +154,7 @@
     testId={contract.modalTestId}
     onClose={() => (modalOpen = false)}
   />
+  {/if}
 </main>
 
 <style>
@@ -163,9 +181,32 @@
   .roles-segment { display: grid; gap: 6px; }
   .roles-segment__label { color: var(--fm-ink-muted); font-size: 13px; font-weight: 800; }
   .roles-segment__options { background: var(--fm-raised); border: 2px solid var(--fm-line); border-radius: 999px; display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; }
-  .roles-segment a { align-items: center; border-radius: 999px; color: var(--fm-ink-muted); display: inline-flex; font-size: 14px; font-weight: 800; min-block-size: 38px; padding: 0 14px; text-decoration: none; }
+  .roles-segment a { align-items: center; border-radius: 999px; color: var(--fm-ink-muted); display: inline-flex; font-size: 14px; font-weight: 800; min-block-size: 44px; padding: 0 14px; text-decoration: none; }
   .roles-segment a:hover { background: var(--fm-surface-muted); color: var(--fm-ink); }
   .roles-segment a[aria-current="true"] { background: var(--fm-accent); color: var(--fm-action-ink); }
+
+  .roles-packs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+  .roles-packs a {
+    align-items: baseline;
+    background: var(--fm-raised);
+    border: 2px solid var(--fm-line);
+    border-radius: var(--fm-radius-panel);
+    color: var(--fm-ink);
+    display: inline-flex;
+    flex: none;
+    font-weight: 800;
+    gap: 8px;
+    min-block-size: 44px;
+    padding: 10px 16px;
+    text-decoration: none;
+  }
+  .roles-packs a small { color: var(--fm-ink-muted); font-size: 12px; font-weight: 700; }
+  .roles-packs a:hover { border-color: var(--fm-accent); }
+  .roles-packs a[aria-current="page"] { background: var(--fm-accent); border-color: var(--fm-accent); color: var(--fm-action-ink); }
+  .roles-packs a[aria-current="page"] small { color: inherit; }
+  @media (forced-colors: active) {
+    .roles-packs a[aria-current="page"] { border-color: Highlight; outline: 2px solid Highlight; }
+  }
 
   .roles-result { color: var(--fm-ink-muted); font-size: 14px; font-weight: 700; margin: 0; }
 

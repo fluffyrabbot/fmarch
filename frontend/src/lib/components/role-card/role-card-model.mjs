@@ -1,4 +1,4 @@
-import { ROLE_ALIGNMENTS, ROLE_PACK, findRole } from "./role-catalog.mjs";
+import { UNALIGNED, normalizeRoleReference } from "./role-reference-model.mjs";
 
 export const ROLE_CARD_CONTRACT = Object.freeze({
   component: "role-card",
@@ -25,30 +25,76 @@ export const ROLE_ICON_PATHS = Object.freeze({
   passive: "M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zM8.5 12h7",
   trait: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   chat: "M5 5h14v10H10l-5 4z",
+  Redirect: "M4 7h12l-3-3M16 7l-3 3M20 17H8l3 3M8 17l3-3",
+  Clear: "M5 19h14M8 15l8-8 3 3-8 8H8z",
+  Grant: "M4 10h16v10H4zM12 10v10M4 14h16M12 10c-2-4-6-4-6-1.5S10 10 12 10c2 0 6 1 6-1.5S14 6 12 10",
+  Convert: "M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M6 21v-4h4",
+  Link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  Visit: "M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M3 21h18M14 12h.01",
+  Info: "M4 6h16v12H4zM4 7l8 6 8-6",
+  Duel: "M5 19L19 5M15 5h4v4M19 19L5 5M5 9V5h4",
+  Veto: "M7 11V6a2 2 0 0 1 4 0v4M11 10V4a2 2 0 0 1 4 0v6M15 10V6a2 2 0 0 1 4 0v8a7 7 0 0 1-14 0v-3a2 2 0 0 1 4 0",
+  Badge: "M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6l-5.4 2.9 1.2-6-4.5-4.2 6.1-.7z",
+});
+
+const ABILITY_ICONS = Object.freeze({
+  Retaliate: "Kill",
+  ItaShot: "Kill",
+  SelfDestruct: "Kill",
+  VoteDuel: "Duel",
 });
 
 const WINDOWS = Object.freeze({
-  Day: Object.freeze({ id: "day", label: "Day", icon: ROLE_ICON_PATHS.day }),
-  Night: Object.freeze({ id: "night", label: "Night", icon: ROLE_ICON_PATHS.night }),
-  Passive: Object.freeze({ id: "passive", label: "Passive", icon: ROLE_ICON_PATHS.passive }),
+  Day: Object.freeze({ id: "day", label: "Day", icon: ROLE_ICON_PATHS.day, cadence: "Every day" }),
+  Night: Object.freeze({ id: "night", label: "Night", icon: ROLE_ICON_PATHS.night, cadence: "Every night" }),
+  Twilight: Object.freeze({ id: "night", label: "Twilight", icon: ROLE_ICON_PATHS.night, cadence: "Every twilight" }),
+  Instant: Object.freeze({ id: "day", label: "Any time", icon: ROLE_ICON_PATHS.day, cadence: "Any time" }),
+  Any: Object.freeze({ id: "day", label: "Any time", icon: ROLE_ICON_PATHS.day, cadence: "Any time" }),
+  Passive: Object.freeze({ id: "passive", label: "Passive", icon: ROLE_ICON_PATHS.passive, cadence: "Always" }),
 });
 
 export function roleWindows(entry) {
   const windows = [];
   for (const action of entry?.actions ?? []) {
     const window = WINDOWS[action.window];
-    if (window && !windows.includes(window)) windows.push(window);
+    if (window && !windows.some((known) => known.label === window.label)) windows.push(window);
   }
   return Object.freeze(windows.length > 0 ? windows : [WINDOWS.Passive]);
 }
 
-export function roleAlignment(id) {
-  const alignment = ROLE_ALIGNMENTS.find((candidate) => candidate.id === id) ?? ROLE_ALIGNMENTS[0];
-  return Object.freeze({ ...alignment, icon: ROLE_ICON_PATHS[alignment.id] });
+// The crest follows the alignment's visual family; unaligned roles keep the
+// independent palette but a distinct crest and label.
+export function roleAlignment(alignment) {
+  const resolved = alignment ?? UNALIGNED;
+  return Object.freeze({
+    ...resolved,
+    icon: resolved.unaligned ? ROLE_ICON_PATHS.passive : ROLE_ICON_PATHS[resolved.id],
+  });
 }
 
-export function buildRoleCardViewModel({ role = null, roleKey = null, variant = "full", bare = false } = {}) {
-  const entry = role ?? findRole(roleKey);
+function abilityIcon(kind) {
+  return ROLE_ICON_PATHS[kind] ?? ROLE_ICON_PATHS[ABILITY_ICONS[kind]] ?? ROLE_ICON_PATHS.passive;
+}
+
+function abilityTags(action, window) {
+  const cadence = action.uses === null
+    ? window.cadence
+    : action.uses === 1 ? "Once per game" : `${action.uses} uses per game`;
+  return Object.freeze([
+    cadence,
+    action.roleblockable ? "Roleblockable" : "Unblockable",
+    `Priority ${action.priority}`,
+    ...action.notes,
+  ]);
+}
+
+/**
+ * `role` is a normalized entry (role-reference-model.mjs); `reference` is a
+ * raw wire RoleReference, normalized here. Either may be absent: an unknown
+ * role renders nothing.
+ */
+export function buildRoleCardViewModel({ role = null, reference = null, variant = "full", bare = false } = {}) {
+  const entry = role ?? (reference === null ? null : normalizeRoleReference(reference));
   if (entry === null) return null;
   const resolvedVariant = ROLE_CARD_CONTRACT.variants.includes(variant) ? variant : "full";
   const alignment = roleAlignment(entry.alignment);
@@ -63,23 +109,22 @@ export function buildRoleCardViewModel({ role = null, roleKey = null, variant = 
     key: entry.key,
     name: entry.name,
     summary: entry.summary,
-    packName: ROLE_PACK.name,
+    packName: entry.packName,
     alignment,
     windows: roleWindows(entry),
-    abilities: Object.freeze(entry.actions.map((action) => Object.freeze({
-      label: action.label,
-      icon: ROLE_ICON_PATHS[action.kind] ?? ROLE_ICON_PATHS.passive,
-      window: WINDOWS[action.window] ?? WINDOWS.Passive,
-      targets: action.targets,
-      tags: Object.freeze([
-        action.window === "Day" ? "Every day" : "Every night",
-        action.roleblockable ? "Roleblockable" : "Unblockable",
-        `Priority ${action.priority}`,
-      ]),
-    }))),
+    abilities: Object.freeze(entry.actions.map((action) => {
+      const window = WINDOWS[action.window] ?? WINDOWS.Passive;
+      return Object.freeze({
+        label: action.label,
+        icon: abilityIcon(action.kind),
+        window,
+        targets: action.targets,
+        tags: abilityTags(action, window),
+      });
+    })),
     traits: entry.traits,
     channels: Object.freeze(channels),
-    win: alignment.win,
+    win: entry.win,
     icons: ROLE_ICON_PATHS,
   });
 }
