@@ -13,6 +13,13 @@ use domain::Pack;
 use game_platform::{DayProgram, DayProgramRef};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
+mod role_reference;
+
+use game_platform::role_reference::{PackRoleReference, PackSummary, RoleReference};
+pub use role_reference::{
+    pack_role_reference, role_reference, validate_presentation, PackPresentation,
+};
+
 const PACK_CATALOG: &str = include_str!("../../../packs/catalog.json");
 const PROGRAM_CATALOG: &str = include_str!("../../../programs/catalog.json");
 
@@ -36,6 +43,29 @@ const PRODUCT_PACK_SOURCES: &[(&str, &str)] = &[
     (
         "mafiascum/pack.json",
         include_str!("../../../packs/mafiascum/pack.json"),
+    ),
+];
+
+const PRODUCT_PRESENTATION_SOURCES: &[(&str, &str)] = &[
+    (
+        "chinese_structured/presentation.json",
+        include_str!("../../../packs/chinese_structured/presentation.json"),
+    ),
+    (
+        "default_open/presentation.json",
+        include_str!("../../../packs/default_open/presentation.json"),
+    ),
+    (
+        "epicmafia/presentation.json",
+        include_str!("../../../packs/epicmafia/presentation.json"),
+    ),
+    (
+        "mafia_universe/presentation.json",
+        include_str!("../../../packs/mafia_universe/presentation.json"),
+    ),
+    (
+        "mafiascum/presentation.json",
+        include_str!("../../../packs/mafiascum/presentation.json"),
     ),
 ];
 
@@ -166,6 +196,9 @@ pub enum ProgramAudience {
 pub struct PackArtifact {
     pub pack_ref: PackRef,
     pub document: Pack,
+    /// Player-facing copy (RFC 0009). Outside the content address and the
+    /// game-owned snapshot: copy edits never re-address a ruleset.
+    pub presentation: PackPresentation,
     canonical_json: String,
 }
 
@@ -176,6 +209,18 @@ impl PackArtifact {
             pack_ref: self.pack_ref.clone(),
             canonical_json: self.canonical_json.clone(),
         }
+    }
+
+    pub fn summary(&self) -> PackSummary {
+        PackSummary {
+            key: self.pack_ref.key.clone(),
+            name: self.presentation.name.clone(),
+            role_count: u32::try_from(self.document.roles.len()).unwrap_or(u32::MAX),
+        }
+    }
+
+    pub fn role_reference(&self) -> PackRoleReference {
+        pack_role_reference(&self.document, &self.presentation)
     }
 }
 
@@ -315,6 +360,7 @@ struct PackCatalog {
 struct PackCatalogEntry {
     key: String,
     file: String,
+    presentation: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -512,6 +558,15 @@ pub fn resolve_pack(pack_ref: &PackRef) -> Result<&'static Pack, RegistryError> 
     })
 }
 
+/// Player-facing reference for one role of a game-owned pack. Mechanics come
+/// from `pack` (the game's snapshot); copy comes from the current product
+/// presentation for that pack key. Packs without presentation (debug
+/// fixtures) and roles the presentation no longer names yield `None`.
+pub fn product_role_reference(pack: &Pack, role_key: &str) -> Option<RoleReference> {
+    let artifact = product_registry().ok()?.pack(&pack.name).ok()?;
+    role_reference(pack, &artifact.presentation, role_key)
+}
+
 #[derive(Debug, Serialize)]
 struct ContentCheck<'a> {
     status: &'static str,
@@ -555,6 +610,15 @@ fn build_product_registry() -> Result<ContentRegistry, String> {
         PRODUCT_PACK_SOURCES.iter().map(|(file, _)| *file),
     )?;
 
+    inventory_is_closed(
+        "presentation",
+        pack_catalog
+            .packs
+            .iter()
+            .map(|entry| entry.presentation.as_str()),
+        PRODUCT_PRESENTATION_SOURCES.iter().map(|(file, _)| *file),
+    )?;
+
     let mut pack_keys = BTreeSet::new();
     let mut packs = Vec::with_capacity(pack_catalog.packs.len());
     for entry in pack_catalog.packs {
@@ -572,6 +636,14 @@ fn build_product_registry() -> Result<ContentRegistry, String> {
         }
         let canonical_json = serde_json::to_string(&document)
             .map_err(|error| format!("canonicalize pack {}: {error}", entry.key))?;
+        let presentation: PackPresentation = serde_json::from_str(embedded(
+            PRODUCT_PRESENTATION_SOURCES,
+            &entry.presentation,
+            "presentation",
+        )?)
+        .map_err(|error| format!("decode presentation {}: {error}", entry.presentation))?;
+        validate_presentation(&document, &presentation)
+            .map_err(|error| format!("validate presentation {}: {error}", entry.presentation))?;
         packs.push(PackArtifact {
             pack_ref: PackRef {
                 key: entry.key,
@@ -579,6 +651,7 @@ fn build_product_registry() -> Result<ContentRegistry, String> {
                 content_hash: ContentHash::digest(canonical_json.as_bytes()),
             },
             document,
+            presentation,
             canonical_json,
         });
     }
@@ -635,6 +708,10 @@ fn build_product_registry() -> Result<ContentRegistry, String> {
         packs
             .iter()
             .map(|artifact| &artifact.pack_ref)
+            .collect::<Vec<_>>(),
+        packs
+            .iter()
+            .map(|artifact| &artifact.presentation)
             .collect::<Vec<_>>(),
         programs
             .iter()
@@ -922,6 +999,153 @@ mod tests {
             verify_pack_artifact(&noncanonical),
             Err(RegistryError::InvalidPackArtifact { .. })
         ));
+    }
+
+    #[test]
+    fn every_product_role_has_a_reference_with_labelled_actions() {
+        let registry = product_registry().unwrap();
+        for artifact in registry.packs() {
+            let reference = artifact.role_reference();
+            assert_eq!(reference.roles.len(), artifact.document.roles.len());
+            for role in &reference.roles {
+                let source = &artifact.document.roles[&role.key];
+                assert_eq!(role.actions.len(), source.actions.len(), "{}", role.key);
+                assert_eq!(
+                    role.alignment
+                        .as_ref()
+                        .map(|alignment| alignment.key.as_str()),
+                    source.alignment.as_deref(),
+                    "{}",
+                    role.key
+                );
+                assert!(!role.win.is_empty(), "{} has win copy", role.key);
+                for (action, template) in role.actions.iter().zip(&source.actions) {
+                    assert_eq!(action.id, template.id);
+                    assert_eq!(action.label, artifact.presentation.actions[&template.id]);
+                    assert_eq!(action.roleblockable, template.constraints.roleblockable);
+                    assert_eq!(action.priority, template.constraints.priority);
+                    assert_eq!(action.uses, template.constraints.x_shots);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn role_reference_joins_traits_channels_and_reveal_policy() {
+        let registry = product_registry().unwrap();
+        let mafiascum = registry.pack("mafiascum").unwrap().role_reference();
+        let role = |key: &str| mafiascum.roles.iter().find(|role| role.key == key).unwrap();
+        assert_eq!(role("miller").traits[0].short, "Reads Scum");
+        assert_eq!(role("lost_mafia_goon").traits[0].short, "Lost");
+        assert!(role("mafia_janitor")
+            .traits
+            .iter()
+            .any(|item| item.short == "Hides flips"));
+        assert!(role("mason").channels[0].confirms_town);
+        assert_eq!(role("encryptor").channels[0].label, "Mafia day chat");
+        assert!(role("traitor").channels.is_empty());
+        assert!(role("survivor").win.contains("alive"));
+        assert_eq!(role("vigilante").actions[0].uses, Some(1));
+        assert_eq!(role("commuter").actions[0].targets.label, "Yourself");
+        assert_eq!(
+            role("novice_cop").actions[0].notes,
+            vec!["From Night 2".to_string()]
+        );
+        assert!(role("lover").alignment.is_none());
+    }
+
+    #[test]
+    fn presentation_coverage_is_closed_both_ways() {
+        let artifact = product_registry().unwrap().pack("default_open").unwrap();
+        let pack = &artifact.document;
+        assert!(validate_presentation(pack, &artifact.presentation).is_ok());
+
+        let mut missing_role = artifact.presentation.clone();
+        missing_role.roles.remove("seer");
+        assert!(validate_presentation(pack, &missing_role)
+            .unwrap_err()
+            .contains("roles drift"));
+
+        let mut unknown_action = artifact.presentation.clone();
+        unknown_action
+            .actions
+            .insert("nope".to_string(), "Nope".to_string());
+        assert!(validate_presentation(pack, &unknown_action)
+            .unwrap_err()
+            .contains("actions drift"));
+
+        let mut stray_win = artifact.presentation.clone();
+        stray_win.roles.get_mut("seer").unwrap().win = Some("Wins somehow.".to_string());
+        assert!(validate_presentation(pack, &stray_win)
+            .unwrap_err()
+            .contains("must be absent"));
+
+        let mut untrimmed = artifact.presentation.clone();
+        untrimmed.roles.get_mut("seer").unwrap().name = " Seer".to_string();
+        assert!(validate_presentation(pack, &untrimmed).is_err());
+    }
+
+    #[test]
+    fn game_snapshot_roles_take_copy_from_the_product_presentation() {
+        let pack = resolve_pack(pack_ref("mafia_universe").unwrap()).unwrap();
+        let godfather = product_role_reference(pack, "godfather").unwrap();
+        assert_eq!(godfather.name, "Godfather");
+        assert_eq!(godfather.pack_name, "Mafia Universe");
+        assert!(product_role_reference(pack, "no_such_role").is_none());
+        let fixture = resolve_pack(pack_ref("test_twilight_window").unwrap()).unwrap();
+        let any_role = fixture.roles.keys().next().unwrap();
+        assert!(product_role_reference(fixture, any_role).is_none());
+    }
+
+    /// The frontend renders fixture-mode role pages from a snapshot of this
+    /// projection, so the projection stays the only owner of role copy.
+    #[test]
+    fn frontend_role_reference_fixture_matches_the_projection() {
+        const FIXTURE: &str =
+            include_str!("../../../frontend/src/lib/dev/pack-role-reference.fixture.json");
+        let registry = product_registry().unwrap();
+        let mut packs: Vec<_> = registry.packs().iter().map(PackArtifact::summary).collect();
+        packs.sort_by(|left, right| left.name.cmp(&right.name).then(left.key.cmp(&right.key)));
+        let references: BTreeMap<_, _> = registry
+            .packs()
+            .iter()
+            .map(|artifact| (artifact.pack_ref.key.clone(), artifact.role_reference()))
+            .collect();
+        let expected = serde_json::json!({
+            "catalog": { "packs": packs },
+            "references": references,
+        });
+        if std::env::var_os("FMARCH_WRITE_ROLE_REFERENCE_FIXTURE").is_some() {
+            let path = concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../frontend/src/lib/dev/pack-role-reference.fixture.json"
+            );
+            std::fs::write(
+                path,
+                serde_json::to_string_pretty(&expected).unwrap() + "\n",
+            )
+            .unwrap();
+        }
+        let actual: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        for (key, reference) in &references {
+            for role in &reference.roles {
+                let fixture_role = actual["references"][key]["roles"]
+                    .as_array()
+                    .and_then(|roles| roles.iter().find(|item| item["key"] == role.key.as_str()));
+                assert_eq!(
+                    fixture_role,
+                    Some(&serde_json::to_value(role).unwrap()),
+                    "{key}/{} fixture drift; regenerate with \
+                     FMARCH_WRITE_ROLE_REFERENCE_FIXTURE=1 cargo test -p content_registry",
+                    role.key
+                );
+            }
+        }
+        assert_eq!(
+            actual, expected,
+            "role reference fixture drift; regenerate with \
+             FMARCH_WRITE_ROLE_REFERENCE_FIXTURE=1 cargo test -p content_registry"
+        );
     }
 
     #[test]

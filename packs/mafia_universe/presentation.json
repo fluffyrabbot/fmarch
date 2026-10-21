@@ -1,0 +1,532 @@
+{
+  "schema_version": 1,
+  "pack": "mafia_universe",
+  "name": "Mafia Universe",
+  "alignments": {
+    "town": {
+      "label": "Town",
+      "family": "town",
+      "win": "Wins when every Mafia member is gone."
+    },
+    "mafia": {
+      "label": "Mafia",
+      "family": "mafia",
+      "win": "Wins when the Mafia equal or outnumber everyone else."
+    },
+    "independent": {
+      "label": "Independent",
+      "family": "independent",
+      "win": "This pack sets no win condition for independents; the host decides it."
+    }
+  },
+  "effects": {
+    "bomb": {
+      "text": "Their night killer dies with them",
+      "short": "Explodes"
+    },
+    "miller": {
+      "text": "Reads as Scum to alignment checks",
+      "short": "Reads Scum"
+    },
+    "godfather": {
+      "text": "Reads as Town to alignment checks",
+      "short": "Reads Town"
+    }
+  },
+  "actions": {
+    "ita_shot": "ITA shot",
+    "factional_kill": "Factional kill",
+    "roleblocker_block": "Block",
+    "cop_investigate": "Alignment check",
+    "doctor_protect": "Protect",
+    "track": "Track",
+    "bodyguard": "Guard",
+    "martyr_protect": "Protect",
+    "cpr_protect": "CPR",
+    "mark_alignment": "Mark",
+    "mark_role": "Mark",
+    "reveal_town": "Reveal as Town",
+    "parity_scan": "Parity scan",
+    "investigate_vanilla": "Vanilla check",
+    "neapolitan": "Neapolitan check",
+    "gunsmith": "Gun check",
+    "role_scan": "Role check",
+    "full_role_scan": "Full role check",
+    "frame": "Frame",
+    "watch": "Watch",
+    "voyeur": "Voyeur watch",
+    "motion_detector": "Motion check",
+    "bus_driver_swap": "Swap",
+    "redirect": "Redirect",
+    "empower": "Empower",
+    "commute": "Commute",
+    "rolestop": "Rolestop",
+    "jail": "Jail",
+    "poison": "Poison",
+    "cure_poison": "Cure",
+    "douse": "Douse",
+    "ignite": "Ignite",
+    "extinguish": "Extinguish",
+    "motivate": "Motivate",
+    "send_fruit": "Send fruit",
+    "night_desperado": "Shoot",
+    "vigilante_kill": "Shoot",
+    "janitor_kill": "Clean kill",
+    "target_backup": "Choose a source",
+    "day_vigilante_kill": "Day shot",
+    "day_desperado": "Day shot",
+    "ninja_kill": "Ninja kill",
+    "power_role_kill": "Kill",
+    "grant_item": "Give item",
+    "strongman_kill": "Strongman kill",
+    "serial_killer_kill": "Kill"
+  },
+  "roles": {
+    "town_ita_shooter": {
+      "name": "ITA Shooter",
+      "summary": "During the day, may take shots in ITA sessions at an ordinary hit chance."
+    },
+    "town_ita_sharpshooter": {
+      "name": "ITA Sharpshooter",
+      "summary": "During the day, may take shots in ITA sessions at a better hit chance."
+    },
+    "town_ita_bad_shot": {
+      "name": "ITA Bad Shot",
+      "summary": "During the day, may take shots in ITA sessions at a worse hit chance."
+    },
+    "town_vanilla": {
+      "name": "Vanilla Townie",
+      "summary": "No special power. Wins with the Town through discussion and the vote."
+    },
+    "vanilla_town": {
+      "name": "Vanilla Town",
+      "summary": "No special power. Wins with the Town through discussion and the vote."
+    },
+    "blank_town_role": {
+      "name": "Blank Town Role",
+      "summary": "A Town placeholder with no abilities, filled in by the host."
+    },
+    "blank_mafia_role": {
+      "name": "Blank Mafia Role",
+      "summary": "A Mafia placeholder with no abilities, filled in by the host."
+    },
+    "lover": {
+      "name": "Lover",
+      "summary": "Bound to another Lover. If either dies, by any means, so does the other.",
+      "win": "Lives and dies with their partner; the host's setup decides how they win."
+    },
+    "mafia_bomber": {
+      "name": "Mafia Bomber",
+      "summary": "A Mafia member who takes their night killer down with them."
+    },
+    "town_bomber": {
+      "name": "Town Bomber",
+      "summary": "A Townie who takes their night killer down with them."
+    },
+    "mason": {
+      "name": "Mason",
+      "summary": "Shares a private chat whose members are confirmed Town to each other."
+    },
+    "neighbor": {
+      "name": "Neighbor",
+      "summary": "Shares a private chat, but its members learn nothing about each other's alignment.",
+      "win": "Has no alignment of their own; the host's setup decides how they win."
+    },
+    "town_treestump": {
+      "name": "Town Treestump",
+      "summary": "After elimination, may keep posting in the thread but cannot vote."
+    },
+    "mafia_treestump": {
+      "name": "Mafia Treestump",
+      "summary": "After elimination, may keep posting in the thread but cannot vote."
+    },
+    "mafia_goon": {
+      "name": "Mafia Goon",
+      "summary": "A Mafia member with no power of their own, who may carry the factional kill."
+    },
+    "mafia_roleblocker": {
+      "name": "Mafia Roleblocker",
+      "summary": "Each night, blocks one player so their next blockable action fails."
+    },
+    "mafia_jack_of_all_trades": {
+      "name": "Mafia Jack of All Trades",
+      "summary": "Holds four one-shot powers: an alignment check, a protection, a block and a track."
+    },
+    "town_doctor": {
+      "name": "Doctor",
+      "summary": "Each night, protects one player from ordinary night kills."
+    },
+    "town_bodyguard": {
+      "name": "Bodyguard",
+      "summary": "Each night, guards one player and dies stopping a kill aimed at them."
+    },
+    "mafia_doctor": {
+      "name": "Mafia Doctor",
+      "summary": "Each night, protects one player from ordinary night kills."
+    },
+    "mafia_bodyguard": {
+      "name": "Mafia Bodyguard",
+      "summary": "Each night, guards one player and dies stopping a kill aimed at them."
+    },
+    "town_martyr": {
+      "name": "Martyr",
+      "summary": "Each night, protects one player and dies in their place if they are attacked."
+    },
+    "town_cpr_doctor": {
+      "name": "CPR Doctor",
+      "summary": "Each night, saves one player if they are attacked, but kills them if they are not."
+    },
+    "town_cop": {
+      "name": "Cop",
+      "summary": "Each night, investigates one player and learns whether they read Town or Scum."
+    },
+    "mafia_cop": {
+      "name": "Mafia Cop",
+      "summary": "Each night, investigates one player and learns whether they read Town or Scum."
+    },
+    "town_alignment_cop": {
+      "name": "Alignment Cop",
+      "summary": "Each night, investigates one player and learns whether they read Town or Scum."
+    },
+    "mafia_alignment_cop": {
+      "name": "Mafia Alignment Cop",
+      "summary": "Each night, investigates one player and learns whether they read Town or Scum."
+    },
+    "town_alignment_oracle": {
+      "name": "Alignment Oracle",
+      "summary": "Marks one player each night. If the Oracle dies, the last marked player's alignment is revealed."
+    },
+    "mafia_alignment_oracle": {
+      "name": "Mafia Alignment Oracle",
+      "summary": "Marks one player each night. If the Oracle dies, the last marked player's alignment is revealed."
+    },
+    "town_role_oracle": {
+      "name": "Role Oracle",
+      "summary": "Marks one player each night. If the Oracle dies, the last marked player's role is revealed."
+    },
+    "mafia_role_oracle": {
+      "name": "Mafia Role Oracle",
+      "summary": "Marks one player each night. If the Oracle dies, the last marked player's role is revealed."
+    },
+    "innocent_child": {
+      "name": "Innocent Child",
+      "summary": "During the day, may publicly confirm they are Town without revealing their role."
+    },
+    "town_parity_cop": {
+      "name": "Parity Cop",
+      "summary": "Each night, scans one player and learns whether they share an alignment with the previous scan."
+    },
+    "town_vanilla_cop": {
+      "name": "Vanilla Cop",
+      "summary": "Each night, checks whether one player has no special power."
+    },
+    "town_neapolitan": {
+      "name": "Neapolitan",
+      "summary": "Each night, checks whether one player is a Vanilla Townie."
+    },
+    "town_gunsmith": {
+      "name": "Gunsmith",
+      "summary": "Each night, checks whether one player's role carries a gun."
+    },
+    "town_role_cop": {
+      "name": "Role Cop",
+      "summary": "Each night, learns one player's role."
+    },
+    "town_full_cop": {
+      "name": "Full Cop",
+      "summary": "Each night, learns one player's role and alignment."
+    },
+    "town_framer": {
+      "name": "Framer",
+      "summary": "Each night, frames one player so an alignment check that night reads Scum."
+    },
+    "town_tracker": {
+      "name": "Tracker",
+      "summary": "Each night, follows one player and learns whom they visited."
+    },
+    "town_watcher": {
+      "name": "Watcher",
+      "summary": "Each night, watches one player and learns who visited them."
+    },
+    "town_voyeur": {
+      "name": "Voyeur",
+      "summary": "Each night, watches one player and learns which kinds of action targeted them."
+    },
+    "town_motion_detector": {
+      "name": "Motion Detector",
+      "summary": "Each night, learns whether one player acted or was visited."
+    },
+    "town_bus_driver": {
+      "name": "Bus Driver",
+      "summary": "Each night, swaps two players: actions aimed at one land on the other."
+    },
+    "town_redirector": {
+      "name": "Redirector",
+      "summary": "Each night, sends actions aimed at the first chosen player to the second."
+    },
+    "town_empowerer": {
+      "name": "Empowerer",
+      "summary": "Each night, empowers one player so their actions that night ignore blocks and redirects."
+    },
+    "town_commuter": {
+      "name": "Commuter",
+      "summary": "Each night, may leave town and cannot be targeted that night."
+    },
+    "town_rolestopper": {
+      "name": "Rolestopper",
+      "summary": "Each night, makes one other player untargetable for that night."
+    },
+    "miller": {
+      "name": "Miller",
+      "summary": "A Townie who reads as Scum to alignment checks."
+    },
+    "town_roleblocker": {
+      "name": "Roleblocker",
+      "summary": "Each night, blocks one player so their next blockable action fails."
+    },
+    "town_jack_of_all_trades": {
+      "name": "Jack of All Trades",
+      "summary": "Holds four one-shot powers: an alignment check, a protection, a block and a track."
+    },
+    "town_jailkeeper": {
+      "name": "Jailkeeper",
+      "summary": "Each night, jails one player: they are blocked and protected by the same action."
+    },
+    "mafia_jailkeeper": {
+      "name": "Mafia Jailkeeper",
+      "summary": "Each night, jails one player: they are blocked and protected by the same action."
+    },
+    "town_poisoner": {
+      "name": "Poisoner",
+      "summary": "Each night, poisons one player, who dies the next night unless cured."
+    },
+    "town_poison_doctor": {
+      "name": "Poison Doctor",
+      "summary": "Each night, cures one poisoned player before the poison kills them."
+    },
+    "town_healer": {
+      "name": "Healer",
+      "summary": "Each night, cures one poisoned player before the poison kills them."
+    },
+    "town_arsonist": {
+      "name": "Town Arsonist",
+      "summary": "A Town Arsonist: douses one player a night, then may ignite to kill everyone doused at once."
+    },
+    "town_firefighter": {
+      "name": "Firefighter",
+      "summary": "Each night, washes the douse off one player before an ignite."
+    },
+    "town_firefighter_preempt": {
+      "name": "Firefighter (Preempt)",
+      "summary": "Each night, washes the douse off one player before an ignite can read it."
+    },
+    "town_motivator": {
+      "name": "Motivator",
+      "summary": "Each night, gives one player a single extra action."
+    },
+    "town_fruit_vendor": {
+      "name": "Fruit Vendor",
+      "summary": "Each night, sends one player fruit. It has no effect beyond the gesture."
+    },
+    "town_night_desperado": {
+      "name": "Night Desperado",
+      "summary": "Each night, may shoot one player. Shooting someone of their own alignment kills the Desperado instead."
+    },
+    "town_vigilante": {
+      "name": "Vigilante",
+      "summary": "Each night, may kill one player, separate from any factional kill."
+    },
+    "town_janitor": {
+      "name": "Janitor",
+      "summary": "Each night, may kill one player whose role stays hidden when they flip."
+    },
+    "town_universal_backup": {
+      "name": "Universal Backup",
+      "summary": "Chooses one player and inherits their role if they die."
+    },
+    "town_day_vigilante": {
+      "name": "Day Vigilante",
+      "summary": "Each day, may kill one player before the vote resolves."
+    },
+    "town_day_desperado": {
+      "name": "Day Desperado",
+      "summary": "Each day, may shoot one player before the vote. If the target is not Mafia, the Desperado dies instead."
+    },
+    "town_ninja": {
+      "name": "Ninja",
+      "summary": "Each night, may kill one player without showing up to trackers or watchers."
+    },
+    "town_power_role_killer": {
+      "name": "Power Role Killer",
+      "summary": "Each night, may kill one player, but only one with a special power."
+    },
+    "town_inventor": {
+      "name": "Inventor",
+      "summary": "Each night, gives one player a single-use item of the Inventor's choice."
+    },
+    "town_strongman": {
+      "name": "Strongman",
+      "summary": "Each night, may kill one player through ordinary protection."
+    },
+    "mafia_strongman": {
+      "name": "Mafia Strongman",
+      "summary": "Each night, may kill one player through ordinary protection."
+    },
+    "godfather": {
+      "name": "Godfather",
+      "summary": "Leads the Mafia, may carry the factional kill, and reads as Town to alignment checks."
+    },
+    "mafia_parity_cop": {
+      "name": "Mafia Parity Cop",
+      "summary": "Each night, scans one player and learns whether they share an alignment with the previous scan."
+    },
+    "mafia_framer": {
+      "name": "Mafia Framer",
+      "summary": "Each night, frames one player so an alignment check that night reads Scum."
+    },
+    "mafia_vanilla_cop": {
+      "name": "Mafia Vanilla Cop",
+      "summary": "Each night, checks whether one player has no special power."
+    },
+    "mafia_neapolitan": {
+      "name": "Mafia Neapolitan",
+      "summary": "Each night, checks whether one player is a Vanilla Townie."
+    },
+    "mafia_gunsmith": {
+      "name": "Mafia Gunsmith",
+      "summary": "Each night, checks whether one player's role carries a gun."
+    },
+    "mafia_role_cop": {
+      "name": "Mafia Role Cop",
+      "summary": "Each night, learns one player's role."
+    },
+    "mafia_full_cop": {
+      "name": "Mafia Full Cop",
+      "summary": "Each night, learns one player's role and alignment."
+    },
+    "mafia_tracker": {
+      "name": "Mafia Tracker",
+      "summary": "Each night, follows one player and learns whom they visited."
+    },
+    "mafia_watcher": {
+      "name": "Mafia Watcher",
+      "summary": "Each night, watches one player and learns who visited them."
+    },
+    "mafia_voyeur": {
+      "name": "Mafia Voyeur",
+      "summary": "Each night, watches one player and learns which kinds of action targeted them."
+    },
+    "mafia_motion_detector": {
+      "name": "Mafia Motion Detector",
+      "summary": "Each night, learns whether one player acted or was visited."
+    },
+    "mafia_bus_driver": {
+      "name": "Mafia Bus Driver",
+      "summary": "Each night, swaps two players: actions aimed at one land on the other."
+    },
+    "mafia_redirector": {
+      "name": "Mafia Redirector",
+      "summary": "Each night, sends actions aimed at the first chosen player to the second."
+    },
+    "mafia_empowerer": {
+      "name": "Mafia Empowerer",
+      "summary": "Each night, empowers one player so their actions that night ignore blocks and redirects."
+    },
+    "mafia_commuter": {
+      "name": "Mafia Commuter",
+      "summary": "Each night, may leave town and cannot be targeted that night."
+    },
+    "mafia_rolestopper": {
+      "name": "Mafia Rolestopper",
+      "summary": "Each night, makes one other player untargetable for that night."
+    },
+    "mafia_poisoner": {
+      "name": "Mafia Poisoner",
+      "summary": "Each night, poisons one player, who dies the next night unless cured."
+    },
+    "mafia_poison_doctor": {
+      "name": "Mafia Poison Doctor",
+      "summary": "Each night, cures one poisoned player before the poison kills them."
+    },
+    "mafia_healer": {
+      "name": "Mafia Healer",
+      "summary": "Each night, cures one poisoned player before the poison kills them."
+    },
+    "mafia_arsonist": {
+      "name": "Mafia Arsonist",
+      "summary": "Douses one player a night, then may ignite to kill everyone doused at once."
+    },
+    "mafia_firefighter": {
+      "name": "Mafia Firefighter",
+      "summary": "Each night, washes the douse off one player before an ignite."
+    },
+    "mafia_motivator": {
+      "name": "Mafia Motivator",
+      "summary": "Each night, gives one player a single extra action."
+    },
+    "mafia_fruit_vendor": {
+      "name": "Mafia Fruit Vendor",
+      "summary": "Each night, sends one player fruit. It has no effect beyond the gesture."
+    },
+    "mafia_night_desperado": {
+      "name": "Mafia Night Desperado",
+      "summary": "Each night, may shoot one player. Shooting someone of their own alignment kills the Desperado instead."
+    },
+    "mafia_vigilante": {
+      "name": "Mafia Vigilante",
+      "summary": "Each night, may kill one player, separate from any factional kill."
+    },
+    "mafia_janitor": {
+      "name": "Mafia Janitor",
+      "summary": "Each night, may kill one player whose role stays hidden when they flip."
+    },
+    "mafia_universal_backup": {
+      "name": "Mafia Universal Backup",
+      "summary": "Chooses one player and inherits their role if they die."
+    },
+    "mafia_day_vigilante": {
+      "name": "Mafia Day Vigilante",
+      "summary": "Each day, may kill one player before the vote resolves."
+    },
+    "mafia_day_desperado": {
+      "name": "Mafia Day Desperado",
+      "summary": "Each day, may shoot one player before the vote. If the target is not Town, the Desperado dies instead."
+    },
+    "mafia_ninja": {
+      "name": "Mafia Ninja",
+      "summary": "Each night, may kill one player without showing up to trackers or watchers."
+    },
+    "serial_killer": {
+      "name": "Serial Killer",
+      "summary": "Kills one player each night, alone and outside any faction. Protection can stop it."
+    },
+    "mafia_power_role_killer": {
+      "name": "Mafia Power Role Killer",
+      "summary": "Each night, may kill one player, but only one with a special power."
+    },
+    "mafia_inventor": {
+      "name": "Mafia Inventor",
+      "summary": "Each night, gives one player a single-use item of the Inventor's choice."
+    },
+    "mafia_ita_evasive": {
+      "name": "Evasive Mafioso",
+      "summary": "A Mafia member who is harder to hit in ITA sessions."
+    },
+    "mafia_ita_shielded": {
+      "name": "Shielded Mafioso",
+      "summary": "A Mafia member whose shield absorbs one ITA hit."
+    },
+    "mafia_ita_evasive_shielded": {
+      "name": "Evasive Shielded Mafioso",
+      "summary": "A Mafia member who is harder to hit in ITA and whose shield absorbs one hit."
+    },
+    "mafia_ita_armored": {
+      "name": "Armored Mafioso",
+      "summary": "A Mafia member who can survive several ITA hits."
+    },
+    "mafia_ita_hybrid_protected": {
+      "name": "Armored Shielded Mafioso",
+      "summary": "A Mafia member with one ITA shield and extra ITA hit points."
+    }
+  }
+}

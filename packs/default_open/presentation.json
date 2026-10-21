@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "pack": "default_open",
+  "name": "Default Open",
+  "alignments": {
+    "town": { "label": "Town", "family": "town", "win": "Wins when every Mafia member is gone." },
+    "mafia": { "label": "Mafia", "family": "mafia", "win": "Wins when the Mafia equal or outnumber everyone else." }
+  },
+  "effects": {},
+  "actions": {
+    "guardian_protect": "Protect",
+    "seer_check": "Alignment check",
+    "agent_kill": "Factional kill"
+  },
+  "roles": {
+    "citizen": { "name": "Citizen", "summary": "No night action. Wins with the Town through discussion and the vote." },
+    "guardian": { "name": "Guardian", "summary": "Each night, protects one other player from an ordinary kill." },
+    "seer": { "name": "Seer", "summary": "Each night, checks one player and learns whether they read Town or Mafia." },
+    "agent": { "name": "Agent", "summary": "Carries the Mafia's shared kill each night." }
+  }
+}
