@@ -2,6 +2,7 @@ import { normalizeDayEventRoom } from "./day-event-room.mjs";
 import { normalizeGameThreadAuthor } from "./game-thread-author.mjs";
 import { canonicalPrincipalId } from "../principal-id.mjs";
 import { canonicalPhaseId } from "../phase-id.mjs";
+import { normalizeRoleReference } from "../components/role-card/role-reference-model.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
@@ -757,6 +758,7 @@ function normalizePlayerCommandRole(role) {
     key,
     alignment: alignment === null ? null : String(alignment),
     description: String(role.description ?? ""),
+    reference: normalizeRoleReference(role.reference ?? null),
   });
 }
 

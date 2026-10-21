@@ -1,5 +1,6 @@
 <script>
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import RoleCard from "$lib/components/role-card/RoleCard.svelte";
 
   export let card;
 </script>
@@ -32,9 +33,16 @@
         testId={card.status.testId}
         className="player-role-card__status"
       />
-      <p class="player-role-card__description" data-testid={card.description.testId}>
-        {card.description.value}
-      </p>
+      {#if card.roleCard}
+        <RoleCard card={card.roleCard} headingLevel={3} summaryTestId={card.description.testId} />
+        <a class="player-role-card__reference" href={card.referenceHref}>
+          Open in the role reference
+        </a>
+      {:else}
+        <p class="player-role-card__description" data-testid={card.description.testId}>
+          {card.description.value}
+        </p>
+      {/if}
     </div>
   </details>
 {/if}

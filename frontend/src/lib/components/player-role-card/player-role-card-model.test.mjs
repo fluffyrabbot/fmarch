@@ -96,3 +96,38 @@ test("missing alignment renders as Unaligned without leaking empty chips", () =>
   assert.equal(card.alignment.label, "Unaligned");
   assert.equal(card.root.data.roleAlignment, "");
 });
+
+test("a published reference renders the full role card from the actor's own role only", async () => {
+  const { fixturePackRoleReference } = await import("../../dev/pack-role-reference-fixture.mjs");
+  const { normalizeRoleReference } = await import("../role-card/role-reference-model.mjs");
+  const reference = normalizeRoleReference(
+    fixturePackRoleReference("mafiascum").roles.find((role) => role.key === "mafia_goon"),
+  );
+  const card = buildPlayerRoleCardViewModel({
+    commandState: {
+      actorStatus: "alive",
+      roleKey: "mafia_goon",
+      role: { key: "mafia_goon", alignment: "mafia", description: "raw pack prose", reference },
+    },
+  });
+  assert.equal(card.root.data.roleState, "assigned");
+  assert.equal(card.name.value, "Mafia Goon");
+  assert.equal(card.alignment.label, "Mafia");
+  assert.equal(card.description.value, reference.summary);
+  assert.equal(card.roleCard.variant, "full");
+  assert.equal(card.roleCard.framed, false);
+  assert.equal(card.roleCard.abilities[0].label, "Factional kill");
+  assert.equal(card.referenceHref, "/roles?pack=mafiascum&role=mafia_goon");
+});
+
+test("states without a published role never build a role card", () => {
+  for (const commandState of [
+    { roleKey: null, role: null, actorStatus: "alive" },
+    { roleKey: null, role: null, actorStatus: "pending_replacement" },
+    { roleKey: "town_cop", role: null, actorStatus: "alive" },
+  ]) {
+    const card = buildPlayerRoleCardViewModel({ commandState });
+    assert.equal(card.roleCard, null);
+    assert.equal(card.referenceHref, null);
+  }
+});

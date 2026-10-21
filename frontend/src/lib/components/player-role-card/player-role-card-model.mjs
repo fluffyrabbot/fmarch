@@ -1,3 +1,5 @@
+import { buildRoleCardViewModel } from "../role-card/role-card-model.mjs";
+
 export const PLAYER_ROLE_CARD_CONTRACT = Object.freeze({
   proofCheckId: "player-role-card",
   rootClassName: "player-role-card fm-proof-disclosure",
@@ -48,6 +50,9 @@ export function buildPlayerRoleCardViewModel({
       testId: PLAYER_ROLE_CARD_CONTRACT.descriptionTestId,
       value: identity.description,
     }),
+    // The full role card, built from this actor's own role reference only.
+    roleCard: identity.roleCard,
+    referenceHref: identity.referenceHref ?? null,
     status: Object.freeze({
       testId: PLAYER_ROLE_CARD_CONTRACT.statusTestId,
       state: identity.state === "assigned" ? "ack" : "pending",
@@ -66,6 +71,7 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
         description:
           "Your seat is being handed to a replacement; your role shows again once the host completes it.",
         statusMessage: "Waiting for the host to complete the replacement",
+        roleCard: null,
       });
     }
     // Roles are dealt when the game starts; a seated player is never told
@@ -76,6 +82,7 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
       alignmentLabel: "Before start",
       description: "The host deals roles when the game starts. Yours will appear here.",
       statusMessage: "Your role arrives when the game starts",
+      roleCard: null,
     });
   }
   if (role === null) {
@@ -85,8 +92,22 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
       alignmentLabel: "In your role PM",
       description: "Your role PM holds the full text of your role.",
       statusMessage: "Read your role PM for the full text",
+      roleCard: null,
     });
   }
+  const reference = role.reference ?? null;
+  if (reference !== null) {
+    return Object.freeze({
+      state: "assigned",
+      name: reference.name,
+      alignmentLabel: reference.alignment.label,
+      description: reference.summary,
+      statusMessage: "Your role for this game",
+      roleCard: buildRoleCardViewModel({ role: reference, variant: "full", bare: true }),
+      referenceHref: `/roles?${new URLSearchParams({ pack: reference.packKey, role: reference.key })}`,
+    });
+  }
+  // Packs without presentation (test fixtures) fall back to the raw role.
   return Object.freeze({
     state: "assigned",
     name: humanizeRoleTag(role.key),
@@ -99,6 +120,7 @@ function resolveRoleIdentity({ role, roleKey, actorStatus }) {
         ? "This role has no published description."
         : String(role.description),
     statusMessage: "Your role for this game",
+    roleCard: null,
   });
 }
 

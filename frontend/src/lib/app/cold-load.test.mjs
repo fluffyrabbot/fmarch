@@ -462,6 +462,7 @@ test("normalizes player command state into route action configs", () => {
         key: "mafia_goon",
         alignment: "mafia",
         description: "Mafia Goon. Carries out the nightly factional kill.",
+        reference: null,
       },
       gameCompleted: true,
       phase: {

@@ -5,6 +5,8 @@
   // to the surface that hosts it.
   export let card;
   export let headingLevel = 2;
+  // A host surface may own the summary's test id (the player role card does).
+  export let summaryTestId = null;
 </script>
 
 {#if card}
@@ -50,7 +52,7 @@
         {/if}
       </header>
 
-      <p class="role-card__summary">{card.summary}</p>
+      <p class="role-card__summary" data-testid={summaryTestId ?? undefined}>{card.summary}</p>
 
       {#if card.variant === "compact"}
         <ul class="role-card__badges" aria-label="Acts and abilities">
