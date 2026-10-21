@@ -4470,6 +4470,21 @@ pub(super) async fn lock_global_admin_initiator(
     require_global_admin_context(&authorization, action)
 }
 
+/// Game creation is a GlobalAdmin operation, with one exception: on a server
+/// holding the staging release acceptance authority, a release acceptance
+/// session may create the game its acceptance run plays in. Such sessions
+/// never carry a global capability and exist only on staging.
+pub(super) fn may_create_release_acceptance_game(
+    state: &AuthHttpState,
+    authorization: &AuthorizationContext,
+) -> bool {
+    state.release_acceptance.is_some()
+        && matches!(
+            authorization.method(),
+            Some((_, identity::MethodKind::ReleaseAcceptance))
+        )
+}
+
 pub(super) fn require_global_admin_context(
     authorization: &AuthorizationContext,
     action: &str,

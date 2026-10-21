@@ -6,8 +6,8 @@
 //! `commands`; live update assembly and publication remain in `live_projection`.
 
 use super::auth_http::{
-    authorization_context, bearer_token, require_global_admin, require_global_admin_context,
-    unauthorized_session, AuthHttpState, AuthenticatedRequest,
+    authorization_context, bearer_token, may_create_release_acceptance_game, require_global_admin,
+    require_global_admin_context, unauthorized_session, AuthHttpState, AuthenticatedRequest,
 };
 use super::live_projection::{self, LiveProjectionChangeSet, LiveProjectionPublisher};
 use super::{program_library, ApiError, ApiState};
@@ -670,7 +670,8 @@ async fn command(
             Ok(authorization) => authorization,
             Err(error) => return command_api_error_response(envelope.id, error),
         };
-    let requires_global_admin = matches!(&msg.command, wire::Command::CreateGame { .. });
+    let requires_global_admin = matches!(&msg.command, wire::Command::CreateGame { .. })
+        && !may_create_release_acceptance_game(&state.auth, &initial_authorization);
     if requires_global_admin {
         if let Err(error) = require_global_admin_context(&initial_authorization, "game creation") {
             return command_api_error_response(envelope.id, error);

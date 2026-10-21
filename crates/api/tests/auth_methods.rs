@@ -4007,6 +4007,39 @@ async fn release_acceptance_sessions_are_keyed_stable_exclusive_and_powerless(po
     .unwrap();
     assert_eq!(audited, 3);
 
+    // The member creates and starts its run's game, exactly as
+    // tools/hosted_authenticated_acceptance.mjs does, without any global capability.
+    let game = Uuid::new_v4();
+    let member_id = member.as_uuid().to_string();
+    for (id, command) in [
+        serde_json::json!({ "CreateGame": { "game": game, "pack": "mafiascum", "cohost_denied": [] } }),
+        serde_json::json!({ "AddSlot": { "game": game, "slot": "slot_1" } }),
+        serde_json::json!({ "SeatPersona": { "game": game, "slot": "slot_1", "principal_id": member_id, "public_name": "Acceptance player" } }),
+        serde_json::json!({ "AssignRole": { "game": game, "slot": "slot_1", "role_key": "vanilla_townie" } }),
+        serde_json::json!({ "StartGame": { "game": game, "phase": "D01" } }),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = post_json(
+            &app,
+            "/commands",
+            Some(second_token.as_str()),
+            serde_json::json!({
+                "v": 3,
+                "id": id + 1,
+                "body": {
+                    "kind": "Command",
+                    "body": { "command_id": Uuid::new_v4(), "command": command.clone() }
+                }
+            }),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "command {command}");
+        let body = json_body(response).await;
+        assert_eq!(body["body"]["kind"], "Ack", "command {command}: {body}");
+    }
+
     let invitation = post_json(
         &app,
         "/community/invitations",
