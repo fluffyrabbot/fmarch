@@ -25,7 +25,7 @@ async function workspace(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, '.cargo'), { recursive: true });
   await writeFile(join(root, '.cargo', 'config.toml'), '[env]\nRUST_TEST_THREADS = { value = "4", force = false }\n');
-  for (const name of ['lib-a1', 'pipeline-b2', 'admin-c3']) {
+  for (const name of ['lib-a1', 'pipeline-b2', 'admin-c3', 'libcommands-d4.rlib', 'libcommands-d4.rmeta', 'libserde-e5.rlib']) {
     await mkdir(join(root, 'target', 'debug', 'deps'), { recursive: true });
     await writeFile(join(root, 'target', 'debug', 'deps', name), name);
   }
@@ -56,7 +56,18 @@ function artifacts(root) {
     message({ kind: ['test'], name: 'pipeline', src: 'tests/pipeline.rs' }, join(root, 'target/debug/deps/pipeline-b2'), true),
     'Compiling noise that is not JSON',
     message({ kind: ['lib'], name: 'commands', src: 'src/lib.rs' }, join(root, 'target/debug/deps/lib-a1'), true),
-    message({ kind: ['lib'], name: 'commands', src: 'src/lib.rs' }, null, false),
+    JSON.stringify({
+      reason: 'compiler-artifact', package_id: packageId, manifest_path: manifestPath,
+      target: { kind: ['lib'], name: 'commands', src_path: join(root, 'crates', 'commands', 'src/lib.rs') },
+      profile: { test: false }, executable: null,
+      filenames: [join(root, 'target/debug/deps/libcommands-d4.rlib'), join(root, 'target/debug/deps/libcommands-d4.rmeta')],
+    }),
+    // A registry dependency's library, which a fixture compile resolves through -L.
+    JSON.stringify({
+      reason: 'compiler-artifact', package_id: 'registry+https://example/serde#1.0.0', manifest_path: '/registry/serde/Cargo.toml',
+      target: { kind: ['lib'], name: 'serde', src_path: '/registry/serde/src/lib.rs' },
+      profile: { test: false }, executable: null, filenames: [join(root, 'target/debug/deps/libserde-e5.rlib')],
+    }),
     message({ kind: ['bin'], name: 'fmarch-admin', src: 'src/bin/admin.rs' }, join(root, 'target/debug/fmarch-admin'), false),
   ].join('\n');
 }
@@ -134,6 +145,11 @@ test('a cargo-test build compiles the exact selection and pins executables by ha
   assert.equal(linked, join(root, 'lane', 'prebuilt', 'tests', 'lib-a1'));
   assert.equal((await stat(linked)).ino, (await stat(join(root, 'target/debug/deps/lib-a1'))).ino);
   assert.equal(plan.binaries['commands/fmarch-admin'], join(root, 'lane', 'prebuilt', 'bin', 'commands', 'fmarch-admin'));
+  // Tests that compile fixtures against their crate find it beside themselves.
+  for (const library of ['libcommands-d4.rlib', 'libcommands-d4.rmeta', 'libserde-e5.rlib']) {
+    assert.equal((await stat(join(root, 'lane', 'prebuilt', 'tests', library))).ino,
+      (await stat(join(root, 'target/debug/deps', library))).ino);
+  }
   assert.equal(plan.packages.commands.CARGO_PKG_VERSION_PRE, 'rc.1');
   assert.equal(plan.packages.commands.CARGO_PKG_AUTHORS, 'a:b');
   assert.deepEqual(JSON.parse(await readFile(planPath, 'utf8')), plan);

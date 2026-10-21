@@ -9,6 +9,8 @@
 //          locks. Cargo compiles the exact selection the lane would have
 //          compiled, and every produced executable is hard-linked into the
 //          lane directory so a later build in another lane cannot replace it.
+//          Test executables sit beside links to the build's libraries, as
+//          they sit in Cargo's deps directory.
 //   run    `run-tests` (or the lane's own harness, which resolves binaries
 //          through FMARCH_PROOF_PREBUILT_PLAN) without the Cargo lock. It never
 //          invokes Cargo; the runner puts a refusing `cargo` first on PATH.
@@ -23,7 +25,7 @@ import { spawn as spawnChild } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFile, link, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -193,6 +195,7 @@ function packageEnvironment(pkg) {
 }
 
 const KIND_ORDER = { lib: 0, bin: 1, test: 2 };
+const LIBRARY_EXTENSIONS = new Set(['.rlib', '.rmeta', '.so', '.dylib', '.dll']);
 
 function targetKind(target) {
   const kind = target.kind.find((value) => value in KIND_ORDER) ?? target.kind[0];
@@ -218,6 +221,16 @@ export async function buildTests({ planPath, args, root = REPO_ROOT, env = proce
   const tests = [];
   const binaries = {};
   for (const artifact of cargoArtifacts(output)) {
+    if (artifact.profile?.test !== true && targetKind(artifact.target) === 'lib') {
+      // `cargo test` runs executables from the deps directory, where a test that
+      // compiles fixtures against its crate finds that library and its
+      // dependencies. Mirror the libraries this build linked, pinned by inode.
+      for (const file of artifact.filenames ?? []) {
+        if (basename(dirname(file)) === 'deps' && LIBRARY_EXTENSIONS.has(extname(file))) {
+          await linkInto(file, join(prebuiltDir, 'tests', basename(file)));
+        }
+      }
+    }
     if (typeof artifact.executable !== 'string' || !isAbsolute(artifact.executable)) continue;
     const pkg = packages.get(resolve(artifact.manifest_path));
     if (!pkg) throw new Error(`cargo artifact ${artifact.executable} belongs to an unknown workspace package`);
