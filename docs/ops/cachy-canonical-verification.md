@@ -229,58 +229,25 @@ forced remote audit before accepting this new environment.
 
 ### Authenticated staging acceptance
 
-`release:staging` now preflights two private session files before any staging
-mutation and requires live authenticated acceptance before writing a version-4
-release receipt. Earlier release receipts do not satisfy the current gate. Production
-does not run the synthetic staging journeys.
-On an empty staging community no admitted account can exist yet; use the
-explicit bootstrap release in
-[the staging runbook](railway-staging-target.md#first-staging-release-onto-an-empty-community),
-whose receipt production promotion rejects, then capture the sessions below.
+`release:staging` requires live authenticated acceptance before writing a
+release receipt; production does not run the synthetic staging journeys. The
+coordinator mints both acceptance sessions from staging with the release
+acceptance key and creates a fresh game for each run, so the gate needs no
+captured sessions, prepared game, or environment variables beyond the key file.
+See
+[the staging runbook](railway-staging-target.md#authenticated-staging-acceptance)
+for the key setup and the exact journey.
 
-The dedicated test accounts must already be admitted through fmarch's ordinary
-community admission. `proof:hosted:login` opens Chromium on Cachy's desktop for
-normal WorkOS sign-in and saves only its backend-issued app cookie in a new 0600
-file. It does not create provider users, invent membership, or mint local-proof
-sessions. WorkOS sign-in and identity delivery are independent capabilities:
-creating WorkOS users alone cannot produce admitted test sessions. Hosted
-preflight now requires a real HTTPS identity-delivery transport in both staging
-and production, including WorkOS-only mode. Use that transport to invite and
-admit two dedicated test accounts before attempting these commands; fresh
-provider login, invitation delivery, MFA, and human acceptance remain separate
-evidence boundaries.
-
-```sh
-FMARCH_HOSTED_SESSION_OUTPUT=/secure/fmarch/member.json npm run proof:hosted:login
-FMARCH_HOSTED_SESSION_OUTPUT=/secure/fmarch/outsider.json npm run proof:hosted:login
-export FMARCH_HOSTED_ACCEPTANCE_MEMBER_STATE=/secure/fmarch/member.json
-export FMARCH_HOSTED_ACCEPTANCE_OUTSIDER_STATE=/secure/fmarch/outsider.json
-# Also set the existing hosted API/frontend origins and expected deployed SHA.
-npm run proof:hosted:prepare
-```
-
-Preparation creates one dedicated game using real `CreateGame`, `AddSlot`,
-`SeatPersona`, `AssignRole` and `StartGame` commands. It records command ids and
-acknowledged progress in a private preparation receipt before/after mutation.
-If interrupted, retain that receipt and inspect the exact game; do not blindly
-rerun preparation and create another game. Preparation is not acceptance.
-Use its returned game/channel/confirmation with the same two sessions:
-
-```sh
-export FMARCH_HOSTED_ACCEPTANCE_GAME=<prepared-game-uuid>
-export FMARCH_HOSTED_ACCEPTANCE_CHANNEL=private:role_pm:slot_1
-export FMARCH_HOSTED_ACCEPTANCE_CONFIRM=staging:<prepared-game-uuid>
-FMARCH_HOSTED_AUTHENTICATED=1 npm run proof:hosted
-```
-
-The gate checks two distinct active WorkOS-backed accounts, a member's private
-post acknowledgement, actual socket loss/reconnect with a missed peer update, reload and fresh-context
-persistence, and rejection of the same private route for the still-authenticated
-outsider. It retains booleans and runtime identities, not post bodies, cookies,
-provider credentials, screenshots, or account identifiers. It leaves two uniquely
-labelled posts in the dedicated test game on each run. Expired/missing sessions,
-missing configuration, partial journeys, and commit drift fail the gate. Linux
-proof contracts exercise gate validation; they do not count as live hosted proof.
+The gate checks two distinct principals with active `release_acceptance`
+methods, a member's private post acknowledgement, actual socket
+loss/reconnect with a missed peer update, reload and fresh-context persistence,
+and rejection of the same private route for the still-authenticated outsider. It
+retains booleans, runtime identities, and the run's game id, not post bodies,
+session tokens, or account identifiers. Each run leaves one small started game
+with two uniquely labelled posts. Missing or loosely permissioned key files,
+refused mints, partial journeys, sessions that survive sign-out, and commit drift
+fail the gate. Linux proof contracts exercise gate validation; they do not count
+as live hosted proof.
 
 
 ## Risk ownership and staged proof

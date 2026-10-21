@@ -88,8 +88,8 @@ All staging release mutations share the remote compare-and-swap lease
 commit and tree plus an immutable operation intent. Coordinator intents bind
 the signed fleet job and receipt and the nullable schema-reset decision;
 game-day intents bind both staging receipt digests, rollback commit, and delay.
-The coordinator acquires this lease before authenticated preparation, image
-publication, or any Railway mutation. The game day acquires the same lease
+The coordinator acquires this lease before image publication or any Railway
+mutation. The game day acquires the same lease
 before its first mutation, so a release and a rehearsal cannot race. Every
 control-plane write re-reads and validates the exact remote token, intent,
 parent, tree, canonical Git URL, and Railway topology immediately before the
@@ -382,34 +382,52 @@ business integrity or plaintext confidentiality after API compromise.
     accept an operator-selected replacement target.
 12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Log out and require the browser to traverse the constrained WorkOS session-logout endpoint before returning to the canonical frontend root; then complete a fresh WorkOS sign-in. If classic-plus-WorkOS is enabled, also attach WorkOS to a recently authenticated Classic principal, require the link flow to traverse the same provider logout, and prove a fresh WorkOS sign-in succeeds afterward. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
-## First Staging Release Onto An Empty Community
+## Authenticated Staging Acceptance
 
-An ordinary staging release requires authenticated acceptance by two admitted
-test accounts before it mutates anything. On an empty staging community those
-accounts cannot exist: admission, invitations, and the founder grant ship in
-the release itself. The coordinator therefore has an explicit bootstrap mode:
+Every staging release ends with authenticated acceptance: an admitted member
+posts in a private channel, survives a live reconnect, recovers a missed
+update, and an admitted outsider is denied the same route. The coordinator
+obtains both accounts itself; no person, browser sign-in, mailbox, or identity
+provider is involved, so the first release onto an empty community is an
+ordinary release.
+
+One-time setup on the release machine:
 
 ```sh
-export FMARCH_STAGING_BOOTSTRAP_CONFIRM=staging-bootstrap:<full-sha>
-npm run release:staging -- --commit <full-sha> --fleet-receipt <signed-envelope.json> --fleet-job <job-id> --bootstrap-staging
+node tools/release_acceptance_key.mjs --generate
 ```
 
-Bootstrap runs every other gate — signed Cachy audit, migrator, API and
-frontend deployment by digest, health, the search sentinel, and the public
-hosted readiness/browser check — but records authenticated journeys as
-`unproven`. Its receipt is the distinct kind `fmarch-staging-bootstrap-release`,
-written as `target/releases/staging/bootstrap.<commit>.<lease>.json`, and the
-lease binds `acceptance_mode: bootstrap`. Production promotion, staging replay,
-and every other consumer of `assertReleaseReceipt` reject it.
+This writes 32 random bytes to `~/secure/fmarch/release-acceptance.key`
+(mode 0600; override the path with `FMARCH_RELEASE_ACCEPTANCE_KEY_FILE`),
+refuses to overwrite an existing key, and prints only the key's SHA-256.
+`--check` verifies the file and prints the same digest. Back the key up with the
+other release secrets; replacing it is just generating a new file, because the
+coordinator redeploys the digest on every staging release.
 
-Before bootstrap, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` so the first
-WorkOS sign-in receives GlobalAdmin and a founder membership, and configure
-identity delivery (the `resend` adapter in `deploy/railway/api.env.example`).
-After bootstrap: sign in as the founder, invite a second account from `/admin`,
-accept the mailed invitation, capture both sessions with
-`proof:hosted:login`, run `proof:hosted:prepare`, then run an ordinary
-authenticated staging release of the same or a later commit. Only that
-receipt is promotion evidence.
+During a staging release the coordinator refuses to start without the private
+key file, then sets `FMARCH_RELEASE_ACCEPTANCE_KEY_SHA256` (the digest only) on
+the staging API alongside its database identity. After deploy and health, hosted
+acceptance:
+
+1. calls `POST /auth/release-acceptance-sessions` with the key in
+   `x-fmarch-release-acceptance-key` for the roles `member` and `outsider`;
+2. creates a fresh game through ordinary `CreateGame`, `AddSlot`,
+   `SeatPersona`, `AssignRole`, and `StartGame` commands, seating the member;
+3. runs the journeys with the minted sessions as the browser's
+   `fmarch_session` cookie; and
+4. signs both sessions out and proves they no longer authenticate.
+
+Each role is one stable principal holding a `release_acceptance` method and a
+sponsorless `release_acceptance` membership, both created on first use. A mint
+revokes that principal's earlier sessions, lives at most one hour, and never
+carries a global capability; these members can never sponsor invitations. The
+receipt records `sessionOrigin: release-acceptance` and keeps
+`freshProviderLogin: unproven`, since no WorkOS sign-in is exercised.
+
+The API refuses to start with the digest unless its durable database identity is
+staging, and answers 404 on the route without it. Production never receives the
+digest; production variable authority rejects it on the API, and on any
+migrator or frontend.
 
 ## Canonical Release Proof
 
