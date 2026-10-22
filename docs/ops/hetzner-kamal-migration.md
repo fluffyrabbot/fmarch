@@ -55,14 +55,16 @@ guarantee that protects data or proves what is serving.
 | D3 | Async streaming standby in `hil` over **WireGuard**; **manual** failover via a scripted runbook, not Patroni | `ash` and `hil` are in different Hetzner network zones, so a private network cannot span them. Automatic failover across a ~70 ms WAN without a third witness risks split-brain, which is worse than a 30-minute manual RTO before 1.0 |
 | D4 | **pgBackRest** to B2 with continuous WAL archiving, `archive_timeout = 60s`, weekly full and daily differential backups, 35-day PITR window | RPO ≤ 60 s even if the standby is lost; 35 days covers a slow-to-notice corruption |
 | D5 | **Backblaze B2** for all buckets. Each bucket and environment has its own application key, and no key can list or read another bucket | Cheap storage, free egress to Cloudflare, S3-compatible, has Object Lock. A second provider from compute |
-| D6 | **Split the subject authority into two buckets**: `subject-journal` (manifest and revocations, Object Lock compliance mode) and `subject-keys` (wrapped subject keys, no lock, purged on delete) | `destroy` crypto-shreds by deleting the key object (`crates/identity/src/subject_privacy.rs`), so bucket-wide WORM would break erasure. Manifest and revocations are create-only and must be immutable. Bucket default retention is provider-neutral; per-object lock headers are not |
+| D6 | **Split the subject authority into two buckets**: `subject-journal` (manifest and revocations, long Object Lock: 35 days in staging, 10 years in production) and `subject-keys` (wrapped subject keys, 35-day Object Lock) | `destroy` crypto-shreds by deleting the key object (`crates/identity/src/subject_privacy.rs`), so the key bucket can only hold deleted versions for the backup window. Manifest and revocations are create-only and must stay immutable much longer. Bucket default retention is provider-neutral; per-object lock headers are not |
 | D7 | **AWS KMS** wraps `FMARCH_SUBJECT_AUTHORITY_WRAP_KEY`. The API holds only ciphertext plus an IAM key restricted to `kms:Decrypt` on that one key, with an `aws:SourceIp` condition pinned to the environment's app-host IPs | Owner choice. Meets the KMS custody gate. A leaked credential is useless off-host, and KMS logs every unwrap. About $1/mo per key |
 | D8 | **Kamal 2** for application deploys. Two Kamal services (`fmarch-api`, `fmarch-frontend`) with `staging` and `production` destinations | Deploys the existing digest-pinned GHCR images, gates traffic on `/readyz` through kamal-proxy, and provides deploy locks and rollback. No Kubernetes |
-| D9 | **OpenTofu** (`hcloud` and `cloudflare` providers) plus cloud-init for hosts, load balancers, firewalls, volumes and DNS | Rebuilding a lost environment from code is the disaster-recovery story. The configuration stays small, with one module per environment |
-| D10 | **Cloudflare** proxied DNS → Hetzner load balancer → kamal-proxy on each app host. Origins are `<domain>` / `api.<domain>` and `staging.<domain>` / `api.staging.<domain>` | Keeps today's separate frontend/API origin shape. WebSockets pass through all three hops. Cloudflare absorbs static egress (see D1) |
+| D9 | **OpenTofu** (`hcloud`, `b2`, `aws`, `cloudflare`, `tls` providers) plus cloud-init for hosts, load balancers, firewalls, volumes, buckets, KMS and DNS. One shared module in `infra/modules/environment`, one root per environment. State lives in a B2 bucket with OpenTofu's native client-side state encryption; a tiny local-state `infra/bootstrap` root creates that bucket once | Rebuilding a lost environment from code is the disaster-recovery story. State holds generated credentials, so it is encrypted before it leaves the operator's machine |
+| D10 | **Cloudflare** proxied DNS → public Hetzner load balancer (TLS with a Cloudflare Origin CA certificate, Full strict) → kamal-proxy on each app host over the private network. Origins are `<domain>` / `api.<domain>` and `staging.<domain>` / `api.staging.<domain>` | Keeps today's separate frontend/API origin shape. WebSockets pass through all three hops. Cloudflare absorbs static egress (see D1). Hetzner-managed certificates need Hetzner DNS, so the origin certificate comes from Cloudflare |
+| D15 | A second, **private-only Hetzner load balancer** (public interface disabled) carries frontend-to-API server-side calls over plain HTTP inside the private network. kamal-proxy lists its private IP as an extra API host | The frontend reaches the API without leaving the private network or depending on Cloudflare, and no public listener serves the API without TLS |
 | D11 | Staging keeps production's **multi-node shape** (two app hosts), without the standby | The hosted multi-node race gate must keep proving cross-replica behavior |
 | D12 | Database target attestation keeps `FMARCH_DATABASE_ENVIRONMENT` and **replaces the Railway project/environment IDs with one `FMARCH_DATABASE_INSTANCE_ID` UUID**, generated when the database is provisioned | Keeps the marker that stops a staging process from opening production, without platform identifiers. Greenfield cutover, no compatibility path |
-| D13 | Technical backup deletion cadence is **35 days** for all copies, including the `subject-keys` vault | A destroyed subject key becomes unrecoverable from every copy within 36 days. This is the value the member-data-lifecycle draft cites for "backup deletion cadence" |
+| D13 | Technical backup deletion cadence is **35 days** for every copy: B2 hidden versions and the fluffycachy pull copy | A destroyed subject key becomes unrecoverable from every copy within 36 days. This is the value the member-data-lifecycle draft cites for "backup deletion cadence" |
+| D16 | **Ransomware protection is Object Lock in place**, not a separate vault bucket. `media`, `subject-keys` and `pgbackrest` carry a 35-day compliance lock; deletes and overwrites become hidden versions, and the lifecycle rule `daysFromHidingToDeleting = 1` purges them once the lock lapses. The third copy is a nightly pull to fluffycachy | B2 lets an application key hide a locked object but never remove a locked version, so a compromised host cannot destroy history inside the window. pgBackRest's own expiry keeps working because its deletes become hides. A dated-snapshot vault would store each object 35 times |
 | D14 | Railway tooling is deleted **at production cutover**, in one commit | Production depends on the coordinator until then. Deleting it all at once avoids a long period with two ways to release |
 
 ## Target topology (per environment)
@@ -70,11 +72,11 @@ guarantee that protects data or proves what is serving.
 | Component | Production | Staging |
 |---|---|---|
 | App hosts | 2 × shared-vCPU VM (~3 vCPU / 4 GB), `ash`. Each runs `fmarch-api` and `fmarch-frontend` | same |
-| Load balancer | Hetzner LB, `ash`, private-network targets | same |
+| Load balancers | Public Hetzner LB (HTTPS) and private-only Hetzner LB (HTTP, D15), `ash`, private-network targets | same |
 | DB primary | Dedicated-vCPU VM (~2 vCPU / 8 GB) plus Hetzner Volume for `PGDATA`, `ash` | Shared-vCPU VM plus volume |
 | DB standby | Small VM plus volume, `hil`, WireGuard to primary | none |
-| Firewalls | App hosts: 80/443 from the LB only; SSH from the operator IP. DB: 5432 from app hosts and WireGuard only | same |
-| B2 buckets | `media`, `subject-journal` (locked), `subject-keys`, `pgbackrest`, `vault` (locked) | same, separate keys |
+| Firewalls | Public interfaces accept only SSH from the operator CIDR; load balancers reach kamal-proxy over the private network. DB: PostgreSQL listens only on its private IP, `pg_hba` admits only `hostssl` from the private subnet (plus WireGuard in production) | same |
+| B2 buckets | `media`, `subject-journal`, `subject-keys`, `pgbackrest`, all locked (D6, D16) | same, separate keys, 35-day journal lock |
 | KMS | one key, `us-east-1` | its own key |
 
 App hosts reach the DB primary over the Hetzner private network with
@@ -86,24 +88,28 @@ existing two-replica semantics: one container per app host, both sharing the
 
 | Data | Primary copy | Second copy | Third copy | Restore target |
 |---|---|---|---|---|
-| Postgres | primary volume (`ash`) | streaming standby (`hil`) | pgBackRest repo in B2 `pgbackrest` (base + WAL, 35 d) | PITR to any point in 35 d |
-| Postgres (ransomware-proof) | — | — | nightly copy of `pgbackrest` → B2 `vault` (Object Lock compliance, 35 d) | last nightly |
-| Media | B2 `media` | nightly `rclone copy` → B2 `vault/media` (35 d lifecycle) | — | per-object |
-| Subject journal | B2 `subject-journal` (Object Lock compliance) | nightly copy → `vault/subject-journal` | — | full |
-| Subject keys | B2 `subject-keys` | nightly copy → `vault/subject-keys` (35 d lifecycle, **not** locked) | — | full, minus keys destroyed > 36 d ago (intended) |
+| Postgres | primary volume (`ash`) | streaming standby (`hil`, production) | pgBackRest repo in B2 `pgbackrest` (client-side encrypted, base + WAL, 35 d, locked) | PITR to any point in 35 d |
+| Media | B2 `media` (locked, hidden versions 35 d) | nightly pull to fluffycachy | — | any object version in 35 d |
+| Subject journal | B2 `subject-journal` (locked 10 y in production) | nightly pull to fluffycachy | — | full |
+| Subject keys | B2 `subject-keys` (locked, hidden versions 35 d) | nightly pull to fluffycachy (35 d) | — | full, minus keys destroyed > 36 d ago (intended) |
+| pgBackRest repo | B2 `pgbackrest` | nightly pull to fluffycachy | — | PITR from the local copy if B2 is unreachable |
 | Secrets | `~/secure/fmarch` on the operator Mac | offline escrow (existing practice) | — | — |
 
 Rules:
 
-- **Vault credentials never touch a production host.** The nightly copy job
-  runs on fluffycachy with a vault-only write key and a read-only source key.
-  A compromised app or DB host cannot delete or encrypt the vault.
-- **B2 keeps old versions by default.** On `subject-keys` and `vault/subject-keys`,
-  set the lifecycle rule `daysFromHidingToDeleting = 1`. Otherwise a "deleted"
-  key survives as a hidden version and crypto-shredding silently fails. The
-  erasure smoke in S2 checks this.
-- **pgBackRest owns expiry in `pgbackrest`**, so that bucket is not locked;
-  `vault` supplies the immutable copy.
+- **No application key can remove a locked version.** Bucket keys get
+  `listFiles`, `readFiles`, `writeFiles` and `deleteFiles` (which hides)
+  but never `bypassGovernance`, `writeFileRetentions`,
+  `writeFileLegalHolds` or `writeBucketRetentions`. Compliance mode refuses
+  version deletion even for the account owner until the lock lapses.
+- **B2 keeps old versions by default.** Every locked bucket except
+  `subject-journal` sets the lifecycle rule `daysFromHidingToDeleting = 1`.
+  Otherwise a "deleted" key survives as a hidden version after the lock
+  lapses and crypto-shredding silently fails. The erasure smoke in S2 checks
+  that a destroyed key has no versions 36 days later on staging.
+- **The fluffycachy pull copy uses read-only keys** and keeps 35 days of
+  history with `rclone sync --backup-dir` rotation. It is the copy that
+  survives losing the B2 account itself.
 
 ### Restore drill (new proof lane)
 
@@ -114,8 +120,8 @@ against the most recent staging backup:
    point inside the PITR window.
 2. Run `fmarch-migrate` against it (a no-op apply at head that reconciles
    ACLs and audits the authority catalog), then `fmarch-schema-gate`.
-3. Boot one API process against the restored database and the read-only
-   `subject-journal`/`subject-keys` replicas. Require `/readyz` to be fully
+3. Boot one API process against the restored database and the pulled
+   `subject-journal`/`subject-keys` copies. Require `/readyz` to be fully
    true and one subject key to unwrap.
 4. Write a signed receipt with the restore point, duration, and backup label.
 
@@ -232,7 +238,7 @@ schema-compatible release and never runs the migrator.
 4. **Frontend internal API URL.** `frontend/src/lib/server/api-base.mjs`
    currently accepts only `http://fmarch.railway.internal:8080`. It will
    accept an `http://` URL whose host is an RFC 1918 address (the
-   environment's LB private IP) and reject anything else.
+   environment's private load balancer, D15) and reject anything else.
 5. **Container command.** The runtime image's default command becomes
    `fmarch-schema-gate && exec fmarch-server`, and `FMARCH_BIND=[::]:8080`
    is set by Kamal. The `PORT` fallback stays for local platforms.
@@ -243,10 +249,10 @@ Each slice is one atomic, Cachy-proven checkpoint on `main`.
 
 | Slice | Content | Done when |
 |---|---|---|
-| **S1 — Staging infrastructure** | `infra/` OpenTofu module and cloud-init for staging; PGDG PostgreSQL 16 with private CA; pgBackRest to B2; B2 buckets, keys and lifecycle rules (including `daysFromHidingToDeleting = 1`); KMS key and IAM policy; Cloudflare DNS | `tofu apply` from empty builds staging. `pgbackrest check` passes. A fresh environment can be destroyed and rebuilt from code |
+| **S1 — Staging infrastructure** | `infra/` OpenTofu module and cloud-init for staging; PGDG PostgreSQL 16 with private CA; pgBackRest to B2; B2 buckets, keys and lifecycle rules (including `daysFromHidingToDeleting = 1`); KMS key and IAM policy; Cloudflare DNS | `tofu apply` from empty builds staging, `infra/scripts/configure-db.sh staging` brings PostgreSQL and pgBackRest up, and `pgbackrest check` passes. Hosts, networks, load balancers and DNS can be destroyed and rebuilt from code; the locked buckets and the KMS key carry `prevent_destroy` and survive a rebuild |
 | **S2 — Application changes** | Items 1–5 above plus updated `deploy/` env examples | Cachy full proof passes. A new hosted-storage conformance check against B2 passes: `PutMode::Create` conditional create is honored (else fail closed), delete removes visibility, and a locked journal object refuses deletion. Erasure smoke: a destroyed subject key has no remaining versions after 48 h |
 | **S3 — Kamal release path** | `config/deploy.yml` plus staging destination; `tools/release.mjs`; container-digest verification; new receipt shape | `npm run release:staging` (now `tools/release.mjs`) deploys a Cachy-proven commit end to end and acceptance passes |
-| **S4 — Drills** | Restore drill lane and schedule on fluffycachy; `tools/db_failover.mjs`; vault copy job | One passing restore receipt, one staging failover-and-rebuild, one manual game-day drill, all recorded under `target/` and cited in the completeness scorecard |
+| **S4 — Drills** | Restore drill lane and schedule on fluffycachy; `tools/db_failover.mjs`; fluffycachy pull-copy job | One passing restore receipt, one staging failover-and-rebuild, one manual game-day drill, all recorded under `target/` and cited in the completeness scorecard |
 | **S5 — Production cutover** | Production infrastructure from the same module (plus standby); WorkOS production redirect URIs updated to the new origins; maintenance window: scale Railway API to zero, final `pg_dump -Fc` from Railway, restore as the schema owner, run the migrator so it reconciles exact ACLs and the identity marker, `rclone sync` media and subject objects into the split buckets, `release.mjs --environment production`, cut DNS | Production `/readyz` fully true on the new host, authenticated acceptance passes, first production restore receipt written |
 | **S6 — Railway deletion** | Delete every file in the Cut table, `railway.toml`, `deploy/railway/`, their proof-lane manifest entries and npm scripts (`promote:production` becomes `release:production`); archive the Railway project after 14 days of unused standby | `npm run test:proof-lane-contract` passes, and no `railway` reference remains outside git history |
 
