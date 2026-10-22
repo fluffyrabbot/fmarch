@@ -106,7 +106,7 @@ mapper_prompt += "An empty string field is valid only after you opened the liste
 mapper_prompt += "Read at least these:\n";
 mapper_prompt += "- docs/ops/proof-lane-manifest.json (all lanes and areas; note every frozen vs active area)\n";
 mapper_prompt += "- docs/ops/proof-lane-timings.json (which lanes have measured seconds, which are missing)\n";
-mapper_prompt += "- docs/ops/proof-lane-refactor-scope.md\n";
+mapper_prompt += "- docs/ops/proof-lanes.md\n";
 mapper_prompt += "- docs/ops/proof-product-freeze.md\n";
 mapper_prompt += "- docs/ops/completion-registry.json (status=complete capabilities cited by frozen areas)\n";
 mapper_prompt += "- tools/proof_lane_select.mjs and tools/proof_lane_select.test.mjs\n";
@@ -193,7 +193,7 @@ build_prompt += "Quantify compile-vs-test where evidence exists. Propose leaf sp
 let perf_prompt = common;
 perf_prompt += "You are the performance-audit architect.\n";
 perf_prompt += "Ask: what dominates wall-clock on this Darwin checkout, and what isolation/scheduling leftover still serializes independent work.\n";
-perf_prompt += "Inspect proof-lane-timings.json, proof-lane-refactor-scope.md packages 5-6, tools/dev_postgres.mjs, cargo:api 192s, cargo:commands-pg 130s, cargo:commands-audit 552s, test:auth-invite-role-proof 72s.\n";
+perf_prompt += "Inspect proof-lane-timings.json, proof-lanes.md resource isolation, tools/dev_postgres.mjs, cargo:api 192s, cargo:commands-pg 130s, cargo:commands-audit 552s, test:auth-invite-role-proof 72s.\n";
 perf_prompt += "Note missing timings (clippy-workspace, most frontend browser lanes, event-key-rotation, csp, visual-regression).\n";
 perf_prompt += "Propose concrete speed moves: nextest, lane-scoped DBs, parallel hermetic leaves, timeouts, stop measuring cold work on push.\n";
 

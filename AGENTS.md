@@ -71,59 +71,30 @@ on the canonical Cachy worker, task branches, and atomic history over PR ceremon
   when the change crosses boundaries.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
   (vs `origin/main`, including uncommitted work) to the required lane set via
-  `docs/ops/proof-lane-manifest.json`, using separate ownership for behavioral changes and dependency coverage.
-  Reverse Cargo closure selects each dependent's `dependency_lanes`; only direct
-  behavioral owners forward `also_triggers` edges. Generated contract checks
-  remain explicit. Focused lanes gate acceptance even with `--keep-going`. Add `--run` to
-  execute the selected lanes: `--mode push --run` before ordinary pushes,
-  `--mode sprint --run` for an active-frontier checkpoint, and
-  `--mode full --run` for the content-addressed full sweep. Full mode selects
-  every lane. Push, sprint, and full runs may reuse an immutable passing lane when
-  its proof key still matches the lane's transitive sources, migrations, locks,
-  toolchain, command, and fixtures. Use `--mode full --force --run` to execute
-  every lane for release checkpoints and periodic exhaustive audits.
+  `docs/ops/proof-lane-manifest.json`. Add `--run` to execute it:
+  `--mode push --run` before ordinary pushes, `--mode sprint --run` for an
+  active-frontier checkpoint, and `--mode full --run` for the content-addressed
+  full sweep, which may reuse frozen lanes whose proof key still matches. Use
+  `--mode full --force --run` for release checkpoints and periodic exhaustive
+  audits. [Proof lanes](docs/ops/proof-lanes.md) owns the lane model, run flags,
+  and cache semantics.
 - Tier discipline: `frozen` areas are completed surfaces trusted between full
   sweeps — their lanes leave the inner loop, never existence. Editing frozen
   paths is allowed (greenfield stance stands) but automatically re-arms their
   lanes plus the dependent closure; that escalation is the cost signal, not a
-  prohibition. Push mode adds only its bounded sentinel set to the touched
-  closure; sprint mode adds every active-tier area. Re-declare tiers at sprint
-  boundaries (current frontier = active), use sprint mode during frontier-wide
-  checkpoints, and run `--mode full --run` before landing a sprint to `main` so
-  the freeze stays honest without rerunning unchanged frozen universes. Run a
-  forced full sweep for explicit release checkpoints and periodic exhaustive
-  audits. Validate manifest integrity with
-  `npm run test:proof-lane-contract`. Normal `--run` executions record current
-  costs under ignored `target/proof-lanes/`; deliberately promote a stable cost
-  into the tracked baseline with
+  prohibition. Re-declare tiers at sprint boundaries (current frontier =
+  active), use sprint mode during frontier-wide checkpoints, and run
+  `--mode full --run` before landing a sprint to `main` so the freeze stays
+  honest. Validate manifest integrity with `npm run test:proof-lane-contract`.
+  Promote a stable cost into the tracked baseline only deliberately, with
   `node tools/proof_lane_select.mjs --record <lane-id>`.
-- Inspect a lane's current cache decision with
-  `npm run proof:cache -- explain <lane-id>`. The explanation names every
-  changed input fingerprint, toolchain field, or execution-contract component
-  relative to the newest prior valid entry. Plan retention with
-  `npm run proof:cache -- gc --dry-run`; it writes an immutable maintenance plan
-  under `target/proof-lanes/cache-maintenance/plans/`. After reviewing that
-  exact receipt, apply it with
-  `npm run proof:cache -- gc --apply <plan-path>`. GC retains current keys, keys
-  referenced by the newest terminal full or release receipts, and all in-flight
-  keys. Applying a reviewed plan serializes through the shared host lock,
-  revalidates the plan digest and complete cache/reachability basis, quarantines
-  corrupt entries, writes immutable application intent/result receipts, refuses
-  replay, and fails closed when protected evidence alone exceeds `--max-bytes`.
-  Audit the complete maintenance receipt graph with
-  `npm run proof:cache -- audit`; this is also a bounded push sentinel. It
-  validates plan, intent, result, recovery, action, and historical
-  post-inventory hashes and fails on missing or tampered linkage. Recover an
-  interrupted or failed application with
-  `npm run proof:cache -- audit --recover <plan-id>`, review the newly written
-  current-state plan, then apply that new plan normally. Recovery never replays
-  an attempted plan. Every maintenance receipt publishes through one durable
-  exclusive protocol: staged write, staging-directory sync, file sync, atomic
-  no-clobber publication, publication-directory sync, staging removal, and
-  final directory sync. Audit reports abandoned staging owned by dead writer
-  PIDs. Quarantine only those revalidated dead-writer stages with
-  `npm run proof:cache -- audit --quarantine-staging`; live-writer staging is
-  never moved.
+- Proof-cache maintenance is two-phase: `npm run proof:cache -- explain
+  <lane-id>` diagnoses a miss; `gc --dry-run` writes a plan, and only that
+  reviewed plan may be applied with `gc --apply <plan-path>`. Audit with
+  `npm run proof:cache -- audit`; recover a failed application with
+  `audit --recover <plan-id>` and apply the new plan. Never replay an attempted
+  plan or hand-edit cache entries. Details are in
+  [proof lanes](docs/ops/proof-lanes.md#proof-cache).
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes on the canonical worker before landing.
 - For Postgres-backed Rust work, use the canonical worker-owned `DATABASE_URL`
