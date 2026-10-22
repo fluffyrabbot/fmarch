@@ -1,0 +1,17 @@
+# Copy to ~/secure/fmarch/staging/infra.tfvars and fill in. Never commit the
+# filled-in file. The state_* values come from `tofu output` in infra/bootstrap.
+state_bucket     = "<bucket_prefix>-tofu-state"
+state_b2_region  = "us-west-004"
+state_b2_key_id  = "<from infra/bootstrap output state_key>"
+state_b2_key     = "<from infra/bootstrap output state_key>"
+state_passphrase = "<at least 16 random characters, kept in ~/secure/fmarch>"
+
+domain             = "<base domain on Cloudflare>"
+cloudflare_zone_id = "<zone id>"
+ssh_public_key     = "ssh-ed25519 AAAA... operator"
+operator_cidrs     = ["<operator public IPv4>/32"]
+
+bucket_prefix = "<globally unique prefix>"
+b2_region     = "us-west-004"
+
+database_authority_revision = "staging-YYYY-MM-DD"

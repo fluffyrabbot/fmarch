@@ -1,0 +1,8 @@
+# OpenTofu: provider lock files are committed; working dirs, state, plans
+# and filled-in variable files never are.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example

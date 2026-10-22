@@ -1,0 +1,65 @@
+#cloud-config
+# fmarch app host: Docker for Kamal, a deploy user without sudo, hardened
+# SSH, and security-only unattended upgrades. No secrets belong here.
+package_update: true
+package_upgrade: true
+
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+apt:
+  sources:
+    docker:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/debian ${debian_codename} stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      keyserver: keyserver.ubuntu.com
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - unattended-upgrades
+  - chrony
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-fmarch.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers deploy
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  # Docker restarts take down app containers; patch them in the reboot window.
+  - path: /etc/apt/apt.conf.d/52fmarch-unattended
+    permissions: "0644"
+    content: |
+      Unattended-Upgrade::Package-Blacklist {
+        "docker-ce";
+        "docker-ce-cli";
+        "containerd.io";
+      };
+      Unattended-Upgrade::Automatic-Reboot "false";
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "local",
+        "log-opts": { "max-size": "50m", "max-file": "5" }
+      }
+
+runcmd:
+  - usermod -aG docker deploy
+  - systemctl restart docker
+  - systemctl restart ssh

@@ -1,0 +1,138 @@
+#cloud-config
+# fmarch PostgreSQL host: PGDG PostgreSQL 16 and pgBackRest with PGDATA on
+# the attached Hetzner volume, Docker for the one-shot migrator, and the
+# backup timers. No secrets belong here: infra/scripts/configure-db.sh
+# installs TLS material, credentials and the pgBackRest repository.
+package_update: true
+package_upgrade: true
+
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+apt:
+  sources:
+    pgdg:
+      source: "deb [signed-by=$KEY_FILE] https://apt.postgresql.org/pub/repos/apt ${debian_codename}-pgdg main"
+      keyid: B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+      keyserver: keyserver.ubuntu.com
+    docker:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/debian ${debian_codename} stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      keyserver: keyserver.ubuntu.com
+
+# PostgreSQL is installed by runcmd, after the volume is mounted, so the
+# cluster is created on the volume rather than the root disk.
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - unattended-upgrades
+  - chrony
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-fmarch.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers deploy
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  # PostgreSQL minor upgrades are planned quarterly (standby first).
+  - path: /etc/apt/apt.conf.d/52fmarch-unattended
+    permissions: "0644"
+    content: |
+      Unattended-Upgrade::Package-Blacklist {
+        "postgresql-";
+        "libpq5";
+        "pgbackrest";
+        "docker-ce";
+        "docker-ce-cli";
+        "containerd.io";
+      };
+      Unattended-Upgrade::Automatic-Reboot "false";
+  - path: /usr/local/sbin/fmarch-mount-pgdata
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      device=/dev/disk/by-id/scsi-0HC_Volume_${volume_id}
+      i=0
+      while [ ! -e "$device" ]; do
+        i=$((i + 1))
+        if [ "$i" -gt 300 ]; then
+          echo "PGDATA volume $device never attached" >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      install -d -m 0755 /var/lib/postgresql
+      grep -q "$device" /etc/fstab || echo "$device /var/lib/postgresql ext4 discard,nofail,defaults 0 2" >> /etc/fstab
+      mountpoint -q /var/lib/postgresql || mount /var/lib/postgresql
+  # D4: weekly full and daily differential backups. configure-db.sh enables
+  # the timers after the stanza exists.
+  - path: /etc/systemd/system/fmarch-pgbackrest@.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=pgBackRest %i backup of the fmarch stanza
+      After=postgresql.service
+
+      [Service]
+      Type=oneshot
+      User=postgres
+      ExecStart=/usr/bin/pgbackrest --stanza=fmarch --type=%i backup
+  - path: /etc/systemd/system/fmarch-pgbackrest-full.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Weekly full pgBackRest backup
+
+      [Timer]
+      OnCalendar=Sun *-*-* 07:00:00 UTC
+      Persistent=true
+      Unit=fmarch-pgbackrest@full.service
+
+      [Install]
+      WantedBy=timers.target
+  - path: /etc/systemd/system/fmarch-pgbackrest-diff.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Daily differential pgBackRest backup
+
+      [Timer]
+      OnCalendar=Mon..Sat *-*-* 07:00:00 UTC
+      Persistent=true
+      Unit=fmarch-pgbackrest@diff.service
+
+      [Install]
+      WantedBy=timers.target
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "local",
+        "log-opts": { "max-size": "50m", "max-file": "5" }
+      }
+
+runcmd:
+  - /usr/local/sbin/fmarch-mount-pgdata
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 pgbackrest
+  - usermod -aG docker deploy
+  - install -d -m 0755 /etc/fmarch
+  - systemctl daemon-reload
+  - systemctl restart docker
+  - systemctl restart ssh
