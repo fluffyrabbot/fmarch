@@ -121,7 +121,8 @@ mutation. Server projections remain authoritative after optimistic feedback.
 ## Local iteration and evidence
 
 Use [the UI workbench](../ui-workbench.md) for fixture-driven visual work on
-real routes. Use [human-run test games](../ops/human-run-test-games.md) when API,
+real routes. [Frontend themes](../ops/frontend-themes.md) owns the theme
+registry, appearance preference, token contract, and theme proof. Use [human-run test games](../ops/human-run-test-games.md) when API,
 authority, persistence, or reconnect behavior is part of the change.
 
 [Frontend proof](../ops/frontend-proof.md) owns command selection and artifact

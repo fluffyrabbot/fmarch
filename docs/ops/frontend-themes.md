@@ -13,17 +13,30 @@ separates domain `phase`, resolved light/dark `scheme`, and visual `palette`.
 - System: follows the device independently of game phase.
 - Light or Dark: fixed appearance independently of game phase.
 
-Appearance is available through the existing account/sign-in entry, or directly
-at `/appearance`. A validated, HttpOnly browser cookie persists the selection;
+Appearance is available through the existing account/sign-in entry, directly
+at `/appearance`, or through the app shell's Day/Game/Night switch, which posts
+the current theme with a fixed scheme to the same validated `/appearance` action
+and returns only to same-origin paths. A validated, HttpOnly browser cookie persists the selection;
 this is a device preference and does not confer identity or game authority.
 Explicit preferences render on the server; system preference is detected after
 hydration and tracks subsequent device changes.
 
+## Themes
+
+The registry holds three themes. **Moonlit Den** (`den`) is the default for
+every surface, including the lobby and forum: rounded type, lantern pills, and
+phase-colored chips. **Paper** (`paper`) keeps warm paper with serif headings,
+and **Slate** (`slate`) uses cool surfaces with compact geometry. The default
+preference is Moonlit Den following the game phase; an unknown or missing
+cookie value normalizes to it. Theme fonts are self-hosted so the CSP can keep
+`font-src 'self'`.
+
 ## Theme contract
 
-`styles/tokens.css` composes the shared geometry/type token contract and the Paper
-and Slate definitions. Each theme supplies all semantic color tokens in every
-palette. Raw color literals belong only in `styles/themes/*.css`. Shared
+`frontend/src/lib/styles/tokens.css` composes the shared geometry/type token
+contract and the theme definitions. Each theme supplies all semantic color
+tokens in every palette. Raw color literals belong only in
+`frontend/src/lib/styles/themes/*.css`. Shared
 primitives and component styles consume these semantic variables.
 
 Theme definitions control colors, font families, heading scale, shape, card
@@ -58,11 +71,11 @@ journeys even under `--keep-going`. Theme changes still select all three browser
 lanes and visual regression for landing; the broad journeys no longer repeat
 the theme matrix.
 
-The theme harness drives real routes and the healthy workbench, checking both
-themes, responsive geometry, live phase transitions, route teardown, preference
+The theme harness drives real routes and the healthy workbench, checking every
+registered theme, responsive geometry, live phase transitions, route teardown, preference
 persistence, independent system/light/dark behavior, and semantic contrast.
-Each engine writes `theme-browser.json` and 36 screenshots under its `themes/`
-subdirectory; the lane validates the complete matrix, contrasts, preferences,
+Each engine writes `theme-browser.json` and one screenshot per theme, role,
+viewport, and phase under its `themes/` subdirectory; the lane validates the complete matrix, contrasts, preferences,
 and screenshot files before writing `themes.json`. These are fixture-backed
 browser artifacts, separate from hosted or native Safari acceptance. Palette
 behavior assertions use real application inputs; the shared contrast sampler
