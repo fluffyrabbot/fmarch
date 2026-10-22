@@ -65,6 +65,7 @@ guarantee that protects data or proves what is serving.
 | D12 | Database target attestation keeps `FMARCH_DATABASE_ENVIRONMENT` and **replaces the Railway project/environment IDs with one `FMARCH_DATABASE_INSTANCE_ID` UUID**, generated when the database is provisioned | Keeps the marker that stops a staging process from opening production, without platform identifiers. Greenfield cutover, no compatibility path |
 | D13 | Technical backup deletion cadence is **35 days** for every copy: B2 hidden versions and the fluffycachy pull copy | A destroyed subject key becomes unrecoverable from every copy within 36 days. This is the value the member-data-lifecycle draft cites for "backup deletion cadence" |
 | D16 | **Ransomware protection is Object Lock in place**, not a separate vault bucket. `media`, `subject-keys` and `pgbackrest` carry a 35-day compliance lock; deletes and overwrites become hidden versions, and the lifecycle rule `daysFromHidingToDeleting = 1` purges them once the lock lapses. The third copy is a nightly pull to fluffycachy | B2 lets an application key hide a locked object but never remove a locked version, so a compromised host cannot destroy history inside the window. pgBackRest's own expiry keeps working because its deletes become hides. A dated-snapshot vault would store each object 35 times |
+| D17 | **Railway is frozen from S2 until S5.** Railway staging and production keep their deployed commit; once S2 lands, `main` is not released to Railway. The Railway coordinator and its contracts stay green but are not extended | Owner decision (2026-10-22). Railway's dynamic egress cannot satisfy the IP-pinned KMS policy (D7), and keeping it releasable would mean transitional code deleted again in S6 |
 | D14 | Railway tooling is deleted **at production cutover**, in one commit | Production depends on the coordinator until then. Deleting it all at once avoids a long period with two ways to release |
 
 ## Target topology (per environment)
@@ -162,11 +163,16 @@ One script, `tools/release.mjs --environment staging|production --commit <sha>`:
    /etc/fmarch/migrator.env ghcr.io/...@sha256:<digest> fmarch-migrate
    --operation-id <sha256(env, sha)>`.
    Migrator credentials live only on the DB host. The exit code is the
-   outcome; a non-zero exit stops the release with the API untouched.
+   outcome; a non-zero exit stops the release with the API untouched. A
+   fresh database is first bound to its identity once with
+   `fmarch-schema-epoch-reset --bind-database-identity` and
+   `FMARCH_DATABASE_IDENTITY_BIND_CONFIRM=<instance>:<env>:<sha>`.
 7. **Deploy:** `kamal deploy -d <env> --version <sha> --skip-push` for the
    API, then the frontend, with `boot.limit: 1` (one host at a time). The
-   container command is `fmarch-schema-gate && exec fmarch-server`, and
-   kamal-proxy moves traffic only after `/readyz` returns fully true. The
+   container command is `fmarch-server` (set by Kamal; the image keeps
+   `CMD ["/bin/false"]` so it never picks an authority by itself). Startup
+   fails closed on an unready schema, and kamal-proxy moves traffic only
+   after `/readyz` returns fully true. The
    script then checks that every running container's image digest equals the
    expected digest.
 8. **Acceptance:** `/healthz` and `/readyz` on both origins with the expected
@@ -209,6 +215,7 @@ schema-compatible release and never runs the migrator.
 | Railway target contract (`railway_staging_target_contract.mjs`, `railway-staging-target.md`, `railway.toml`, `deploy/railway/*.railway.toml`) | ~1,850 lines | `config/deploy*.yml`, `infra/`, this document | The platform is gone |
 | Receipt versions 7 and 8 | multiple schemas | One release receipt (step 9) | One shape, one reader |
 | Release must use an audit of the current `main` tip | forced re-audit after docs FFs | Step 2: receipt for `<sha>`'s code checkpoint | Docs-only commits don't change what ships |
+| `fmarch-schema-gate` and its `FMARCH_SCHEMA_GATE_*` settings | 121 lines | Synchronous migrator before deploy, plus startup's own schema check | The pre-deploy gate existed because Railway admitted replicas while a separate migrator might still run |
 | Debug operation delay in `crates/server/src/one_shot_database.rs` | part of 277 lines | Keep the timeouts and `--operation-id` (it labels migrator logs) | Only game day used it |
 
 `security_release_baseline.mjs`, `exact_image_content_smoke.mjs` and the
@@ -216,34 +223,51 @@ schema-compatible release and never runs the migrator.
 
 ## Application changes
 
-1. **KMS unwrap (D7).** The API accepts
-   `FMARCH_SUBJECT_AUTHORITY_WRAP_KEY_CIPHERTEXT`, `FMARCH_SUBJECT_AUTHORITY_KMS_KEY_ARN`
-   and decrypt-only AWS credentials in place of the plaintext key. It calls
-   one SigV4-signed `TrentService.Decrypt` at startup with the encryption
-   context `fmarch:environment=<env>`, `fmarch:purpose=subject-authority-wrap`
-   (the IAM policy requires both), using the `aws-sigv4`
-   crate and the existing HTTP client rather than the full `aws-sdk-kms`
-   dependency tree. Readiness re-runs the decrypt so a revoked key takes
-   replicas out of service. The plaintext variable is removed from hosted
-   configuration; development keeps a local plaintext path behind
-   `release_commit() == "development"`.
-2. **Subject authority split (D6).** Split `FMARCH_SUBJECT_AUTHORITY_*` into
-   `FMARCH_SUBJECT_JOURNAL_*` (manifest and revocations) and
-   `FMARCH_SUBJECT_KEYS_*` (wrapped keys). Bootstrap writes the manifest to
-   the journal store; `create`/`load`/`destroy` use the key store;
-   `record_revocation` uses the journal store. `/readyz` reports both.
-3. **Database instance identity (D12).** Replace
-   `FMARCH_DATABASE_PROJECT_ID`/`FMARCH_DATABASE_ENVIRONMENT_ID` with
-   `FMARCH_DATABASE_INSTANCE_ID` in `crates/server/src/lib.rs`, the identity
-   marker table (new migration), `fmarch-schema-epoch-reset` and
-   `fmarch-staging-search-corpus`.
+1. **KMS unwrap (D7).** Hosted processes receive
+   `FMARCH_SUBJECT_AUTHORITY_WRAP_KEY_CIPHERTEXT`,
+   `FMARCH_SUBJECT_AUTHORITY_KMS_KEY_ARN`,
+   `FMARCH_SUBJECT_AUTHORITY_KMS_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY` and
+   `FMARCH_SUBJECT_AUTHORITY_ENVIRONMENT`; the plaintext
+   `FMARCH_SUBJECT_AUTHORITY_WRAP_KEY` no longer exists. Startup makes one
+   SigV4-signed `TrentService.Decrypt` call with the encryption context
+   `fmarch:environment=<env>`, `fmarch:purpose=subject-authority-wrap` (the
+   IAM policy requires both) and checks that KMS answered for the configured
+   key. The signer is about 60 lines over the crate's existing `hmac`,
+   `sha2` and `reqwest`, tested against the AWS SigV4 test-suite vectors,
+   instead of the AWS SDK. The key is unwrapped **once at startup**; readiness
+   does not call KMS, so a KMS outage cannot take every replica out of
+   service. Revoking the KMS grant takes effect at the next restart. Debug
+   and proof runs keep the hermetic filesystem authority.
+2. **Subject authority split (D6).** Shared endpoint settings stay under
+   `FMARCH_SUBJECT_AUTHORITY_{ENDPOINT,REGION,URL_STYLE,ALLOW_HTTP}`; each
+   bucket gets its own `FMARCH_SUBJECT_JOURNAL_{BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}`
+   and `FMARCH_SUBJECT_KEYS_{...}`. Startup rejects a shared bucket or a
+   shared credential. Bootstrap, the manifest and revocations use the
+   journal store; `create`/`load`/`destroy` use the key store. `/readyz`
+   requires the manifest and a bounded listing of the key bucket.
+3. **Database instance identity (D12).** `FMARCH_DATABASE_INSTANCE_ID`
+   replaces `FMARCH_DATABASE_PROJECT_ID`/`FMARCH_DATABASE_ENVIRONMENT_ID` in
+   the server, migrator, schema gate and `fmarch-schema-epoch-reset`. The
+   identity table is created by the bind step, not a migration, so its shape
+   (`instance_id uuid`) and the database comment marker (now `v2`) change in
+   place. `/readyz` attests `{instance_id, environment}`.
 4. **Frontend internal API URL.** `frontend/src/lib/server/api-base.mjs`
-   currently accepts only `http://fmarch.railway.internal:8080`. It will
-   accept an `http://` URL whose host is an RFC 1918 address (the
-   environment's private load balancer, D15) and reject anything else.
-5. **Container command.** The runtime image's default command becomes
-   `fmarch-schema-gate && exec fmarch-server`, and `FMARCH_BIND=[::]:8080`
-   is set by Kamal. The `PORT` fallback stays for local platforms.
+   accepts `http://<RFC 1918 IPv4>[:port]` (the private load balancer, D15)
+   and nothing else; the Railway private hostname is gone.
+5. **No container-command change.** The image keeps `CMD ["/bin/false"]`,
+   which the image proof enforces; Kamal sets `fmarch-server` and `PORT=8080`
+   in S3. A separate schema-gate step is redundant once the migrator runs
+   synchronously before deploy and startup itself refuses an unready schema,
+   so `fmarch-schema-gate` joins the S6 cut list.
+6. **Private-CA database TLS.** Database URLs may carry one absolute
+   `sslrootcert` alongside `sslmode=verify-ca|verify-full`, so clients verify
+   the self-hosted server against the environment CA. Ambient `PG*`
+   variables remain forbidden.
+7. **Storage conformance.** `fmarch-storage-conformance` (shipped in the
+   runtime image) runs with the API's environment and probes the real
+   buckets: create-only puts are refused on an existing object, deletes hide
+   objects in `media` and `subject-keys`, and the `subject-journal`
+   credential cannot delete.
 
 ## Slices
 
@@ -252,10 +276,10 @@ Each slice is one atomic, Cachy-proven checkpoint on `main`.
 | Slice | Content | Done when |
 |---|---|---|
 | **S1 — Staging infrastructure** | [`infra/`](../../infra/README.md) OpenTofu module and cloud-init for staging; PGDG PostgreSQL 16 with private CA; pgBackRest to B2; B2 buckets, keys and lifecycle rules (including `daysFromHidingToDeleting = 1`); KMS key and IAM policy; Cloudflare DNS | `tofu apply` from empty builds staging, `infra/scripts/configure-db.sh staging` brings PostgreSQL and pgBackRest up, and `pgbackrest check` passes. Hosts, networks, load balancers and DNS can be destroyed and rebuilt from code; the locked buckets and the KMS key carry `prevent_destroy` and survive a rebuild |
-| **S2 — Application changes** | Items 1–5 above plus updated `deploy/` env examples | Cachy full proof passes. A new hosted-storage conformance check against B2 passes: `PutMode::Create` conditional create is honored (else fail closed), delete removes visibility, and a locked journal object refuses deletion. Erasure smoke: a destroyed subject key has no remaining versions after 48 h |
+| **S2 — Application changes** | Items 1–7 above plus `deploy/hetzner/` env examples | Cachy proof passes. After `tofu apply`, `fmarch-storage-conformance` passes against staging's B2 buckets |
 | **S3 — Kamal release path** | `config/deploy.yml` plus staging destination; `tools/release.mjs`; container-digest verification; new receipt shape | `npm run release:staging` (now `tools/release.mjs`) deploys a Cachy-proven commit end to end and acceptance passes |
-| **S4 — Drills** | Restore drill lane and schedule on fluffycachy; `tools/db_failover.mjs`; fluffycachy pull-copy job | One passing restore receipt, one staging failover-and-rebuild, one manual game-day drill, all recorded under `target/` and cited in the completeness scorecard |
-| **S5 — Production cutover** | Production infrastructure from the same module (plus standby); WorkOS production redirect URIs updated to the new origins; maintenance window: scale Railway API to zero, final `pg_dump -Fc` from Railway, restore as the schema owner, run the migrator so it reconciles exact ACLs and the identity marker, `rclone sync` media and subject objects into the split buckets, `release.mjs --environment production`, cut DNS | Production `/readyz` fully true on the new host, authenticated acceptance passes, first production restore receipt written |
+| **S4 — Drills** | Restore drill lane and schedule on fluffycachy; `tools/db_failover.mjs`; fluffycachy pull-copy job; erasure smoke (a destroyed staging subject key has no B2 versions left 36 days later, D13) | One passing restore receipt, one staging failover-and-rebuild, one manual game-day drill, all recorded under `target/` and cited in the completeness scorecard |
+| **S5 — Production cutover** | Production infrastructure from the same module (plus standby); WorkOS production redirect URIs updated to the new origins; maintenance window: scale Railway API to zero, final `pg_dump -Fc` from Railway, restore as the schema owner, drop the restored Railway-era identity table and database comment, bind the new instance identity, run the migrator so it reconciles exact ACLs, `rclone sync` media and subject objects into the split buckets, `release.mjs --environment production`, cut DNS | Production `/readyz` fully true on the new host, authenticated acceptance passes, first production restore receipt written |
 | **S6 — Railway deletion** | Delete every file in the Cut table, `railway.toml`, `deploy/railway/`, their proof-lane manifest entries and npm scripts (`promote:production` becomes `release:production`); archive the Railway project after 14 days of unused standby | `npm run test:proof-lane-contract` passes, and no `railway` reference remains outside git history |
 
 Staging data is disposable, so S1–S4 start from an empty staging database.
