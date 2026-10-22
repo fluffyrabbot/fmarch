@@ -8,7 +8,7 @@ const ENV = Object.freeze({
   WORKOS_API_KEY: "sk_test_secret",
   WORKOS_REDIRECT_URI: "https://fmarch.example.test/auth/callback",
   WORKOS_COOKIE_PASSWORD: "0123456789abcdef0123456789abcdef",
-  FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
+  FMARCH_API_INTERNAL_URL: "http://10.40.1.6",
 });
 const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
 
@@ -38,7 +38,7 @@ test("callback exchanges the typed AuthKit result directly for one backend sessi
   assert.equal(observed.callback.response, cookies);
   assert.equal(
     observed.request.url,
-    "http://fmarch.railway.internal:8080/auth/sessions",
+    "http://10.40.1.6/auth/sessions",
   );
   assert.equal(observed.request.init.headers.authorization, "Bearer provider-token");
   assert.deepEqual(JSON.parse(observed.request.init.body), { method: "workos" });
@@ -364,7 +364,7 @@ test("callback links WorkOS to an authenticated principal without replacing its 
 
   assert.equal(
     request.url,
-    "http://fmarch.railway.internal:8080/auth/account/methods/workos",
+    "http://10.40.1.6/auth/account/methods/workos",
   );
   assert.equal(request.init.headers.authorization, "Bearer fmss_classic");
   assert.deepEqual(JSON.parse(request.init.body), { provider_assertion: "link-assertion" });
