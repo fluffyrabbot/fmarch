@@ -3845,7 +3845,6 @@ fn staging_identity(environment: &str) -> database_schema::DatabaseEnvironmentId
     database_schema::DatabaseEnvironmentIdentity::new(
         environment,
         "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     )
     .unwrap()
 }

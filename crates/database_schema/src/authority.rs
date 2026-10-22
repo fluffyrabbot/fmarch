@@ -14,7 +14,7 @@ pub const DATABASE_ENVIRONMENT_IDENTITY_TABLE: &str = "database_environment_iden
 pub const SCHEMA_EPOCH_RESET_COMPLETION_TABLE: &str = "schema_epoch_reset_completion";
 pub const DATABASE_IDENTITY_ADVISORY_LOCK: i64 = 2_542_974_982_456_656_081;
 const DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX: &str =
-    "fmarch-database-environment-identity:v1:";
+    "fmarch-database-environment-identity:v2:";
 
 const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "action_counter",
@@ -823,34 +823,27 @@ pub enum DatabaseAuthorityError {
 /// application principal and external readiness checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabaseEnvironmentIdentity {
-    pub project_id: String,
-    pub environment_id: String,
+    pub instance_id: String,
     pub environment: String,
 }
 
 impl DatabaseEnvironmentIdentity {
     pub fn new(
         environment: impl Into<String>,
-        project_id: impl Into<String>,
-        environment_id: impl Into<String>,
+        instance_id: impl Into<String>,
     ) -> Result<Self, DatabaseAuthorityError> {
         let identity = Self {
-            project_id: project_id.into(),
-            environment_id: environment_id.into(),
+            instance_id: instance_id.into(),
             environment: environment.into(),
         };
-        validate_release_identity(
-            &identity.environment,
-            &identity.project_id,
-            &identity.environment_id,
-        )?;
+        validate_release_identity(&identity.environment, &identity.instance_id)?;
         Ok(identity)
     }
 
     fn marker(&self) -> String {
         format!(
-            "{DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX}{}:{}:{}",
-            self.project_id, self.environment_id, self.environment
+            "{DATABASE_ENVIRONMENT_IDENTITY_MARKER_PREFIX}{}:{}",
+            self.instance_id, self.environment
         )
     }
 
@@ -864,12 +857,12 @@ impl DatabaseEnvironmentIdentity {
             })?
             .split(':')
             .collect::<Vec<_>>();
-        let [project_id, environment_id, environment] = fields.as_slice() else {
+        let [instance_id, environment] = fields.as_slice() else {
             return Err(DatabaseAuthorityError::Configuration(
                 "database environment identity marker has an unknown format".to_string(),
             ));
         };
-        Self::new(*environment, *project_id, *environment_id)
+        Self::new(*environment, *instance_id)
     }
 }
 
@@ -1979,14 +1972,10 @@ async fn verify_catalog_manifest_on(
 pub async fn bind_database_environment_identity(
     pool: &PgPool,
     expected_environment: &str,
-    expected_project_id: &str,
-    expected_environment_id: &str,
+    expected_instance_id: &str,
 ) -> Result<(), DatabaseAuthorityError> {
-    let expected_identity = DatabaseEnvironmentIdentity::new(
-        expected_environment,
-        expected_project_id,
-        expected_environment_id,
-    )?;
+    let expected_identity =
+        DatabaseEnvironmentIdentity::new(expected_environment, expected_instance_id)?;
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
         .bind(DATABASE_IDENTITY_ADVISORY_LOCK)
@@ -2015,8 +2004,7 @@ pub async fn bind_database_environment_identity(
             r#"
             CREATE TABLE fmarch_release_authority.database_environment_identity (
                 singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
-                project_id uuid NOT NULL,
-                environment_id uuid NOT NULL,
+                instance_id uuid NOT NULL,
                 environment text NOT NULL CHECK (environment IN ('staging', 'production')),
                 created_at timestamp with time zone NOT NULL DEFAULT clock_timestamp()
             )
@@ -2035,29 +2023,26 @@ pub async fn bind_database_environment_identity(
             "database environment identity authority was not created".to_string(),
         ));
     }
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT project_id::text, environment_id::text, environment FROM fmarch_release_authority.database_environment_identity",
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT instance_id::text, environment FROM fmarch_release_authority.database_environment_identity",
     )
     .fetch_all(&mut *tx)
     .await?;
     match rows.as_slice() {
         [] => {
             sqlx::query(
-                "INSERT INTO fmarch_release_authority.database_environment_identity (project_id, environment_id, environment) VALUES ($1::uuid, $2::uuid, $3)",
+                "INSERT INTO fmarch_release_authority.database_environment_identity (instance_id, environment) VALUES ($1::uuid, $2)",
             )
-            .bind(expected_project_id)
-            .bind(expected_environment_id)
+            .bind(expected_instance_id)
             .bind(expected_environment)
             .execute(&mut *tx)
             .await?;
         }
-        [(project_id, environment_id, environment)]
-            if project_id == expected_project_id
-                && environment_id == expected_environment_id
-                && environment == expected_environment => {}
-        [(project_id, environment_id, environment)] => {
+        [(instance_id, environment)]
+            if instance_id == expected_instance_id && environment == expected_environment => {}
+        [(instance_id, environment)] => {
             return Err(DatabaseAuthorityError::Configuration(format!(
-                "database identity is {project_id}/{environment_id}/{environment}, expected {expected_project_id}/{expected_environment_id}/{expected_environment}"
+                "database identity is {instance_id}/{environment}, expected {expected_instance_id}/{expected_environment}"
             )));
         }
         _ => {
@@ -2136,13 +2121,8 @@ pub async fn verify_database_environment_identity_marker(
     let actual = read_database_environment_identity_marker(connection).await?;
     if actual != *expected {
         return Err(DatabaseAuthorityError::Configuration(format!(
-            "database identity is {}/{}/{}, expected {}/{}/{}",
-            actual.project_id,
-            actual.environment_id,
-            actual.environment,
-            expected.project_id,
-            expected.environment_id,
-            expected.environment,
+            "database identity is {}/{}, expected {}/{}",
+            actual.instance_id, actual.environment, expected.instance_id, expected.environment,
         )));
     }
     Ok(actual)
@@ -2151,32 +2131,26 @@ pub async fn verify_database_environment_identity_marker(
 pub async fn verify_database_environment_identity(
     connection: &mut PgConnection,
     expected_environment: &str,
-    expected_project_id: &str,
-    expected_environment_id: &str,
+    expected_instance_id: &str,
 ) -> Result<(), DatabaseAuthorityError> {
-    let expected_identity = DatabaseEnvironmentIdentity::new(
-        expected_environment,
-        expected_project_id,
-        expected_environment_id,
-    )?;
+    let expected_identity =
+        DatabaseEnvironmentIdentity::new(expected_environment, expected_instance_id)?;
     verify_database_environment_identity_marker(connection, &expected_identity).await?;
     if !verify_database_environment_identity_authority(connection).await? {
         return Err(DatabaseAuthorityError::Configuration(
             "database environment identity is not provisioned".to_string(),
         ));
     }
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT project_id::text, environment_id::text, environment FROM fmarch_release_authority.database_environment_identity",
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT instance_id::text, environment FROM fmarch_release_authority.database_environment_identity",
     )
     .fetch_all(&mut *connection)
     .await?;
     match rows.as_slice() {
-        [(project_id, environment_id, environment)]
-            if project_id == expected_project_id
-                && environment_id == expected_environment_id
-                && environment == expected_environment => Ok(()),
-        [(project_id, environment_id, environment)] => Err(DatabaseAuthorityError::Configuration(format!(
-            "database identity is {project_id}/{environment_id}/{environment}, expected {expected_project_id}/{expected_environment_id}/{expected_environment}"
+        [(instance_id, environment)]
+            if instance_id == expected_instance_id && environment == expected_environment => Ok(()),
+        [(instance_id, environment)] => Err(DatabaseAuthorityError::Configuration(format!(
+            "database identity is {instance_id}/{environment}, expected {expected_instance_id}/{expected_environment}"
         ))),
         _ => Err(DatabaseAuthorityError::Configuration(
             "database environment identity must contain exactly one row".to_string(),
@@ -2186,25 +2160,20 @@ pub async fn verify_database_environment_identity(
 
 fn validate_release_identity(
     environment: &str,
-    project_id: &str,
-    environment_id: &str,
+    instance_id: &str,
 ) -> Result<(), DatabaseAuthorityError> {
     if !matches!(environment, "staging" | "production") {
         Err(DatabaseAuthorityError::Configuration(
             "database environment identity must be staging or production".to_string(),
         ))?;
     }
-    for (label, value) in [("project", project_id), ("environment", environment_id)] {
-        let parsed = uuid::Uuid::parse_str(value).map_err(|_| {
-            DatabaseAuthorityError::Configuration(format!(
-                "database {label} identity must be a canonical UUID"
-            ))
-        })?;
-        if parsed.to_string() != value {
-            return Err(DatabaseAuthorityError::Configuration(format!(
-                "database {label} identity must be a canonical UUID"
-            )));
-        }
+    let canonical = uuid::Uuid::parse_str(instance_id)
+        .map(|parsed| parsed.to_string() == instance_id)
+        .unwrap_or(false);
+    if !canonical {
+        return Err(DatabaseAuthorityError::Configuration(
+            "database instance identity must be a canonical UUID".to_string(),
+        ));
     }
     Ok(())
 }
@@ -2302,8 +2271,7 @@ async fn verify_database_environment_identity_authority(
     if columns
         != [
             ("singleton".to_string(), "boolean".to_string(), true),
-            ("project_id".to_string(), "uuid".to_string(), true),
-            ("environment_id".to_string(), "uuid".to_string(), true),
+            ("instance_id".to_string(), "uuid".to_string(), true),
             ("environment".to_string(), "text".to_string(), true),
             (
                 "created_at".to_string(),

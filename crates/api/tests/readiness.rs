@@ -74,14 +74,12 @@ async fn readyz_attests_the_actual_database_and_rejects_a_coherent_wrong_target(
     let staging = database_schema::DatabaseEnvironmentIdentity::new(
         "staging",
         "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     )
     .unwrap();
     database_schema::bind_database_environment_identity(
         &pool,
         &staging.environment,
-        &staging.project_id,
-        &staging.environment_id,
+        &staging.instance_id,
     )
     .await
     .unwrap();
@@ -89,7 +87,6 @@ async fn readyz_attests_the_actual_database_and_rejects_a_coherent_wrong_target(
 
     let production = database_schema::DatabaseEnvironmentIdentity::new(
         "production",
-        "9d285d67-c11b-4508-9efb-fad042787b4c",
         "c1378737-84cc-45ba-8474-9c868baf7cfb",
     )
     .unwrap();
@@ -115,8 +112,7 @@ async fn readyz_attests_the_actual_database_and_rejects_a_coherent_wrong_target(
     assert_eq!(
         body.database_identity,
         Some(DatabaseIdentityAttestation {
-            project_id: "9d285d67-c11b-4508-9efb-fad042787b4c".to_string(),
-            environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4".to_string(),
+            instance_id: "9d285d67-c11b-4508-9efb-fad042787b4c".to_string(),
             environment: "staging".to_string(),
         })
     );
@@ -124,7 +120,7 @@ async fn readyz_attests_the_actual_database_and_rejects_a_coherent_wrong_target(
     let mutation: String = sqlx::query_scalar(
         "SELECT format('COMMENT ON DATABASE %I IS %L', current_database(), $1)",
     )
-    .bind("fmarch-database-environment-identity:v1:9d285d67-c11b-4508-9efb-fad042787b4c:c1378737-84cc-45ba-8474-9c868baf7cfb:production")
+    .bind("fmarch-database-environment-identity:v2:c1378737-84cc-45ba-8474-9c868baf7cfb:production")
     .fetch_one(&pool)
     .await
     .unwrap();

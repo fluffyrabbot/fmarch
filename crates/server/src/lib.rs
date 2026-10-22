@@ -14,22 +14,21 @@ pub fn configured_database_environment_identity(
 ) -> Result<Option<DatabaseEnvironmentIdentity>, String> {
     let values = (
         std::env::var("FMARCH_DATABASE_ENVIRONMENT"),
-        std::env::var("FMARCH_DATABASE_PROJECT_ID"),
-        std::env::var("FMARCH_DATABASE_ENVIRONMENT_ID"),
+        std::env::var("FMARCH_DATABASE_INSTANCE_ID"),
     );
     match values {
-        (Ok(environment), Ok(project_id), Ok(environment_id)) => {
-            DatabaseEnvironmentIdentity::new(environment, project_id, environment_id)
+        (Ok(environment), Ok(instance_id)) => {
+            DatabaseEnvironmentIdentity::new(environment, instance_id)
                 .map(Some)
                 .map_err(|error| error.to_string())
         }
-        (
-            Err(std::env::VarError::NotPresent),
-            Err(std::env::VarError::NotPresent),
-            Err(std::env::VarError::NotPresent),
-        ) if api::release_commit() == "development" => Ok(None),
+        (Err(std::env::VarError::NotPresent), Err(std::env::VarError::NotPresent))
+            if api::release_commit() == "development" =>
+        {
+            Ok(None)
+        }
         _ => Err(format!(
-            "exact release {process_name} requires the complete durable database project/environment identity"
+            "exact release {process_name} requires the complete durable database environment and instance identity"
         )),
     }
 }

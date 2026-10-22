@@ -22,8 +22,7 @@ fn migrate_binary() -> String {
 }
 
 const RELEASE_COMMIT: &str = "1111111111111111111111111111111111111111";
-const PROJECT_ID: &str = "9d285d67-c11b-4508-9efb-fad042787b4c";
-const ENVIRONMENT_ID: &str = "e109e500-2a4c-48a3-96f2-e92a9edb63e4";
+const INSTANCE_ID: &str = "9d285d67-c11b-4508-9efb-fad042787b4c";
 const RESET_OPERATION_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const MIGRATION_OPERATION_ID: &str =
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -58,8 +57,7 @@ fn reset_command(database_url: &str, execute: bool, expected: Option<&Value>) ->
         .env_clear()
         .env("DATABASE_MIGRATION_URL", database_url)
         .env("FMARCH_DATABASE_ENVIRONMENT", "staging")
-        .env("FMARCH_DATABASE_PROJECT_ID", PROJECT_ID)
-        .env("FMARCH_DATABASE_ENVIRONMENT_ID", ENVIRONMENT_ID)
+        .env("FMARCH_DATABASE_INSTANCE_ID", INSTANCE_ID)
         .env("FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT", "staging")
         .env("FMARCH_SCHEMA_EPOCH_RESET_EPOCH", epoch.to_string())
         .env(
@@ -98,8 +96,7 @@ fn migration_command(database_url: &str) -> Command {
         .env_clear()
         .env("DATABASE_MIGRATION_URL", database_url)
         .env("FMARCH_DATABASE_ENVIRONMENT", "staging")
-        .env("FMARCH_DATABASE_PROJECT_ID", PROJECT_ID)
-        .env("FMARCH_DATABASE_ENVIRONMENT_ID", ENVIRONMENT_ID)
+        .env("FMARCH_DATABASE_INSTANCE_ID", INSTANCE_ID)
         .env("FMARCH_DATABASE_APPLICATION_PASSWORD", APPLICATION_PASSWORD)
         .env("FMARCH_DATABASE_KEY_ADMIN_PASSWORD", KEY_ADMIN_PASSWORD)
         .env("FMARCH_DB_ACQUIRE_TIMEOUT_MS", "30000")
@@ -145,14 +142,9 @@ fn message(output: &Output, kind: &str) -> Value {
 async fn committed_reset_recovers_without_a_second_drop_and_rejects_a_changed_inventory(
     pool: PgPool,
 ) {
-    database_schema::bind_database_environment_identity(
-        &pool,
-        "staging",
-        PROJECT_ID,
-        ENVIRONMENT_ID,
-    )
-    .await
-    .expect("explicitly bootstrap disposable database identity");
+    database_schema::bind_database_environment_identity(&pool, "staging", INSTANCE_ID)
+        .await
+        .expect("explicitly bootstrap disposable database identity");
     let database_url = migration_url(&pool).await;
 
     let first_audit = run_reset(&database_url, false, None);
@@ -248,14 +240,9 @@ async fn committed_reset_recovers_without_a_second_drop_and_rejects_a_changed_in
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn shared_lock_contention_is_bounded_and_leaves_no_database_side_effects(pool: PgPool) {
-    database_schema::bind_database_environment_identity(
-        &pool,
-        "staging",
-        PROJECT_ID,
-        ENVIRONMENT_ID,
-    )
-    .await
-    .expect("explicitly bootstrap disposable database identity");
+    database_schema::bind_database_environment_identity(&pool, "staging", INSTANCE_ID)
+        .await
+        .expect("explicitly bootstrap disposable database identity");
     database_schema::reconcile_database_authority(&pool, APPLICATION_PASSWORD, KEY_ADMIN_PASSWORD)
         .await
         .expect("establish the application privilege manifest");

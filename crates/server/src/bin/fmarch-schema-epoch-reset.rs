@@ -167,12 +167,12 @@ async fn main() -> Result<(), DynError> {
     let database_url = env::var("DATABASE_MIGRATION_URL")?;
     server::validate_database_transport(&database_url, "DATABASE_MIGRATION_URL")?;
     let release_commit = exact_release_commit()?;
-    let (database_environment, project_id, environment_id) = database_identity_environment()?;
+    let (database_environment, instance_id) = database_identity_environment()?;
     let request = if mode == Mode::BindDatabaseIdentity {
         let expected_confirmation =
-            format!("{project_id}:{environment_id}:{database_environment}:{release_commit}");
+            format!("{instance_id}:{database_environment}:{release_commit}");
         if env::var("FMARCH_DATABASE_IDENTITY_BIND_CONFIRM")? != expected_confirmation {
-            return Err("database identity bootstrap confirmation does not match canonical project, environment, and release commit".into());
+            return Err("database identity bootstrap confirmation does not match canonical instance, environment, and release commit".into());
         }
         None
     } else {
@@ -235,8 +235,7 @@ async fn main() -> Result<(), DynError> {
             &mode,
             &release_commit,
             &database_environment,
-            &project_id,
-            &environment_id,
+            &instance_id,
             request.as_ref(),
         ),
     )
@@ -279,8 +278,7 @@ async fn run(
     mode: &Mode,
     release_commit: &str,
     database_environment: &str,
-    project_id: &str,
-    environment_id: &str,
+    instance_id: &str,
     request: Option<&ResetRequest>,
 ) -> Result<(), DynError> {
     sqlx::query("SELECT set_config('search_path', 'public', false)")
@@ -289,19 +287,12 @@ async fn run(
     server::verify_migration_authority(pool).await?;
 
     if mode == &Mode::BindDatabaseIdentity {
-        server::bind_database_environment_identity(
-            pool,
-            database_environment,
-            project_id,
-            environment_id,
-        )
-        .await?;
+        server::bind_database_environment_identity(pool, database_environment, instance_id).await?;
         println!(
             "{}",
             json!({
                 "kind": "fmarch-database-environment-identity-bound",
-                "project_id": project_id,
-                "environment_id": environment_id,
+                "instance_id": instance_id,
                 "environment": database_environment,
                 "release_commit": release_commit,
             })
@@ -319,13 +310,8 @@ async fn run(
         debug_operation_delay().await?;
         let mut tx = connection.begin().await?;
         lock_database_identity(&mut tx).await?;
-        server::verify_database_environment_identity(
-            &mut tx,
-            &request.environment,
-            project_id,
-            environment_id,
-        )
-        .await?;
+        server::verify_database_environment_identity(&mut tx, &request.environment, instance_id)
+            .await?;
         if completion_store_exists(&mut tx).await? {
             if let Some(completion) =
                 load_completion(&mut tx, &request.environment, request.epoch_i64).await?
@@ -369,13 +355,8 @@ async fn run(
         .bind(format!("fmarch-schema-epoch-reset:{}", request.environment))
         .execute(&mut *tx)
         .await?;
-    server::verify_database_environment_identity(
-        &mut tx,
-        &request.environment,
-        project_id,
-        environment_id,
-    )
-    .await?;
+    server::verify_database_environment_identity(&mut tx, &request.environment, instance_id)
+        .await?;
     ensure_completion_store(&mut tx).await?;
     if let Some(completion) =
         load_completion(&mut tx, &request.environment, request.epoch_i64).await?
@@ -404,13 +385,8 @@ async fn run(
     }
 
     lock_public_data_relations(&mut tx).await?;
-    server::verify_database_environment_identity(
-        &mut tx,
-        &request.environment,
-        project_id,
-        environment_id,
-    )
-    .await?;
+    server::verify_database_environment_identity(&mut tx, &request.environment, instance_id)
+        .await?;
     let audit = audit_counts(&mut tx).await?;
     if &audit != expected_inventory {
         return Err("schema epoch reset inventory changed after the non-mutating audit".into());
@@ -476,11 +452,10 @@ fn exact_release_commit() -> Result<String, Box<dyn std::error::Error>> {
     Ok(release_commit)
 }
 
-fn database_identity_environment() -> Result<(String, String, String), Box<dyn std::error::Error>> {
+fn database_identity_environment() -> Result<(String, String), Box<dyn std::error::Error>> {
     Ok((
         env::var("FMARCH_DATABASE_ENVIRONMENT")?,
-        env::var("FMARCH_DATABASE_PROJECT_ID")?,
-        env::var("FMARCH_DATABASE_ENVIRONMENT_ID")?,
+        env::var("FMARCH_DATABASE_INSTANCE_ID")?,
     ))
 }
 

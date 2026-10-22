@@ -43,20 +43,14 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     reconcile_database_authority(&owner, APPLICATION_PASSWORD, KEY_ADMIN_PASSWORD)
         .await
         .expect("reconcile exact database roles and ACLs");
-    bind_database_environment_identity(
-        &owner,
-        "staging",
-        "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
-    )
-    .await
-    .expect("bind the explicit test database identity");
+    bind_database_environment_identity(&owner, "staging", "9d285d67-c11b-4508-9efb-fad042787b4c")
+        .await
+        .expect("bind the explicit test database identity");
     let mut owner_connection = owner.acquire().await.unwrap();
     verify_database_environment_identity(
         &mut owner_connection,
         "staging",
         "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     )
     .await
     .expect("canonical identity is admitted");
@@ -70,7 +64,6 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         &mut owner_connection,
         "staging",
         "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     )
     .await
     .expect_err("a non-owner control-table grant must fail identity admission");
@@ -90,7 +83,6 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         &mut owner_connection,
         "staging",
         "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     )
     .await
     .expect_err("a non-owner control-schema grant must fail identity admission");
@@ -102,12 +94,9 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     .unwrap();
     let application = role_pool(&owner, APPLICATION_DATABASE_ROLE, APPLICATION_PASSWORD).await;
     let key_admin = role_pool(&owner, KEY_ADMIN_DATABASE_ROLE, KEY_ADMIN_PASSWORD).await;
-    let expected_identity = DatabaseEnvironmentIdentity::new(
-        "staging",
-        "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
-    )
-    .unwrap();
+    let expected_identity =
+        DatabaseEnvironmentIdentity::new("staging", "9d285d67-c11b-4508-9efb-fad042787b4c")
+            .unwrap();
     let mut application_connection = application.acquire().await.unwrap();
     assert_eq!(
         read_database_environment_identity_marker(&mut application_connection)
@@ -115,12 +104,9 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
             .expect("application can read only the database-global identity attestation"),
         expected_identity,
     );
-    let wrong_environment = DatabaseEnvironmentIdentity::new(
-        "production",
-        "9d285d67-c11b-4508-9efb-fad042787b4c",
-        "c1378737-84cc-45ba-8474-9c868baf7cfb",
-    )
-    .unwrap();
+    let wrong_environment =
+        DatabaseEnvironmentIdentity::new("production", "c1378737-84cc-45ba-8474-9c868baf7cfb")
+            .unwrap();
     verify_database_environment_identity_marker(&mut application_connection, &wrong_environment)
         .await
         .expect_err("runtime must reject a coherently configured wrong physical database");

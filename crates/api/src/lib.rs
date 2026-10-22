@@ -515,16 +515,14 @@ pub struct Readiness {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DatabaseIdentityAttestation {
-    pub project_id: String,
-    pub environment_id: String,
+    pub instance_id: String,
     pub environment: String,
 }
 
 impl From<database_schema::DatabaseEnvironmentIdentity> for DatabaseIdentityAttestation {
     fn from(identity: database_schema::DatabaseEnvironmentIdentity) -> Self {
         Self {
-            project_id: identity.project_id,
-            environment_id: identity.environment_id,
+            instance_id: identity.instance_id,
             environment: identity.environment,
         }
     }

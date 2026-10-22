@@ -162,8 +162,7 @@ async fn migrate(
             server::verify_database_environment_identity(
                 &mut operation_lock,
                 &identity.environment,
-                &identity.project_id,
-                &identity.environment_id,
+                &identity.instance_id,
             )
             .await?;
         }
