@@ -613,14 +613,6 @@ fn validate_identity_delivery_http_budget(
     Ok(())
 }
 
-fn required_env(name: &str) -> Result<String, std::io::Error> {
-    optional_env(name)?
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, format!("{name} is required"))
-        })
-}
-
 fn optional_env(name: &str) -> Result<Option<String>, std::io::Error> {
     match env::var(name) {
         Ok(value) => Ok(Some(value)),
@@ -628,19 +620,6 @@ fn optional_env(name: &str) -> Result<Option<String>, std::io::Error> {
         Err(error) => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!("{name} is not valid UTF-8: {error}"),
-        )),
-    }
-}
-
-fn virtual_hosted_style_from_value(value: &str) -> Result<bool, std::io::Error> {
-    match value {
-        "path" => Ok(false),
-        // Railway's S3-compatible bucket credential uses `virtual-host`; accept the
-        // longer spelling as a provider-neutral synonym for manually managed stores.
-        "virtual-host" | "virtual-hosted" => Ok(true),
-        _ => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AWS_S3_URL_STYLE must be path, virtual-host, or virtual-hosted",
         )),
     }
 }
@@ -656,27 +635,7 @@ fn media_config_from_env() -> Result<MediaConfig, Box<dyn std::error::Error>> {
         }
         return Ok(MediaConfig::LocalDebug(PathBuf::from(root)));
     }
-    let endpoint = required_env("AWS_ENDPOINT_URL")?;
-    let url_style = optional_env("AWS_S3_URL_STYLE")?.unwrap_or_else(|| "path".to_string());
-    let virtual_hosted_style = virtual_hosted_style_from_value(&url_style)?;
-    let allow_http_configured = strict_bool_env("FMARCH_S3_ALLOW_HTTP", false)?;
-    let allow_http = endpoint.starts_with("http://") && allow_http_configured;
-    if endpoint.starts_with("http://") && !allow_http {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "HTTP object storage requires explicit FMARCH_S3_ALLOW_HTTP=1",
-        )
-        .into());
-    }
-    Ok(MediaConfig::S3(media::S3MediaConfig {
-        endpoint,
-        region: required_env("AWS_DEFAULT_REGION")?,
-        bucket: required_env("AWS_S3_BUCKET_NAME")?,
-        access_key_id: required_env("AWS_ACCESS_KEY_ID")?,
-        secret_access_key: required_env("AWS_SECRET_ACCESS_KEY")?,
-        virtual_hosted_style,
-        allow_http,
-    }))
+    Ok(MediaConfig::S3(server::media_s3_config_from_environment()?))
 }
 
 fn bootstrap_admin_from_values(
@@ -1691,8 +1650,8 @@ mod tests {
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
         local_proof_auth_from_values, release_acceptance_from_values, required_bounded_env,
         strict_bool_env, validate_http_shutdown_budget, validate_identity_delivery_http_budget,
-        virtual_hosted_style_from_value, wait_for_shutdown_request, IdentityDeliveryMode,
-        MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+        wait_for_shutdown_request, IdentityDeliveryMode, MIN_DATABASE_POOL_CONNECTIONS,
+        MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
     use std::time::Duration;
 
@@ -1992,14 +1951,6 @@ mod tests {
         .unwrap_err();
         std::env::remove_var("FMARCH_TEST_DATABASE_POOL_CONNECTIONS");
         assert!(error.to_string().contains("between 5 and 256"));
-    }
-
-    #[test]
-    fn s3_url_style_accepts_railway_and_provider_neutral_spellings() {
-        assert!(!virtual_hosted_style_from_value("path").unwrap());
-        assert!(virtual_hosted_style_from_value("virtual-host").unwrap());
-        assert!(virtual_hosted_style_from_value("virtual-hosted").unwrap());
-        assert!(virtual_hosted_style_from_value("virtual").is_err());
     }
 
     #[test]

@@ -20,6 +20,7 @@ export const exactImageRuntimeBinaries = Object.freeze([
   "fmarch-staging-search-corpus",
   "fmarch-event-key-admin",
   "fmarch-profile-index-admin",
+  "fmarch-storage-conformance",
 ]);
 
 export const exactImageTimingPhases = Object.freeze([

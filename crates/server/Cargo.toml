@@ -17,11 +17,13 @@ domain = { path = "../domain", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }
 identity = { path = "../identity", version = "0.1.0" }
 media = { path = "../media", version = "0.1.0" }
+object_store = { version = "0.14.1", default-features = false }
 operator_api = { path = "../operator_api", version = "0.1.0" }
 profile_handle_index = { path = "../profile_handle_index", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 profile_application = { path = "../profile_application", version = "0.1.0" }
 axum = "0.8"
+bytes = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
