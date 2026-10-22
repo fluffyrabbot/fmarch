@@ -2045,7 +2045,7 @@
     {
       "id": "docs",
       "tier": "active",
-      "paths": ["docs/", "AGENTS.md", "README.md"],
+      "paths": ["docs/", "AGENTS.md", "README.md", ".grok/"],
       "lanes": ["test:proof-lane-contract"]
     },
     {
