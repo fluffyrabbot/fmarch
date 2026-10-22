@@ -6,10 +6,10 @@ import { publicApiBaseUrl, serverApiBaseUrl } from "./api-base.mjs";
 test("serverApiBaseUrl prefers the internal endpoint over the public one", () => {
   assert.equal(
     serverApiBaseUrl({
-      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
+      FMARCH_API_INTERNAL_URL: "http://10.40.1.6",
       FMARCH_API_BASE_URL: "https://api.example.test",
     }),
-    "http://fmarch.railway.internal:8080",
+    "http://10.40.1.6",
   );
 });
 
@@ -37,7 +37,7 @@ test("serverApiBaseUrl admits only an explicit non-production IPv4 loopback port
   ]) {
     assert.throws(
       () => serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: value }),
-      /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+      /must be http:\/\/<RFC 1918 IPv4>/u,
       value,
     );
   }
@@ -47,39 +47,55 @@ test("serverApiBaseUrl admits only an explicit non-production IPv4 loopback port
         FMARCH_API_INTERNAL_URL: "http://127.0.0.1:4017",
         NODE_ENV: "production",
       }),
-    /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+    /must be http:\/\/<RFC 1918 IPv4>/u,
   );
 });
 
 test("publicApiBaseUrl ignores the internal endpoint", () => {
   assert.equal(
     publicApiBaseUrl({
-      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
+      FMARCH_API_INTERNAL_URL: "http://10.40.1.6",
       FMARCH_API_BASE_URL: "https://api.example.test/",
     }),
     "https://api.example.test",
   );
   assert.equal(
-    publicApiBaseUrl({ FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080" }),
+    publicApiBaseUrl({ FMARCH_API_INTERNAL_URL: "http://10.40.1.6" }),
     "",
   );
 });
 
-test("serverApiBaseUrl rejects every near-match for the Railway private host", () => {
+test("serverApiBaseUrl admits private IPv4 load balancers with an optional port", () => {
+  for (const value of ["http://10.40.1.6", "http://172.16.0.9:8080", "http://192.168.1.2:80"]) {
+    assert.equal(serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: value, NODE_ENV: "production" }), value);
+  }
+});
+
+test("serverApiBaseUrl rejects every near-match for the private load balancer", () => {
   for (const value of [
     "http://attacker.example:8080",
-    "http://fmarch.railway.internal:4000",
-    "http://user@fmarch.railway.internal:8080",
-    "http://fmarch.railway.internal:8080/path",
-    "http://fmarch.railway.internal:8080?next=attacker",
-    "http://fmarch.railway.internal:8080#attacker",
-    "http://fmarch.railway.internal:8080/",
-    " http://fmarch.railway.internal:8080",
-    "http://fmarch.railway.internal:8080 ",
+    "http://8.8.8.8",
+    "http://172.32.0.1",
+    "http://172.15.0.1",
+    "http://192.169.1.1",
+    "http://010.40.1.6",
+    "http://10.40.1.256",
+    "http://10.40.1",
+    "https://10.40.1.6",
+    "http://user@10.40.1.6",
+    "http://10.40.1.6/",
+    "http://10.40.1.6/path",
+    "http://10.40.1.6?next=attacker",
+    "http://10.40.1.6#attacker",
+    "http://10.40.1.6:0",
+    "http://10.40.1.6:65536",
+    " http://10.40.1.6",
+    "http://10.40.1.6 ",
+    "http://fmarch.railway.internal:8080",
   ]) {
     assert.throws(
       () => serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: value }),
-      /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+      /must be http:\/\/<RFC 1918 IPv4>/u,
       value,
     );
   }

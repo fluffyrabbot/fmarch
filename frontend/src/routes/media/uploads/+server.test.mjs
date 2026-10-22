@@ -93,7 +93,7 @@ test("media upload proxy never forwards a bearer to an unpinned internal origin"
         return new Response();
       },
     }),
-    /FMARCH_API_INTERNAL_URL must be exactly/u,
+    /FMARCH_API_INTERNAL_URL must be http:\/\/<RFC 1918 IPv4>/u,
   );
   assert.equal(fetchCalled, false);
 });

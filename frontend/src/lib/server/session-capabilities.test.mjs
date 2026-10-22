@@ -493,14 +493,14 @@ test("session resolution prefers the private-network API base when configured", 
     request: requestFor("/g/game-1/host"),
     env: {
       FMARCH_API_BASE_URL: "https://api.example.test",
-      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
+      FMARCH_API_INTERNAL_URL: "http://10.40.1.6",
     },
     fetchImpl: async (url) => {
       seen.push(url);
       return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
     },
   });
-  assert.equal(seen[0], "http://fmarch.railway.internal:8080/auth/session?game=game-1");
+  assert.equal(seen[0], "http://10.40.1.6/auth/session?game=game-1");
 });
 
 test("session resolution degrades to an empty session when the API fetch fails", async () => {

@@ -1329,7 +1329,7 @@ test("host live projection endpoint uses the same-origin authenticated ticket br
     capabilities: [{ kind: "HostOf", game: "midsummer", source: "fixture" }],
     principalId: HOST_PRINCIPAL_ID,
     fetchImpl: null,
-    apiBaseUrl: "http://fmarch.railway.internal:8080",
+    apiBaseUrl: "http://10.40.1.6",
   });
   assert.equal(
     data.liveProjection.endpoint,

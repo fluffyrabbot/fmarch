@@ -1173,7 +1173,7 @@ test("live projection endpoint always uses the same-origin authenticated ticket 
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7", source: "fixture" },
     ],
     fetchImpl: null,
-    apiBaseUrl: "http://fmarch.railway.internal:8080",
+    apiBaseUrl: "http://10.40.1.6",
   });
   assert.equal(
     data.liveProjection.endpoint,
