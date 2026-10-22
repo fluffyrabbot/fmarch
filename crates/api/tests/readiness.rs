@@ -141,7 +141,10 @@ async fn readyz_revalidates_subject_authority_after_startup(pool: sqlx::PgPool) 
         MediaRepository::in_memory(MediaLimits::default(), MediaReadLimits::default()).unwrap();
     let backing: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
     let authority = identity::ObjectSubjectKeyStore::new(
-        Arc::clone(&backing),
+        identity::SubjectAuthorityStores {
+            journal: Arc::clone(&backing),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "readiness-revision",
         Uuid::new_v4(),
         "readiness-wrap-v1",

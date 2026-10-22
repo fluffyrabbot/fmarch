@@ -24,20 +24,26 @@ use std::sync::{Arc, OnceLock};
 use url::Url;
 use uuid::Uuid;
 
+use crate::subject_authority_kms::{
+    KmsWrapKeySource, KMS_ACCESS_KEY_ENV, KMS_ENVIRONMENT_ENV, KMS_KEY_ARN_ENV, KMS_SECRET_KEY_ENV,
+    WRAP_KEY_CIPHERTEXT_ENV,
+};
 use crate::PrincipalId;
 
 const SUBJECT_KEY_DIR_ENV: &str = "FMARCH_SUBJECT_KEY_DIR";
 const SUBJECT_AUTHORITY_REVISION_ENV: &str = "FMARCH_SUBJECT_KEY_AUTHORITY_REVISION";
 const SUBJECT_AUTHORITY_ENDPOINT_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_ENDPOINT";
 const SUBJECT_AUTHORITY_REGION_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_REGION";
-const SUBJECT_AUTHORITY_BUCKET_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_BUCKET";
-const SUBJECT_AUTHORITY_ACCESS_KEY_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID";
-const SUBJECT_AUTHORITY_SECRET_KEY_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY";
 const SUBJECT_AUTHORITY_URL_STYLE_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_URL_STYLE";
 const SUBJECT_AUTHORITY_ALLOW_HTTP_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_ALLOW_HTTP";
+const SUBJECT_JOURNAL_BUCKET_ENV: &str = "FMARCH_SUBJECT_JOURNAL_BUCKET";
+const SUBJECT_JOURNAL_ACCESS_KEY_ENV: &str = "FMARCH_SUBJECT_JOURNAL_ACCESS_KEY_ID";
+const SUBJECT_JOURNAL_SECRET_KEY_ENV: &str = "FMARCH_SUBJECT_JOURNAL_SECRET_ACCESS_KEY";
+const SUBJECT_KEYS_BUCKET_ENV: &str = "FMARCH_SUBJECT_KEYS_BUCKET";
+const SUBJECT_KEYS_ACCESS_KEY_ENV: &str = "FMARCH_SUBJECT_KEYS_ACCESS_KEY_ID";
+const SUBJECT_KEYS_SECRET_KEY_ENV: &str = "FMARCH_SUBJECT_KEYS_SECRET_ACCESS_KEY";
 const SUBJECT_AUTHORITY_ID_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_ID";
 const SUBJECT_AUTHORITY_WRAP_KID_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_WRAP_KID";
-const SUBJECT_AUTHORITY_WRAP_KEY_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY";
 const SUBJECT_AUTHORITY_JOURNAL_KID_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID";
 const SUBJECT_AUTHORITY_JOURNAL_KEY_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY";
 const SUBJECT_AUTHORITY_MARKER: &str = "authority-revision";
@@ -182,45 +188,49 @@ pub trait SubjectKeyStore: Send + Sync {
     }
 }
 
+/// One bucket of the subject authority and the credential scoped to it.
 #[derive(Clone)]
-pub struct ObjectSubjectKeyStoreConfig {
-    pub endpoint: String,
-    pub region: String,
+pub struct SubjectAuthorityBucket {
     pub bucket: String,
     pub access_key_id: String,
     pub secret_access_key: String,
-    pub virtual_hosted_style: bool,
-    pub allow_http: bool,
-    pub authority_revision: String,
-    pub authority_id: Uuid,
-    pub wrap_kid: String,
-    pub wrap_key: [u8; 32],
-    pub journal_kid: String,
-    pub journal_key: [u8; 32],
 }
 
-impl std::fmt::Debug for ObjectSubjectKeyStoreConfig {
+impl std::fmt::Debug for SubjectAuthorityBucket {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("ObjectSubjectKeyStoreConfig")
-            .field("endpoint", &self.endpoint)
-            .field("region", &self.region)
+            .debug_struct("SubjectAuthorityBucket")
             .field("bucket", &self.bucket)
             .field("access_key_id", &"<redacted>")
             .field("secret_access_key", &"<redacted>")
-            .field("virtual_hosted_style", &self.virtual_hosted_style)
-            .field("allow_http", &self.allow_http)
-            .field("authority_revision", &self.authority_revision)
-            .field("authority_id", &self.authority_id)
-            .field("wrap_kid", &self.wrap_kid)
-            .field("wrap_key", &"<redacted>")
-            .field("journal_kid", &self.journal_kid)
-            .field("journal_key", &"<redacted>")
             .finish()
     }
 }
 
-impl ObjectSubjectKeyStoreConfig {
+/// Where the subject authority lives. The manifest and revocation journal
+/// are create-only and sit in a long-locked bucket whose credential cannot
+/// delete; wrapped subject keys sit in a separate bucket whose credential can,
+/// because destroying a key object is how erasure crypto-shreds a subject.
+#[derive(Debug, Clone)]
+pub struct SubjectAuthorityStorageConfig {
+    pub endpoint: String,
+    pub region: String,
+    pub virtual_hosted_style: bool,
+    pub allow_http: bool,
+    pub journal: SubjectAuthorityBucket,
+    pub keys: SubjectAuthorityBucket,
+}
+
+/// The two object stores built from [`SubjectAuthorityStorageConfig`].
+#[derive(Clone)]
+pub struct SubjectAuthorityStores {
+    pub journal: Arc<dyn ObjectStore>,
+    pub keys: Arc<dyn ObjectStore>,
+}
+
+impl SubjectAuthorityStorageConfig {
+    /// Read storage settings only. Needs no key material, so operational
+    /// tools such as storage conformance can use it without KMS.
     pub fn from_environment() -> Result<Self, SubjectPrivacyError> {
         let endpoint = required_authority_env(SUBJECT_AUTHORITY_ENDPOINT_ENV)?;
         let url_style =
@@ -246,11 +256,103 @@ impl ObjectSubjectKeyStoreConfig {
         let config = Self {
             endpoint,
             region: required_authority_env(SUBJECT_AUTHORITY_REGION_ENV)?,
-            bucket: required_authority_env(SUBJECT_AUTHORITY_BUCKET_ENV)?,
-            access_key_id: required_authority_env(SUBJECT_AUTHORITY_ACCESS_KEY_ENV)?,
-            secret_access_key: required_authority_env(SUBJECT_AUTHORITY_SECRET_KEY_ENV)?,
             virtual_hosted_style,
             allow_http,
+            journal: SubjectAuthorityBucket {
+                bucket: required_authority_env(SUBJECT_JOURNAL_BUCKET_ENV)?,
+                access_key_id: required_authority_env(SUBJECT_JOURNAL_ACCESS_KEY_ENV)?,
+                secret_access_key: required_authority_env(SUBJECT_JOURNAL_SECRET_KEY_ENV)?,
+            },
+            keys: SubjectAuthorityBucket {
+                bucket: required_authority_env(SUBJECT_KEYS_BUCKET_ENV)?,
+                access_key_id: required_authority_env(SUBJECT_KEYS_ACCESS_KEY_ENV)?,
+                secret_access_key: required_authority_env(SUBJECT_KEYS_SECRET_KEY_ENV)?,
+            },
+        };
+        config.validate_separation()?;
+        Ok(config)
+    }
+
+    fn validate_separation(&self) -> Result<(), SubjectPrivacyError> {
+        if self.journal.bucket == self.keys.bucket {
+            return Err(SubjectPrivacyError::Configuration(format!(
+                "{SUBJECT_JOURNAL_BUCKET_ENV} and {SUBJECT_KEYS_BUCKET_ENV} must name distinct buckets"
+            )));
+        }
+        if self.journal.access_key_id == self.keys.access_key_id {
+            return Err(SubjectPrivacyError::Configuration(format!(
+                "{SUBJECT_JOURNAL_ACCESS_KEY_ENV} and {SUBJECT_KEYS_ACCESS_KEY_ENV} must be distinct bucket-scoped credentials"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn build(&self) -> Result<SubjectAuthorityStores, SubjectPrivacyError> {
+        self.validate_separation()?;
+        Ok(SubjectAuthorityStores {
+            journal: self.build_store(&self.journal)?,
+            keys: self.build_store(&self.keys)?,
+        })
+    }
+
+    fn build_store(
+        &self,
+        bucket: &SubjectAuthorityBucket,
+    ) -> Result<Arc<dyn ObjectStore>, SubjectPrivacyError> {
+        let endpoint = subject_authority_bucket_endpoint(
+            &self.endpoint,
+            &bucket.bucket,
+            self.virtual_hosted_style,
+        )?;
+        let store = AmazonS3Builder::new()
+            .with_endpoint(endpoint)
+            .with_region(&self.region)
+            .with_bucket_name(&bucket.bucket)
+            .with_access_key_id(&bucket.access_key_id)
+            .with_secret_access_key(&bucket.secret_access_key)
+            .with_virtual_hosted_style_request(self.virtual_hosted_style)
+            .with_allow_http(self.allow_http)
+            .build()
+            .map_err(|error| object_storage_error("configure", error))?;
+        Ok(Arc::new(store))
+    }
+}
+
+#[derive(Clone)]
+pub struct ObjectSubjectKeyStoreConfig {
+    pub storage: SubjectAuthorityStorageConfig,
+    pub authority_revision: String,
+    pub authority_id: Uuid,
+    pub wrap_kid: String,
+    pub wrap_key: [u8; 32],
+    pub journal_kid: String,
+    pub journal_key: [u8; 32],
+}
+
+impl std::fmt::Debug for ObjectSubjectKeyStoreConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ObjectSubjectKeyStoreConfig")
+            .field("storage", &self.storage)
+            .field("authority_revision", &self.authority_revision)
+            .field("authority_id", &self.authority_id)
+            .field("wrap_kid", &self.wrap_kid)
+            .field("wrap_key", &"<redacted>")
+            .field("journal_kid", &self.journal_kid)
+            .field("journal_key", &"<redacted>")
+            .finish()
+    }
+}
+
+impl ObjectSubjectKeyStoreConfig {
+    /// Read the complete authority configuration. The wrapping key is
+    /// unwrapped through KMS (RFC D7); hosted configuration never carries it
+    /// in plaintext.
+    pub async fn from_environment() -> Result<Self, SubjectPrivacyError> {
+        let storage = SubjectAuthorityStorageConfig::from_environment()?;
+        let wrap_key = KmsWrapKeySource::from_environment()?.decrypt().await?;
+        let config = Self {
+            storage,
             authority_revision: required_authority_env(SUBJECT_AUTHORITY_REVISION_ENV)?,
             authority_id: required_authority_env(SUBJECT_AUTHORITY_ID_ENV)?
                 .parse()
@@ -260,7 +362,7 @@ impl ObjectSubjectKeyStoreConfig {
                     ))
                 })?,
             wrap_kid: required_authority_env(SUBJECT_AUTHORITY_WRAP_KID_ENV)?,
-            wrap_key: decode_authority_key(SUBJECT_AUTHORITY_WRAP_KEY_ENV)?,
+            wrap_key,
             journal_kid: required_authority_env(SUBJECT_AUTHORITY_JOURNAL_KID_ENV)?,
             journal_key: decode_authority_key(SUBJECT_AUTHORITY_JOURNAL_KEY_ENV)?,
         };
@@ -276,7 +378,7 @@ impl ObjectSubjectKeyStoreConfig {
         }
         if self.wrap_key == self.journal_key {
             return Err(SubjectPrivacyError::Configuration(format!(
-                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+                "the KMS-unwrapped wrapping key and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must be distinct key material"
             )));
         }
         Ok(())
@@ -315,7 +417,8 @@ struct SubjectRevocationObject {
 
 #[derive(Clone)]
 pub struct ObjectSubjectKeyStore {
-    store: Arc<dyn ObjectStore>,
+    journal: Arc<dyn ObjectStore>,
+    keys: Arc<dyn ObjectStore>,
     authority_revision: String,
     authority_id: Uuid,
     wrap_kid: String,
@@ -328,7 +431,8 @@ impl std::fmt::Debug for ObjectSubjectKeyStore {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ObjectSubjectKeyStore")
-            .field("store", &"object-store")
+            .field("journal", &"object-store")
+            .field("keys", &"object-store")
             .field("authority_revision", &self.authority_revision)
             .field("authority_id", &self.authority_id)
             .field("wrap_kid", &self.wrap_kid)
@@ -340,19 +444,9 @@ impl std::fmt::Debug for ObjectSubjectKeyStore {
 impl ObjectSubjectKeyStore {
     pub fn s3(config: ObjectSubjectKeyStoreConfig) -> Result<Self, SubjectPrivacyError> {
         config.validate_key_separation()?;
-        let endpoint = subject_authority_bucket_endpoint(&config)?;
-        let store = AmazonS3Builder::new()
-            .with_endpoint(endpoint)
-            .with_region(config.region)
-            .with_bucket_name(config.bucket)
-            .with_access_key_id(config.access_key_id)
-            .with_secret_access_key(config.secret_access_key)
-            .with_virtual_hosted_style_request(config.virtual_hosted_style)
-            .with_allow_http(config.allow_http)
-            .build()
-            .map_err(|error| object_storage_error("configure", error))?;
+        let stores = config.storage.build()?;
         Ok(Self::new(
-            Arc::new(store),
+            stores,
             config.authority_revision,
             config.authority_id,
             config.wrap_kid,
@@ -364,7 +458,7 @@ impl ObjectSubjectKeyStore {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        store: Arc<dyn ObjectStore>,
+        stores: SubjectAuthorityStores,
         authority_revision: impl Into<String>,
         authority_id: Uuid,
         wrap_kid: impl Into<String>,
@@ -373,7 +467,8 @@ impl ObjectSubjectKeyStore {
         journal_key: [u8; 32],
     ) -> Self {
         Self {
-            store,
+            journal: stores.journal,
+            keys: stores.keys,
             authority_revision: authority_revision.into(),
             authority_id,
             wrap_kid: wrap_kid.into(),
@@ -395,7 +490,7 @@ impl ObjectSubjectKeyStore {
             .map_err(|error| SubjectPrivacyError::Serialization(error.to_string()))?;
         let path = authority_manifest_path();
         match self
-            .store
+            .journal
             .put_opts(&path, Bytes::copy_from_slice(&bytes).into(), PutMode::Create.into())
             .await
         {
@@ -408,20 +503,25 @@ impl ObjectSubjectKeyStore {
             }
             Err(error) => return Err(object_storage_error("bootstrap-manifest", error)),
         }
-        self.verify_exact_object(&path, &bytes, "verify-bootstrap-manifest")
-            .await?;
+        verify_exact_object(
+            self.journal.as_ref(),
+            &path,
+            &bytes,
+            "verify-bootstrap-manifest",
+        )
+        .await?;
         Ok(manifest)
     }
 
     pub async fn require_manifest(&self) -> Result<SubjectAuthorityManifest, SubjectPrivacyError> {
         let path = authority_manifest_path();
-        let bytes = self
-            .read_object_bounded(
-                &path,
-                SUBJECT_AUTHORITY_MANIFEST_MAX_BYTES,
-                "read-authority-manifest",
-            )
-            .await?
+        let bytes = read_object_bounded(
+            self.journal.as_ref(),
+            &path,
+            SUBJECT_AUTHORITY_MANIFEST_MAX_BYTES,
+            "read-authority-manifest",
+        )
+        .await?
             .ok_or_else(|| {
                 SubjectPrivacyError::Configuration(
                     "subject authority manifest is missing; run server --bootstrap-subject-authority once"
@@ -461,70 +561,6 @@ impl ObjectSubjectKeyStore {
             ));
         }
         Ok(manifest)
-    }
-
-    async fn read_object_bounded(
-        &self,
-        path: &ObjectPath,
-        max_bytes: usize,
-        operation: &'static str,
-    ) -> Result<Option<Bytes>, SubjectPrivacyError> {
-        match self.store.get(path).await {
-            Ok(result) => {
-                if result.meta.size > max_bytes as u64 {
-                    return Err(SubjectPrivacyError::Storage(format!(
-                        "{operation}: object {path} exceeds {max_bytes} bytes"
-                    )));
-                }
-                let mut bytes = Vec::with_capacity(result.meta.size as usize);
-                let mut stream = result.into_stream();
-                while let Some(chunk) = stream
-                    .try_next()
-                    .await
-                    .map_err(|error| object_storage_error(operation, error))?
-                {
-                    if bytes.len().saturating_add(chunk.len()) > max_bytes {
-                        return Err(SubjectPrivacyError::Storage(format!(
-                            "{operation}: object {path} exceeds {max_bytes} bytes"
-                        )));
-                    }
-                    bytes.extend_from_slice(&chunk);
-                }
-                Ok(Some(Bytes::from(bytes)))
-            }
-            Err(object_store::Error::NotFound { .. }) => Ok(None),
-            Err(error) => Err(object_storage_error(operation, error)),
-        }
-    }
-
-    async fn exists(&self, path: &ObjectPath) -> Result<bool, SubjectPrivacyError> {
-        match self.store.head(path).await {
-            Ok(_) => Ok(true),
-            Err(object_store::Error::NotFound { .. }) => Ok(false),
-            Err(error) => Err(object_storage_error("head", error)),
-        }
-    }
-
-    async fn verify_exact_object(
-        &self,
-        path: &ObjectPath,
-        expected: &[u8],
-        operation: &'static str,
-    ) -> Result<(), SubjectPrivacyError> {
-        let actual = self
-            .read_object_bounded(path, expected.len().saturating_add(1), operation)
-            .await?
-            .ok_or_else(|| {
-                SubjectPrivacyError::Storage(format!(
-                    "{operation}: object {path} vanished after a successful create"
-                ))
-            })?;
-        if actual.as_ref() != expected {
-            return Err(SubjectPrivacyError::Storage(format!(
-                "{operation}: immutable object {path} differs from written bytes"
-            )));
-        }
-        Ok(())
     }
 
     fn wrap_subject_key(
@@ -660,11 +696,18 @@ impl ObjectSubjectKeyStore {
 #[async_trait::async_trait]
 impl SubjectKeyStore for ObjectSubjectKeyStore {
     async fn check_readiness(&self) -> Result<(), SubjectPrivacyError> {
-        self.require_manifest().await.map(|_| ())
+        self.require_manifest().await?;
+        // Prove the key bucket and its credential without writing: a bounded
+        // delimiter listing under a reserved empty prefix.
+        self.keys
+            .list_with_delimiter(Some(&ObjectPath::from("__fmarch_readiness__")))
+            .await
+            .map(|_| ())
+            .map_err(|error| object_storage_error("keys-readiness-list", error))
     }
 
     async fn create(&self, subject_id: SubjectId) -> Result<(), SubjectPrivacyError> {
-        if self.exists(&revocation_object_path(subject_id)).await? {
+        if object_exists(self.journal.as_ref(), &revocation_object_path(subject_id)).await? {
             return Err(SubjectPrivacyError::MissingKey { subject_id });
         }
         let path = key_object_path(subject_id);
@@ -674,7 +717,7 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
         let bytes = serde_json::to_vec(&object)
             .map_err(|error| SubjectPrivacyError::Serialization(error.to_string()))?;
         match self
-            .store
+            .keys
             .put_opts(
                 &path,
                 Bytes::copy_from_slice(&bytes).into(),
@@ -683,15 +726,14 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
             .await
         {
             Ok(_) => {
-                self.verify_exact_object(&path, &bytes, "verify-key-create")
-                    .await?
+                verify_exact_object(self.keys.as_ref(), &path, &bytes, "verify-key-create").await?
             }
             Err(object_store::Error::AlreadyExists { .. }) => {
                 let _ = self.load(subject_id).await?;
             }
             Err(error) => return Err(object_storage_error("create-key", error)),
         }
-        if self.exists(&revocation_object_path(subject_id)).await? {
+        if object_exists(self.journal.as_ref(), &revocation_object_path(subject_id)).await? {
             let _ = self.destroy(subject_id).await?;
             return Err(SubjectPrivacyError::MissingKey { subject_id });
         }
@@ -700,18 +742,18 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
 
     async fn load(&self, subject_id: SubjectId) -> Result<[u8; 32], SubjectPrivacyError> {
         let revocation = revocation_object_path(subject_id);
-        if self.exists(&revocation).await? {
+        if object_exists(self.journal.as_ref(), &revocation).await? {
             return Err(SubjectPrivacyError::MissingKey { subject_id });
         }
-        let bytes = self
-            .read_object_bounded(
-                &key_object_path(subject_id),
-                SUBJECT_KEY_OBJECT_MAX_BYTES,
-                "load-key",
-            )
-            .await?
-            .ok_or(SubjectPrivacyError::MissingKey { subject_id })?;
-        if self.exists(&revocation).await? {
+        let bytes = read_object_bounded(
+            self.keys.as_ref(),
+            &key_object_path(subject_id),
+            SUBJECT_KEY_OBJECT_MAX_BYTES,
+            "load-key",
+        )
+        .await?
+        .ok_or(SubjectPrivacyError::MissingKey { subject_id })?;
+        if object_exists(self.journal.as_ref(), &revocation).await? {
             return Err(SubjectPrivacyError::MissingKey { subject_id });
         }
         let object: SubjectKeyObject = serde_json::from_slice(&bytes).map_err(|error| {
@@ -724,12 +766,12 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
 
     async fn destroy(&self, subject_id: SubjectId) -> Result<bool, SubjectPrivacyError> {
         let path = key_object_path(subject_id);
-        let was_present = self.exists(&path).await?;
-        match self.store.delete(&path).await {
+        let was_present = object_exists(self.keys.as_ref(), &path).await?;
+        match self.keys.delete(&path).await {
             Ok(()) | Err(object_store::Error::NotFound { .. }) => {}
             Err(error) => return Err(object_storage_error("destroy-key", error)),
         }
-        if self.exists(&path).await? {
+        if object_exists(self.keys.as_ref(), &path).await? {
             return Err(SubjectPrivacyError::Storage(format!(
                 "destroy-key: key object {path} is still visible after deletion"
             )));
@@ -746,7 +788,7 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
         let bytes = serde_json::to_vec(&object)
             .map_err(|error| SubjectPrivacyError::Serialization(error.to_string()))?;
         match self
-            .store
+            .journal
             .put_opts(
                 &path,
                 Bytes::copy_from_slice(&bytes).into(),
@@ -755,18 +797,27 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
             .await
         {
             Ok(_) => {
-                self.verify_exact_object(&path, &bytes, "verify-revocation-create")
-                    .await
-            }
-            Err(object_store::Error::AlreadyExists { .. }) => self
-                .verify_exact_object(&path, &bytes, "verify-existing-revocation")
+                verify_exact_object(
+                    self.journal.as_ref(),
+                    &path,
+                    &bytes,
+                    "verify-revocation-create",
+                )
                 .await
-                .map_err(|_| {
-                    SubjectPrivacyError::Storage(format!(
-                        "conflicting revocation record for subject {}",
-                        record.subject_id
-                    ))
-                }),
+            }
+            Err(object_store::Error::AlreadyExists { .. }) => verify_exact_object(
+                self.journal.as_ref(),
+                &path,
+                &bytes,
+                "verify-existing-revocation",
+            )
+            .await
+            .map_err(|_| {
+                SubjectPrivacyError::Storage(format!(
+                    "conflicting revocation record for subject {}",
+                    record.subject_id
+                ))
+            }),
             Err(error) => Err(object_storage_error("create-revocation", error)),
         }
     }
@@ -774,26 +825,26 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
     async fn revocations(&self) -> Result<Vec<SubjectRevocationRecord>, SubjectPrivacyError> {
         let prefix = revocations_object_prefix();
         let objects = self
-            .store
+            .journal
             .list(Some(&prefix))
             .try_collect::<Vec<_>>()
             .await
             .map_err(|error| object_storage_error("list-revocations", error))?;
         let mut records = futures_util::stream::iter(objects)
             .map(|object| async move {
-                let bytes = self
-                    .read_object_bounded(
-                        &object.location,
-                        SUBJECT_REVOCATION_OBJECT_MAX_BYTES,
-                        "read-revocation",
-                    )
-                    .await?
-                    .ok_or_else(|| {
-                        SubjectPrivacyError::Storage(format!(
-                            "revocation {} vanished during authority listing",
-                            object.location
-                        ))
-                    })?;
+                let bytes = read_object_bounded(
+                    self.journal.as_ref(),
+                    &object.location,
+                    SUBJECT_REVOCATION_OBJECT_MAX_BYTES,
+                    "read-revocation",
+                )
+                .await?
+                .ok_or_else(|| {
+                    SubjectPrivacyError::Storage(format!(
+                        "revocation {} vanished during authority listing",
+                        object.location
+                    ))
+                })?;
                 let envelope: SubjectRevocationObject = serde_json::from_slice(&bytes)
                     .map_err(|error| SubjectPrivacyError::Serialization(error.to_string()))?;
                 let record = self.verify_revocation(&envelope)?;
@@ -811,6 +862,72 @@ impl SubjectKeyStore for ObjectSubjectKeyStore {
         records.sort_by_key(|record| (record.destroyed_at, record.subject_id.as_uuid()));
         Ok(records)
     }
+}
+
+async fn read_object_bounded(
+    store: &dyn ObjectStore,
+    path: &ObjectPath,
+    max_bytes: usize,
+    operation: &'static str,
+) -> Result<Option<Bytes>, SubjectPrivacyError> {
+    match store.get(path).await {
+        Ok(result) => {
+            if result.meta.size > max_bytes as u64 {
+                return Err(SubjectPrivacyError::Storage(format!(
+                    "{operation}: object {path} exceeds {max_bytes} bytes"
+                )));
+            }
+            let mut bytes = Vec::with_capacity(result.meta.size as usize);
+            let mut stream = result.into_stream();
+            while let Some(chunk) = stream
+                .try_next()
+                .await
+                .map_err(|error| object_storage_error(operation, error))?
+            {
+                if bytes.len().saturating_add(chunk.len()) > max_bytes {
+                    return Err(SubjectPrivacyError::Storage(format!(
+                        "{operation}: object {path} exceeds {max_bytes} bytes"
+                    )));
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Ok(Some(Bytes::from(bytes)))
+        }
+        Err(object_store::Error::NotFound { .. }) => Ok(None),
+        Err(error) => Err(object_storage_error(operation, error)),
+    }
+}
+
+async fn object_exists(
+    store: &dyn ObjectStore,
+    path: &ObjectPath,
+) -> Result<bool, SubjectPrivacyError> {
+    match store.head(path).await {
+        Ok(_) => Ok(true),
+        Err(object_store::Error::NotFound { .. }) => Ok(false),
+        Err(error) => Err(object_storage_error("head", error)),
+    }
+}
+
+async fn verify_exact_object(
+    store: &dyn ObjectStore,
+    path: &ObjectPath,
+    expected: &[u8],
+    operation: &'static str,
+) -> Result<(), SubjectPrivacyError> {
+    let actual = read_object_bounded(store, path, expected.len().saturating_add(1), operation)
+        .await?
+        .ok_or_else(|| {
+            SubjectPrivacyError::Storage(format!(
+                "{operation}: object {path} vanished after a successful create"
+            ))
+        })?;
+    if actual.as_ref() != expected {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "{operation}: immutable object {path} differs from written bytes"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -837,16 +954,23 @@ pub async fn configured_subject_key_authority(
     let object_variables = [
         SUBJECT_AUTHORITY_ENDPOINT_ENV,
         SUBJECT_AUTHORITY_REGION_ENV,
-        SUBJECT_AUTHORITY_BUCKET_ENV,
-        SUBJECT_AUTHORITY_ACCESS_KEY_ENV,
-        SUBJECT_AUTHORITY_SECRET_KEY_ENV,
         SUBJECT_AUTHORITY_URL_STYLE_ENV,
         SUBJECT_AUTHORITY_ALLOW_HTTP_ENV,
+        SUBJECT_JOURNAL_BUCKET_ENV,
+        SUBJECT_JOURNAL_ACCESS_KEY_ENV,
+        SUBJECT_JOURNAL_SECRET_KEY_ENV,
+        SUBJECT_KEYS_BUCKET_ENV,
+        SUBJECT_KEYS_ACCESS_KEY_ENV,
+        SUBJECT_KEYS_SECRET_KEY_ENV,
         SUBJECT_AUTHORITY_ID_ENV,
         SUBJECT_AUTHORITY_WRAP_KID_ENV,
-        SUBJECT_AUTHORITY_WRAP_KEY_ENV,
         SUBJECT_AUTHORITY_JOURNAL_KID_ENV,
         SUBJECT_AUTHORITY_JOURNAL_KEY_ENV,
+        WRAP_KEY_CIPHERTEXT_ENV,
+        KMS_KEY_ARN_ENV,
+        KMS_ACCESS_KEY_ENV,
+        KMS_SECRET_KEY_ENV,
+        KMS_ENVIRONMENT_ENV,
     ];
     let object_configured = object_variables
         .iter()
@@ -858,7 +982,8 @@ pub async fn configured_subject_key_authority(
         )));
     }
     if object_configured || !cfg!(debug_assertions) {
-        let store = ObjectSubjectKeyStore::s3(ObjectSubjectKeyStoreConfig::from_environment()?)?;
+        let store =
+            ObjectSubjectKeyStore::s3(ObjectSubjectKeyStoreConfig::from_environment().await?)?;
         let manifest = store.require_manifest().await?;
         return Ok(ConfiguredSubjectKeyAuthority {
             key_store: Arc::new(store),
@@ -904,7 +1029,7 @@ pub async fn bootstrap_subject_key_authority_from_environment(
             "{SUBJECT_AUTHORITY_ENDPOINT_ENV} is required for authority bootstrap"
         )));
     }
-    let store = ObjectSubjectKeyStore::s3(ObjectSubjectKeyStoreConfig::from_environment()?)?;
+    let store = ObjectSubjectKeyStore::s3(ObjectSubjectKeyStoreConfig::from_environment().await?)?;
     store.bootstrap().await
 }
 
@@ -932,9 +1057,11 @@ fn decode_authority_key(name: &str) -> Result<[u8; 32], SubjectPrivacyError> {
 }
 
 fn subject_authority_bucket_endpoint(
-    config: &ObjectSubjectKeyStoreConfig,
+    base_endpoint: &str,
+    bucket: &str,
+    virtual_hosted_style: bool,
 ) -> Result<String, SubjectPrivacyError> {
-    let mut endpoint = Url::parse(&config.endpoint).map_err(|error| {
+    let mut endpoint = Url::parse(base_endpoint).map_err(|error| {
         SubjectPrivacyError::Configuration(format!(
             "{SUBJECT_AUTHORITY_ENDPOINT_ENV} is invalid: {error}"
         ))
@@ -949,15 +1076,15 @@ fn subject_authority_bucket_endpoint(
             "{SUBJECT_AUTHORITY_ENDPOINT_ENV} must be an HTTP(S) base URL without credentials, query, or fragment"
         )));
     }
-    if config.virtual_hosted_style {
+    if virtual_hosted_style {
         let host = endpoint.host_str().ok_or_else(|| {
             SubjectPrivacyError::Configuration(
                 "virtual-hosted subject authority endpoint must have a DNS host".to_string(),
             )
         })?;
-        let bucket_prefix = format!("{}.", config.bucket);
-        if host != config.bucket && !host.starts_with(&bucket_prefix) {
-            let bucket_host = format!("{}.{}", config.bucket, host);
+        let bucket_prefix = format!("{bucket}.");
+        if host != bucket && !host.starts_with(&bucket_prefix) {
+            let bucket_host = format!("{bucket}.{host}");
             endpoint.set_host(Some(&bucket_host)).map_err(|_| {
                 SubjectPrivacyError::Configuration(
                     "subject authority bucket and endpoint do not form a valid virtual-hosted URL"
@@ -2637,20 +2764,17 @@ mod tests {
     use std::ffi::OsString;
     use std::sync::{Mutex, MutexGuard};
 
-    const SUBJECT_AUTHORITY_ENV_NAMES: [&str; 13] = [
-        SUBJECT_AUTHORITY_REVISION_ENV,
+    const SUBJECT_AUTHORITY_STORAGE_ENV_NAMES: [&str; 10] = [
         SUBJECT_AUTHORITY_ENDPOINT_ENV,
         SUBJECT_AUTHORITY_REGION_ENV,
-        SUBJECT_AUTHORITY_BUCKET_ENV,
-        SUBJECT_AUTHORITY_ACCESS_KEY_ENV,
-        SUBJECT_AUTHORITY_SECRET_KEY_ENV,
         SUBJECT_AUTHORITY_URL_STYLE_ENV,
         SUBJECT_AUTHORITY_ALLOW_HTTP_ENV,
-        SUBJECT_AUTHORITY_ID_ENV,
-        SUBJECT_AUTHORITY_WRAP_KID_ENV,
-        SUBJECT_AUTHORITY_WRAP_KEY_ENV,
-        SUBJECT_AUTHORITY_JOURNAL_KID_ENV,
-        SUBJECT_AUTHORITY_JOURNAL_KEY_ENV,
+        SUBJECT_JOURNAL_BUCKET_ENV,
+        SUBJECT_JOURNAL_ACCESS_KEY_ENV,
+        SUBJECT_JOURNAL_SECRET_KEY_ENV,
+        SUBJECT_KEYS_BUCKET_ENV,
+        SUBJECT_KEYS_ACCESS_KEY_ENV,
+        SUBJECT_KEYS_SECRET_KEY_ENV,
     ];
     static SUBJECT_AUTHORITY_ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -2664,40 +2788,28 @@ mod tests {
             let lock = SUBJECT_AUTHORITY_ENV_LOCK
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let prior = SUBJECT_AUTHORITY_ENV_NAMES
+            let prior = SUBJECT_AUTHORITY_STORAGE_ENV_NAMES
                 .into_iter()
                 .map(|name| (name, std::env::var_os(name)))
                 .collect();
-            for name in SUBJECT_AUTHORITY_ENV_NAMES {
+            for name in SUBJECT_AUTHORITY_STORAGE_ENV_NAMES {
                 std::env::remove_var(name);
             }
             Self { prior, _lock: lock }
         }
 
-        fn configure(
-            &self,
-            wrap_kid: &str,
-            wrap_key: [u8; 32],
-            journal_kid: &str,
-            journal_key: [u8; 32],
-        ) {
-            std::env::set_var(SUBJECT_AUTHORITY_REVISION_ENV, "test-revision");
+        fn configure(&self, journal: (&str, &str), keys: (&str, &str)) {
             std::env::set_var(
                 SUBJECT_AUTHORITY_ENDPOINT_ENV,
                 "https://objects.example.invalid",
             );
             std::env::set_var(SUBJECT_AUTHORITY_REGION_ENV, "test-region");
-            std::env::set_var(SUBJECT_AUTHORITY_BUCKET_ENV, "subject-keys");
-            std::env::set_var(SUBJECT_AUTHORITY_ACCESS_KEY_ENV, "test-access-key");
-            std::env::set_var(SUBJECT_AUTHORITY_SECRET_KEY_ENV, "test-secret-key");
-            std::env::set_var(SUBJECT_AUTHORITY_ID_ENV, Uuid::new_v4().to_string());
-            std::env::set_var(SUBJECT_AUTHORITY_WRAP_KID_ENV, wrap_kid);
-            std::env::set_var(SUBJECT_AUTHORITY_WRAP_KEY_ENV, STANDARD.encode(wrap_key));
-            std::env::set_var(SUBJECT_AUTHORITY_JOURNAL_KID_ENV, journal_kid);
-            std::env::set_var(
-                SUBJECT_AUTHORITY_JOURNAL_KEY_ENV,
-                STANDARD.encode(journal_key),
-            );
+            std::env::set_var(SUBJECT_JOURNAL_BUCKET_ENV, journal.0);
+            std::env::set_var(SUBJECT_JOURNAL_ACCESS_KEY_ENV, journal.1);
+            std::env::set_var(SUBJECT_JOURNAL_SECRET_KEY_ENV, "journal-secret");
+            std::env::set_var(SUBJECT_KEYS_BUCKET_ENV, keys.0);
+            std::env::set_var(SUBJECT_KEYS_ACCESS_KEY_ENV, keys.1);
+            std::env::set_var(SUBJECT_KEYS_SECRET_KEY_ENV, "keys-secret");
         }
     }
 
@@ -2712,6 +2824,25 @@ mod tests {
         }
     }
 
+    fn storage_config() -> SubjectAuthorityStorageConfig {
+        SubjectAuthorityStorageConfig {
+            endpoint: "https://objects.example.invalid".to_string(),
+            region: "test-region".to_string(),
+            virtual_hosted_style: false,
+            allow_http: false,
+            journal: SubjectAuthorityBucket {
+                bucket: "subject-journal".to_string(),
+                access_key_id: "journal-access-key".to_string(),
+                secret_access_key: "journal-secret".to_string(),
+            },
+            keys: SubjectAuthorityBucket {
+                bucket: "subject-keys".to_string(),
+                access_key_id: "keys-access-key".to_string(),
+                secret_access_key: "keys-secret".to_string(),
+            },
+        }
+    }
+
     fn object_authority_config(
         wrap_kid: &str,
         wrap_key: [u8; 32],
@@ -2719,13 +2850,7 @@ mod tests {
         journal_key: [u8; 32],
     ) -> ObjectSubjectKeyStoreConfig {
         ObjectSubjectKeyStoreConfig {
-            endpoint: "https://objects.example.invalid".to_string(),
-            region: "test-region".to_string(),
-            bucket: "subject-keys".to_string(),
-            access_key_id: "test-access-key".to_string(),
-            secret_access_key: "test-secret-key".to_string(),
-            virtual_hosted_style: false,
-            allow_http: false,
+            storage: storage_config(),
             authority_revision: "test-revision".to_string(),
             authority_id: Uuid::new_v4(),
             wrap_kid: wrap_kid.to_string(),
@@ -2755,21 +2880,35 @@ mod tests {
     }
 
     #[test]
-    fn environment_config_requires_purpose_separated_authority_keys() {
+    fn storage_config_requires_separate_journal_and_key_buckets_and_credentials() {
         let environment = SubjectAuthorityEnvGuard::isolated();
-        environment.configure("shared-v1", [7_u8; 32], "shared-v1", [9_u8; 32]);
+        environment.configure(
+            ("subject-journal", "journal-key"),
+            ("subject-keys", "keys-key"),
+        );
+        let config = SubjectAuthorityStorageConfig::from_environment().unwrap();
+        assert_eq!(config.journal.bucket, "subject-journal");
+        assert_eq!(config.keys.bucket, "subject-keys");
+
+        environment.configure(
+            ("subject-shared", "journal-key"),
+            ("subject-shared", "keys-key"),
+        );
         assert_configuration_error(
-            ObjectSubjectKeyStoreConfig::from_environment(),
+            SubjectAuthorityStorageConfig::from_environment(),
             &format!(
-                "{SUBJECT_AUTHORITY_WRAP_KID_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KID_ENV} must identify distinct keys"
+                "{SUBJECT_JOURNAL_BUCKET_ENV} and {SUBJECT_KEYS_BUCKET_ENV} must name distinct buckets"
             ),
         );
 
-        environment.configure("wrap-v1", [7_u8; 32], "journal-v1", [7_u8; 32]);
+        environment.configure(
+            ("subject-journal", "shared-key"),
+            ("subject-keys", "shared-key"),
+        );
         assert_configuration_error(
-            ObjectSubjectKeyStoreConfig::from_environment(),
+            SubjectAuthorityStorageConfig::from_environment(),
             &format!(
-                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+                "{SUBJECT_JOURNAL_ACCESS_KEY_ENV} and {SUBJECT_KEYS_ACCESS_KEY_ENV} must be distinct bucket-scoped credentials"
             ),
         );
     }
@@ -2795,7 +2934,7 @@ mod tests {
                 [7_u8; 32],
             )),
             &format!(
-                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+                "the KMS-unwrapped wrapping key and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must be distinct key material"
             ),
         );
     }
@@ -2913,9 +3052,19 @@ mod tests {
         ));
     }
 
-    fn object_authority(store: Arc<dyn ObjectStore>, authority_id: Uuid) -> ObjectSubjectKeyStore {
+    fn memory_stores() -> SubjectAuthorityStores {
+        SubjectAuthorityStores {
+            journal: Arc::new(object_store::memory::InMemory::new()),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        }
+    }
+
+    fn object_authority(
+        stores: SubjectAuthorityStores,
+        authority_id: Uuid,
+    ) -> ObjectSubjectKeyStore {
         ObjectSubjectKeyStore::new(
-            store,
+            stores,
             "test-revision",
             authority_id,
             "wrap-test-v1",
@@ -2927,9 +3076,9 @@ mod tests {
 
     #[tokio::test]
     async fn object_authority_requires_genesis_and_wraps_keys() {
-        let backing: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
+        let stores = memory_stores();
         let authority_id = Uuid::new_v4();
-        let store = object_authority(Arc::clone(&backing), authority_id);
+        let store = object_authority(stores.clone(), authority_id);
         assert!(matches!(
             store.require_manifest().await,
             Err(SubjectPrivacyError::Configuration(_))
@@ -2941,11 +3090,13 @@ mod tests {
             store.bootstrap().await,
             Err(SubjectPrivacyError::Configuration(_))
         ));
+        store.check_readiness().await.unwrap();
 
         let subject_id = SubjectId::random();
         store.create(subject_id).await.unwrap();
         let plaintext_key = store.load(subject_id).await.unwrap();
-        let raw = backing
+        let raw = stores
+            .keys
             .get(&key_object_path(subject_id))
             .await
             .unwrap()
@@ -2956,25 +3107,38 @@ mod tests {
         assert_eq!(object.scheme, SUBJECT_KEY_OBJECT_SCHEME);
         assert!(!String::from_utf8_lossy(&raw).contains(&STANDARD.encode(plaintext_key)));
 
-        let wrong_genesis = object_authority(Arc::clone(&backing), Uuid::new_v4());
+        // The manifest lives only in the journal; keys live only in the key bucket.
+        assert!(matches!(
+            stores.keys.head(&authority_manifest_path()).await,
+            Err(object_store::Error::NotFound { .. })
+        ));
+        assert!(matches!(
+            stores.journal.head(&key_object_path(subject_id)).await,
+            Err(object_store::Error::NotFound { .. })
+        ));
+
+        let wrong_genesis = object_authority(stores.clone(), Uuid::new_v4());
         assert!(matches!(
             wrong_genesis.require_manifest().await,
             Err(SubjectPrivacyError::Configuration(_))
         ));
-        let wrong_bucket = object_authority(
-            Arc::new(object_store::memory::InMemory::new()),
+        let wrong_journal = object_authority(
+            SubjectAuthorityStores {
+                journal: Arc::new(object_store::memory::InMemory::new()),
+                keys: Arc::clone(&stores.keys),
+            },
             authority_id,
         );
         assert!(matches!(
-            wrong_bucket.require_manifest().await,
+            wrong_journal.require_manifest().await,
             Err(SubjectPrivacyError::Configuration(_))
         ));
     }
 
     #[tokio::test]
     async fn object_revocations_are_authenticated_create_only_and_destroy_keys() {
-        let backing: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
-        let store = object_authority(Arc::clone(&backing), Uuid::new_v4());
+        let stores = memory_stores();
+        let store = object_authority(stores.clone(), Uuid::new_v4());
         store.bootstrap().await.unwrap();
         let subject_id = SubjectId::random();
         store.create(subject_id).await.unwrap();
@@ -2994,12 +3158,18 @@ mod tests {
         ));
         assert!(store.destroy(subject_id).await.unwrap());
         assert!(matches!(
-            backing.head(&key_object_path(subject_id)).await,
+            stores.keys.head(&key_object_path(subject_id)).await,
             Err(object_store::Error::NotFound { .. })
         ));
+        assert!(stores
+            .journal
+            .head(&revocation_object_path(subject_id))
+            .await
+            .is_ok());
 
         let mut envelope: SubjectRevocationObject = serde_json::from_slice(
-            &backing
+            &stores
+                .journal
                 .get(&revocation_object_path(subject_id))
                 .await
                 .unwrap()
@@ -3009,7 +3179,8 @@ mod tests {
         )
         .unwrap();
         envelope.record.replacement_alias = random_tombstone_alias();
-        backing
+        stores
+            .journal
             .put(
                 &revocation_object_path(subject_id),
                 Bytes::from(serde_json::to_vec(&envelope).unwrap()).into(),

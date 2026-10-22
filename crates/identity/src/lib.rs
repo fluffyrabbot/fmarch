@@ -5,6 +5,7 @@ pub mod methods;
 pub mod password;
 pub mod private_claims;
 pub mod session;
+pub mod subject_authority_kms;
 pub mod subject_privacy;
 #[cfg(all(feature = "test-support", not(debug_assertions)))]
 compile_error!("identity test-support must not be enabled in a non-debug build");
@@ -61,7 +62,8 @@ pub use subject_privacy::{
     reconcile_subject_revocations, reconcile_subject_revocations_with_store, seal_subject_claim,
     verify_active_subject_keys, verify_or_bind_database_authority, ClaimId,
     ConfiguredSubjectKeyAuthority, FilesystemSubjectKeyStore, ObjectSubjectKeyStore,
-    ObjectSubjectKeyStoreConfig, SubjectAuthorityManifest, SubjectClaimEnvelope, SubjectId,
+    ObjectSubjectKeyStoreConfig, SubjectAuthorityBucket, SubjectAuthorityManifest,
+    SubjectAuthorityStorageConfig, SubjectAuthorityStores, SubjectClaimEnvelope, SubjectId,
     SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 pub use workos::{

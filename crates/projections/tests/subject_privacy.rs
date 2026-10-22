@@ -3,8 +3,9 @@ use eventstore::EventInput;
 use game_platform::{GamePersonaName, GamePersonaPresentation};
 use identity::{
     prepare_subject_authority_for_service, random_tombstone_alias, reconcile_subject_revocations,
-    ConfiguredSubjectKeyAuthority, FilesystemSubjectKeyStore, ObjectSubjectKeyStore, SubjectId,
-    SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
+    ConfiguredSubjectKeyAuthority, FilesystemSubjectKeyStore, ObjectSubjectKeyStore,
+    SubjectAuthorityStores, SubjectId, SubjectKeyStore, SubjectPrivacyError,
+    SubjectRevocationRecord,
 };
 use projections::{
     append_and_project, append_and_project_in_tx, public_profile_by_handle,
@@ -267,7 +268,10 @@ async fn object_authority(
     authority_id: Uuid,
 ) -> (ObjectSubjectKeyStore, ConfiguredSubjectKeyAuthority) {
     let store = ObjectSubjectKeyStore::new(
-        Arc::new(object_store::memory::InMemory::new()),
+        SubjectAuthorityStores {
+            journal: Arc::new(object_store::memory::InMemory::new()),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "pg-test-revision",
         authority_id,
         "pg-wrap-v1",

@@ -6,8 +6,8 @@ use identity::{
     random_tombstone_alias, reconcile_subject_revocations_with_store,
     subject_privacy::reconcile_subject_revocations_with_store_and_preflight_query_count,
     verify_active_subject_keys, verify_or_bind_database_authority, ConfiguredSubjectKeyAuthority,
-    MemberLifecycleStatus, ObjectSubjectKeyStore, PrincipalId, SubjectId, SubjectKeyStore,
-    SubjectPrivacyError, SubjectRevocationRecord,
+    MemberLifecycleStatus, ObjectSubjectKeyStore, PrincipalId, SubjectAuthorityStores, SubjectId,
+    SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 use object_store::{
     path::Path as ObjectPath, CopyOptions, GetOptions, GetResult, ListResult, MultipartUpload,
@@ -360,7 +360,10 @@ fn object_authority() -> (ObjectSubjectKeyStore, Arc<ObjectRequestCounts>) {
         counts: Arc::clone(&counts),
     });
     let authority = ObjectSubjectKeyStore::new(
-        backing,
+        SubjectAuthorityStores {
+            journal: backing,
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "startup-request-count-v1",
         Uuid::new_v4(),
         "wrap-test-v1",
@@ -403,7 +406,10 @@ async fn concurrent_first_startup_binds_exactly_one_complete_authority_manifest(
 ) {
     let authority_id = Uuid::new_v4();
     let authority_a = ObjectSubjectKeyStore::new(
-        Arc::new(object_store::memory::InMemory::new()),
+        SubjectAuthorityStores {
+            journal: Arc::new(object_store::memory::InMemory::new()),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "revision-a",
         authority_id,
         "wrap-a",
@@ -412,7 +418,10 @@ async fn concurrent_first_startup_binds_exactly_one_complete_authority_manifest(
         [37_u8; 32],
     );
     let authority_b = ObjectSubjectKeyStore::new(
-        Arc::new(object_store::memory::InMemory::new()),
+        SubjectAuthorityStores {
+            journal: Arc::new(object_store::memory::InMemory::new()),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "revision-b",
         authority_id,
         "wrap-b",
@@ -472,7 +481,10 @@ async fn concurrent_first_startup_binds_exactly_one_complete_authority_manifest(
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn unbound_database_with_pre_subject_identity_data_refuses_new_authority(pool: sqlx::PgPool) {
     let authority = ObjectSubjectKeyStore::new(
-        Arc::new(object_store::memory::InMemory::new()),
+        SubjectAuthorityStores {
+            journal: Arc::new(object_store::memory::InMemory::new()),
+            keys: Arc::new(object_store::memory::InMemory::new()),
+        },
         "restore-safety-v1",
         Uuid::new_v4(),
         "wrap-v1",
