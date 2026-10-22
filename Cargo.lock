@@ -3236,6 +3236,7 @@ version = "0.1.0"
 dependencies = [
  "api",
  "axum",
+ "bytes",
  "caps",
  "commands",
  "content_registry",
@@ -3246,6 +3247,7 @@ dependencies = [
  "forum_postgres",
  "identity",
  "media",
+ "object_store",
  "operator_api",
  "percent-encoding",
  "profile_application",

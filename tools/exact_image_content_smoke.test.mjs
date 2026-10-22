@@ -22,6 +22,7 @@ test("static runtime contract includes every shipped binary", () => {
     "fmarch-staging-search-corpus",
     "fmarch-event-key-admin",
     "fmarch-profile-index-admin",
+    "fmarch-storage-conformance",
   ]);
 });
 

@@ -35,6 +35,50 @@ pub fn configured_database_environment_identity(
 
 pub mod one_shot_database;
 pub mod staging_search_corpus;
+pub mod storage_conformance;
+
+/// S3-compatible media settings from the environment. Shared by the server
+/// and the storage conformance tool so both read one definition.
+pub fn media_s3_config_from_environment() -> Result<media::S3MediaConfig, String> {
+    let required = |name: &str| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| format!("{name} is required"))
+    };
+    let endpoint = required("AWS_ENDPOINT_URL")?;
+    let url_style = std::env::var("AWS_S3_URL_STYLE").unwrap_or_else(|_| "path".to_string());
+    let virtual_hosted_style = virtual_hosted_style_from_value(&url_style)?;
+    let allow_http_configured = match std::env::var("FMARCH_S3_ALLOW_HTTP") {
+        Err(std::env::VarError::NotPresent) => false,
+        Ok(value) if value.trim() == "1" => true,
+        Ok(value) if value.trim() == "0" => false,
+        _ => return Err("FMARCH_S3_ALLOW_HTTP must be exactly 0 or 1".to_string()),
+    };
+    let allow_http = endpoint.starts_with("http://") && allow_http_configured;
+    if endpoint.starts_with("http://") && !allow_http {
+        return Err("HTTP object storage requires explicit FMARCH_S3_ALLOW_HTTP=1".to_string());
+    }
+    Ok(media::S3MediaConfig {
+        endpoint,
+        region: required("AWS_DEFAULT_REGION")?,
+        bucket: required("AWS_S3_BUCKET_NAME")?,
+        access_key_id: required("AWS_ACCESS_KEY_ID")?,
+        secret_access_key: required("AWS_SECRET_ACCESS_KEY")?,
+        virtual_hosted_style,
+        allow_http,
+    })
+}
+
+pub fn virtual_hosted_style_from_value(value: &str) -> Result<bool, String> {
+    match value {
+        "path" => Ok(false),
+        // `virtual-host` is the common provider spelling; the longer form is a
+        // provider-neutral synonym for manually managed stores.
+        "virtual-host" | "virtual-hosted" => Ok(true),
+        _ => Err("AWS_S3_URL_STYLE must be path, virtual-host, or virtual-hosted".to_string()),
+    }
+}
 
 /// Reject every ambient libpq-style authority input. Matching the `PG` prefix
 /// is deliberate: libpq adds variables over time, and a fixed allow/deny list
@@ -118,7 +162,15 @@ pub fn validate_database_transport(database_url: &str, variable: &str) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::validate_database_transport;
+    use super::{validate_database_transport, virtual_hosted_style_from_value};
+
+    #[test]
+    fn s3_url_style_accepts_provider_spellings() {
+        assert!(!virtual_hosted_style_from_value("path").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual-host").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual-hosted").unwrap());
+        assert!(virtual_hosted_style_from_value("virtual").is_err());
+    }
 
     #[test]
     fn database_transport_rejects_implicit_and_downgradable_modes() {

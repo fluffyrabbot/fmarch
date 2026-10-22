@@ -43,6 +43,25 @@ impl fmt::Debug for S3MediaConfig {
     }
 }
 
+impl S3MediaConfig {
+    /// The raw object store for this bucket. Exposed for operational
+    /// conformance checks; application code goes through [`MediaRepository`].
+    pub fn object_store(&self) -> Result<Arc<dyn ObjectStore>, MediaError> {
+        let endpoint = s3_bucket_endpoint(self)?;
+        let store = AmazonS3Builder::new()
+            .with_endpoint(endpoint)
+            .with_region(&self.region)
+            .with_bucket_name(&self.bucket)
+            .with_access_key_id(&self.access_key_id)
+            .with_secret_access_key(&self.secret_access_key)
+            .with_virtual_hosted_style_request(self.virtual_hosted_style)
+            .with_allow_http(self.allow_http)
+            .build()
+            .map_err(|error| object_error("configure", error))?;
+        Ok(Arc::new(store))
+    }
+}
+
 #[derive(Clone)]
 enum RepositoryBackend {
     Local(MediaStore),
@@ -289,18 +308,7 @@ impl MediaRepository {
         read_limits: MediaReadLimits,
     ) -> Result<Self, MediaError> {
         limits.validate()?;
-        let endpoint = s3_bucket_endpoint(&config)?;
-        let store = AmazonS3Builder::new()
-            .with_endpoint(endpoint)
-            .with_region(config.region)
-            .with_bucket_name(config.bucket)
-            .with_access_key_id(config.access_key_id)
-            .with_secret_access_key(config.secret_access_key)
-            .with_virtual_hosted_style_request(config.virtual_hosted_style)
-            .with_allow_http(config.allow_http)
-            .build()
-            .map_err(|error| object_error("configure", error))?;
-        Ok(Self::object(Arc::new(store), limits, read_limits))
+        Ok(Self::object(config.object_store()?, limits, read_limits))
     }
 
     /// Shared, process-local object storage for deterministic replica contract tests.
