@@ -2032,7 +2032,7 @@
         "test:frontend-route-live-contract"
       ]
     },
-    {"id": "ops:hosting-infra", "tier": "active", "paths": ["infra/", "tools/infra_contract.mjs", "tools/infra_contract.test.mjs"], "lanes": ["test:infra-contract"]},
+    {"id": "ops:hosting-infra", "tier": "active", "paths": ["infra/", "deploy/hetzner/", "tools/infra_contract.mjs", "tools/infra_contract.test.mjs"], "lanes": ["test:infra-contract"]},
     {
       "id": "ops:scorecard",
       "tier": "active",
