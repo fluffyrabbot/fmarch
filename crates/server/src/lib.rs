@@ -73,13 +73,37 @@ pub fn validate_database_transport(database_url: &str, variable: &str) -> Result
             "{variable} must embed one username, password, host, and database and must not contain a fragment"
         ));
     }
-    let query = parsed.query_pairs().collect::<Vec<_>>();
-    if query.len() != 1 || query[0].0 != "sslmode" {
-        return Err(format!(
-            "{variable} must contain exactly one sslmode and no other query options"
-        ));
+    // A self-hosted database presents a certificate from the environment's
+    // private CA, so verify-ca/verify-full may name that CA file. Ambient PG*
+    // variables stay forbidden; the URL remains the sole connection authority.
+    let query_error = || {
+        format!(
+            "{variable} must contain exactly one sslmode, at most one sslrootcert, and no other query options"
+        )
+    };
+    let mut sslmode = None;
+    let mut sslrootcert = None;
+    for (name, value) in parsed.query_pairs() {
+        let slot = match name.as_ref() {
+            "sslmode" => &mut sslmode,
+            "sslrootcert" => &mut sslrootcert,
+            _ => return Err(query_error()),
+        };
+        if slot.replace(value.into_owned()).is_some() {
+            return Err(query_error());
+        }
     }
-    let mode = query[0].1.as_ref();
+    let Some(mode) = sslmode else {
+        return Err(query_error());
+    };
+    let mode = mode.as_str();
+    if let Some(root) = sslrootcert {
+        if !root.starts_with('/') || !matches!(mode, "verify-ca" | "verify-full") {
+            return Err(format!(
+                "{variable} sslrootcert must be an absolute path and requires sslmode=verify-ca or verify-full"
+            ));
+        }
+    }
     if matches!(mode, "require" | "verify-ca" | "verify-full") {
         return Ok(());
     }
@@ -107,12 +131,26 @@ mod tests {
             "postgres://role@db.example/fmarch?sslmode=require",
             "postgres://role:secret@db.example/?sslmode=require",
             "postgres://role:secret@db.example/fmarch?sslmode=require#fragment",
+            "postgres://role:secret@db.example/fmarch?sslrootcert=/ca.crt",
+            "postgres://role:secret@db.example/fmarch?sslmode=require&sslrootcert=/ca.crt",
+            "postgres://role:secret@db.example/fmarch?sslmode=verify-full&sslrootcert=ca.crt",
+            "postgres://role:secret@db.example/fmarch?sslmode=verify-full&sslmode=require",
+            "postgres://role:secret@db.example/fmarch?sslmode=verify-full&sslrootcert=/a&sslrootcert=/b",
         ] {
             assert!(validate_database_transport(url, "DATABASE_URL").is_err());
         }
         for mode in ["require", "verify-ca", "verify-full"] {
             validate_database_transport(
                 &format!("postgres://role:secret@db.example/fmarch?sslmode={mode}"),
+                "DATABASE_URL",
+            )
+            .unwrap();
+        }
+        for mode in ["verify-ca", "verify-full"] {
+            validate_database_transport(
+                &format!(
+                    "postgres://role:secret@10.40.1.21:5432/fmarch?sslmode={mode}&sslrootcert=/etc/fmarch/pg-tls/ca.crt"
+                ),
                 "DATABASE_URL",
             )
             .unwrap();
