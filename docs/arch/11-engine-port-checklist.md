@@ -63,7 +63,7 @@ Current proof boundaries:
   result-event, action-id, role-id, or culture-note rows; the only unsupported rows are the
   explicit out-of-scope Engine V4 test families `feature_flags_test` and `init`.
 - The completion audit now marks all eight build-order phases complete and the readiness
-  baseline is recorded in `docs/ops/engine-port-readiness-baseline-2026-06-18.md`.
+  baseline is the `engine-port-readiness-baseline-2026-06-18` tag.
 - Persistent effects have a rebuildable `slot_effect` projection, explicit-audience notices
   have a rebuildable `player_notification` projection, and counters/inventory-style state is
   covered where needed by the resolver and command/projection proof. Richer host-facing UX for
@@ -2979,6 +2979,6 @@ Before any future release/tag, rerun:
 python3 tools/engine_port_completion_audit.py --check --require-complete --output target/operator-proof/current-engine-port-completion-audit.json
 ```
 
-The 2026-06-18 readiness baseline is recorded in
-`docs/ops/engine-port-readiness-baseline-2026-06-18.md` and tagged as
-`engine-port-readiness-baseline-2026-06-18`.
+The 2026-06-18 readiness baseline is the
+`engine-port-readiness-baseline-2026-06-18` tag; current capability status lives
+in the [completion registry](../ops/completion-registry.json).
