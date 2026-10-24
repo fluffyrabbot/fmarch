@@ -45,6 +45,7 @@ import {
   buildPrivateQueueBoundary,
 } from "../../../lib/components/player-private-queue/player-private-queue-model.mjs";
 import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
+import { phaseThemeKey } from "../../../lib/app/phase-theme.mjs";
 import { buildPlayerRouteLayoutViewModel } from "./player-route-layout.mjs";
 import { seatNames, voteTargetLabel } from "../../../lib/app/seat-presenter.mjs";
 import { mentionSeat } from "../../../lib/app/slot-mention-model.mjs";
@@ -426,10 +427,11 @@ export function buildPlayerPhaseView(commandState) {
   return Object.freeze({
     label,
     state,
+    kind: phaseThemeKey(phase.phaseId),
     deadlineLabel:
       typeof phase.deadline === "number"
         ? formatDeadline(phase.deadline)
-        : "No deadline committed",
+        : "No deadline set",
     deadlineAt: typeof phase.deadline === "number" ? phase.deadline : null,
     summary: `${label} is ${state}.`,
   });

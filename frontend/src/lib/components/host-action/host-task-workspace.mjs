@@ -160,7 +160,9 @@ function buildTask({
     state,
     label: group.label,
     intent: group.id === "deadline" ? "Choose when this phase should end." : group.value,
-    consequence: primaryAction?.outcomeLabel ?? group.emptyLabel,
+    // The deadline's consequence lives in its confirmation; a tool's primary
+    // action already carries its own on the trigger.
+    consequence: group.id === "deadline" ? null : primaryAction?.outcomeLabel ?? group.emptyLabel,
     meta: taskMeta({ groupId: group.id, phase, replacement, hostPrompts, votecount }),
     testId: `host-task-${group.id}`,
     panelTestId: `moderator-control-${group.id}`,
@@ -229,7 +231,9 @@ function buildHostTaskInstance({
       dayEvent?.label ??
       (dayEventDecision ? "DayEvent decision" : "Host decision"),
     intent: prompt?.value ?? task.intent,
-    consequence: blockedReason ?? (prompt ? "Your choice will resolve this decision." : task.consequence),
+    // A pack prompt states its subject once, in `intent`; only a blocked task
+    // adds a second line, saying why.
+    consequence: blockedReason ?? (prompt ? null : task.consequence),
     meta:
       dayEvent?.meta ??
       [phaseLabelFromId(task.phaseId), task.subjectSlot ? seatNames(roster).label(task.subjectSlot) : null].filter(Boolean).join(" · "),

@@ -6,6 +6,8 @@
   import { containTabWithinConfirmation } from "$lib/app/confirmation-focus.mjs";
 
   export let view;
+  /** The latest official votecount post, linked from the sheet it summarises. */
+  export let officialPost = null;
   export let onCommand = () => {};
   export let onSelectTarget = () => {};
   /** Arm a vote row (or Unvote) for confirmation; `null` disarms it. */
@@ -84,6 +86,18 @@
       >{view.context.currentVote.value}</strong>
     </div>
   </header>
+
+  {#if officialPost !== null}
+    <a
+      class="vote-sheet__official"
+      href={`#thread-post-${officialPost.seq}`}
+      data-testid="player-live-official-post"
+    >
+      <span>{officialPost.label}</span>
+      <strong>{officialPost.value}</strong>
+      <small>{officialPost.detail}</small>
+    </a>
+  {/if}
 
   <details class="vote-picker" data-testid={picker.testId} data-has-vote={String(picker.hasVote)} bind:open={listOpen}>
     <summary data-testid="player-vote-picker-toggle">
@@ -286,6 +300,30 @@
   .vote-picker > p,
   .vote-picker small {
     color: var(--fm-ink-muted);
+  }
+
+  .vote-sheet__official {
+    border: 1px solid var(--fm-accent);
+    border-inline-start: 6px solid var(--fm-accent);
+    border-radius: var(--fm-radius-control);
+    color: var(--fm-ink);
+    display: grid;
+    gap: 2px;
+    padding: 10px 14px;
+    text-decoration: none;
+  }
+
+  .vote-sheet__official span,
+  .vote-sheet__official small {
+    color: var(--fm-ink-muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .vote-sheet__official strong {
+    color: var(--fm-accent-ink);
+    overflow-wrap: anywhere;
   }
 
   .vote-picker,

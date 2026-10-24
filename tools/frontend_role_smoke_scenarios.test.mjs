@@ -359,7 +359,7 @@ test("role smoke pins collapsed support and mobile first-viewport budgets", () =
       maxDocumentHeightViewportRatio: 2.6,
     },
     player: {
-      primaryActionSelector: '[data-testid="player-dock-vote"]',
+      primaryActionSelector: '[data-testid="player-dock-reply"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 3.5,
     },

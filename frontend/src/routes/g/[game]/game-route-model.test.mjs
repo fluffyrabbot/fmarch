@@ -118,6 +118,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.deepEqual(data.phase, {
     label: "Day 2",
     state: "open",
+    kind: "day",
     deadlineLabel: "Jun 19, 2026, 9:00 PM",
     deadlineAt: 1781928000,
     summary: "Day 2 is open.",

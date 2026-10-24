@@ -37,8 +37,11 @@
   data-boundary-status={view.root.data.boundaryStatus}
 >
   {#if returnAvailable}<button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid="return-to-thread" on:click={onReturnToThread}>Return to thread</button>{/if}
-  <header class="fm-ledger__head">
+  <header class="fm-ledger__head" class:private-head--compact={view.items.length === 0}>
     <h2>{view.heading}</h2>
+    {#if view.items.length === 0}
+      <p class="private-empty" data-testid="player-private-empty" title={view.boundary.detail}>{view.emptyMessage}</p>
+    {/if}
     {#if attention.state === "ready" && view.items.length > 0}
       <select id="private-attention-filter" class="private-filter" aria-label="Filter messages" data-testid="private-attention-filter" value={filter} on:change={event => onFilter(event.currentTarget.value)}>
         <option value="all">All ({view.items.length})</option>
@@ -52,6 +55,7 @@
   </header>
   <p
     class="private-queue-boundary"
+    class:fm-sr-only={view.items.length === 0}
     data-testid="player-private-boundary"
   >
     {view.boundary.detail}
@@ -64,11 +68,7 @@
 
     {/if}
   {/if}
-  {#if view.items.length === 0}
-    <p data-testid="player-private-empty">
-      {view.emptyMessage}
-    </p>
-  {:else}
+  {#if view.items.length > 0}
     {#if visibleItems.length === 0}<p role="status" data-testid="private-filter-empty">{filter === "new" ? "Nothing new" : "No reviewed messages"}</p>{/if}
     {#each visibleItems as item (item.id)}
       <article
@@ -134,6 +134,9 @@
   .private-item-heading > span { color: var(--fm-ink-subtle); font-size: 12px; white-space: nowrap; }
   .private-filter { margin-inline-start: auto; min-height: 44px; max-width: 130px; font: inherit; color: inherit; background: var(--fm-paper); border: 1px solid var(--fm-rule); border-radius: 4px; }
   .private-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Nothing to read: one line, no card body, the boundary copy on hover. */
+  .private-head--compact { align-items: baseline; gap: 10px; }
+  .private-empty { color: var(--fm-ink-muted); flex: 1 1 auto; font-size: 14px; margin: 0; }
 
   .player-private-queue h2 {
     font-size: 18px;

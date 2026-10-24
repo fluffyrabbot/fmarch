@@ -1,4 +1,5 @@
 <script>
+  import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import { buildRouteStateViewModel } from "$lib/app/app-route-state-model.mjs";
   import {
@@ -11,15 +12,6 @@
   $: boardForcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
     : null;
-  // Counts describe the cards on this page; the board is paginated.
-  $: boardSummary =
-    !boardForcedRouteState && data.board?.status !== "degraded" && (data.board?.games?.length ?? 0) > 0
-      ? {
-          inProgress: data.board.games.filter((game) => game.status === "active" && game.phaseId !== null).length,
-          gathering: data.board.games.filter((game) => game.status === "active" && game.phaseId === null).length,
-          closed: data.board.games.filter((game) => game.status === "completed").length,
-        }
-      : null;
 </script>
 
 <svelte:head>
@@ -28,29 +20,7 @@
 
 {#snippet boardSurface()}
   <main class="fm-surface board-surface" data-testid={BOARD_ROUTE_CONTRACT.surfaceTestId}>
-    <header class="board-hero">
-      <svg class="board-hero__sky" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
-        <g class="board-hero__stars">
-          <circle cx="90" cy="40" r="2" /><circle cx="210" cy="120" r="1.5" /><circle cx="330" cy="60" r="2.4" /><circle cx="470" cy="30" r="1.4" />
-          <circle cx="560" cy="140" r="1.8" /><circle cx="690" cy="50" r="1.5" /><circle cx="760" cy="110" r="2.2" /><circle cx="1110" cy="150" r="1.6" />
-          <circle cx="1160" cy="40" r="2" />
-          <path d="M150 80l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" /><path d="M640 90l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" />
-        </g>
-        <path class="board-hero__hills" d="M0 220V186l28-26 24 24 28-34 32 36 28-20 28 24 32-34 36 36 32-22 32 24h900v26zM900 220v-24l30-28 26 22 34-38 34 36 28-24 32 28 36-34 40 32 40-18v48z" />
-      </svg>
-      <div class="board-hero__copy">
-        <p class="fm-eyebrow">The village board</p>
-        <h1>Games</h1>
-        <p class="board-hero__lede">Every game in the village, from first howl to case closed.</p>
-      </div>
-      {#if boardSummary}
-        <ul class="board-hero__counts" aria-label="Games on this page">
-          <li><strong>{boardSummary.inProgress}</strong><span>in progress</span></li>
-          <li><strong>{boardSummary.gathering}</strong><span>gathering</span></li>
-          <li><strong>{boardSummary.closed}</strong><span>cases closed</span></li>
-        </ul>
-      {/if}
-    </header>
+    <AppSurfaceHeader header={data.surfaceHeader} />
 
     {#if boardForcedRouteState}
       <RouteState view={boardForcedRouteState} />
@@ -145,21 +115,6 @@
 
 <style>
   .board-surface { align-content: start; }
-  .board-hero { align-items: center; border-block-end: 2px solid var(--fm-line); display: flex; flex-wrap: wrap; gap: 20px 32px; isolation: isolate; margin: -22px -22px 0; overflow: hidden; padding: 36px 22px 48px; position: relative; }
-  /* The bleed matches the surface's narrow padding (16px below 840px). */
-  @media (max-width: 840px) { .board-hero { margin: -16px -16px 0; padding-inline: 16px; } }
-  .board-hero__sky { block-size: 100%; inline-size: 100%; inset: 0; position: absolute; z-index: -1; }
-  .board-hero__stars { fill: var(--fm-accent-soft); }
-  .board-hero__hills { fill: var(--fm-surface-muted); }
-  .board-hero__copy { display: grid; flex: 999 1 420px; gap: 8px; min-inline-size: 0; }
-  .board-hero__copy .fm-eyebrow { margin: 0; }
-  .board-hero h1 { font-size: clamp(36px, 6vw, 56px); }
-  .board-hero__lede { color: var(--fm-ink-muted); font-size: 18px; margin: 0; max-inline-size: 36rem; }
-  .board-hero__counts { display: grid; flex: 1 1 300px; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
-  .board-hero__counts li { background: var(--fm-raised); border: 2px solid var(--fm-line); border-radius: var(--fm-radius-panel); display: grid; padding: 12px 10px; text-align: center; }
-  .board-hero__counts strong { font-family: var(--fm-font-display); font-size: 30px; line-height: 1.1; }
-  .board-hero__counts span { color: var(--fm-ink-muted); font-size: 13px; font-weight: 700; }
-  @media (forced-colors: active) { .board-hero__sky { display: none; } }
   .board-surface > .fm-grid { gap: 28px 20px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
   .board-card { align-content: start; }
   .board-card h2 { overflow-wrap: anywhere; }

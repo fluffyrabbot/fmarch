@@ -7,7 +7,6 @@
   } from "./player-thread-model.mjs";
 
   export let thread;
-  export let liveOfficialPost = null;
   export let threadPageStatus = null;
   export let quoteEnabled = false;
   export let roster = [];
@@ -27,17 +26,6 @@
   {#if thread.nextAfterSeq != null}
     <button class="fm-touch-button" on:click={onLoadNewer} disabled={threadPageStatus?.state === "pending"}>Load newer posts</button>
   {/if}
-  {#if liveOfficialPost !== null}
-    <aside
-      class="player-surface__official-post fm-card"
-      data-testid="player-live-official-post"
-    >
-      <span>{liveOfficialPost.label}</span>
-      <strong>{liveOfficialPost.value}</strong>
-      <small>{liveOfficialPost.detail}</small>
-    </aside>
-  {/if}
-
   <div
     class="player-surface__pager"
     aria-busy={threadView.pager.root.busy}
@@ -45,18 +33,14 @@
     data-state={threadView.pager.root.state}
     data-testid={threadView.pager.root.testId}
   >
-    <div>
-      <span>Thread page</span>
-      <strong
-        data-next-before-seq={threadView.pager.cursor.nextBeforeSeq}
-        data-testid={threadView.pager.cursor.testId}
-      >
-        {threadView.pager.cursor.label}
-      </strong>
-    </div>
+    <span
+      class="fm-sr-only"
+      data-next-before-seq={threadView.pager.cursor.nextBeforeSeq}
+      data-testid={threadView.pager.cursor.testId}
+    >{threadView.pager.cursor.label}</span>
     <button
       type="button"
-      class="fm-touch-button fm-touch-button--secondary"
+      class="player-surface__pager-button"
       aria-disabled={threadView.pager.button.ariaDisabled}
       disabled={threadView.pager.button.disabled}
       data-min-touch-target-px={threadView.pager.button.minTouchTargetPx}
@@ -269,51 +253,42 @@
     min-inline-size: 0;
   }
 
-  .player-surface__official-post {
-    border-color: var(--fm-accent);
-    border-inline-start: 6px solid var(--fm-accent);
-    gap: 4px;
-    min-block-size: 72px;
-    margin-block: 12px;
-  }
 
-  .player-surface__official-post span,
-  .player-surface__official-post small {
-    color: var(--fm-ink-muted);
-    font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
-
-  .player-surface__official-post strong {
-    color: var(--fm-accent-ink);
-    font-size: 17px;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-  }
-
+  /* One slim line: the cursor label is read by screen readers only. */
   .player-surface__pager {
-    align-items: center;
     border-block-end: 1px solid var(--fm-line-soft);
-    display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-block-size: 52px;
-    padding-block: 4px;
+    display: flex;
+    justify-content: center;
   }
 
-  .player-surface__pager span {
-    color: var(--fm-ink-subtle);
-    display: block;
-    font-size: 12px;
+  .player-surface__pager-button {
+    background: transparent;
+    border: 0;
+    color: var(--fm-ink-muted);
+    cursor: pointer;
+    display: inline-grid;
+    font: inherit;
+    font-size: 13px;
     font-weight: 800;
+    justify-items: center;
+    min-block-size: 44px;
+    padding: 8px 16px;
     text-transform: uppercase;
   }
 
-  .player-surface__pager strong {
-    display: block;
-    margin-block-start: 2px;
-    overflow-wrap: anywhere;
+  .player-surface__pager-button:disabled {
+    cursor: default;
+  }
+
+  .player-surface__pager-button:hover:not(:disabled),
+  .player-surface__pager-button:focus-visible {
+    color: var(--fm-ink);
+  }
+
+  .player-surface__pager-button .fm-touch-button__reason {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: none;
   }
 
   .player-surface__post header {

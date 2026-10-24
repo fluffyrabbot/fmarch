@@ -384,7 +384,7 @@ export const roles = Object.freeze([
     capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
     requiredText: PLAYER_ROUTE_CONTRACT.requiredText,
     mobileViewportBudget: Object.freeze({
-      primaryActionSelector: '[data-testid="player-dock-vote"]',
+      primaryActionSelector: '[data-testid="player-dock-reply"]',
       maxPrimaryActionBottomViewportRatio: 1,
       maxDocumentHeightViewportRatio: 3.5,
     }),

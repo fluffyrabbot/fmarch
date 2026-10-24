@@ -4166,7 +4166,7 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     assert.equal(await dock.getAttribute("aria-label"), "Player navigation");
     assert.equal(await dock.getAttribute("aria-busy"), null);
     assert.equal(await dock.locator("button").count(), 0);
-    assert.equal(await dock.locator('[data-testid="player-dock-reply"], [data-testid="player-dock-act"], [data-testid="player-dock-events"]').count(), 0);
+    assert.equal(await dock.locator('[data-testid="player-dock-reply"], [data-testid="player-dock-act"]').count(), 0);
     assert.equal(await tab.locator('button[data-action]:enabled').count(), 0);
     await tab.getByTestId("player-dock-vote").focus();
     await tab.keyboard.press("Tab");

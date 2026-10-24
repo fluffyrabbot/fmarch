@@ -311,7 +311,7 @@
   top: 0;
   z-index: 11;
   align-items: center;
-  background: var(--fm-raised-veil);
+  background: var(--fm-raised);
   border-block-end: 1px solid var(--fm-line);
   display: grid;
   gap: 18px;
@@ -569,12 +569,10 @@
   min-block-size: 44px;
 }
 
-.host-task-workspace__diagnostics,
 .host-task-workspace__command-context {
   border-block-start: 1px solid var(--fm-line);
 }
 
-.host-task-workspace__diagnostics summary,
 .host-task-workspace__command-context summary {
   align-items: center;
   cursor: pointer;
@@ -584,13 +582,13 @@
   min-block-size: 44px;
 }
 
-.host-task-workspace__diagnostics dl {
+.host-task-workspace__diagnostics {
   display: grid;
   gap: 8px;
-  margin: 0;
+  margin: 8px 0 0;
 }
 
-.host-task-workspace__diagnostics dl > div {
+.host-task-workspace__diagnostics > div {
   background: var(--fm-surface-muted);
   border: 1px solid var(--fm-line);
   padding: 8px 10px;

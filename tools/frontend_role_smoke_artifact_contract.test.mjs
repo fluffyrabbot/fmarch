@@ -1268,7 +1268,7 @@ test("route-state render artifact covers every forced board and role page state"
     },
     dayEventRailTestId: "player-day-event-rail",
     dayEventCardTestId: "player-day-event-event-cookie",
-    dayEventDockTestId: "player-dock-events",
+    dayEventNoticeTestId: "player-game-bar-events",
     threadPager: {
       component: PLAYER_THREAD_PAGER_CONTRACT.component,
       rootTestId: PLAYER_THREAD_PAGER_CONTRACT.rootTestId,

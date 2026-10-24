@@ -121,7 +121,7 @@
             <span data-state={task.state}>{task.state}</span>
           </header>
           <p class="host-task-workspace__intent">{task.intent}</p>
-          {#if task.kind !== 'deadline'}
+          {#if task.consequence}
             <p class="host-task-workspace__consequence">{task.consequence}</p>
           {/if}
 
@@ -178,7 +178,11 @@
                   data-testid={action.testId}
                   aria-busy={action.status?.state === "pending" ? "true" : undefined}
                 >
-                  <HostAction action={action.config} onDispatch={onDispatch} />
+                  <HostAction
+                    action={action.config}
+                    showConsequence={action.config.outcomeLabel !== task.intent}
+                    onDispatch={onDispatch}
+                  />
                   <div
                     class="host-task-workspace__status-floor"
                     data-testid={action.statusFloorTestId}
@@ -195,14 +199,6 @@
             </div>
           {/if}
 
-          <details class="host-task-workspace__diagnostics" data-legibility="technical">
-            <summary>Technical details</summary>
-            <dl>
-              <div><dt>Required access</dt><dd>{task.diagnostics.authority}</dd></div>
-              <div><dt>Dispatch boundary</dt><dd>{task.diagnostics.boundary}</dd></div>
-              <div><dt>Protocol</dt><dd>{task.diagnostics.protocol}</dd></div>
-            </dl>
-          </details>
         </article>
       {/each}
     {:else}
@@ -224,6 +220,13 @@
         <span>{view.commandContext.label}</span>
         <strong>{view.commandContext.value}</strong>
         <small>{view.commandContext.commandEndpoint}</small>
+        {#if view.selectedTask}
+          <dl class="host-task-workspace__diagnostics" data-task-id={view.selectedTask.id}>
+            <div><dt>Required access</dt><dd>{view.selectedTask.diagnostics.authority}</dd></div>
+            <div><dt>Dispatch boundary</dt><dd>{view.selectedTask.diagnostics.boundary}</dd></div>
+            <div><dt>Protocol</dt><dd>{view.selectedTask.diagnostics.protocol}</dd></div>
+          </dl>
+        {/if}
       </div>
     </details>
   </section>

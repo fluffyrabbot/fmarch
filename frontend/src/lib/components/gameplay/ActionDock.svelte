@@ -2,12 +2,20 @@
   export let view;
   export let commandsAvailable = false;
   export let privateNewCount = null;
+  /** "day", "night", "twilight" or null before the first phase. */
+  export let phaseKind = null;
   export let onOpenVotePicker = () => {};
   export let onOpenPrivateQueue = () => {};
-  export let dayEventCount = 0;
 
   $: votePicker = view?.votePicker ?? null;
   $: hasPhaseActions = (view?.composer?.actionPicker?.actions?.length ?? 0) > 0;
+  // Reply is the frequent write and takes the primary slot. Vote is a state
+  // chip during the day; at night the chip slot carries the night action when
+  // there is one and nothing otherwise, because no vote exists to show.
+  $: nightSlot = commandsAvailable && phaseKind === "night";
+  $: showVoteChip = !nightSlot;
+  $: showAct = commandsAvailable && hasPhaseActions;
+  $: showReply = commandsAvailable && view?.composer?.readOnly !== true;
 
   function focusDestination(destinationId) {
     window.setTimeout(() => {
@@ -25,40 +33,39 @@
   aria-busy={commandsAvailable ? view?.root?.ariaBusy : undefined}
   data-component="player-action-dock"
   data-channel-id={view?.root?.data?.channelId}
+  data-phase-kind={phaseKind ?? undefined}
   data-thumb-zone="player-primary-actions"
   data-action-priority="primary"
   data-testid="player-primary-action-zone"
 >
-  <a
-    class="action-dock__vote"
-    class:action-dock__vote--cast={votePicker?.hasVote === true}
-    href="#player-actions"
-    data-testid="player-dock-vote"
-    data-has-vote={String(votePicker?.hasVote === true)}
-    on:click|preventDefault={onOpenVotePicker}
-  >
-    <span>{commandsAvailable ? votePicker?.dock.label ?? "Vote" : "Votes"}</span>
-  </a>
-  {#if commandsAvailable && view?.composer?.readOnly !== true}
+  {#if showVoteChip}
     <a
-      class="action-dock__tool"
+      class="action-dock__chip"
+      class:action-dock__chip--cast={votePicker?.hasVote === true}
+      href="#player-actions"
+      data-testid="player-dock-vote"
+      data-has-vote={String(votePicker?.hasVote === true)}
+      on:click|preventDefault={onOpenVotePicker}
+    >
+      <span>{commandsAvailable ? votePicker?.dock.label ?? "Vote" : "Votes"}</span>
+    </a>
+  {/if}
+  {#if showAct}
+    <a class="action-dock__chip action-dock__chip--act" href="#player-phase-actions" data-testid="player-dock-act">
+      <span>{phaseKind === "night" ? "Night action" : "Act"}</span>
+    </a>
+  {/if}
+  {#if showReply}
+    <a
+      class="action-dock__primary"
       href="#player-composer"
       data-testid="player-dock-reply"
       on:click={() => focusDestination("player-composer")}
     >
       <span>Reply</span>
     </a>
-  {/if}
-  {#if commandsAvailable && hasPhaseActions}
-    <a class="action-dock__tool" href="#player-phase-actions" data-testid="player-dock-act">
-      <span>Act</span>
-    </a>
-  {/if}
-  {#if commandsAvailable && dayEventCount > 0}
-    <a class="action-dock__tool" href="#player-day-events" data-testid="player-dock-events">
-      <span>Event</span>
-      <strong aria-label={`${dayEventCount} open events`}>{dayEventCount}</strong>
-    </a>
+  {:else}
+    <span class="action-dock__spacer" aria-hidden="true"></span>
   {/if}
   <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
     aria-label={privateNewCount === null ? "More: your role, messages and history" : `More: ${privateNewCount} new ${privateNewCount === 1 ? "message" : "messages"}`}
@@ -78,6 +85,7 @@
     bottom: calc(10px + env(safe-area-inset-bottom));
     box-shadow: var(--fm-shadow-floating);
     display: flex;
+    flex-wrap: nowrap;
     gap: 4px;
     inset-inline: max(12px, calc((100vw - 920px) / 2));
     min-block-size: 58px;
@@ -87,7 +95,8 @@
     z-index: 12;
   }
 
-  .action-dock__vote,
+  .action-dock__chip,
+  .action-dock__primary,
   .action-dock__tool {
     align-items: center;
     background: transparent;
@@ -106,23 +115,35 @@
     text-decoration: none;
   }
 
-  .action-dock__vote {
+  .action-dock__primary {
     background: var(--fm-ink);
     color: var(--fm-action-ink);
     flex: 1 1 auto;
     min-inline-size: 0;
   }
 
-  .action-dock__vote span {
+  .action-dock__spacer {
+    flex: 1 1 auto;
+  }
+
+  .action-dock__chip {
+    border: 1px solid var(--fm-line-strong);
+    flex: 0 1 auto;
+    max-inline-size: 46%;
+    min-inline-size: 0;
+  }
+
+  .action-dock__chip span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .action-dock__vote--cast {
-    background: transparent;
-    border: 1px solid var(--fm-ink);
-    color: var(--fm-ink);
+  .action-dock__chip--cast,
+  .action-dock__chip--act {
+    background: var(--fm-accent-wash);
+    border-color: var(--fm-accent);
+    color: var(--fm-accent-ink);
   }
 
   .action-dock__tool {
@@ -145,19 +166,14 @@
     .action-dock {
       border-radius: var(--fm-radius-dock);
       inset-inline: 8px;
-      flex-wrap: wrap;
     }
 
-    .action-dock__vote {
-      flex-basis: 100%;
-    }
-
-    .action-dock__vote,
+    .action-dock__chip,
+    .action-dock__primary,
     .action-dock__tool {
       font-size: 12px;
       min-inline-size: 44px;
-      padding-inline: 6px;
+      padding-inline: 8px;
     }
-
   }
 </style>
