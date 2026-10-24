@@ -350,7 +350,7 @@ function surfaceScenarios() {
         "player-composer",
         "player-day-event-rail",
         "player-day-event-event-cookie",
-        "player-dock-events",
+        "player-game-bar-events",
         PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
         PLAYER_THREAD_PAGER_CONTRACT.rootTestId,
         PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,

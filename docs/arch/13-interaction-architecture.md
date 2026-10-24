@@ -46,7 +46,12 @@ The thread owns the initial viewport. The game bar and channel tabs provide
 compact context; they do not repeat explanatory state already available in the
 thread or action surfaces.
 
-The action dock remains reachable while reading:
+The action dock remains reachable while reading. Reply is its primary control
+because posting is the frequent write; voting is the important write and is
+guarded by its confirmation rather than by prominence. The dock's first slot
+follows the phase: by day it is the vote chip (`Vote`, or `Voting Ilya`), by
+night it is the night action when one exists and nothing otherwise, because no
+vote exists to show.
 
 - Vote opens a roster picker; selecting a player only selects a candidate, and a separate confirmation commits the vote;
 - Reply moves to the channel composer;
@@ -55,6 +60,15 @@ The action dock remains reachable while reading:
 - Count moves to the current vote and complete votecount;
 - Act moves to phase-specific actions when they exist;
 - More moves to private notices, role identity, activity, and game history.
+
+An open day event is a game-bar notice linking to the event rail, not a dock
+item; the dock stays one row at every width. The game bar's facts follow the
+phase as well: by day the player's own vote, then the deadline countdown, then
+the leading count where there is room; by night the countdown, then whether the
+night action was sent. A phase with no deadline shows no deadline fact, and
+phones show the first fact only. The More sheet renders the role card always,
+the night action card only in a night phase or while the player holds a legal
+action or an action receipt, and the empty Messages card as one line.
 
 The composer, action detail, and player context follow the thread in document
 order. This keeps automation, keyboard access, and no-JavaScript behavior honest
@@ -285,15 +299,15 @@ The action dock's More control counts distinct delivered IDs absent from the
 reader's review receipts. Unknown receipt state or lost seat authority suppresses
 the badge. The control's accessible name distinguishes the New count from total
 deliveries, and keyboard activation focuses the queue filter (New when there are
-new items, otherwise All). On phones, primary actions and navigation occupy two
-rows; the primary row retains its height during pending commands so touch targets
-and command feedback remain stationary.
+new items, otherwise All). The dock is one row on every width and retains its
+height during pending commands so touch targets and command feedback remain
+stationary.
 
 
 Reader navigation remains mounted independently of command readiness. Count and
 More remain keyboard-accessible for completed games, spectator views, and paused
 command transport. The dock accepts a fail-closed command-availability flag;
-quick votes, Reply, Act, and Event are rendered only when commands are available.
+Reply and Act are rendered only when commands are available.
 Reader-only navigation is not marked busy by command recovery, and its mobile
 layout does not reserve an empty command row. Completed games retain their final
 state notice without implying that a refresh can reopen commands. Spectator

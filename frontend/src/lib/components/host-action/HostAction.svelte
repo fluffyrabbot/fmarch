@@ -13,6 +13,8 @@
   export let action;
   export let onDispatch = () => {};
   export let initialConfirmationOpen = false;
+  /** False when the canvas already states this action's consequence. */
+  export let showConsequence = true;
 
   function localInputTime(value) {
     const date = new Date(value);
@@ -126,7 +128,7 @@
       on:click={activate}
     >
       <span>{view.trigger.intent}</span>
-      {#if view.trigger.consequence && action?.payload?.kind !== "extend_deadline"}
+      {#if showConsequence && view.trigger.consequence && action?.payload?.kind !== "extend_deadline"}
         <small>{view.trigger.consequence}</small>
       {/if}
     </button>

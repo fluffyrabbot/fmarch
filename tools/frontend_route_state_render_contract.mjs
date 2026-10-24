@@ -1517,8 +1517,8 @@ async function proveRenderedPlayerSurface(bundle) {
   assertIncludes(html, "Join Raffle", "player DayEvent command");
   assertIncludes(
     html,
-    'data-testid="player-dock-events"',
-    "player DayEvent dock affordance",
+    'data-testid="player-game-bar-events"',
+    "player DayEvent game-bar notice",
   );
   assertIncludes(
     html,
@@ -1626,7 +1626,7 @@ async function proveRenderedPlayerSurface(bundle) {
     },
     dayEventRailTestId: "player-day-event-rail",
     dayEventCardTestId: "player-day-event-event-cookie",
-    dayEventDockTestId: "player-dock-events",
+    dayEventNoticeTestId: "player-game-bar-events",
     threadPager: {
       component: PLAYER_THREAD_PAGER_CONTRACT.component,
       rootTestId: PLAYER_THREAD_PAGER_CONTRACT.rootTestId,

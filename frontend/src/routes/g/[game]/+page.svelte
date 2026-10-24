@@ -477,6 +477,14 @@
     player,
     commandStatus,
   });
+  // The night action card is phase-specific: it renders in a night phase, or
+  // whenever the player has a legal action or an action receipt to read back
+  // (including a completed game, whose closed state it still reports).
+  $: nightActionVisible =
+    phase.kind === "night" ||
+    playerActionSubmissionCheckpoint.root.data.actionState.startsWith("enabled:") ||
+    playerActionSubmissionCheckpoint.root.data.receiptState !== "idle" ||
+    player.gameCompleted === true;
   $: playerRoleCard = buildPlayerRoleCardViewModel({ commandState, player });
   $: playerEndgameSummary = buildPlayerEndgameSummaryViewModel({
     endgameSummary: endgameSummary ?? null,
@@ -1022,7 +1030,7 @@
 {:else}
   <GameFrame>
     <GameBar
-        shell={data.shell}
+      shell={data.shell}
       slot="bar"
       game={data.game}
       {phase}
@@ -1030,6 +1038,9 @@
       {votecount}
       {liveStatus}
       {player}
+      phaseKind={phase.kind ?? null}
+      dayEvents={composer.dayEventCommands ?? []}
+      nightAction={nightActionVisible ? playerActionSubmissionCheckpoint.receipt : null}
     >
       <PlayerFeedback
         status={commandStatus}
@@ -1073,7 +1084,6 @@
     {/if}
     <PlayerThread
       {thread}
-      {liveOfficialPost}
       {threadPageStatus}
       {quoteEnabled}
       {votableAuthorSlots}
@@ -1142,6 +1152,7 @@
       returnAvailable={readerTrip?.destination === "count"}
       onReturnToThread={returnToThread}
       view={playerActionView}
+      officialPost={liveOfficialPost}
       onCommand={submitPlayerCommand}
       onSelectTarget={selectActionTarget}
       onSelectVote={selectVote}
@@ -1151,7 +1162,7 @@
     <ContextSheet>
       {#if player.readOnly !== true}
         <PlayerRoleCard card={playerRoleCard} />
-        {#if projectionCommandsReady}
+        {#if projectionCommandsReady && nightActionVisible}
           <PlayerActionSubmissionCheckpoint
             checkpoint={playerActionSubmissionCheckpoint}
           />
@@ -1198,9 +1209,9 @@
         view={playerActionView}
         commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
         privateNewCount={privateNewItemCount}
+        phaseKind={phase.kind ?? null}
         onOpenPrivateQueue={openPrivateQueue}
         onOpenVotePicker={openVotePicker}
-        dayEventCount={composer.dayEventCommands?.length ?? 0}
       />
   </GameFrame>
 {/if}
