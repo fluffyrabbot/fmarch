@@ -16,6 +16,7 @@ import {
   navFocusCoverage,
   publicGameScenario,
   publicationViewports,
+  roleScenarioForViewport,
   routeStateScenarios,
   roles,
   setupViewports,
@@ -6220,12 +6221,15 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
 
 function assertRoleMobileViewportEvidence(roleEntries) {
   for (const scenario of roles) {
-    const runtimeScenario = scenario.live === undefined
+    const liveScenario = scenario.live === undefined
       ? scenario
       : { ...scenario, ...scenario.live };
     const entries = roleEntries.filter((entry) => entry.role === scenario.id);
     assert.equal(entries.length > 0, true, `${scenario.id} viewport evidence missing`);
     for (const entry of entries) {
+      // Budgets differ per viewport where the scenario declares variants
+      // (the player rail has no dock to be busy or to anchor on).
+      const runtimeScenario = roleScenarioForViewport(liveScenario, entry.viewport);
       assert.deepEqual(
         entry.disclosureDefaults,
         runtimeScenario.closedByDefault.map((selector) => ({ selector, open: false })),

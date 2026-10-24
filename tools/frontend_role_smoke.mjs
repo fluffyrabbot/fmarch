@@ -30,6 +30,7 @@ import {
   publicGameScenario,
   publicationViewports as allPublicationViewports,
   routeStateScenarios,
+  roleScenarioForViewport,
   roles,
   setupViewports as allSetupViewports,
   viewports as allViewports,
@@ -227,7 +228,7 @@ try {
     await boardContext.close();
 
     for (const roleContract of roles) {
-      const role = browserRoleScenario(roleContract);
+      const role = roleScenarioForViewport(browserRoleScenario(roleContract), viewport);
       const context = await newContextForViewport(viewport, role.token);
       const page = await context.newPage();
       let playerMediaRequests = null;
@@ -523,20 +524,26 @@ try {
           },
         ),
       },
-      {
-        label: "player-private-channel review link",
-        box: await assertNavigationAffordance(
-          privateChannelPage.getByTestId("player-private-link-notification-N02-0-slot-7"),
-          {
-            label: "player-private-channel private review link",
-            navigation: "link",
-            hrefPath: privateChannelPath,
-            searchParams: Object.freeze({ private: "notification-N02-0-slot-7" }),
-            baseUrl,
-          },
-        ),
-      },
     ];
+    // The review link lives in More: measured with the sheet revealed, and
+    // part of the overlap set only where it is a rail panel rather than a
+    // modal over the surface.
+    const privateChannelMoreSurface = await revealPlayerSheet(privateChannelPage, "more");
+    const privateChannelReviewLink = {
+      label: "player-private-channel review link",
+      box: await assertNavigationAffordance(
+        privateChannelPage.getByTestId("player-private-link-notification-N02-0-slot-7"),
+        {
+          label: "player-private-channel private review link",
+          navigation: "link",
+          hrefPath: privateChannelPath,
+          searchParams: Object.freeze({ private: "notification-N02-0-slot-7" }),
+          baseUrl,
+        },
+      ),
+    };
+    await dismissPlayerSheet(privateChannelPage, "more");
+    if (privateChannelMoreSurface.layout === "rail") privateChannelTargets.push(privateChannelReviewLink);
     await assertNoObviousOverlap(privateChannelTargets, {
       role: "player-private-channel",
       viewport: viewport.name,
@@ -1347,10 +1354,13 @@ function resolveFlowHook(name) {
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
     playerVotePicker: (page, ctx) =>
       drivePlayerVotePicker(page, { commandRequests: ctx.commandRequests }),
+    playerRevealVote: (page) => revealPlayerSheet(page, "vote"),
+    playerDismissVote: (page) => dismissPlayerSheet(page, "vote"),
     playerPrivateDisclosure: (page, ctx) =>
       drivePlayerPrivateDisclosure(page, {
         viewport: ctx.viewport,
         baseUrl: ctx.baseUrl,
+        role: ctx.role,
       }),
     playerPrivateAttention: (page, ctx) => provePrivateAttention(page, ctx.baseUrl, ctx.role.path),
     adminAuditDetail: (page, ctx) =>
@@ -2454,12 +2464,17 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
   await page.route(commandRoute, answerVote);
   await page.route(stateRoute, serveState);
   try {
+    // The dock chip carries the vote state below the rail width; the vote
+    // surface's own "Current vote" fact carries it everywhere.
+    const layout = await playerLayout(page);
     const dock = page.getByTestId("player-dock-vote");
-    const dockLabel = () => dock.innerText().then((text) => text.trim());
+    const dockLabel = async () => layout === "rail" ? null : (await dock.innerText()).trim();
+    const currentVote = () => page.getByTestId("player-current-vote").innerText().then((text) => text.trim());
     const steps = [];
-    const choose = async ({ testId, message, dockAfter }) => {
+    const choose = async ({ testId, message, dockAfter, hasVoteAfter }) => {
       const before = commandRequests.length;
-      await dock.click();
+      const previousVote = await currentVote();
+      await revealPlayerSheet(page, "vote");
       const option = page.getByTestId(testId);
       await option.waitFor({ state: "visible" });
       await assertHitTarget(option, `vote picker ${testId}`);
@@ -2472,15 +2487,23 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
       assert.equal(commandRequests.length, before, `the first tap on ${testId} must not dispatch`);
       await assertHitTarget(confirm, `vote picker confirm ${testId}`);
       await confirm.click();
-      await page.waitForFunction(
-        (label) => document.querySelector('[data-testid="player-dock-vote"]')?.innerText.trim() === label,
-        dockAfter,
-      );
+      // The vote surface's own fact changes with the vote: its seat label
+      // differs from the previous one and its has-vote state matches.
+      await page.waitForFunction(({ hasVote, previous }) => {
+        const fact = document.querySelector('[data-testid="player-current-vote"]');
+        return fact?.dataset.hasVote === String(hasVote) && fact.innerText.trim() !== previous;
+      }, { hasVote: hasVoteAfter, previous: previousVote });
+      if (layout !== "rail") {
+        await page.waitForFunction(
+          (label) => document.querySelector('[data-testid="player-dock-vote"]')?.innerText.trim() === label,
+          dockAfter,
+        );
+      }
       assert.equal(commandRequests.length, before + 1, `${testId} dispatches exactly once`);
-      steps.push({ testId, message, dock: await dockLabel(), command: Object.keys(commandRequests.at(-1))[0] });
+      steps.push({ testId, message, dock: await dockLabel(), currentVote: await currentVote(), command: Object.keys(commandRequests.at(-1))[0] });
     };
 
-    await dock.click();
+    const surface = await revealPlayerSheet(page, "vote");
     await page.getByTestId("player-vote-picker").waitFor({ state: "visible" });
     const rows = await page
       .locator('[data-testid="player-vote-picker"] [data-vote-key]')
@@ -2493,32 +2516,53 @@ async function drivePlayerVotePicker(page, { commandRequests = [] } = {}) {
     );
     assert.equal(await page.getByTestId("player-vote-unvote").isDisabled(), true, "nothing to unvote yet");
 
-    // A post author's Vote opens the picker preselected; it still only arms.
+    await dismissPlayerSheet(page, "vote");
+
+    // A post's Vote lives in its overflow menu (usage-frequency audit,
+    // decision 10): a compact 32px row control opens a menu whose items keep
+    // the 44px floor. Vote opens the picker preselected; it still only arms.
+    const menuToggle = page.locator('[data-testid^="player-post-menu-toggle-"]').first();
+    await menuToggle.scrollIntoViewIfNeeded();
+    await menuToggle.hover();
+    await assertHitTarget(menuToggle, "post menu toggle", 32);
+    const quote = page.locator('[data-testid^="player-quote-"]').first();
+    await assertHitTarget(quote, "post quote control", 32);
+    await menuToggle.click();
     const authorVote = page.locator('[data-testid^="player-vote-author-"]').first();
     await assertHitTarget(authorVote, "post author vote");
+    const copyLink = page.locator('[data-testid^="player-post-copy-"]').first();
+    await assertHitTarget(copyLink, "post copy link");
+    const copyValue = await copyLink.getAttribute("data-copy-value");
+    assert.match(copyValue ?? "", /^\?post=\d+#thread-post-\d+$/u, "copy link carries the post address");
     const authorRequests = commandRequests.length;
     await authorVote.click();
     await page.getByTestId("player-vote-confirm").waitFor({ state: "visible" });
     const authorMessage = (await page.getByTestId("player-vote-confirmation").innerText()).split("\n")[0].trim();
     assert.match(authorMessage, /^Vote \S/u, "post author vote opens a preselected confirmation");
     assert.equal(commandRequests.length, authorRequests, "a post author's Vote must not dispatch");
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "player-vote-confirm", "post author vote focuses the confirmation");
     await page.getByTestId("player-vote-cancel").click();
     await page.getByTestId("player-vote-confirm").waitFor({ state: "detached" });
+    const authorDismissal = await dismissPlayerSheet(page, "vote");
+    if (authorDismissal.dismissed) {
+      // Focus goes back to the control that opened the sheet: the post menu.
+      await page.waitForFunction(() => (document.activeElement?.dataset.testid ?? "").startsWith("player-post-menu-toggle-"));
+    }
 
-    await choose({ testId: "player-vote-option-slot-2", message: "Vote Ilya", dockAfter: "Voting Ilya" });
+    await choose({ testId: "player-vote-option-slot-2", message: "Vote Ilya", dockAfter: "Voting Ilya", hasVoteAfter: true });
     await choose({
       testId: "player-vote-option-slot-3",
       message: "Change vote: Ilya → Rook",
       dockAfter: "Voting Rook",
+      hasVoteAfter: true,
     });
-    await choose({ testId: "player-vote-unvote", message: "Remove your vote for Rook", dockAfter: "Vote" });
-
-    const returnToThread = page.getByTestId("return-to-thread");
-    if (await returnToThread.isVisible()) {
-      await returnToThread.focus();
-      await page.keyboard.press("Enter");
-    }
-    return { rows: rows.length, authorPreselection: authorMessage, steps };
+    await choose({ testId: "player-vote-unvote", message: "Remove your vote for Rook", dockAfter: "Vote", hasVoteAfter: false });
+    const dismissal = await dismissPlayerSheet(page, "vote");
+    return {
+      rows: rows.length, authorPreselection: authorMessage, steps, layout: surface.layout,
+      postMenu: { toggleMinPx: 32, voteMinPx: 44, copyLinkMinPx: 44, copyValue, voteReturnsFocusToMenu: authorDismissal.dismissed },
+      sheet: { opened: surface.opened, dismissed: dismissal.dismissed, focusReturned: dismissal.dismissed ? dismissal.focusReturned : null },
+    };
   } finally {
     await page.unroute(stateRoute, serveState);
     await page.unroute(commandRoute, answerVote);
@@ -3186,7 +3230,16 @@ function isForbiddenMediaUrl(value) {
   );
 }
 
-async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
+async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl, role }) {
+  // Messages live in More: a sheet below the rail width, a rail panel above.
+  const surface = await revealPlayerSheet(page, "more");
+  const sheetTargets = [];
+  for (const testId of role?.moreSheetTestIds ?? []) {
+    sheetTargets.push({ testId, box: await assertVisibleBox(page.getByTestId(testId), `player More ${testId}`) });
+  }
+  for (const selector of role?.moreSheetTouchSelectors ?? []) {
+    sheetTargets.push({ selector, box: await assertHitTarget(page.locator(selector).first(), `player More ${selector}`) });
+  }
   const review = page.getByTestId("player-private-review-notification-N02-0-slot-7");
   await assertHitTarget(review, "player private notification disclosure");
   await assertNavigationAffordance(
@@ -3240,6 +3293,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
   });
 
   await navigateBrowserPage(page, baseRouteUrl, { settle: true });
+  await revealPlayerSheet(page, "more");
   await page.getByTestId("player-private-review-notification-N02-0-slot-7").waitFor({
     state: "visible",
   });
@@ -3275,6 +3329,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     label: `player private disclosure expanded ${viewport.name}`,
     viewport,
   });
+  await dismissPlayerSheet(page, "more");
 
   return {
     reviewTestId: "player-private-review-notification-N02-0-slot-7",
@@ -3299,6 +3354,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     detail: detailText,
     focusStayedOnButton: true,
     hostOnlyCopyExcluded: true,
+    moreSurface: { layout: surface.layout, opened: surface.opened, targets: sheetTargets.length },
   };
 }
 
@@ -3912,17 +3968,108 @@ async function assertVisibleBox(locator, label) {
   return box;
 }
 
-async function assertHitTarget(locator, label) {
+async function assertHitTarget(locator, label, minimumPx = 44) {
   const box = await assertVisibleBox(locator, label);
   // Firefox can report a CSS 44px box as 43.9999847 after coordinate
   // subtraction. Allow sub-layout-unit numeric noise, not smaller targets.
-  const minimum = 44 - 0.001;
+  const minimum = minimumPx - 0.001;
   if (box.width < minimum || box.height < minimum) {
     throw new Error(
-      `${label} rendered ${box.width}x${box.height}, expected at least 44x44`,
+      `${label} rendered ${box.width}x${box.height}, expected at least ${minimumPx}x${minimumPx}`,
     );
   }
   return box;
+}
+
+// Below the rail width Vote and More are bottom sheets opened from the dock;
+// from it up they are rail panels and the dock is not rendered (usage-
+// frequency audit, decision 9). These helpers make a proof read the same at
+// every viewport: reveal, do the thing, dismiss.
+// A function, not a module-level const: the run body above executes before
+// later declarations initialise.
+function playerSheetIds(kind) {
+  const ids = {
+    vote: { dock: "player-dock-vote", sheet: "player-vote-sheet" },
+    more: { dock: "player-dock-more", sheet: "player-more-sheet" },
+  }[kind];
+  if (ids === undefined) throw new Error(`unknown player sheet ${kind}`);
+  return ids;
+}
+
+async function playerLayout(page) {
+  await page.waitForFunction(() =>
+    ["sheet", "rail"].includes(document.querySelector('[data-testid="player-surface"]')?.dataset.layout));
+  return page.getByTestId("player-surface").getAttribute("data-layout");
+}
+
+async function playerSheetOpen(page, kind) {
+  return page.evaluate((id) => document.querySelector(`[data-testid="${id}"]`)?.open === true, playerSheetIds(kind).sheet);
+}
+
+async function revealPlayerSheet(page, kind, { via = "click" } = {}) {
+  const layout = await playerLayout(page);
+  const ids = playerSheetIds(kind);
+  if (layout === "rail") {
+    await page.getByTestId(ids.sheet).waitFor({ state: "visible" });
+    assert.equal(await page.getByTestId("player-primary-action-zone").count(), 0, "the rail layout renders no dock");
+    return { layout, opened: false };
+  }
+  if (await playerSheetOpen(page, kind)) return { layout, opened: false };
+  const dock = page.getByTestId(ids.dock);
+  if (via === "keyboard") {
+    await dock.focus();
+    await page.keyboard.press("Enter");
+  } else {
+    await dock.click();
+  }
+  await page.waitForFunction((id) => document.querySelector(`[data-testid="${id}"]`)?.open === true, ids.sheet);
+  await page.waitForFunction((id) => document.querySelector(`[data-testid="${id}"]`)?.contains(document.activeElement), ids.sheet);
+  // The panel rises over 180ms; geometry read before that settles is wrong.
+  await page.evaluate((id) => Promise.all(
+    [...document.querySelectorAll(`[data-testid="${id}"] *`)].flatMap((el) => el.getAnimations()).map((animation) => animation.finished.catch(() => {})),
+  ), ids.sheet);
+  return { layout, opened: true, via, focusWithin: true };
+}
+
+async function dismissPlayerSheet(page, kind, { via = "escape" } = {}) {
+  const layout = await playerLayout(page);
+  const ids = playerSheetIds(kind);
+  if (layout === "rail" || !(await playerSheetOpen(page, kind))) return { layout, dismissed: false };
+  const sheet = page.getByTestId(ids.sheet);
+  if (via === "escape") {
+    await page.keyboard.press("Escape");
+  } else if (via === "close") {
+    await page.getByTestId(`${ids.sheet}-close`).click();
+  } else if (via === "backdrop") {
+    // The dialog box hugs the bottom edge; above it only the backdrop can
+    // receive the click, which the dialog element reports as its own.
+    const box = await sheet.boundingBox();
+    const point = { x: 12, y: Math.max(4, box.y - 24) };
+    const under = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return { tag: el?.tagName, testId: el?.dataset.testid ?? null, dialogTop: document.querySelector('[data-testid="player-vote-sheet"]')?.getBoundingClientRect().top };
+    }, point);
+    await page.mouse.click(point.x, point.y);
+    await page.waitForFunction((id) => document.querySelector(`[data-testid="${id}"]`)?.open === false, ids.sheet, { timeout: 5000 }).catch((error) => {
+      throw new Error(`${error.message}; backdrop click at ${JSON.stringify(point)} landed on ${JSON.stringify(under)}; box=${JSON.stringify(box)}`);
+    });
+  } else if (via === "swipe") {
+    const grip = await page.getByTestId(`${ids.sheet}-grip`).boundingBox();
+    const x = grip.x + grip.width / 2;
+    const y = grip.y + grip.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 40, { steps: 4 });
+    await page.mouse.move(x, y + 140, { steps: 6 });
+    await page.mouse.up();
+  } else {
+    throw new Error(`unknown sheet dismissal ${via}`);
+  }
+  await page.waitForFunction((id) => document.querySelector(`[data-testid="${id}"]`)?.open === false, ids.sheet);
+  const focusReturned = await page.waitForFunction(
+    (id) => document.activeElement?.dataset.testid === id, ids.dock, { timeout: 2000 },
+  ).then(() => true, () => false);
+  return { layout, dismissed: true, via, focusReturned };
 }
 
 async function assertThumbZones(page, role, { viewport }) {
@@ -4036,14 +4183,22 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   const status = page.getByTestId(`private-attention-${id}`);
   const badge = page.getByTestId("player-private-new-count");
   await page.waitForFunction(() => document.querySelector('[data-testid="player-private-new-count"]')?.textContent === "2");
+  const layout = await playerLayout(page);
   const more = page.getByTestId("player-dock-more");
-  await assertHitTarget(more, "private queue navigation");
-  await more.evaluate((element) => element.previousElementSibling.focus());
-  await page.keyboard.press("Tab");
-  await page.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
-  await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
-  assert.equal(await page.getByTestId("private-attention-filter").inputValue(), "new");
+  if (layout === "sheet") {
+    // Keyboard activation of More opens the sheet on the queue filter, set
+    // to New because there are new items.
+    await assertHitTarget(more, "private queue navigation");
+    await more.evaluate((element) => element.previousElementSibling.focus());
+    await page.keyboard.press("Tab");
+    await page.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
+    assert.equal(await page.getByTestId("private-attention-filter").inputValue(), "new");
+  } else {
+    assert.equal(await more.count(), 0, "the rail layout renders no dock");
+    await page.getByTestId("private-attention-filter").focus();
+  }
   await page.getByTestId("private-attention-filter").selectOption("all");
   await page.getByTestId(`private-mark-reviewed-${id}`).waitFor();
   await page.route("**/api/gameplay/games/*/private-attention", route => route.fulfill({ status: 503 }), { times: 1 });
@@ -4057,11 +4212,15 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   assert.equal(await badge.innerText(), "1");
   await reloadBrowserPage(page);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
+  // More opens on New while an item is new; the reviewed item is under All.
+  await revealPlayerSheet(page, "more");
+  await page.getByTestId("private-attention-filter").selectOption("all");
   await page.getByTestId(`player-private-link-${id}`).click();
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   assert.equal(new URL(page.url()).searchParams.get("private"), id);
   await page.waitForFunction(id => document.querySelector(`[data-testid="private-attention-${id}"]`)?.textContent === "Reviewed", id);
   await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
+  await revealPlayerSheet(page, "more");
   const filter = page.getByTestId("private-attention-filter");
   await filter.selectOption("new");
   // Wait for the filter to re-render before asserting the reviewed item is gone.
@@ -4074,7 +4233,19 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await page.waitForFunction(id => new URL(location.href).searchParams.get("private") === id, id);
   await page.goBack();
   await page.waitForFunction(() => document.querySelector('[data-testid="private-attention-filter"]')?.value === "reviewed");
-  await page.waitForFunction(({ id, top }) => Math.abs(document.getElementById(`private-item-${id}`).getBoundingClientRect().top - top) < 2, { id, top: readingTop });
+  await page.waitForFunction(({ id, top }) => {
+    const item = document.getElementById(`private-item-${id}`);
+    return item !== null && Math.abs(item.getBoundingClientRect().top - top) < 2;
+  }, { id, top: readingTop }, { timeout: 5000 }).catch(async error => {
+    const state = await page.evaluate(id => ({
+      url: location.href, active: document.activeElement?.id,
+      sheetOpen: document.querySelector('[data-testid="player-more-sheet"]')?.open,
+      filter: document.getElementById("private-attention-filter")?.value,
+      item: document.getElementById(`private-item-${id}`)?.getBoundingClientRect().top ?? null,
+      body: (() => { const b = document.querySelector('[data-testid="player-more-sheet"] [data-scroll-container]'); return b && { scrollTop: b.scrollTop, scrollHeight: b.scrollHeight, clientHeight: b.clientHeight }; })(),
+    }), id);
+    throw new Error(`${error.message}; expected top=${readingTop}; back state=${JSON.stringify(state)}`);
+  });
 
   await page.waitForFunction(id => document.activeElement?.id === `private-item-${id}`, id);
   const peer = await page.context().newPage();
@@ -4103,6 +4274,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
   await peer.route(endpoint, mock);
   try {
     await Promise.all([navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true }), navigateBrowserPage(peer, `${baseUrl}${routePath}`, { settle: true })]);
+    for (const tab of [page, peer]) await revealPlayerSheet(tab, "more");
     await Promise.all([page, peer].map(tab => tab.getByTestId("private-attention-filter").selectOption("all")));
     await filter.selectOption("new");
     await filter.evaluate(el => el.scrollIntoView({ block: "center" }));
@@ -4118,8 +4290,11 @@ async function provePrivateAttention(page, baseUrl, routePath) {
       const filter = document.getElementById("private-attention-filter");
       if (!filter) return false;
       const actual = filter.getBoundingClientRect().top;
-      const maximumScroll = document.documentElement.scrollHeight - innerHeight;
-      const expected = Math.max(top, actual + scrollY - maximumScroll);
+      // The sheet body or rail scrolls on its own; the document otherwise.
+      const scroller = filter.closest("[data-scroll-container]");
+      const scrolled = scroller ? scroller.scrollTop : scrollY;
+      const maximumScroll = scroller ? scroller.scrollHeight - scroller.clientHeight : document.documentElement.scrollHeight - innerHeight;
+      const expected = Math.max(top, actual + scrolled - maximumScroll);
       return Math.abs(actual - expected) < 2;
     }, filterTop, { timeout: 5000 });
     await filter.selectOption("all");
@@ -4140,7 +4315,7 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.getByText("Review status is unavailable.", { exact: true }).waitFor();
     assert.equal(await badge.count(), 0);
-    assert.equal(await more.getAttribute("aria-label"), "More: your role, messages and history");
+    if (layout === "sheet") assert.equal(await more.getAttribute("aria-label"), "More: your role, messages and history");
     assert.equal(await peer.getByTestId("player-private-new-count").innerText(), "2");
     await page.unroute(endpoint, denySeat);
   } catch (error) {
@@ -4151,28 +4326,46 @@ async function provePrivateAttention(page, baseUrl, routePath) {
     await peer.close();
     await page.unroute(endpoint, mock);
   }
-  await proveReaderNavigation(page, baseUrl, routePath);
-  await proveReadingReturn(page, baseUrl, routePath);
+  const navigation = await proveReaderNavigation(page, baseUrl, routePath);
+  const sheets = await proveSheetDismissal(page, baseUrl, routePath);
   await proveReloadReadingReturn(page, baseUrl, routePath);
   await proveDurableReadingCheckpoint(page, baseUrl, routePath);
-  return { kind: "private-attention", status: "passed", completedNavigation: true, readOnlyNavigation: true, recoveryControls: true, offlineRetry: true, cancelledRetry: true, newestRetry: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, localHistoryReturn: true, livePostReturn: true, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: true, crossTabNewCount: true, seatDenialClearsCount: true };
+  return { kind: "private-attention", status: "passed", layout, completedNavigation: true, readOnlyNavigation: true, recoveryControls: true, offlineRetry: true, cancelledRetry: true, newestRetry: true, reloadOriginRecovery: true, unavailableOriginRecovery: true, sheets, navigation, itemId: id, persistedAcrossReload: true, failedWriteRemainedNew: true, destinationFocused: true, filtersProven: true, crossTabConvergence: true, returnPositionPreserved: true, keyboardQueueJump: layout === "sheet", crossTabNewCount: true, seatDenialClearsCount: true };
 }
 
 
+// Reader-only navigation: a completed game and a spectator keep Vote and
+// More reachable without commands. Below the rail width that is the dock
+// (links, no buttons) opening the sheets; above it the rail is simply there.
 async function proveReaderNavigation(page, baseUrl, routePath) {
+  const results = [];
   async function proveNavigation(tab, expectedFocus) {
+    const layout = await playerLayout(tab);
+    assert.equal(await tab.locator('button[data-action]:enabled').count(), 0);
+    if (layout === "rail") {
+      assert.equal(await tab.getByTestId("player-primary-action-zone").count(), 0);
+      await assertVisibleBox(tab.getByTestId("player-vote-sheet"), "rail vote panel");
+      await assertVisibleBox(tab.getByTestId("player-more-sheet"), "rail more panel");
+      await tab.evaluate(id => document.getElementById(id)?.focus(), expectedFocus);
+      await tab.waitForFunction(id => document.activeElement?.id === id, expectedFocus);
+      results.push({ layout, expectedFocus, dock: false });
+      return;
+    }
     const dock = tab.getByTestId("player-primary-action-zone");
     await tab.waitForFunction(() => document.querySelector('[data-testid="player-primary-action-zone"]')?.dataset.commandsAvailable === "false");
     assert.equal(await dock.getAttribute("aria-label"), "Player navigation");
     assert.equal(await dock.getAttribute("aria-busy"), null);
     assert.equal(await dock.locator("button").count(), 0);
     assert.equal(await dock.locator('[data-testid="player-dock-reply"], [data-testid="player-dock-act"]').count(), 0);
-    assert.equal(await tab.locator('button[data-action]:enabled').count(), 0);
     await tab.getByTestId("player-dock-vote").focus();
     await tab.keyboard.press("Tab");
     await tab.waitForFunction(() => document.activeElement?.dataset.testid === "player-dock-more");
     await tab.keyboard.press("Enter");
+    await tab.waitForFunction(() => document.querySelector('[data-testid="player-more-sheet"]')?.open === true);
     await tab.waitForFunction(id => document.activeElement?.id === id, expectedFocus);
+    const dismissal = await dismissPlayerSheet(tab, "more", { via: "escape" });
+    assert.equal(dismissal.focusReturned, true, "Escape returns focus to the More control");
+    results.push({ layout, expectedFocus, dock: true, escapeReturnsFocus: true });
   }
   const commandRoute = fixtureApiRoutes.find(route => route.pattern instanceof RegExp && route.pattern.test("/games/midsummer/player-command-state"));
   const completed = route => route.fulfill({ json: { ...commandRoute.body, game_completed: true } });
@@ -4194,25 +4387,32 @@ async function proveReaderNavigation(page, baseUrl, routePath) {
     assert.equal(response.status(), 200);
     await proveNavigation(spectator, "player-private-queue");
     assert.equal(await spectator.getByTestId("player-private-new-count").count(), 0);
-    await spectator.getByTestId("player-private-empty").waitFor();
+    await spectator.getByTestId("player-private-empty").waitFor({ state: "attached" });
   } finally { await context.close(); }
+  return results;
 }
 
 
-async function proveReadingReturn(page, baseUrl, routePath) {
+// The vote sheet overlays the thread: Escape, the backdrop, a swipe down on
+// the grip and Close all dismiss it, focus returns to the dock control that
+// opened it, and the reading position survives live arrivals and edits above
+// the anchor while it is open. In the rail layout there is nothing to
+// dismiss; the position still holds.
+async function proveSheetDismissal(page, baseUrl, routePath) {
   await navigateBrowserPage(page, `${baseUrl}${routePath}`, { settle: true });
+  const layout = await playerLayout(page);
   const origin = page.locator("#thread-post-443");
   await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
   const top = await origin.evaluate(el => el.getBoundingClientRect().top);
-  async function assertReturned() {
-    await page.waitForFunction(top => document.activeElement?.id === "thread-post-443" && Math.abs(document.getElementById("thread-post-443").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
-      const state = await page.evaluate(() => ({ active: document.activeElement?.id, top: document.getElementById("thread-post-443")?.getBoundingClientRect().top, history: history.state }));
-      throw new Error(`${error.message}; expected top=${top}; return state=${JSON.stringify(state)}`);
+  async function assertHeld(label) {
+    await page.waitForFunction(top => {
+      const post = document.getElementById("thread-post-443");
+      return post !== null && Math.abs(post.getBoundingClientRect().top - top) < 2;
+    }, top, { timeout: 5000 }).catch(async error => {
+      const state = await page.evaluate(() => ({ active: document.activeElement?.id, top: document.getElementById("thread-post-443")?.getBoundingClientRect().top }));
+      throw new Error(`${label}: ${error.message}; expected top=${top}; state=${JSON.stringify(state)}`);
     });
   }
-  await page.getByTestId("player-dock-vote").focus();
-  await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
   const post = (seq, body) => ({ game: "midsummer", source_seq: seq, stream_seq: seq,
     channel_id: "main", author: { kind: "slot", slot_id: "slot-2" }, phase_id: "D01",
     body, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
@@ -4221,18 +4421,37 @@ async function proveReadingReturn(page, baseUrl, routePath) {
       game: "midsummer", posts: [post(442, "Live edit above the reading anchor. ".repeat(100)), post(446, "A live arrival while reading the vote count.")],
     } },
   } } })];
+  if (layout === "rail") {
+    await assertVisibleBox(page.getByTestId("player-vote-picker"), "rail vote picker");
+    await page.evaluate(frame => window.__fmarchEmitLiveProjection(frame), frame);
+    await page.locator("#thread-post-446").waitFor();
+    await assertHeld("rail live arrival");
+    return { layout, dismissals: [], positionHeld: true };
+  }
+  const dismissals = [];
+  const opened = await revealPlayerSheet(page, "vote", { via: "keyboard" });
+  assert.equal(opened.opened, true);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.testid), "player-vote-picker-toggle", "the vote sheet opens on the picker");
   await page.evaluate(frame => window.__fmarchEmitLiveProjection(frame), frame);
   await page.locator("#thread-post-446").waitFor();
-  await page.goBack(); await assertReturned();
-  await page.goForward();
-  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
-  await page.getByTestId("return-to-thread").focus(); await page.keyboard.press("Enter");
-  await assertReturned();
-  await page.getByTestId("player-dock-more").focus(); await page.keyboard.press("Enter");
+  dismissals.push(await dismissPlayerSheet(page, "vote", { via: "escape" }));
+  await assertHeld("after Escape");
+  for (const via of ["backdrop", "swipe", "close"]) {
+    await revealPlayerSheet(page, "vote");
+    dismissals.push(await dismissPlayerSheet(page, "vote", { via }));
+    await assertHeld(`after ${via}`);
+  }
+  for (const dismissal of dismissals) {
+    assert.equal(dismissal.dismissed, true, `${dismissal.via} dismisses the sheet`);
+    assert.equal(dismissal.focusReturned, true, `${dismissal.via} returns focus to the dock`);
+  }
+  // More opens on the queue filter and the two sheets never stack.
+  await revealPlayerSheet(page, "more", { via: "keyboard" });
   await page.waitForFunction(() => document.activeElement?.id === "private-attention-filter");
-  await page.getByTestId("player-dock-vote").focus(); await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.activeElement?.id === "player-actions");
-  await page.getByTestId("return-to-thread").click(); await assertReturned();
+  assert.equal(await playerSheetOpen(page, "vote"), false);
+  dismissals.push(await dismissPlayerSheet(page, "more", { via: "escape" }));
+  await assertHeld("after More");
+  return { layout, dismissals: dismissals.map(({ via, focusReturned }) => ({ via, focusReturned })), positionHeld: true };
 }
 
 // Runs in every document before its scripts: counts in-flight fetch and XHR
@@ -4302,11 +4521,14 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
     body: `Historical post ${seq}.`, media: [], quotations: [], citation_count: 0, occurred_at: 1781938800 });
   const posts = Array.from({ length: 60 }, (_, index) => post(index + 1));
   const endpoint = channel === "main" ? "**/api/gameplay/games/midsummer?**" : "**/games/midsummer/channels/*/thread?**";
-  let outcome = "ready", requests = 0, newest = null, heldRequest = null;
+  let outcome = "ready", requests = 0, newest = null, heldRequest = null, accessLost = false;
   const handler = async route => {
     const url = new URL(route.request().url());
     if (url.searchParams.has("before_seq")) return route.fulfill({ json: { next_before_seq: null, posts } });
     if (!url.searchParams.has("around_seq")) {
+      // Lost channel access denies every read of the channel, not only the
+      // anchored one; a later successful read would rightly restore it.
+      if (accessLost) return route.fulfill({ status: 403 });
       if (newest === "error") return route.fulfill({ status: 503 });
       if (newest === "ready") return route.fulfill({ json: { next_before_seq: 450, posts: [post(500)] } });
       return route.fallback();
@@ -4326,18 +4548,26 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
       await page.getByTestId("player-thread-load-older").click();
       const origin = page.locator("#thread-post-10");
       await origin.waitFor();
-      await origin.evaluate(el => { el.focus({ preventScroll: true }); el.scrollIntoView({ block: "center" }); });
-      const top = await origin.evaluate(el => el.getBoundingClientRect().top);
-      await page.getByTestId("player-dock-vote").focus(); await page.keyboard.press("Enter");
-      await page.waitForFunction(() => document.activeElement?.id === "player-actions");
-      await reloadBrowserPage(page);
-      assert.equal(await origin.count(), 0);
-      await page.getByTestId("return-to-thread").waitFor({ timeout: 5000 }).catch(async error => {
-        const state = await page.evaluate(() => ({ url: location.href, history: history.state,
-          snapshots: Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.includes("snapshot"))) }));
-        throw new Error(`${error.message}; reload state=${JSON.stringify(state)}`);
+      // Put post 10 just under the sticky bar, then make one deliberate
+      // reading gesture on it: a settled gesture records the place in history
+      // state, and the route snapshot carries it across the reload.
+      await origin.evaluate(el => {
+        el.focus({ preventScroll: true });
+        el.scrollIntoView({ block: "start", behavior: "instant" });
+        // Post 10 becomes the first post below the bar: the one above ends
+        // above it, so the settled gesture records post 10 and nothing else.
+        const bar = document.querySelector('[data-testid="player-game-bar"]').getBoundingClientRect().bottom;
+        scrollBy({ top: -(bar - 2), behavior: "instant" });
       });
-      await page.getByTestId("return-to-thread").focus(); await page.keyboard.press("Enter");
+      const body = await origin.locator('[data-testid="thread-post-body-10"]').boundingBox();
+      await page.mouse.click(body.x + Math.min(40, body.width / 2), body.y + Math.min(8, body.height / 2));
+      await page.waitForFunction(() => JSON.stringify(history.state ?? {}).includes('"thread-post-10"'), null, { timeout: 5000 }).catch(async error => {
+        const state = await page.evaluate(() => ({ url: location.href, history: history.state, active: document.activeElement?.id }));
+        throw new Error(`${error.message}; checkpoint state=${JSON.stringify(state)}`);
+      });
+      const top = await origin.evaluate(el => el.getBoundingClientRect().top);
+      accessLost = outcome === "denied";
+      await reloadBrowserPage(page);
       if (outcome === "ready") {
         await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
           Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 }).catch(async error => {
@@ -4404,6 +4634,7 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
             assert.notEqual(await page.evaluate(() => document.activeElement.id), "thread-post-10");
           }
           outcome = "ready";
+          accessLost = false;
           await recovery.getByRole("button", { name: "Retry", exact: true }).focus(); await page.keyboard.press("Enter");
           await page.waitForFunction(top => document.activeElement?.id === "thread-post-10" &&
             Math.abs(document.getElementById("thread-post-10").getBoundingClientRect().top - top) < 2, top, { timeout: 5000 });

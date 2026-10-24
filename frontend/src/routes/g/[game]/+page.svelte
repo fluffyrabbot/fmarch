@@ -8,6 +8,7 @@
   import { page } from "$app/stores";
   import { createReaderNavigation, captureReaderOrigin, restoreReaderOrigin, focusReaderThread, readerNavigationSnapshot, readerNavigationFromSnapshot } from "$lib/app/reader-navigation.mjs";
   import { captureReadingPosition, restoreReadingPosition, focusAddressedPost } from "$lib/app/post-address.mjs";
+  import { scrollerFor } from "$lib/app/scroll-container.mjs";
   afterNavigate(async ({ to, type }) => {
     await tick();
     if (to) {
@@ -17,8 +18,7 @@
         const itemId = to.url.searchParams.get("private");
         if (itemId) {
           privateFilter = "all";
-          await tick();
-          document.getElementById(`private-item-${itemId}`)?.focus();
+          revealMore([`#private-item-${itemId}`, "#private-attention-filter", "#player-private-queue"], null);
         }
       }
       if (data.player.slotId && !data.pendingReplacement) void refreshPrivateAttention();
@@ -53,6 +53,8 @@
   import ComposeSheet from "$lib/components/gameplay/ComposeSheet.svelte";
   import VoteSheet from "$lib/components/gameplay/VoteSheet.svelte";
   import ContextSheet from "$lib/components/gameplay/ContextSheet.svelte";
+  import PlayerSheet from "$lib/components/gameplay/PlayerSheet.svelte";
+  import { observePlayerLayout } from "$lib/components/gameplay/player-layout.mjs";
   import { buildPlayerCommandPanelViewModel } from "$lib/components/player-command/player-command-panel-model.mjs";
   import { voteActionForSlot } from "$lib/components/player-command/player-vote-picker-model.mjs";
   import { buildPlayerActionSubmissionCheckpoint } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
@@ -163,6 +165,21 @@
       !["replaced", "pending_replacement"].includes(commandState?.actorStatus),
   });
   let readerNavigation;
+  // "flow" until hydration; then "sheet" below the rail width or "rail".
+  let layout = "flow";
+  let voteSheetOpen = false;
+  let moreSheetOpen = false;
+  let voteSheetReturnTo = null;
+  let moreSheetReturnTo = null;
+  let voteSheetFocus = [];
+  let moreSheetFocus = [];
+  onMount(() => observePlayerLayout(window, (value) => {
+    layout = value;
+    if (value === "rail") {
+      voteSheetOpen = false;
+      moreSheetOpen = false;
+    }
+  }));
   let checkpointStatus = "ready";
   let remoteCheckpoint = null;
   let resumeSavedPosition = () => {};
@@ -170,8 +187,10 @@
   let readerTrip = null;
   let readerRecovery = { state: "idle", intent: "origin" };
   $: readerNavigationMessage = readerRecoveryMessage(readerRecovery);
+  // The post the reader last focused: the anchor for position restoration
+  // while a sheet holds focus, as long as that post is still visible.
+  let focusedReaderPost = null;
   onMount(() => {
-    let focusedReaderPost = null;
     const rememberPost = event => {
       const post = event.target?.closest?.('[id^="thread-post-"]');
       if (post) focusedReaderPost = post.id;
@@ -219,12 +238,6 @@
       reconcileOrigin: origin => {
         if (document.getElementById(origin.id)) restoreReaderOrigin(origin);
       },
-      focusDestination: destination => {
-        const section = document.getElementById(destination === "count" ? "player-actions" : "player-private-queue");
-        const focusTarget = destination === "private" ? document.getElementById("private-attention-filter") ?? section : section;
-        focusTarget?.focus({ preventScroll: true });
-        section?.scrollIntoView({ block: "start", behavior: "instant" });
-      },
       onChange: trip => {
         readerTrip = trip;
         readerRecovery = { state: "idle", intent: "origin" };
@@ -237,7 +250,7 @@
     const checkpoints = data.player.principalId ? createReadingCheckpoint({
       game: data.game.id, channel: data.threadPager.channel, principal: data.player.principalId,
       onInitial: value => {
-        if (value.position && !$page.state?.readerNavigation?.localReturn && !$page.state?.readerNavigation?.destination && !window.location.hash
+        if (value.position && !$page.state?.readerNavigation?.localReturn && !window.location.hash
           && !$page.url.searchParams.has("post") && !$page.url.searchParams.has("private")) {
           readerThreadWindow = { aroundSeq: String(value.position.source_seq) };
           readerNavigation.checkpoint({ id: `thread-post-${value.position.source_seq}`, top: value.position.offset_px }, { resume: true });
@@ -273,7 +286,7 @@
     const sample = () => {
       clearTimeout(sampleTimer);
       sampleTimer = setTimeout(() => {
-        if (Date.now() > gestureUntil || readerTrip?.destination) return;
+        if (Date.now() > gestureUntil) return;
         // A settled gesture authorizes one checkpoint. Later layout or history
         // restoration scrolls must not reuse the same reading intent.
         gestureUntil = 0;
@@ -300,7 +313,7 @@
     const interactions = ["pointerdown", "wheel", "touchstart", "keydown"];
     for (const event of interactions) document.addEventListener(event, release, { passive: true, capture: true });
     const flushCheckpoint = () => {
-      if (Date.now() > gestureUntil || readerTrip?.destination) return;
+      if (Date.now() > gestureUntil) return;
       gestureUntil = 0;
       const origin = deliberateReadingOrigin();
       if (origin) checkpoints?.save({ source_seq: Number(origin.id.slice("thread-post-".length)), offset_px: origin.top });
@@ -327,14 +340,22 @@
     });
   }
   let privateAttentionController;
+  // Browser Back restores window scroll on its own; the Messages position is
+  // carried here because the sheet body or rail is its own scroll container.
   export const snapshot = {
     capture: () => ({ privateFilter, expandedPrivateItems, reader: readerNavigationSnapshot({ ...$page, url: new URL(window.location.href) }),
-      focusedId: document.activeElement?.closest('[id^="private-item-"], [id^="thread-post-"]')?.id ?? capturePrivateReadingPositions()[0]?.id ?? null }),
+      focusedId: document.activeElement?.closest('[id^="private-item-"], [id^="thread-post-"]')?.id ?? capturePrivateReadingPositions()[0]?.id ?? null,
+      privatePosition: capturePrivateReadingPositions()[0] ?? null }),
     restore: value => {
       privateFilter = value.privateFilter;
       expandedPrivateItems = value.expandedPrivateItems;
       const trip = readerNavigationFromSnapshot(value.reader, $page);
       returnFocusId = trip ? null : value.focusedId;
+      const position = value.privatePosition;
+      if (position) void tick().then(() => {
+        const target = document.getElementById(position.id);
+        if (target) restoreReadingPosition(position, document, scrollerFor(target));
+      });
       if (trip) void tick().then(() => {
         if (readerNavigationFromSnapshot(value.reader, $page) === trip) {
           replaceState("", { ...$page.state, readerNavigation: trip });
@@ -355,7 +376,8 @@
         privateReviewMessage = message;
         await tick();
         if (!active) return;
-        restoreReadingPosition(positions.find(position => document.getElementById(position.id)));
+        const surviving = positions.find(position => document.getElementById(position.id));
+        restoreReadingPosition(surviving, document, scrollerFor(surviving && document.getElementById(surviving.id)));
         if (focusedId && !document.getElementById(focusedId)) {
           document.querySelector('[data-testid="private-attention-filter"]')?.focus({ preventScroll: true });
         }
@@ -511,7 +533,7 @@
   }));
 
   projectionStore.subscribe((snapshot) => {
-    const readingPosition = typeof document === "undefined" ? null : captureReadingPosition();
+    const readingPosition = typeof document === "undefined" ? null : captureReaderOrigin(document, focusedReaderPost);
     const focusedPostId = typeof document !== "undefined" && document.activeElement?.matches?.('article[id^="thread-post-"]')
       ? document.activeElement.id : null;
     thread = snapshot.thread;
@@ -956,13 +978,71 @@
     return positions;
   }
 
-  function openPrivateQueue() { privateFilter = privateNewItemCount > 0 ? "new" : "all"; readerNavigation?.open("private"); }
-  function openVotePicker() { readerNavigation?.open("count"); }
-  function voteForAuthor(slotId) {
-    selectedVoteAction = voteActionForSlot(composer.voteCommands, slotId);
-    openVotePicker();
+  // Vote and More are bottom sheets below the rail width and rail panels
+  // from it up (usage-frequency audit, decision 9). Revealing either focuses
+  // the first selector that resolves; a sheet hands focus back to the control
+  // that opened it when it closes.
+  async function focusFirst(selectors) {
+    await tick();
+    for (const selector of selectors) {
+      const target = document.querySelector(selector);
+      if (target) {
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: "nearest" });
+        return;
+      }
+    }
   }
-  function returnToThread() { readerNavigation?.returnToThread(); }
+  function revealVote(selectors, invoker) {
+    if (layout !== "sheet" || voteSheetOpen) {
+      void focusFirst(selectors);
+      return;
+    }
+    voteSheetFocus = selectors;
+    voteSheetReturnTo = invoker ?? null;
+    voteSheetOpen = true;
+  }
+  function revealMore(selectors, invoker) {
+    if (layout !== "sheet" || moreSheetOpen) {
+      void focusFirst(selectors);
+      return;
+    }
+    moreSheetFocus = selectors;
+    moreSheetReturnTo = invoker ?? null;
+    moreSheetOpen = true;
+  }
+  function closeSheets({ returnFocus = true } = {}) {
+    if (!returnFocus) {
+      voteSheetReturnTo = null;
+      moreSheetReturnTo = null;
+    }
+    voteSheetOpen = false;
+    moreSheetOpen = false;
+  }
+  function openVotePicker(invoker) {
+    revealVote(['[data-testid="player-vote-picker-toggle"]', "#player-actions"], invoker);
+  }
+  function openPhaseActions(invoker) {
+    revealVote(["#player-phase-actions button:enabled", "#player-phase-actions", "#player-actions"], invoker);
+  }
+  function openPrivateQueue(invoker) {
+    privateFilter = privateNewItemCount > 0 ? "new" : "all";
+    revealMore(["#private-attention-filter", "#player-private-queue"], invoker);
+  }
+  function voteForAuthor(slotId, invoker) {
+    selectedVoteAction = voteActionForSlot(composer.voteCommands, slotId);
+    revealVote(['[data-testid="player-vote-confirm"]', '[data-testid="player-vote-picker-toggle"]', "#player-actions"], invoker);
+  }
+  async function showOfficialPost(seq) {
+    closeSheets({ returnFocus: false });
+    await tick();
+    const post = document.getElementById(`thread-post-${seq}`);
+    post?.focus({ preventScroll: true });
+    post?.scrollIntoView({ block: "center", behavior: "instant" });
+  }
+  async function copyPostLink(post) {
+    await navigator.clipboard.writeText(new URL(post.permalink.href, window.location.href).toString());
+  }
   function cancelReaderRecovery({ focusControl = false } = {}) {
     readerNavigation?.release();
     if (readerRecovery.state !== "pending") return;
@@ -991,7 +1071,7 @@
     const top = control?.getBoundingClientRect().top;
     privateFilter = filter;
     await tick();
-    if (control) window.scrollBy({ top: control.getBoundingClientRect().top - top, behavior: "instant" });
+    if (control) scrollerFor(control).scrollBy({ top: control.getBoundingClientRect().top - top, behavior: "instant" });
   }
 
   function togglePrivateItem(item) {
@@ -1028,7 +1108,7 @@
     <RouteState view={playerEmptyState} />
   </main>
 {:else}
-  <GameFrame>
+  <GameFrame {layout}>
     <GameBar
       shell={data.shell}
       slot="bar"
@@ -1041,6 +1121,7 @@
       phaseKind={phase.kind ?? null}
       dayEvents={composer.dayEventCommands ?? []}
       nightAction={nightActionVisible ? playerActionSubmissionCheckpoint.receipt : null}
+      onOpenVote={(invoker, kind) => kind === "actions" ? openPhaseActions(invoker) : openVotePicker(invoker)}
     >
       <PlayerFeedback
         status={commandStatus}
@@ -1072,7 +1153,7 @@
       </section>
     {/if}
 
-    {#if !readerTrip?.destination && (remoteCheckpoint || readerTrip?.returnable)}
+    {#if remoteCheckpoint || readerTrip?.returnable}
       <div class="reader-saved-position" role="group" aria-label="Reading navigation">
         {#if remoteCheckpoint && readerRecovery.state !== "pending"}
           <button class="fm-touch-button" data-testid="resume-saved-position" on:click={resumeSavedPosition}>Resume saved position</button>
@@ -1092,6 +1173,7 @@
       onLoadNewer={loadNewerThread}
       onQuote={quotePlayerPost}
       onVoteAuthor={voteForAuthor}
+      onCopyLink={copyPostLink}
     >
       <svelte:fragment slot="recovery">
       {#if checkpointStatus === "error"}
@@ -1148,71 +1230,95 @@
       </section>
     {/if}
 
-    <VoteSheet
-      returnAvailable={readerTrip?.destination === "count"}
-      onReturnToThread={returnToThread}
-      view={playerActionView}
-      officialPost={liveOfficialPost}
-      onCommand={submitPlayerCommand}
-      onSelectTarget={selectActionTarget}
-      onSelectVote={selectVote}
-      pickerRequested={readerTrip?.destination === "count"}
-    />
+    <svelte:fragment slot="rail">
+      <PlayerSheet
+        {layout}
+        open={voteSheetOpen}
+        label="Vote"
+        testId="player-vote-sheet"
+        returnTo={voteSheetReturnTo}
+        focusSelectors={voteSheetFocus}
+        onClose={() => { voteSheetOpen = false; }}
+      >
+        <VoteSheet
+          view={playerActionView}
+          officialPost={liveOfficialPost}
+          onCommand={submitPlayerCommand}
+          onSelectTarget={selectActionTarget}
+          onSelectVote={selectVote}
+          pickerRequested={layout === "rail" || voteSheetOpen}
+          onOfficialPost={showOfficialPost}
+        />
+      </PlayerSheet>
 
-    <ContextSheet>
-      {#if player.readOnly !== true}
-        <PlayerRoleCard card={playerRoleCard} />
-        {#if projectionCommandsReady && nightActionVisible}
-          <PlayerActionSubmissionCheckpoint
-            checkpoint={playerActionSubmissionCheckpoint}
+      <PlayerSheet
+        {layout}
+        open={moreSheetOpen}
+        label="More"
+        testId="player-more-sheet"
+        returnTo={moreSheetReturnTo}
+        focusSelectors={moreSheetFocus}
+        onClose={() => { moreSheetOpen = false; }}
+      >
+        <ContextSheet {layout}>
+          {#if player.readOnly !== true}
+            <PlayerRoleCard card={playerRoleCard} />
+            {#if projectionCommandsReady && nightActionVisible}
+              <PlayerActionSubmissionCheckpoint
+                checkpoint={playerActionSubmissionCheckpoint}
+              />
+            {/if}
+          {/if}
+
+          <PlayerPrivateQueue
+            newCount={layout === "rail" ? privateNewItemCount : null}
+            boundary={privateQueueBoundary}
+            items={privateQueue}
+            expandedItems={expandedPrivateItems}
+            onToggle={togglePrivateItem}
+            attention={privateAttention}
+            filter={privateFilter}
+            onFilter={filterPrivateItems}
+            pending={privateReviewPending}
+            message={privateReviewMessage}
+            onReview={reviewPrivateItem}
+            onRetry={refreshPrivateAttention}
           />
-        {/if}
+
+          <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
+            <summary>
+              <span class="fm-surface-drawer__label">
+                <strong>History</strong>
+                <small>Day vote outcomes and the endgame record</small>
+              </span>
+            </summary>
+            <div class="fm-surface-drawer__body">
+              <PlayerEndgameSummary view={playerEndgameSummary} />
+              <DayVoteOutcomePanel
+                outcomes={dayVoteOutcomes}
+                boundary={data.dayVoteOutcomeBoundary}
+                rootTestId="player-day-vote-outcome"
+                roster={commandState?.roster ?? []}
+              />
+            </div>
+          </details>
+        </ContextSheet>
+      </PlayerSheet>
+    </svelte:fragment>
+
+    <svelte:fragment slot="dock">
+      {#if layout !== "rail"}
+        <ActionDock
+          view={playerActionView}
+          commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
+          privateNewCount={privateNewItemCount}
+          phaseKind={phase.kind ?? null}
+          onOpenPrivateQueue={openPrivateQueue}
+          onOpenVotePicker={openVotePicker}
+          onOpenPhaseActions={openPhaseActions}
+        />
       {/if}
-
-      <PlayerPrivateQueue
-        returnAvailable={readerTrip?.destination === "private"}
-        onReturnToThread={returnToThread}
-        boundary={privateQueueBoundary}
-        items={privateQueue}
-        expandedItems={expandedPrivateItems}
-        onToggle={togglePrivateItem}
-        attention={privateAttention}
-        filter={privateFilter}
-        onFilter={filterPrivateItems}
-        pending={privateReviewPending}
-        message={privateReviewMessage}
-        onReview={reviewPrivateItem}
-        onRetry={refreshPrivateAttention}
-      />
-
-      <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
-        <summary>
-          <span class="fm-surface-drawer__label">
-            <strong>History</strong>
-            <small>Day vote outcomes and the endgame record</small>
-          </span>
-        </summary>
-        <div class="fm-surface-drawer__body">
-          <PlayerEndgameSummary view={playerEndgameSummary} />
-          <DayVoteOutcomePanel
-            outcomes={dayVoteOutcomes}
-            boundary={data.dayVoteOutcomeBoundary}
-            rootTestId="player-day-vote-outcome"
-            roster={commandState?.roster ?? []}
-          />
-        </div>
-      </details>
-    </ContextSheet>
-
-      <ActionDock
-        slot="dock"
-        view={playerActionView}
-        commandsAvailable={projectionCommandsReady && player.readOnly !== true && player.gameCompleted !== true && playerActionView.composer?.readOnly !== true}
-        privateNewCount={privateNewItemCount}
-        phaseKind={phase.kind ?? null}
-        onOpenPrivateQueue={openPrivateQueue}
-        onOpenVotePicker={openVotePicker}
-      />
+    </svelte:fragment>
   </GameFrame>
 {/if}
 

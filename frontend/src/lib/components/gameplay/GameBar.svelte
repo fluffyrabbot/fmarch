@@ -18,6 +18,9 @@
   export let dayEvents = [];
   /** `{ value }` for the night action's sent state, or null when none applies. */
   export let nightAction = null;
+  /** The vote facts reveal the vote surface (a sheet below the rail width);
+      the anchor stays for readers without scripting. */
+  export let onOpenVote = (invoker) => {};
 
   $: voteRows = Array.isArray(votecount) ? votecount : [];
   $: leadingVote = voteRows.reduce(
@@ -64,7 +67,7 @@
   <div class="game-bar__side">
     <div class="game-bar__facts" aria-label="Current game state">
       {#if voteFacts && composer.currentVoteLabel}
-        <a href="#player-actions" data-testid="player-game-bar-current-vote" data-has-vote={String(hasVote)}>
+        <a href="#player-actions" data-testid="player-game-bar-current-vote" data-has-vote={String(hasVote)} on:click|preventDefault={(event) => onOpenVote(event.currentTarget)}>
           <span>Your vote</span>
           <strong>{hasVote ? currentVote : "None yet"}</strong>
         </a>
@@ -75,6 +78,7 @@
           data-testid="player-game-bar-deadline"
           data-state={phase.state}
           data-projected="true"
+          on:click|preventDefault={(event) => onOpenVote(event.currentTarget)}
         >
           <span>Deadline</span>
           {#if countdown}
@@ -86,12 +90,12 @@
         </a>
       {/if}
       {#if nightFacts && nightAction}
-        <a href="#player-phase-actions" data-testid="player-game-bar-night-action">
+        <a href="#player-phase-actions" data-testid="player-game-bar-night-action" on:click|preventDefault={(event) => onOpenVote(event.currentTarget, "actions")}>
           <span>Night action</span>
           <strong>{nightAction.value}</strong>
         </a>
       {:else if voteFacts && voteProgress}
-        <a href="#player-actions" data-testid="player-game-bar-vote-progress" class="game-bar__fact--wide">
+        <a href="#player-actions" data-testid="player-game-bar-vote-progress" class="game-bar__fact--wide" on:click|preventDefault={(event) => onOpenVote(event.currentTarget)}>
           <span>Leading count</span>
           <strong>{voteProgress}</strong>
         </a>

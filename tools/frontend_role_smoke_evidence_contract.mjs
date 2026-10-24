@@ -10,6 +10,7 @@ import {
   boardScenario,
   browserRoleScenario,
   forbiddenRoutes,
+  roleScenarioForViewport,
   roles,
   routeStateScenarios,
   viewports,
@@ -53,14 +54,21 @@ export const LIVE_ROLE_SMOKE_EVIDENCE_CONTRACT = Object.freeze({
   }),
 });
 
+function thumbZoneExpectationsFor(scenario) {
+  return (scenario.thumbZones ?? []).map((zone) => ({
+    testId: zone.testId,
+    thumbZone: zone.zone,
+    targetCount: zone.targetSelectors.length,
+  }));
+}
+
 export function liveRoleSmokeThumbZoneExpectations() {
   return liveRoleScenarios.map((scenario) => ({
     role: scenario.id,
-    zones: (scenario.thumbZones ?? []).map((zone) => ({
-      testId: zone.testId,
-      thumbZone: zone.zone,
-      targetCount: zone.targetSelectors.length,
-    })),
+    zones: thumbZoneExpectationsFor(scenario),
+    // Scenarios with viewport variants (the player rail) expect different
+    // zones per viewport; `zonesAt` resolves them for one entry.
+    zonesAt: (viewport) => thumbZoneExpectationsFor(roleScenarioForViewport(scenario, viewport)),
   }));
 }
 
@@ -151,7 +159,7 @@ export function liveRoleSmokeThumbZoneEvidenceComplete(roleSmoke) {
       return false;
     }
     for (const entry of entries) {
-      if (!thumbZoneEvidenceComplete(entry, expectation.zones)) {
+      if (!thumbZoneEvidenceComplete(entry, expectation.zonesAt(entry.viewport))) {
         return false;
       }
     }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EXPECTED_COUNTS } from "./frontend_proof_expectations.mjs";
 import {
+  roleScenarioForViewport,
   accessibilitySurfaceContract,
   boardScenario,
   forbiddenRoutes,
@@ -313,6 +314,27 @@ test("role smoke scenarios expose first-viewport, touch, status, and focus targe
     assertFocusMatchesNav(role.focus, role.nav, role.id);
     assertFocusScenario(role.focus, role.id);
   }
+});
+
+test("the player scenario drops the dock and gains the rail from 1100px up", () => {
+  const player = roles.find((role) => role.id === "player");
+  const sheet = roleScenarioForViewport(player, { name: "tablet", width: 1024, height: 768 });
+  assert.equal(sheet, player);
+  assert.deepEqual(player.moreSheetTestIds.slice(0, 2), [
+    "player-private-boundary",
+    "player-private-review-notification-N02-0-slot-7",
+  ]);
+  for (const width of [1100, 1180, 1280, 1440]) {
+    const rail = roleScenarioForViewport(player, { name: "wide", width, height: 900 });
+    assert.equal(rail.viewportVariant, "rail");
+    assert.deepEqual(rail.thumbZones, []);
+    assert.equal(rail.visibleTestIds.includes("player-rail"), true);
+    assert.equal(rail.visibleTestIds.includes("player-primary-action-zone"), false);
+    assert.equal(rail.overlapTestIds.every((id) => rail.visibleTestIds.includes(id)), true);
+    assert.deepEqual(rail.touchSelectors, player.touchSelectors);
+    assert.equal(rail.mobileViewportBudget, player.mobileViewportBudget);
+  }
+  assert.equal(roleScenarioForViewport(player, { name: "edge", width: 1099, height: 900 }), player);
 });
 
 test("role smoke scenarios pin tablet thumb-zone target counts", () => {

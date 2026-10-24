@@ -238,6 +238,30 @@ visible element to read it from.
     menu is the one path. Roles moves to Search and the in-game menu. Muted
     members moves to the profile edit route.
 
+### Tier 2 landing notes
+
+Decisions 9 and 10 landed on branch `ux-tier2-sheets-rail`
+(`docs/arch/13-interaction-architecture.md` records the behaviour). Three
+notes on the shape, none a deviation from the text above:
+
+- The hydrated topology is chosen from `(min-width: 1100px)`
+  (`player-layout.mjs`) and followed across resizes; the server-rendered and
+  no-JavaScript shape keeps Vote and More as in-flow sections after the
+  composer, so document order, the SSR contracts and the no-bind lanes keep
+  their meaning. The sheet's Close control joins Escape, backdrop and swipe.
+- The post-row reveal is keyed on `(pointer: fine)` rather than a hover media
+  query: the tablet interaction contract forbids hover media queries so that
+  no affordance depends on hover, and keyboard focus reveals the row anyway.
+  Coarse pointers always see the 32px row; the menu items are 44px.
+- Deleting the reader trips also deleted the proofs that drove them. Reload
+  recovery is now proven through a settled reading gesture (the checkpoint
+  path), sheet dismissal has its own proof (Escape, backdrop, swipe, Close,
+  focus return, reading position held through live arrivals), and the
+  role-smoke scenario table resolves per viewport so the five-width matrix
+  asserts the dock below 1100px and the rail from it up.
+
+Decisions 11–14 remain open.
+
 ### Tier 3 — board as a needs-me list
 
 15. **"Your games" first, with need state.** (B2.) Cards the viewer plays or

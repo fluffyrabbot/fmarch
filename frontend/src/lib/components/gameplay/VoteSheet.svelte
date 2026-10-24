@@ -1,6 +1,4 @@
 <script>
-  export let returnAvailable = false;
-  export let onReturnToThread = () => {};
   import { tick } from "svelte";
   import ConfirmationShell from "$lib/app/ConfirmationShell.svelte";
   import { containTabWithinConfirmation } from "$lib/app/confirmation-focus.mjs";
@@ -13,8 +11,11 @@
   /** Arm a vote row (or Unvote) for confirmation; `null` disarms it. */
   export let onSelectVote = () => {};
   export let initialConfirmingAction = null;
-  /** The dock or a post's Vote control asked for the picker. */
+  /** The dock, a post's Vote control or the rail asked for the picker. */
   export let pickerRequested = false;
+  /** The official votecount link was followed: the route closes the sheet
+      and moves the reader to that post. */
+  export let onOfficialPost = () => {};
 
   let confirmingAction = initialConfirmingAction;
   let confirmElements = {};
@@ -65,8 +66,7 @@
   }
 </script>
 
-<section class="vote-sheet" id="player-actions" tabindex="-1" data-testid="player-action-detail">
-  {#if returnAvailable}<button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid="return-to-thread" on:click={onReturnToThread}>Return to thread</button>{/if}
+<section class="vote-sheet" id="player-actions" tabindex="-1" aria-busy={view.root?.ariaBusy} data-testid="player-action-detail">
   <header>
     <div>
       <p class="fm-eyebrow">Game state</p>
@@ -92,6 +92,7 @@
       class="vote-sheet__official"
       href={`#thread-post-${officialPost.seq}`}
       data-testid="player-live-official-post"
+      on:click|preventDefault={() => onOfficialPost(officialPost.seq)}
     >
       <span>{officialPost.label}</span>
       <strong>{officialPost.value}</strong>
@@ -275,6 +276,12 @@
     gap: 16px;
     padding-block-start: 22px;
     scroll-margin-block-start: calc(var(--fm-app-topbar-block-size) + var(--fm-game-bar-block-size, 0px) + 16px);
+  }
+
+  :global(dialog.player-sheet) .vote-sheet,
+  :global(.player-sheet--rail) .vote-sheet {
+    border-block-start: 0;
+    padding-block-start: 4px;
   }
 
   .vote-sheet header {

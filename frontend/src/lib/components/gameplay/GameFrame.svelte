@@ -1,5 +1,7 @@
 <script>
   import { onMount } from "svelte";
+  /** "flow" (server/no-JavaScript), "sheet" (below the rail width) or "rail". */
+  export let layout = "flow";
   let frame;
   onMount(() => {
     const bar = frame.querySelector('[data-testid="player-game-bar"]');
@@ -12,12 +14,20 @@
   });
 </script>
 
-<main bind:this={frame} class="game-frame player-surface" data-testid="player-surface">
+<main bind:this={frame} class="game-frame player-surface" data-testid="player-surface" data-layout={layout}>
   <slot name="bar" />
   <div class="game-frame__workspace">
     <slot name="channels" />
-    <div class="game-frame__reading-lane">
-      <slot />
+    <div class="game-frame__columns">
+      <div class="game-frame__reading-lane">
+        <slot />
+      </div>
+      <!-- Below the rail width this holds the closed sheets (no box of its own);
+           from the rail width up it is the sticky second column. Without
+           JavaScript its sections simply follow the composer in document order. -->
+      <aside class="game-frame__rail" aria-label="Game state" data-testid="player-rail" data-scroll-container={layout === "rail" ? "" : undefined}>
+        <slot name="rail" />
+      </aside>
     </div>
   </div>
   <slot name="dock" />
@@ -41,6 +51,12 @@
     padding-inline: clamp(14px, 3vw, 30px);
   }
 
+  .game-frame__columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-inline-size: 0;
+  }
+
   .game-frame__reading-lane {
     display: grid;
     gap: var(--fm-space-reading);
@@ -49,6 +65,19 @@
     min-inline-size: 0;
     padding-block: 0 44px;
     width: 100%;
+  }
+
+  .game-frame__rail {
+    display: grid;
+    gap: 22px;
+    margin-inline: auto;
+    max-inline-size: var(--fm-reading-width);
+    min-inline-size: 0;
+    width: 100%;
+  }
+
+  .game-frame[data-layout="sheet"] .game-frame__rail {
+    display: contents;
   }
 
   @media (max-width: 840px) {
@@ -63,6 +92,41 @@
     .game-frame__reading-lane {
       gap: 22px;
       padding-block-start: 0;
+    }
+  }
+
+  /* Two columns from the rail width: the reading measure plus a sticky rail
+     that scrolls on its own when it is taller than the viewport. */
+  @media (min-width: 1100px) {
+    .game-frame[data-layout="rail"] {
+      padding-block-end: 44px;
+    }
+
+    .game-frame__workspace {
+      max-inline-size: 1220px;
+    }
+
+    .game-frame__columns {
+      column-gap: 36px;
+      grid-template-columns: minmax(0, var(--fm-reading-width)) minmax(260px, 336px);
+      justify-content: center;
+    }
+
+    .game-frame__reading-lane {
+      margin-inline: 0;
+    }
+
+    .game-frame__rail {
+      align-self: start;
+      margin-inline: 0;
+      max-block-size: calc(100svh - var(--fm-app-topbar-block-size) - var(--fm-game-bar-block-size, 0px) - 12px);
+      max-inline-size: none;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-block-end: 24px;
+      position: sticky;
+      scrollbar-gutter: stable;
+      top: calc(var(--fm-app-topbar-block-size) + var(--fm-game-bar-block-size, 0px) + 12px);
     }
   }
 </style>

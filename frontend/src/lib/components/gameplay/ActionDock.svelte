@@ -4,7 +4,10 @@
   export let privateNewCount = null;
   /** "day", "night", "twilight" or null before the first phase. */
   export let phaseKind = null;
+  /** Each opener receives the dock control that invoked it, so the sheet
+      can return focus there when it closes. */
   export let onOpenVotePicker = () => {};
+  export let onOpenPhaseActions = () => {};
   export let onOpenPrivateQueue = () => {};
 
   $: votePicker = view?.votePicker ?? null;
@@ -45,13 +48,18 @@
       href="#player-actions"
       data-testid="player-dock-vote"
       data-has-vote={String(votePicker?.hasVote === true)}
-      on:click|preventDefault={onOpenVotePicker}
+      on:click|preventDefault={(event) => onOpenVotePicker(event.currentTarget)}
     >
       <span>{commandsAvailable ? votePicker?.dock.label ?? "Vote" : "Votes"}</span>
     </a>
   {/if}
   {#if showAct}
-    <a class="action-dock__chip action-dock__chip--act" href="#player-phase-actions" data-testid="player-dock-act">
+    <a
+      class="action-dock__chip action-dock__chip--act"
+      href="#player-phase-actions"
+      data-testid="player-dock-act"
+      on:click|preventDefault={(event) => onOpenPhaseActions(event.currentTarget)}
+    >
       <span>{phaseKind === "night" ? "Night action" : "Act"}</span>
     </a>
   {/if}
@@ -69,7 +77,7 @@
   {/if}
   <a class="action-dock__tool" href="#player-private-queue" data-testid="player-dock-more"
     aria-label={privateNewCount === null ? "More: your role, messages and history" : `More: ${privateNewCount} new ${privateNewCount === 1 ? "message" : "messages"}`}
-    on:click|preventDefault={onOpenPrivateQueue}>
+    on:click|preventDefault={(event) => onOpenPrivateQueue(event.currentTarget)}>
     <span>More</span>
     {#if privateNewCount > 0}<strong aria-hidden="true" data-testid="player-private-new-count">{privateNewCount}</strong>{/if}
   </a>

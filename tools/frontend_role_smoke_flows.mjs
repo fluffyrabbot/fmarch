@@ -45,6 +45,9 @@ export const flowHookNames = Object.freeze([
   "moderatorSlotLifecycleAck",
   "playerMediaNetwork",
   "playerLiveThreadEmit",
+  "playerRevealVote",
+  "playerDismissVote",
+  "playerVotePicker",
   "playerPrivateDisclosure",
   "playerPrivateAttention",
   "adminAuditDetail",
@@ -832,12 +835,16 @@ export const commandFlows = Object.freeze({
     steps: Object.freeze([
       { type: "hook", id: "media", name: "playerMediaNetwork" },
       { type: "hook", name: "playerLiveThreadEmit" },
+      // The official votecount link lives in the vote surface: a bottom sheet
+      // below the rail width, a rail panel above it. Reveal, read, dismiss.
+      { type: "hook", id: "voteSurface", name: "playerRevealVote" },
       { type: "wait-visible", target: { testId: "player-live-official-post" } },
       {
         type: "assert-visible-box",
         target: { testId: "player-live-official-post" },
         label: "player live official post",
       },
+      { type: "hook", id: "voteSurfaceDismissed", name: "playerDismissVote" },
       { type: "wait-visible", target: { testId: "thread-post-444" } },
       { type: "hook", id: "privateDisclosure", name: "playerPrivateDisclosure" },
       { type: "click", target: { testId: "player-thread-load-older" } },
@@ -858,7 +865,7 @@ export const commandFlows = Object.freeze({
         },
       },
       { type: "wait-visible", target: { testId: "thread-post-440" } },
-      { type: "click", target: { testId: "player-dock-vote" } },
+      { type: "hook", name: "playerRevealVote" },
       {
         type: "wait-visible",
         target: { within: "player-vote-picker", selector: '[data-vote-action="submit_vote"]' },
@@ -912,6 +919,9 @@ export const commandFlows = Object.freeze({
         name: "player-receipt",
         labelPrefix: "player receipt",
       },
+      // The receipt was screenshotted with the vote surface open; put it
+      // away before the composer flow, which needs the reading lane.
+      { type: "hook", name: "playerDismissVote" },
       // A retryable rejection retains the exact command until the player
       // explicitly retries or abandons it; settle that recovery before posting.
       {
@@ -1022,11 +1032,13 @@ export const commandFlows = Object.freeze({
         resultPath: "mentions.submitted",
       },
       { type: "set-from-value", from: { id: "media" }, resultPath: "media" },
+      { type: "hook", name: "playerRevealVote" },
       {
         type: "read-text",
         target: { testId: "player-live-official-post" },
         resultPath: "liveThread.officialPost",
       },
+      { type: "hook", name: "playerDismissVote" },
       {
         type: "read-text",
         target: { testId: "thread-post-444" },
@@ -1121,6 +1133,8 @@ export const commandFlows = Object.freeze({
       { type: "set-from-value", from: { id: "postCommandReceipt" }, resultPath: "postCommandReceipt" },
       { type: "hook", id: "votePicker", name: "playerVotePicker" },
       { type: "set-from-value", from: { id: "votePicker" }, resultPath: "votePicker" },
+      { type: "set-from-value", from: { id: "voteSurface" }, resultPath: "voteSurface" },
+      { type: "set-from-value", from: { id: "voteSurfaceDismissed" }, resultPath: "voteSurfaceDismissed" },
     ]),
   }),
 });

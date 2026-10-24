@@ -1,16 +1,17 @@
 import { captureReadingPosition, restoreReadingPosition } from "./post-address.mjs";
 
 export const readerScope = url => `${url.pathname}${url.search}`;
-const destinations = new Set(["count", "private"]);
+// The entry records where the reader was: a route-scoped post id and its
+// viewport offset. Vote and More are sheets or a rail, never a place in the
+// document, so there is no destination to travel to and return from.
 export function readerNavigationState(page) {
   const value = page.state?.readerNavigation;
   return value?.scope === readerScope(page.url)
-    && (value.destination === null || destinations.has(value.destination))
     && typeof value.origin?.id === "string" && Number.isFinite(value.origin?.top)
     ? value : null;
 }
 // SvelteKit resets page.state on hydration; its supported snapshot lifecycle
-// persists the excursion without depending on internal history-state keys.
+// persists the reading place without depending on internal history-state keys.
 export function readerNavigationSnapshot(page) {
   return { trip: readerNavigationState(page), hash: page.url.hash };
 }
@@ -44,10 +45,10 @@ export function focusReaderThread(documentRef = document) {
   thread?.scrollIntoView({ block: "start", behavior: "instant" });
 }
 
-// Only our own destination entry can request Back. No post text or private
-// receipt state is copied into history, and an origin never crosses routes.
+// Only our own visit entry can request Back. No post text or private receipt
+// state is copied into history, and an origin never crosses routes.
 export function createReaderNavigation({ getPage, push, replace, back, capture,
-  restore, reconcileOrigin = () => {}, focusNewest = () => {}, focusDestination, afterRender, onChange }) {
+  restore, reconcileOrigin = () => {}, focusNewest = () => {}, afterRender, onChange }) {
   let observed;
   let epoch = 0;
   let disposed = false;
@@ -69,18 +70,16 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       onChange(next);
       if (next) void afterRender().then(() => {
         if (disposed || generation !== epoch) return;
-        if (next.destination === null) {
-          restoration = { origin: next.origin, intent, forceReload: next.verify === true, signal, isCurrent: () => !disposed && generation === epoch };
-          restore(next.origin, restoration);
-        } else focusDestination(next.destination);
+        restoration = { origin: next.origin, intent, forceReload: next.verify === true, signal, isCurrent: () => !disposed && generation === epoch };
+        restore(next.origin, restoration);
       });
     },
     checkpoint(origin, { resume = false, verify = false } = {}) {
       const page = getPage();
       const current = readerNavigationState(page);
-      if (disposed || current?.destination) return;
+      if (disposed) return;
       this.release();
-      const trip = { scope: readerScope(page.url), origin, destination: null, verify,
+      const trip = { scope: readerScope(page.url), origin, verify,
         returnable: current?.returnable === true, localReturn: current?.localReturn === true };
       if (!resume) { observed = trip; onChange(trip); }
       replace("", { ...page.state, readerNavigation: trip });
@@ -88,31 +87,31 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
     visit(origin) {
       const page = getPage();
       const current = readerNavigationState(page);
-      if (disposed || returning || current?.destination) return false;
+      if (disposed || returning) return false;
       const previous = capture();
       if (!previous) return false;
       this.release();
-      const prior = { scope: readerScope(page.url), origin: previous, destination: null,
+      const prior = { scope: readerScope(page.url), origin: previous,
         verify: true, returnable: current?.returnable === true, localReturn: true };
       observed = prior;
       onChange(prior);
       replace("", { ...page.state, readerNavigation: prior });
       push("#player-thread", { ...page.state, readerNavigation: {
-        scope: readerScope(page.url), origin, destination: null, verify: true,
+        scope: readerScope(page.url), origin, verify: true,
         localReturn: true, returnable: true,
       } });
       return true;
     },
     returnToPrevious() {
       const current = readerNavigationState(getPage());
-      if (!disposed && !returning && current?.returnable === true && current.destination === null) {
+      if (!disposed && !returning && current?.returnable === true) {
         returning = true;
         back();
       }
     },
     recover(intent = "origin") {
       const page = getPage();
-      if (disposed || !["origin", "newest"].includes(intent) || readerNavigationState(page)?.destination !== null) return;
+      if (disposed || !["origin", "newest"].includes(intent) || !readerNavigationState(page)) return;
       observed = undefined;
       this.observe(page, intent);
     },
@@ -141,29 +140,6 @@ export function createReaderNavigation({ getPage, push, replace, back, capture,
       restoration = null;
       recovery?.abort();
       ++epoch;
-    },
-    open(destination) {
-      if (disposed || returning || !destinations.has(destination)) return;
-      const page = getPage();
-      const current = readerNavigationState(page);
-      const origin = current?.destination ? current.origin : capture();
-      if (!origin) return;
-      const base = { ...page.state };
-      const trip = { scope: readerScope(page.url), origin, destination,
-        returnable: current?.returnable === true, localReturn: current?.localReturn === true,
-        verify: current?.localReturn === true };
-      const url = destination === "count" ? "#player-actions" : "#player-private-queue";
-      if (current?.destination) replace(url, { ...base, readerNavigation: trip });
-      else {
-        replace("", { ...base, readerNavigation: { ...trip, destination: null } });
-        push(url, { ...base, readerNavigation: trip });
-      }
-    },
-    returnToThread() {
-      if (!disposed && !returning && readerNavigationState(getPage())?.destination) {
-        returning = true;
-        back();
-      }
     },
     dispose() { disposed = true; recovery?.abort(); ++epoch; },
   };

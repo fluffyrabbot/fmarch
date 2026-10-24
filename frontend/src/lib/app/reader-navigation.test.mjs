@@ -2,34 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createReaderNavigation, readerNavigationState, readerNavigationSnapshot, readerNavigationFromSnapshot, restoreReaderOrigin, captureReaderOrigin } from "./reader-navigation.mjs";
 const settle = () => new Promise(resolve => setImmediate(resolve));
-test("Count and More share one reversible origin entry and retain unrelated history state", async () => {
-  const stack = [{ url: new URL("https://example.test/g/g?post=443"), state: { existing: true } }];
-  let index = 0; const restored = [], focused = [];
-  let controller;
-  const write = (url, state, push) => {
-    const entry = { url: new URL(url || stack[index].url, stack[index].url), state };
-    if (push) { stack.splice(++index); stack.push(entry); } else stack[index] = entry;
-    controller.observe(entry);
-  };
-  controller = createReaderNavigation({ getPage: () => stack[index],
-    push: (url,state) => write(url,state,true), replace: (url,state) => write(url,state,false),
-    back: () => controller.observe(stack[--index]), capture: () => ({ id: "thread-post-443", top: 117 }),
-    restore: origin => restored.push(origin), focusDestination: value => focused.push(value),
-    afterRender: () => Promise.resolve(), onChange() {},
-  });
-  controller.open("count"); await settle();
-  assert.equal(stack.length, 2); assert.equal(stack[1].state.existing, true);
-  assert.deepEqual(focused, ["count"]); assert.deepEqual(restored, []);
-  controller.open("private"); await settle();
-  assert.equal(stack.length, 2); assert.deepEqual(focused, ["count", "private"]);
-  controller.returnToThread(); await settle();
-  assert.equal(index, 0); assert.deepEqual(restored, [{ id: "thread-post-443", top: 117 }]);
-  controller.returnToThread(); assert.equal(index, 0);
-  controller.observe(stack[++index]); await settle();
-  assert.equal(focused.at(-1), "private"); controller.dispose();
-});
 test("origins cannot cross channels and teardown cancels scheduled restoration", async () => {
-  const trip = { scope: "/g/g/c/private", origin: { id: "thread-post-1", top: 5 }, destination: null };
+  const trip = { scope: "/g/g/c/private", origin: { id: "thread-post-1", top: 5 } };
   assert.equal(readerNavigationState({ url: new URL("https://example.test/g/g"), state: { readerNavigation: trip } }), null);
   let restored = false;
   const controller = createReaderNavigation({ afterRender: () => Promise.resolve(), restore: () => { restored = true; }, onChange() {} });
@@ -52,22 +26,12 @@ test("moving focus to the dock retains a visible focused post as the origin", ()
   const preferred = { id: "thread-post-443", getBoundingClientRect: () => ({ top: 120, bottom: 200 }) };
   assert.deepEqual(captureReaderOrigin({ getElementById: () => preferred, defaultView: { innerHeight: 800 } }, preferred.id), { id: preferred.id, top: 120 });
 });
-test("repeated Return activation cannot traverse beyond the owned history entry", () => {
-  const page = { url: new URL("https://example.test/g/g"), state: { readerNavigation: {
-    scope: "/g/g", origin: { id: "thread-post-1", top: 10 }, destination: "count",
-  } } };
-  let backs = 0;
-  const controller = createReaderNavigation({ getPage: () => page, back: () => ++backs });
-  controller.returnToThread(); controller.returnToThread();
-  assert.equal(backs, 1); controller.dispose();
-});
-
 test("leaving an origin aborts recovery and invalidates its publication guard", async () => {
   let context;
   const controller = createReaderNavigation({ afterRender: () => Promise.resolve(),
-    restore: (_, value) => { context = value; }, onChange() {}, focusDestination() {} });
+    restore: (_, value) => { context = value; }, onChange() {} });
   const entry = { url: new URL("https://example.test/g/g"), state: { readerNavigation: {
-    scope: "/g/g", origin: { id: "thread-post-10", top: 90 }, destination: null,
+    scope: "/g/g", origin: { id: "thread-post-10", top: 90 },
   } } };
   controller.observe(entry); await settle();
   assert.equal(context.isCurrent(), true);
@@ -77,15 +41,15 @@ test("leaving an origin aborts recovery and invalidates its publication guard", 
   controller.dispose();
 });
 
-test("reload snapshots restore only the same scoped destination without replacing current history state", () => {
-  const page = { url: new URL("https://example.test/g/g#player-actions"), state: { readerNavigation: {
-    scope: "/g/g", origin: { id: "thread-post-10", top: 123 }, destination: "count",
+test("reload snapshots restore only the same scoped place without replacing current history state", () => {
+  const page = { url: new URL("https://example.test/g/g#thread-post-10"), state: { readerNavigation: {
+    scope: "/g/g", origin: { id: "thread-post-10", top: 123 }, verify: true,
   } } };
   const saved = JSON.parse(JSON.stringify(readerNavigationSnapshot(page)));
   assert.deepEqual(readerNavigationFromSnapshot(saved, { ...page, state: {} }), page.state.readerNavigation);
   assert.equal(readerNavigationFromSnapshot(saved, page), null);
   assert.equal(readerNavigationFromSnapshot(saved, { url: new URL("https://example.test/g/g"), state: {} }), null);
-  assert.equal(readerNavigationFromSnapshot(saved, { url: new URL("https://example.test/g/g/c/private#player-actions"), state: {} }), null);
+  assert.equal(readerNavigationFromSnapshot(saved, { url: new URL("https://example.test/g/g/c/private#thread-post-10"), state: {} }), null);
 });
 
 test("initial live replacement reconciles the anchor until the reader interacts", async () => {
@@ -93,7 +57,7 @@ test("initial live replacement reconciles the anchor until the reader interacts"
   const controller = createReaderNavigation({ afterRender: () => Promise.resolve(), restore() {},
     reconcileOrigin: () => ++reconciled, onChange() {} });
   controller.observe({ url: new URL("https://example.test/g/g"), state: { readerNavigation: {
-    scope: "/g/g", origin: { id: "thread-post-10", top: 90 }, destination: null,
+    scope: "/g/g", origin: { id: "thread-post-10", top: 90 },
   } } });
   await settle(); controller.reconcile(); await settle();
   assert.equal(reconciled, 1);
@@ -105,7 +69,7 @@ test("initial live replacement reconciles the anchor until the reader interacts"
 
 test("retry preserves the anchor, supersedes a cancelled attempt, and newest completion clears only navigation state", async () => {
   let page = { url: new URL("https://example.test/g/g?post=10&private=receipt"), state: { unrelated: 1, readerNavigation: {
-    scope: "/g/g?post=10&private=receipt", origin: { id: "thread-post-10", top: 90 }, destination: null,
+    scope: "/g/g?post=10&private=receipt", origin: { id: "thread-post-10", top: 90 },
   } } };
   const attempts = []; let focused = 0;
   const controller = createReaderNavigation({ getPage: () => page, afterRender: () => Promise.resolve(),
@@ -139,7 +103,7 @@ test("deliberate checkpoints replace stale origins without restoring; initial re
   assert.equal(page.state.other, 1); controller.dispose();
 });
 
-test("saved visits retain independent positions through Back, Forward, checkpoints, and Count excursions", async () => {
+test("saved visits retain independent positions through Back, Forward and checkpoints", async () => {
   const stack = [{ url: new URL("https://example.test/g/g"), state: { other: true } }];
   let index = 0, controller, captured = { id: "thread-post-10", top: 110 };
   const restored = [];
@@ -151,14 +115,13 @@ test("saved visits retain independent positions through Back, Forward, checkpoin
   controller = createReaderNavigation({ getPage: () => stack[index],
     push: (url,state) => write(url,state,true), replace: (url,state) => write(url,state,false),
     back: () => controller.observe(stack[--index]), capture: () => captured,
-    restore: (origin, context) => restored.push({ origin, context }), focusDestination() {},
+    restore: (origin, context) => restored.push({ origin, context }),
     afterRender: () => Promise.resolve(), onChange() {} });
   assert.equal(controller.visit({ id: "thread-post-80", top: 90 }), true); await settle();
   assert.equal(stack.length, 2); assert.equal(stack[0].state.readerNavigation.localReturn, true);
   assert.equal(restored.at(-1).context.forceReload, true);
   captured = { id: "thread-post-85", top: 100 };
   controller.checkpoint(captured);
-  controller.open("count"); await settle(); controller.returnToThread(); await settle();
   assert.equal(index, 1); assert.equal(stack[index].state.readerNavigation.returnable, true);
   controller.returnToPrevious(); await settle();
   assert.deepEqual(restored.at(-1).origin, { id: "thread-post-10", top: 110 });

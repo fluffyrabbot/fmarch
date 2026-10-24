@@ -28,6 +28,9 @@ import {
   playerForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/game-route-model.mjs";
 import {
+  PLAYER_RAIL_MIN_WIDTH_PX,
+} from "../frontend/src/lib/components/gameplay/player-layout.mjs";
+import {
   HOST_CONSOLE_ROUTE_CONTRACT,
   hostConsoleForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/host/host-route-model.mjs";
@@ -174,6 +177,31 @@ export const hostSetupScenario = Object.freeze({
   capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
   requiredText: HOST_SETUP_ROUTE_CONTRACT.requiredText,
   slotIds: Object.freeze(["slot_1", "slot_2"]),
+});
+
+const playerPendingStateBudget = Object.freeze({
+  triggerSelector:
+    '[data-testid="player-composer"] [data-action="submit_post"]',
+  statusSelector: '[data-testid="player-command-status"]',
+  busySelector: '[data-testid="player-primary-action-zone"]',
+  anchorSelector: '[data-testid="player-primary-action-zone"]',
+  targetSelector: '[data-testid="player-command-status"]',
+  maxAnchorShiftPx: 1,
+  maxCombinedSpanViewportRatio: 1,
+  maxDocumentGrowthViewportRatio: 0.25,
+  maxEnterPendingMs: 500,
+  inputBoundary: "player-command-surface",
+});
+const playerInterruptedStateBudget = Object.freeze({
+  actionId: "submit_post",
+  statusSelector: '[data-testid="player-command-status"]',
+  anchorSelector: '[data-testid="player-primary-action-zone"]',
+  targetSelector: '[data-testid="command-recovery-submit_post"]',
+  returnFocusSelector:
+    '[data-testid="player-composer"] [data-action="submit_post"]',
+  maxAnchorShiftPx: 1,
+  maxCombinedSpanViewportRatio: 1.1,
+  maxDocumentGrowthViewportRatio: 0.4,
 });
 
 export const roles = Object.freeze([
@@ -410,30 +438,8 @@ export const roles = Object.freeze([
       maxVisualViewportDeltaPx: 1,
       inputBoundary: "interrupted-command-recovery-control",
     }),
-    pendingStateBudget: Object.freeze({
-      triggerSelector:
-        '[data-testid="player-composer"] [data-action="submit_post"]',
-      statusSelector: '[data-testid="player-command-status"]',
-      busySelector: '[data-testid="player-primary-action-zone"]',
-      anchorSelector: '[data-testid="player-primary-action-zone"]',
-      targetSelector: '[data-testid="player-command-status"]',
-      maxAnchorShiftPx: 1,
-      maxCombinedSpanViewportRatio: 1,
-      maxDocumentGrowthViewportRatio: 0.25,
-      maxEnterPendingMs: 500,
-      inputBoundary: "player-command-surface",
-    }),
-    interruptedStateBudget: Object.freeze({
-      actionId: "submit_post",
-      statusSelector: '[data-testid="player-command-status"]',
-      anchorSelector: '[data-testid="player-primary-action-zone"]',
-      targetSelector: '[data-testid="command-recovery-submit_post"]',
-      returnFocusSelector:
-        '[data-testid="player-composer"] [data-action="submit_post"]',
-      maxAnchorShiftPx: 1,
-      maxCombinedSpanViewportRatio: 1.1,
-      maxDocumentGrowthViewportRatio: 0.4,
-    }),
+    pendingStateBudget: playerPendingStateBudget,
+    interruptedStateBudget: playerInterruptedStateBudget,
     closedByDefault: Object.freeze([
       '[data-testid="player-media-composer"]',
       '[data-testid="player-game-record"]',
@@ -449,6 +455,10 @@ export const roles = Object.freeze([
       '[data-testid="player-media-composer"]',
       '[data-testid="player-game-record"]',
     ]),
+    // Messages live in the More sheet below the rail width, so their visible
+    // boxes and touch targets are proven by the private disclosure hook,
+    // which reveals the sheet first (see `moreSheetTestIds` and
+    // `moreSheetTouchSelectors`).
     visibleTestIds: [
       "player-game-bar",
       "player-channel-switcher",
@@ -456,12 +466,18 @@ export const roles = Object.freeze([
       "player-day-event-event-cookie",
       "player-primary-action-zone",
       "player-thread-pager",
+    ],
+    moreSheetTestIds: Object.freeze([
       "player-private-boundary",
       "player-private-review-notification-N02-0-slot-7",
       "player-private-link-notification-N02-0-slot-7",
       "player-private-review-investigation-N02-1-slot-7",
       "player-private-link-investigation-N02-1-slot-7",
-    ],
+    ]),
+    moreSheetTouchSelectors: Object.freeze([
+      '[data-testid="player-private-link-notification-N02-0-slot-7"]',
+      '[data-testid="player-game-record"] > summary',
+    ]),
     overlapTestIds: [
       "player-game-bar",
       "player-channel-switcher",
@@ -473,9 +489,7 @@ export const roles = Object.freeze([
       '[data-testid="player-day-event-event-cookie"] button',
       '[data-testid="player-thread-load-older"]',
       '[data-testid="player-composer"] button',
-      '[data-testid="player-private-link-notification-N02-0-slot-7"]',
       '[data-testid="player-media-composer"] > summary',
-      '[data-testid="player-game-record"] > summary',
     ],
     thumbZones: Object.freeze([
       Object.freeze({
@@ -485,6 +499,41 @@ export const roles = Object.freeze([
           '[data-testid="player-dock-vote"]',
           '[data-testid="player-dock-reply"]',
         ]),
+      }),
+    ]),
+    // From the rail width up the dock is not rendered: Vote and More are a
+    // sticky rail beside the reading lane (usage-frequency audit, decision 9).
+    viewportVariants: Object.freeze([
+      Object.freeze({
+        name: "rail",
+        minWidth: PLAYER_RAIL_MIN_WIDTH_PX,
+        overrides: Object.freeze({
+          visibleTestIds: Object.freeze([
+            "player-game-bar",
+            "player-channel-switcher",
+            "player-day-event-rail",
+            "player-day-event-event-cookie",
+            "player-rail",
+            "player-thread-pager",
+          ]),
+          overlapTestIds: Object.freeze([
+            "player-game-bar",
+            "player-channel-switcher",
+            "player-rail",
+          ]),
+          thumbZones: Object.freeze([]),
+          // No dock to be busy or to anchor on: the vote surface carries the
+          // busy state and the sticky game bar is the stationary anchor.
+          pendingStateBudget: Object.freeze({
+            ...playerPendingStateBudget,
+            busySelector: '[data-testid="player-action-detail"]',
+            anchorSelector: '[data-testid="player-game-bar"]',
+          }),
+          interruptedStateBudget: Object.freeze({
+            ...playerInterruptedStateBudget,
+            anchorSelector: '[data-testid="player-game-bar"]',
+          }),
+        }),
       }),
     ]),
     nav: playerNav,
@@ -629,6 +678,16 @@ export function browserRoleScenario(role) {
   return role.live === undefined
     ? role
     : Object.freeze({ ...role, ...role.live });
+}
+
+/** The scenario as it applies at `viewport`: the widest matching variant wins. */
+export function roleScenarioForViewport(role, viewport) {
+  const variants = (role.viewportVariants ?? [])
+    .filter((variant) => viewport.width >= variant.minWidth)
+    .sort((a, b) => b.minWidth - a.minWidth);
+  return variants.length === 0
+    ? role
+    : Object.freeze({ ...role, ...variants[0].overrides, viewportVariant: variants[0].name });
 }
 
 export const navFocusCoverage = Object.freeze({

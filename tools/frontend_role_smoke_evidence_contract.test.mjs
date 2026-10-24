@@ -19,6 +19,7 @@ import {
 import {
   boardScenario,
   browserRoleScenario,
+  roleScenarioForViewport,
   forbiddenRoutes,
   roles,
   routeStateScenarios,
@@ -234,7 +235,7 @@ function validRoleSmoke() {
     })),
     setup: validHostSetupEvidence(),
     roles: viewports.flatMap((viewport) =>
-      roles.map((role) => validRoleEntry(browserRoleScenario(role), viewport)),
+      roles.map((role) => validRoleEntry(roleScenarioForViewport(browserRoleScenario(role), viewport), viewport)),
     ),
     playerPrivateChannel: viewports.map(validPrivateChannelEntry),
     routeStates: viewports.flatMap((viewport) =>
