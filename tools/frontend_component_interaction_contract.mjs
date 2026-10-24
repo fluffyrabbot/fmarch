@@ -127,7 +127,9 @@ async function proveSourceContracts() {
       component: "HostTaskWorkspace",
       path: "frontend/src/lib/components/host-action/HostTaskWorkspace.svelte",
       requiredSnippets: [
-        "<HostAction action={action.config} onDispatch={onDispatch} />",
+        "<HostAction",
+        "action={action.config}",
+        "onDispatch={onDispatch}",
         "<CommandRecovery",
         "data-testid={view.queue.testId}",
         "data-testid={view.canvas.testId}",

@@ -227,7 +227,9 @@ async function provePlayerHandlers() {
   assert.equal(postAck.visible.state, "ack");
   assert.deepEqual(voteAck.refreshed, [["votecount"]]);
   assert.deepEqual(voteReject.refreshed, []);
-  assert.deepEqual(postAck.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
+  assert.deepEqual(postAck.refreshed, [
+    ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
+  ]);
 
   return {
     component: "player-command-receipt",

@@ -318,7 +318,9 @@ async function provePlayerDispatchBridge() {
   assert.deepEqual(rejectPath.refreshed, []);
   assert.equal(rejectPath.finalReceipt.state, "reject");
   assert.equal(commandKind(postPath.request.command), "SubmitPost");
-  assert.deepEqual(postPath.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
+  assert.deepEqual(postPath.refreshed, [
+    ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
+  ]);
   assert.deepEqual(postPath.request.command.SubmitPost, {
     game: "midsummer",
     channel_id: "private:role_pm:slot-7",

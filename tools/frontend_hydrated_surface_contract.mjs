@@ -341,7 +341,7 @@ async function provePlayerSurfaceAdapter() {
     body: "private role note",
   });
   assert.deepEqual(postCommand.refreshed, [
-    ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+    ["thread", "votecount", "commandState", "dayVoteOutcomes", "slotMentions"],
   ]);
   const threadPager = await provePlayerThreadPagerLifecycle();
 
@@ -373,6 +373,22 @@ async function provePlayerSurfaceAdapter() {
   };
 }
 
+function olderThreadPost({ seq, slotId, body }) {
+  return {
+    game: playerData.game.id,
+    source_seq: seq,
+    stream_seq: seq,
+    channel_id: playerData.threadPager.channel,
+    author: { kind: "slot", slot_id: slotId },
+    phase_id: null,
+    body,
+    media: [],
+    quotations: [],
+    citation_count: 0,
+    occurred_at: 1782000000,
+  };
+}
+
 async function provePlayerThreadPagerLifecycle() {
   const pendingStatus = playerThreadPendingStatus();
   const pending = buildPlayerThreadViewModel(playerData.thread, {
@@ -393,16 +409,8 @@ async function provePlayerThreadPagerLifecycle() {
     fetchImpl: async () => jsonResponse({
       next_before_seq: null,
       posts: [
-        {
-          source_seq: 430,
-          author: { kind: "slot", slot_id: "slot-3" },
-          body: "older one",
-        },
-        {
-          source_seq: 431,
-          author: { kind: "slot", slot_id: "slot-7" },
-          body: "older two",
-        },
+        olderThreadPost({ seq: 430, slotId: "slot-3", body: "older one" }),
+        olderThreadPost({ seq: 431, slotId: "slot-7", body: "older two" }),
       ],
     }),
     projectionStore: ackStore,
@@ -813,6 +821,12 @@ function fakeProjectionStore(snapshot) {
     },
     getSnapshot() {
       return snapshot;
+    },
+    captureReadGuard() {
+      return () => true;
+    },
+    captureAuthorityGuard() {
+      return () => true;
     },
   };
 }

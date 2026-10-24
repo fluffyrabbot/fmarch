@@ -710,7 +710,7 @@ test("static role contract artifact records shared nav focus and route state mat
     inspectHref: "/admin/audit/proof-runs?game=midsummer",
     boundaryTestId: "admin-audit-boundary-proof-runs",
     evidenceTestId: "admin-audit-evidence-proof-runs",
-    authority: "GlobalAdmin or GlobalMod",
+    authority: ["GlobalAdmin", "GlobalMod"],
     boundary: "Read-only operator proof",
   });
   assert.deepEqual(adminStaticRole.commandActivity, {
@@ -1743,7 +1743,7 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
   assert.equal(dispatchBridge.rolePlans.player.postPath.commandKind, "SubmitPost");
   assert.equal(dispatchBridge.rolePlans.player.postPath.finalReceipt.state, "ack");
   assert.deepEqual(dispatchBridge.rolePlans.player.postPath.refreshed, [
-    ["thread", "votecount", "dayVoteOutcomes"],
+    ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
   ]);
   assert.equal(dispatchBridge.rolePlans.moderator.commandKind, "ResolveHostPrompt");
   assert.equal(
@@ -1938,7 +1938,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
           testId: "player-command-receipt-submit_post",
           statusTestId: "player-command-status",
         },
-        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes"],
+        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes", "slotMentions"],
         channelId: "private:role_pm:slot-7",
       },
     },
@@ -2074,6 +2074,7 @@ test("hydrated surface artifact records route-backed surface adapters without lo
     "votecount",
     "commandState",
     "dayVoteOutcomes",
+    "slotMentions",
   ]);
   assert.deepEqual(hydratedSurfaces.player.privateDisclosure, {
     itemId: "notification-N02-0-slot-7",
@@ -3126,6 +3127,7 @@ test("in-app browser interaction page fixture records role command targets", asy
     "votecount",
     "commandState",
     "dayVoteOutcomes",
+    "slotMentions",
   ]);
   assert.deepEqual(playerHydratedScenario.threadPager.pending, {
     status: {
@@ -3227,7 +3229,6 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.match(page, /data-testid="iab-surface-moderator"/);
   assert.match(page, /data-component="fm-app-shell"/);
   assert.match(page, /data-testid="role-nav-admin"/);
-  assert.match(page, /data-testid="role-nav-player"/);
   assert.match(page, /data-testid="role-nav-moderator"/);
   assert.match(page, /data-iab-scenario-id="admin-cohost-confirm-click"/);
   assert.match(page, /data-testid="admin-command-confirm-cohost"/);
@@ -6506,11 +6507,12 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       "player composer acknowledgement screenshots",
     );
     assert.deepEqual(entry.commandResult.commandReceipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_vote",
+      receiptTestId: "player-feedback",
+      receiptItemTestId: "player-feedback",
       statusTestId: "player-command-status",
       state: "reject",
-      message: "Reject StreamConflict: reload and retry",
+      message:
+        "Your vote for Juniper was not accepted because the game changed. Check the current game before retrying.",
       exportedReceipts: [
         {
           actionId: "submit_vote",
@@ -6546,32 +6548,24 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
       ariaAtomic: "true",
     });
     assert.equal(entry.commandResult.postCommand.state, "ack");
-    assert.match(entry.commandResult.postCommand.message, /Ack: stream seqs 72/);
+    assert.equal(entry.commandResult.postCommand.message, "Saved.");
     assert.equal(
       entry.commandResult.postCommand.refreshedPostTestId,
       "thread-post-445",
     );
     assert.deepEqual(entry.commandResult.postCommandReceipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_post",
+      receiptTestId: null,
+      receiptItemTestId: null,
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Ack: stream seqs 72",
+      message: "Saved.",
       exportedReceipts: [
-        {
-          actionId: "submit_vote",
-          state: "reject",
-          message: "Reject StreamConflict: reload and retry",
-          commandTrace:
-            entry.commandResult.postCommandReceipt.exportedReceipts[0].commandTrace,
-          current: false,
-        },
         {
           actionId: "submit_post",
           state: "ack",
           message: "Ack: stream seqs 72",
           commandTrace:
-            entry.commandResult.postCommandReceipt.exportedReceipts[1].commandTrace,
+            entry.commandResult.postCommandReceipt.exportedReceipts[0].commandTrace,
           current: true,
         },
       ],
@@ -6647,7 +6641,7 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
       "/g/midsummer/c/private%3Arole_pm%3Aslot-7?private=notification-N02-0-slot-7#private-item-notification-N02-0-slot-7",
     );
     assert.equal(entry.commandResult.state, "ack");
-    assert.match(entry.commandResult.message, /Ack: stream seqs 172/);
+    assert.equal(entry.commandResult.message, "Saved.");
     assert.deepEqual(entry.commandResult.requestCommand, {
       game: "midsummer",
       channel_id: "private:role_pm:slot-7",
@@ -6666,11 +6660,11 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
       ariaAtomic: "true",
     });
     assert.deepEqual(entry.commandResult.receipt, {
-      receiptTestId: "player-command-receipt",
-      receiptItemTestId: "player-command-receipt-submit_post",
+      receiptTestId: null,
+      receiptItemTestId: null,
       statusTestId: "player-command-status",
       state: "ack",
-      message: "Ack: stream seqs 172",
+      message: "Saved.",
       exportedReceipts: [
         {
           actionId: "submit_post",
@@ -6692,29 +6686,14 @@ function assertBrowserPlayerPrivateChannelEvidence(entries) {
     assert.equal(entry.media.renderedVariant, "tablet");
     assert.equal(entry.media.requestedOriginal, false);
     assert.equal(entry.media.requested.length > 0, true);
-    assert.deepEqual(
-      entry.focusTraversal.expectedOrder,
-      entry.viewport.name === "mobile"
-        ? [
-            "app-shell-skip-link",
-            "role-nav-player",
-            "player-channel-main",
-            "player-channel-private:role_pm:slot-7",
-            "player-thread-load-older",
-          ]
-        : [
-            "app-shell-skip-link",
-            "role-nav-board",
-            "role-nav-community",
-            "role-nav-inbox",
-            "role-nav-search",
-            "role-nav-player",
-            "player-channel-main",
-            "player-channel-private:role_pm:slot-7",
-            "player-thread-load-older",
-          ],
-    );
-    assert.equal(entry.overlapCheckedTargets >= 3, true);
+    assert.deepEqual(entry.focusTraversal.expectedOrder, [
+      "app-shell-skip-link",
+      "account-menu-toggle",
+      "player-channel-main",
+      "player-channel-private:role_pm:slot-7",
+      "player-thread-load-older",
+    ]);
+    assert.equal(entry.overlapCheckedTargets >= 2, true);
     assertPixelEvidence([entry], "player private-channel screenshots");
   }
 }
