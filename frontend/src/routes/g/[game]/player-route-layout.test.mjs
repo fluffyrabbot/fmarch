@@ -6,17 +6,19 @@ import {
   PLAYER_ROUTE_LAYOUT_CONTRACT,
 } from "./player-route-layout.mjs";
 
-test("player route layout keeps a stable reading lane with a fixed action dock", () => {
+test("player route layout keeps a stable reading lane, sheets below the rail width and a rail above it", () => {
   const view = buildPlayerRouteLayoutViewModel();
 
   assert.equal(view.root.className, PLAYER_ROUTE_LAYOUT_CONTRACT.rootClassName);
   assert.equal(view.root.data.mode, "reading-first-action-dock");
   assert.equal(view.root.data.minTabletViewportPx, 1024);
+  assert.equal(view.root.data.railMinViewportPx, 1100);
   assert.equal(view.root.data.collapseBelowPx, null);
   assert.deepEqual(view.commandRail, {
     className: "action-dock",
     data: {
       mode: "fixed-context-navigation",
+      renderedBelowPx: 1100,
       stickyTopPx: null,
       unstickBelowPx: null,
       stabilityMode: "thread-width-stable",
@@ -27,10 +29,21 @@ test("player route layout keeps a stable reading lane with a fixed action dock",
     "channels",
     "thread",
     "composer",
-    "actions",
-    "context",
+    "rail",
     "dock",
   ]);
+  assert.deepEqual(view.sheets, ["vote", "more"]);
+});
+
+test("the route renders the dock only below the rail width and the sheets in the rail slot", async () => {
+  const source = await readFile(new URL("./+page.svelte", import.meta.url), "utf8");
+
+  assert.match(source, /<svelte:fragment slot="dock">\s*\{#if layout !== "rail"\}\s*<ActionDock/u);
+  assert.match(source, /<svelte:fragment slot="rail">[\s\S]*?<PlayerSheet[\s\S]*?testId="player-vote-sheet"[\s\S]*?<VoteSheet[\s\S]*?<PlayerSheet[\s\S]*?testId="player-more-sheet"[\s\S]*?<ContextSheet/u);
+  assert.doesNotMatch(source, /return-to-thread|returnToThread|readerNavigation\?\.open\(/u);
+  // The composer stays in-flow after the thread on every width.
+  assert.ok(source.indexOf("<PlayerThread") < source.indexOf("<ComposeSheet"));
+  assert.ok(source.indexOf("<ComposeSheet") < source.indexOf('<svelte:fragment slot="rail">'));
 });
 
 test("player feedback lives in the game bar while commands stay gated", async () => {

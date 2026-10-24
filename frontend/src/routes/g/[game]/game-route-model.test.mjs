@@ -271,10 +271,12 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.equal(data.layout.root.data.mode, "reading-first-action-dock");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
   assert.equal(data.layout.root.data.collapseBelowPx, null);
+  assert.equal(data.layout.root.data.railMinViewportPx, 1100);
   assert.deepEqual(data.layout.commandRail, {
     className: "action-dock",
     data: {
       mode: "fixed-context-navigation",
+      renderedBelowPx: 1100,
       stickyTopPx: null,
       unstickBelowPx: null,
       stabilityMode: "thread-width-stable",
@@ -285,10 +287,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     "channels",
     "thread",
     "composer",
-    "actions",
-    "context",
+    "rail",
     "dock",
   ]);
+  assert.deepEqual(data.layout.sheets, ["vote", "more"]);
 });
 
 test("player phase view keeps an explicit null phase pre-game", () => {

@@ -1,6 +1,4 @@
 <script>
-  export let returnAvailable = false;
-  export let onReturnToThread = () => {};
   import {
     buildPlayerPrivateQueueViewModel,
   } from "./player-private-queue-model.mjs";
@@ -16,6 +14,9 @@
   export let onToggle = () => {};
   export let filter = "all";
   export let onFilter = () => {};
+  /** New deliveries, shown here only where no dock carries the count (the
+      desktop rail); null when unknown or when the dock owns it. */
+  export let newCount = null;
   $: visibleItems = attention.state !== "ready" || filter === "all" ? view.items
     : view.items.filter(item => reviewed.has(item.id) === (filter === "reviewed"));
 
@@ -36,9 +37,11 @@
   data-component={view.root.data.component}
   data-boundary-status={view.root.data.boundaryStatus}
 >
-  {#if returnAvailable}<button type="button" class="fm-touch-button fm-touch-button--secondary" data-testid="return-to-thread" on:click={onReturnToThread}>Return to thread</button>{/if}
   <header class="fm-ledger__head" class:private-head--compact={view.items.length === 0}>
     <h2>{view.heading}</h2>
+    {#if newCount > 0}
+      <strong class="private-new-count" data-testid="player-private-new-count" aria-label={`${newCount} new ${newCount === 1 ? "message" : "messages"}`}>{newCount}</strong>
+    {/if}
     {#if view.items.length === 0}
       <p class="private-empty" data-testid="player-private-empty" title={view.boundary.detail}>{view.emptyMessage}</p>
     {/if}
@@ -136,6 +139,18 @@
   .private-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   /* Nothing to read: one line, no card body, the boundary copy on hover. */
   .private-head--compact { align-items: baseline; gap: 10px; }
+  .private-new-count {
+    align-items: center;
+    background: var(--fm-accent);
+    border-radius: 999px;
+    color: var(--fm-action-ink);
+    display: inline-flex;
+    font-size: 11px;
+    justify-content: center;
+    min-block-size: 20px;
+    min-inline-size: 20px;
+    padding-inline: 6px;
+  }
   .private-empty { color: var(--fm-ink-muted); flex: 1 1 auto; font-size: 14px; margin: 0; }
 
   .player-private-queue h2 {

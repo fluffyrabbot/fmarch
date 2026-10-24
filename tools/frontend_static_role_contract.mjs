@@ -1661,15 +1661,16 @@ async function provePlayerSurface() {
   assert.equal(data.layout.root.data.mode, "reading-first-action-dock");
   assert.equal(data.layout.root.data.minTabletViewportPx, 1024);
   assert.equal(data.layout.root.data.collapseBelowPx, null);
+  assert.equal(data.layout.root.data.railMinViewportPx, 1100);
   assert.deepEqual(data.layout.regions, [
     "game-bar",
     "channels",
     "thread",
     "composer",
-    "actions",
-    "context",
+    "rail",
     "dock",
   ]);
+  assert.deepEqual(data.layout.sheets, ["vote", "more"]);
   const rolePmRoute = await buildGameRouteData({
     game: "midsummer",
     fixtureMode: true,

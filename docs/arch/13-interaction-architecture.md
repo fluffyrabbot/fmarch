@@ -53,13 +53,12 @@ follows the phase: by day it is the vote chip (`Vote`, or `Voting Ilya`), by
 night it is the night action when one exists and nothing otherwise, because no
 vote exists to show.
 
-- Vote opens a roster picker; selecting a player only selects a candidate, and a separate confirmation commits the vote;
+- Vote opens the vote surface on its roster picker; selecting a player only selects a candidate, and a separate confirmation commits the vote;
 - Reply moves to the channel composer;
 - Quote seeds that same composer with a structured citation; it does not fork the thread;
 - Mention (`@`) typeahead lives inside that same composer and records a structured address, never parsed prose ([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md));
-- Count moves to the current vote and complete votecount;
-- Act moves to phase-specific actions when they exist;
-- More moves to private notices, role identity, activity, and game history.
+- Act opens the vote surface on the phase-specific actions when they exist;
+- More opens the context surface: role identity, the night action when it can matter, private messages, and game history.
 
 An open day event is a game-bar notice linking to the event rail, not a dock
 item; the dock stays one row at every width. The game bar's facts follow the
@@ -70,12 +69,32 @@ phones show the first fact only. The More sheet renders the role card always,
 the night action card only in a night phase or while the player holds a legal
 action or an action receipt, and the empty Messages card as one line.
 
-The composer, action detail, and player context follow the thread in document
-order. This keeps automation, keyboard access, and no-JavaScript behavior honest
-while the dock provides one-tap navigation from any scroll position. Wider
-screens add whitespace rather than a permanently open command inspector. A live
-`PostCitationsChanged` delta updates “Quoted N times” on an already-loaded post
-when a later quoting post arrives or is hidden.
+The composer follows the thread in document order on every width, because a
+reader who wants to reply is at the end of what they read. Vote and More are
+not places in the document: below 1100px they are native `<dialog>` bottom
+sheets opened from the dock, and from 1100px up the frame is two columns and
+they are panels in a sticky rail beside the reading lane, where the dock is
+not rendered. The server-rendered and no-JavaScript shape keeps both as
+ordinary sections after the composer, so document order stays useful without
+enhancement; hydration selects the sheet or rail topology from the viewport
+and follows it across resizes.
+
+A sheet is modal: the thread behind it is inert, Escape, the backdrop, a swipe
+down on its grip and its Close control dismiss it, and focus returns to the
+control that opened it (a dock chip, a post menu, a game-bar fact). Opening
+Vote focuses the picker, or the armed confirmation when a post's Vote asked
+for a seat; opening More focuses the queue filter (New while new items exist,
+otherwise All) or the queue itself. A private-result destination opens More on
+the exact delivery. The official votecount link in the vote surface closes the
+sheet and moves the reader to that post. The sheet body and the rail scroll on
+their own; position restoration scrolls the container that holds the element.
+
+Post actions follow the same frequency rule. Quote stays a compact text control
+in the post meta row. Vote for the author and Copy link live in one overflow
+menu per post, revealed on hover or keyboard focus for fine-pointer devices and
+always visible at 32px on coarse pointers; the menu items keep the 44px floor.
+A live `PostCitationsChanged` delta updates “Quoted N times” on an
+already-loaded post when a later quoting post arrives or is hidden.
 
 A successful command updates its projection and announces “Saved” without a
 persistent receipt card. Pending, interrupted, and rejected actions use one
@@ -185,14 +204,19 @@ routes remain the durable place for evidence review.
 
 ## Responsive rules
 
-- Phone: one compact app bar, a full-width reading lane, and a bottom action dock.
-- Tablet: the same semantic order with a wider reading measure. Temporary detail
-  may use the available side space, but is never permanently reserved.
-- Desktop: preserve the reading measure and use the extra space for optional
-  context, not additional dashboards.
+- Phone: one compact app bar, a full-width reading lane, a bottom action dock,
+  and Vote and More as bottom sheets.
+- Tablet below 1100px: the same semantic order with a wider reading measure and
+  the same sheets.
+- From 1100px: preserve the reading measure and spend the extra width on one
+  sticky rail (vote tally and picker, role card, messages, history) beside the
+  reading lane. There is no dock, and no additional dashboard.
 
-Primary controls have a 44px minimum target. No action depends on hover or a
-gesture. Document order remains useful without client-side enhancement.
+Primary controls have a 44px minimum target; compact post-row controls are
+32px and open 44px targets. No action depends on hover or a gesture: a sheet
+also closes from Escape and its Close control, and a hover-revealed row is also
+revealed by keyboard focus. Document order remains useful without client-side
+enhancement.
 
 ## Accessibility interaction contract
 
@@ -222,8 +246,9 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
 - Substantive player thread content begins within 260px on phone and tablet
   fixtures.
 - Vote and reply are reachable in one interaction from any thread position.
-- The player route has no permanent command column.
-- Desktop width does not increase the number of initially visible status panels.
+- Below 1100px the player route has no permanent command column; from 1100px
+  the only permanent column is the rail, and the dock is not rendered.
+- Desktop width does not add status panels beyond the rail.
 - The host first viewport contains the highest-priority task, its consequence,
   and its primary action.
 - The public game thread starts within 420px on phone and 390px on desktop, uses
@@ -298,13 +323,13 @@ with the filter as a fallback when its final New items disappear.
 The action dock's More control counts distinct delivered IDs absent from the
 reader's review receipts. Unknown receipt state or lost seat authority suppresses
 the badge. The control's accessible name distinguishes the New count from total
-deliveries, and keyboard activation focuses the queue filter (New when there are
-new items, otherwise All). The dock is one row on every width and retains its
-height during pending commands so touch targets and command feedback remain
-stationary.
+deliveries, and activation opens the More sheet on the queue filter (New when
+there are new items, otherwise All). The dock is one row on every width below
+1100px and retains its height during pending commands so touch targets and
+command feedback remain stationary.
 
 
-Reader navigation remains mounted independently of command readiness. Count and
+Reader navigation remains mounted independently of command readiness. Vote and
 More remain keyboard-accessible for completed games, spectator views, and paused
 command transport. The dock accepts a fail-closed command-availability flag;
 Reply and Act are rendered only when commands are available.
@@ -314,21 +339,20 @@ state notice without implying that a refresh can reopen commands. Spectator
 navigation does not confer seat access or populate the private delivery badge.
 
 
-Count and More are reversible local excursions using SvelteKit shallow history.
-The origin entry stores a route-scoped post ID and viewport offset, with a thread
-fallback when no post is visible. Keyboard focus moving to the dock retains the
-last focused post only while that post is still visible. Switching Count/More
-replaces the destination entry, so Return to thread and browser Back have one
-origin; repeated Return activation cannot consume another history entry. Forward
-reopens the destination. Restoration resolves current DOM geometry after render,
-so live arrivals and edits above the origin do not change the reading offset.
-History contains no post text or private receipts. The route snapshot persists
-this scoped excursion across reloads, recording the visible URL because shallow
-routing does not update `page.url`. Snapshot restoration requires both the same
-route scope and destination hash, and never overwrites an existing excursion.
+Vote and More never move the reader: a sheet overlays the thread and a rail
+sits beside it, so there is no in-page excursion and no "Return to thread".
+The reading place is still recorded in SvelteKit shallow history state: a
+route-scoped post ID and viewport offset, written by a settled reading gesture
+or by resuming a saved position, with a thread fallback when no post is
+visible. Restoration resolves current DOM geometry after render, so live
+arrivals and edits above the anchor do not change the reading offset, whether
+or not a sheet is open. History contains no post text or private receipts. The
+route snapshot persists the place across reloads, recording the visible URL
+because shallow routing does not update `page.url`. Snapshot restoration
+requires the same route scope and hash, and never overwrites an existing entry.
 
-When the origin is outside the loaded window, Return or reload fetches the
-current channel's authorized `around_seq` page before restoring focus and offset.
+When the place is outside the loaded window, reload fetches the current
+channel's authorized `around_seq` page before restoring focus and offset.
 Reconnect cold loads follow the recovered anchor so the initial live handshake
 cannot evict it with a newest-page refresh. Recovery replaces the window instead
 of joining disjoint pages with a hidden gap; the returned cursors expose the
