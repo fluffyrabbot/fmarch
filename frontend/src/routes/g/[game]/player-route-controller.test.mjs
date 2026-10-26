@@ -1667,7 +1667,7 @@ test("late recovery cannot overwrite navigation, pagination, or revoked authorit
         return jsonResponse({ next_before_seq: null, posts: [recoveryPost(10)] });
       },
     });
-    assert.equal(result, "cancelled");
+    assert.equal(result, kind === "navigation" ? "cancelled" : "retry");
     assert.ok(!store.getSnapshot().thread.posts.some(p => p.seq === 10));
   }
 });
@@ -1783,7 +1783,8 @@ test("private recovery rejects revoked authority and ignores stale read denials"
         posts: [{ ...recoveryPost(10, "original", channel), citation_count: event.startsWith("batch-") ? 1 : 0 }] });
     } });
     if (event === "batch-late-denial") await assert.rejects(run, /Citation batch rejected/);
-    else assert.equal(await run, event === "batch-refresh" ? "ready" : "cancelled");
+    // A revoked or superseded read asks the route for one more attempt.
+    else assert.equal(await run, event === "batch-refresh" ? "ready" : "retry");
     const posts = store.getSnapshot().thread.posts;
     if (event.includes("revoke")) assert.deepEqual(posts, []);
     else if (event.includes("denial")) assert.equal(posts[0].body, "refreshed");
@@ -1842,7 +1843,7 @@ test("an omitted original from a superseded read cannot erase a newer visible po
     store.applySnapshot({ thread: { posts: [{ seq: 10, body: "newer authorized post" }, { seq: 443 }], nextBeforeSeq: 400 } });
     return jsonResponse({ posts: [], next_before_seq: null });
   } });
-  assert.equal(result, "cancelled");
+  assert.equal(result, "retry");
   assert.equal(store.getSnapshot().thread.posts[0].body, "newer authorized post");
   assert.equal(store.getSnapshot().thread.unavailableSeqs, undefined);
 });

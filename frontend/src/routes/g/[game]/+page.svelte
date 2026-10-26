@@ -203,13 +203,20 @@
         let result = "ready";
         if (context.forceReload || context.intent === "newest" || !document.getElementById(origin.id)) {
           readerRecovery = { state: "pending", intent: context.intent };
-          try {
-            result = await recoverPlayerThreadWindow({ data, fetchImpl: fetch, projectionStore, origin,
-              onRecovered: seq => { readerThreadWindow = { aroundSeq: seq }; }, ...context });
-          } catch {
-            if (!context.isCurrent()) return;
-            result = "error";
+          // A live resync that lands during a reload supersedes the first
+          // read; one more attempt reads the fresh window instead of giving up.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              result = await recoverPlayerThreadWindow({ data, fetchImpl: fetch, projectionStore, origin,
+                onRecovered: seq => { readerThreadWindow = { aroundSeq: seq }; }, ...context });
+            } catch {
+              if (!context.isCurrent()) return;
+              result = "error";
+            }
+            if (result !== "retry" || !context.isCurrent()) break;
+            await tick();
           }
+          if (result === "retry") result = "cancelled";
           await tick();
         }
         if (!context.isCurrent()) return;
