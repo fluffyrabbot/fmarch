@@ -21,7 +21,6 @@ test("default or mismatched route, refresh, occupant and invite cannot qualify",
     (e) => { e.replacement.slotId = "slot-2"; },
     (e) => { e.replacement.assignedPrincipalId = "other"; },
     (e) => { e.inviteTarget.slotId = "slot-2"; },
-    (e) => { e.inviteTarget.principalId = "other"; },
     (e) => { e.inviteTarget.expectedOccupantPrincipalId = "other"; },
   ]) {
     const evidence = fixture();
@@ -52,6 +51,6 @@ function fixture() {
     pageUrl: "http://localhost/g/game/host?slot_id=slot-7",
     reads: [{ pathname: "/api/gameplay/games/game/host-console-state", slotIds: ["slot-7"], method: "GET", status: 200 }],
     replacement: { slotId: "slot-7", assignedPrincipalId: principalId },
-    inviteTarget: { slotId: "slot-7", principalId, expectedOccupantPrincipalId: principalId },
+    inviteTarget: { slotId: "slot-7", expectedOccupantPrincipalId: principalId },
   };
 }
