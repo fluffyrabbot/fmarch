@@ -15,6 +15,9 @@
   export let returnTo = null;
   /** Selectors tried in order for the element to focus once opened. */
   export let focusSelectors = [];
+  /** "content": the height it opens with; "full": the whole sheet height, so a
+      working canvas has room for a confirmation without scrolling its trigger. */
+  export let detent = "content";
   export let onClose = () => {};
 
   const SWIPE_CLOSE_PX = 72;
@@ -45,7 +48,10 @@
   function pinDetent() {
     if (!panel) return;
     panel.style.blockSize = "";
-    panel.style.blockSize = `${Math.ceil(panel.getBoundingClientRect().height)}px`;
+    const height = detent === "full"
+      ? window.innerHeight - 40
+      : panel.getBoundingClientRect().height;
+    panel.style.blockSize = `${Math.ceil(height)}px`;
   }
 
   function focusInitial() {

@@ -1349,6 +1349,8 @@ function resolveFlowHook(name) {
         commandRequests: ctx.commandRequests,
         mockState: ctx.mockState,
       }),
+    moderatorRevealDeadline: (page) => selectHostTask(page, "deadline"),
+    moderatorDismissTask: (page) => dismissHostTaskSheet(page),
     playerMediaNetwork: (page, ctx) =>
       assertPlayerMediaNetwork(page, { mediaRequests: ctx.mediaRequests }),
     playerLiveThreadEmit: (page) => emitPlayerOfficialThreadPost(page),
@@ -2659,14 +2661,61 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [], mock
   };
 }
 
+// The host console shares the game frame (usage-frequency audit, decision
+// 11): below the rail width a chosen task opens as a sheet over the thread,
+// from it up the task sits in the rail. Routine tools are bar controls, rare
+// ones live in the Tools popover, decisions in the queue strip (decision 12).
+async function hostLayout(page) {
+  await page.waitForFunction(() =>
+    ["sheet", "rail"].includes(document.querySelector('[data-testid="host-console-surface"]')?.dataset.layout));
+  return page.getByTestId("host-console-surface").getAttribute("data-layout");
+}
+
+async function hostTaskSheetOpen(page) {
+  return page.evaluate(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === true);
+}
+
+async function dismissHostTaskSheet(page) {
+  const layout = await hostLayout(page);
+  if (layout === "rail" || !(await hostTaskSheetOpen(page))) return { layout, dismissed: false };
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === false);
+  return { layout, dismissed: true, via: "escape" };
+}
+
 async function selectHostTask(page, taskId) {
-  const task = page.locator(`button[data-task-id="${taskId}"]`);
-  if (!(await task.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-  await task.waitFor({ state: "visible" });
-  await task.click();
+  const layout = await hostLayout(page);
+  // A modal sheet over the thread must close before any control behind it
+  // can be pressed; the next task opens its own.
+  await dismissHostTaskSheet(page);
+  const tool = page.getByTestId(`host-tool-${taskId}`);
+  let via;
+  if (await tool.count() > 0) {
+    if (!(await tool.isVisible())) {
+      await page.getByTestId("host-tools").locator("summary").click();
+      await tool.waitFor({ state: "visible" });
+      via = "tools-popover";
+    } else {
+      via = "bar";
+    }
+    await tool.click();
+  } else {
+    const task = page.locator(`[data-testid="host-task-queue"] button[data-task-id="${taskId}"]`);
+    await task.waitFor({ state: "visible" });
+    await task.click();
+    via = "queue";
+  }
+  if (layout === "sheet") {
+    await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === true);
+    await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.contains(document.activeElement));
+    await page.evaluate(() => Promise.all(
+      [...document.querySelectorAll('[data-testid="host-task-sheet"] *')].flatMap((el) => el.getAnimations()).map((animation) => animation.finished.catch(() => {})),
+    ));
+  }
   await page
     .locator(`article[data-task-id="${taskId}"]:not([hidden])`)
     .waitFor({ state: "visible" });
+  return { layout, taskId, via, opened: layout === "sheet" };
 }
 
 async function assertRailCommandActivity(page, { prefix, actionId, expectedState }) {
@@ -2942,6 +2991,23 @@ async function assertHostConfirmationFocus(actionRoot, page, {
   tabContainment = "confirm-cancel",
   tabSequenceTestIds = [],
 }) {
+  const present = await actionRoot.getByTestId("critical-host-action-confirmation")
+    .waitFor({ state: "attached", timeout: 3000 }).then(() => true, () => false);
+  if (!present) {
+    const diagnostic = await page.evaluate(() => ({
+      layout: document.querySelector('[data-testid="host-console-surface"]')?.dataset.layout,
+      active: document.activeElement?.dataset?.testid ?? document.activeElement?.tagName,
+      paused: document.querySelector('[data-testid="host-projection-command-health"]') !== null,
+      canvases: document.querySelectorAll('[data-testid="host-decision-canvas"]').length,
+      visibleArticle: document.querySelector('[data-testid="host-decision-canvas"] article:not([hidden])')?.dataset.taskId ?? null,
+      sheetOpen: document.querySelector('[data-testid="host-task-sheet"]')?.open ?? null,
+      liveEvents: (window.__fmarchHostLiveProjectionEvents ?? []).map((event) => `${event.kind}:${event.state ?? ""}:${event.body?.delta?.kind ?? event.delta?.kind ?? ""}`).slice(-12),
+      statuses: window.__fmarchHostCommandStatuses,
+      actionEvents: (window.__fmarchHostActionEvents ?? []).map((event) => event.actionId),
+      viewport: [innerWidth, innerHeight, scrollY],
+    }));
+    throw new Error(`${label} confirmation vanished before its focus proof: ${JSON.stringify(diagnostic)}`);
+  }
   const dialog = await assertConfirmationRoot(actionRoot, {
     label,
     dialogTestId: "critical-host-action-confirmation",
@@ -4017,7 +4083,12 @@ async function revealPlayerSheet(page, kind, { via = "click" } = {}) {
   if (await playerSheetOpen(page, kind)) return { layout, opened: false };
   const dock = page.getByTestId(ids.dock);
   if (via === "keyboard") {
+    // A dialog that just closed restores focus to its opener on its own
+    // schedule; let that land before moving focus, or Enter reopens the
+    // sheet the previous step dismissed.
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await dock.focus();
+    await page.waitForFunction((id) => document.activeElement?.dataset.testid === id, ids.dock);
     await page.keyboard.press("Enter");
   } else {
     await dock.click();
@@ -4590,7 +4661,15 @@ async function proveReloadReadingReturn(page, baseUrl, routePath, channel = "mai
       } else {
         const connectionError = "Could not restore your place. Retry when your connection is available.";
         await page.getByText(outcome === "denied" ? "You no longer have access to this channel."
-          : ["offline", "cancelled"].includes(outcome) ? connectionError : "The original post is unavailable.", { exact: true }).waitFor();
+          : ["offline", "cancelled"].includes(outcome) ? connectionError : "The original post is unavailable.", { exact: true }).waitFor().catch(async error => {
+            const state = await page.evaluate(() => ({ url: location.href, active: document.activeElement?.id, history: history.state,
+              layout: document.querySelector('[data-testid="player-surface"]')?.dataset.layout,
+              recovery: document.querySelector('[data-testid="reader-recovery"]')?.innerText ?? null,
+              statuses: [...document.querySelectorAll('[role="status"]')].map(el => el.textContent?.trim()),
+              posts: document.querySelectorAll('[id^="thread-post-"]').length,
+              body: document.body.innerText.slice(0, 600) }));
+            throw new Error(`${error.message}; outcome=${outcome}, requests=${requests}, state=${JSON.stringify(state)}`);
+          });
         if (outcome === "denied") assert.equal(await page.locator('[id^="thread-post-"]').count(), 0);
         assert.equal(await origin.count(), 0);
         assert.equal(await page.evaluate(() => document.activeElement.id), "player-thread");

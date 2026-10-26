@@ -343,6 +343,7 @@ test("host gameplay loads live authority only when every endpoint validates", as
   });
 
   assert.equal(result.kind, "ready");
+  assert.equal(result.data.thread.posts.length, 1);
   assert.equal(result.data.hostPrompts[0].phaseId, "D01");
   assert.equal(result.data.hostConsoleState.authority.capability, "HostOf");
   assert.equal(result.data.hostConsoleState.phase, null);
@@ -638,6 +639,10 @@ function playerPayloadFor(url) {
       boundary: "reveal-gated",
     };
   }
+  return threadPagePayload();
+}
+
+function threadPagePayload() {
   return {
     game: {
       game: "midsummer",
@@ -705,6 +710,9 @@ function hostPayloadFor(url) {
   }
   if (path.includes("host-console-state")) {
     return hostConsolePayload();
+  }
+  if (/\/games\/midsummer\?/u.test(path)) {
+    return threadPagePayload();
   }
   throw new Error(`unexpected host URL ${path}`);
 }

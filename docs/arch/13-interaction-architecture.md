@@ -7,8 +7,9 @@ different cognitive jobs. Visual primitives are shared; page composition is not.
 
 - The player surface is a reading-first conversation workspace with persistent,
   thumb-reachable action shortcuts.
-- The host surface is an exception-driven task queue with one active decision
-  canvas.
+- The host surface is the same reading-first workspace as the player's, with
+  an exception-driven decision queue and one active decision canvas beside or
+  over the thread.
 - Game setup is a six-stage `guided-stage-canvas` workflow with purpose-built
   editors inside the roster, roles, rules, and optional-content Program stages.
 - Public game pages are reading publications: a compact masthead followed by a
@@ -134,20 +135,43 @@ retains its anchor during reconnect rather than silently selecting the latest
 
 ## Host workspace
 
-The host console presents a queue of unresolved or time-sensitive tasks and one
-selected decision canvas. Full projection evidence and audit activity remain
-available in secondary drawers. An available command is not automatically a
-task. Command feedback uses a shared status selector and each action reserves a
-stable status floor, so pending and recovery messages do not move neighboring
-controls.
+The host reads the game where it happens. The console shares the game frame
+with the player workspace: the public main thread is its reading lane, the
+host composer follows the thread in flow, and the host bar is its contextual
+bar. Hosting is mostly reading and reacting, so the thread owns the viewport
+and the decisions come to it.
 
-Routine deadline, phase, votecount, lifecycle, and endgame controls live in Tools.
-The queue contains pending prompts, replacement requests, expired deadlines,
-locked phases ready to resolve, and commands requiring recovery. An idle queue
-says “Nothing needs you right now”. Packs must declare a label and description
-for every prompt they produce; the canvas uses those labels and roster names.
-Deadline controls offer 24 hours, 48 hours, and a custom time. The confirmation
-states the consequence once. Red treatment is reserved for irreversible actions.
+The decision queue holds every task the game is waiting on the host for:
+pending prompts, day events to resolve, replacement requests with a chosen
+member, expired deadlines, locked phases ready to advance, and commands needing
+recovery. An available command is not automatically a task. Below 1100px the
+queue is a strip under the host bar and a chosen task opens as a sheet over the
+thread, dismissed by Escape, the backdrop, a swipe or Close, with focus
+returning to the control that opened it. From 1100px the queue heads the
+sticky rail and the decision canvas follows it there. An idle queue says
+“Nothing needs you right now”. A task that needs recovery after a reload opens
+itself once.
+
+The host bar names the game and phase, counts the queue in an attention badge,
+counts down the deadline, and carries the writes by frequency. `Post` moves to
+the composer; the per-phase routine (Votecount, Deadline, End phase) is a
+compact tool row; Tools is a popover holding only the rare items (Replacement,
+Slot lifecycle, Roles). A host post is an ordinary write with no confirmation;
+it is authorized as the `PublishHostPost` command into the main thread.
+
+The Replacement task holds the incoming-member chooser and the replacement
+invite; player invites are setup work and live on the setup route's roster
+stage. One Technical details drawer after the composer holds the command
+access context, receipts, scheduler evidence, lifecycle checks, prompt history,
+the vote record and the phase summary.
+
+Packs must declare a label and description for every prompt they produce; the
+canvas uses those labels and roster names, and a prompt states its question
+once. Deadline controls offer 24 hours, 48 hours, and a custom time. The
+confirmation states the consequence once. Red treatment is reserved for
+irreversible actions. Command feedback uses a shared status selector and each
+action reserves a stable status floor, so pending and recovery messages do not
+move neighboring controls.
 
 A host link can select an authoritative roster seat with `?slot_id=<seat>`.
 The server loads that seat's current projection, and subsequent refreshes and
@@ -205,12 +229,14 @@ routes remain the durable place for evidence review.
 ## Responsive rules
 
 - Phone: one compact app bar, a full-width reading lane, a bottom action dock,
-  and Vote and More as bottom sheets.
+  and Vote and More as bottom sheets. The host console has no dock: its queue
+  strip sits under the host bar and a chosen task is a sheet.
 - Tablet below 1100px: the same semantic order with a wider reading measure and
   the same sheets.
 - From 1100px: preserve the reading measure and spend the extra width on one
-  sticky rail (vote tally and picker, role card, messages, history) beside the
-  reading lane. There is no dock, and no additional dashboard.
+  sticky rail beside the reading lane: for a player the vote tally and picker,
+  role card, messages and history; for the host the decision queue and the
+  decision canvas. There is no dock, and no additional dashboard.
 
 Primary controls have a 44px minimum target; compact post-row controls are
 32px and open 44px targets. No action depends on hover or a gesture: a sheet
@@ -249,8 +275,11 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
 - Below 1100px the player route has no permanent command column; from 1100px
   the only permanent column is the rail, and the dock is not rendered.
 - Desktop width does not add status panels beyond the rail.
-- The host first viewport contains the highest-priority task, its consequence,
-  and its primary action.
+- The host first viewport contains the thread and the queue strip naming the
+  highest-priority decision; its consequence and primary action are one tap
+  away in the task sheet below 1100px and on screen in the rail from 1100px.
+- The host's three routine tools and `Post` are one tap from the bar at every
+  width; the rare tools are one tap behind Tools.
 - The public game thread starts within 420px on phone and 390px on desktop, uses
   at most a 760px reading measure, and contains no panel-card stack.
 - The admin overview renders one decision canvas, with its queue stacked below
@@ -278,7 +307,8 @@ mode. Reduced-motion preference removes any authored scrolling behavior.
 1. Replace the player masthead, channel cards, and command rail with the game
    frame, game bar, channel tabs, content-following sheets, and action dock.
 2. Replace the host wall of controls with `HostTask` navigation and a decision
-   canvas.
+   canvas. Complete, then recomposed onto the shared game frame: thread lane,
+   queue strip or rail, task sheet, bar tools by frequency.
 3. Convert setup to the six-stage `guided-stage-canvas` workflow. Complete.
 4. Reassess public and admin surfaces independently; do not force either through
    the gameplay composition. Complete: public uses a publication, admin uses an

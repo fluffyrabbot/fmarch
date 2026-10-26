@@ -388,7 +388,7 @@ function repositoryFixture(t) {
   addFiles(fixture.root, fixture.files, {
     'frontend/src/routes/g/[game]/host/+page.svelte': 'host-page',
     'frontend/src/routes/discussions/[slug]/+page.svelte': 'discussion-page',
-    'tools/live_stack/host_invite_retry_scenario.mjs': 'browser-helper',
+    'tools/live_stack/host_replacement_scenario.mjs': 'browser-helper',
     'tools/cargo_test_evidence.mjs': 'cargo-evidence-wrapper',
     'tools/fixtures/im_human_v4/day_vote_resolution.fmarch.json': 'day-vote-fixture',
     'docs/ops/proof-runs.json': 'proof-runs',
@@ -449,7 +449,7 @@ test('production pure Rust keys exclude unrelated UI tools but bind source, lock
   const { root, files, metadata: packageMetadata, compute } = repositoryFixture(t);
   const laneId = 'cargo:event-actor';
   const before = compute(laneId);
-  for (const path of ['frontend/src/routes/g/[game]/host/+page.svelte', 'tools/live_stack/host_invite_retry_scenario.mjs']) {
+  for (const path of ['frontend/src/routes/g/[game]/host/+page.svelte', 'tools/live_stack/host_replacement_scenario.mjs']) {
     assert.ok(!before.payload.inputs.some((input) => input.path === path), path);
     writeFileSync(join(root, path), 'unrelated change');
     assert.equal(compute(laneId).proofKey, before.proofKey, path);

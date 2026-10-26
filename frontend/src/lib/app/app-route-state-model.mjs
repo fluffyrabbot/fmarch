@@ -218,14 +218,14 @@ export function isPlayerRouteEmpty({
 }
 
 export function isModeratorRouteEmpty({
-  workQueues,
+  thread,
   votecount,
   hostPrompts,
   hostTasks,
   moderatorActionGroups,
 } = {}) {
   return (
-    arrayLength(workQueues) === 0 &&
+    arrayLength(thread?.posts) === 0 &&
     arrayLength(votecount) === 0 &&
     arrayLength(hostPrompts) === 0 &&
     arrayLength(hostTasks) === 0 &&
