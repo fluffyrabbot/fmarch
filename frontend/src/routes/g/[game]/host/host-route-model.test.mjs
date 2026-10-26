@@ -4,11 +4,11 @@ import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import { loadHostGameplaySnapshot } from "../../../../lib/server/gameplay-api.mjs";
 import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import { actions, load } from "./+page.server.js";
+import { actions as setupActions } from "../setup/+page.server.js";
 import {
   HOST_CONSOLE_ROUTE_CONTRACT,
-  buildHostInviteTargets,
+  buildHostReplacementInviteTarget,
   buildHostConsoleRouteData as buildHostConsoleRouteDataModel,
-  buildHostWorkQueues,
   hostConsoleForbiddenMessage,
   resolveHostConsoleAccess,
   resolveHostRouteCapabilities,
@@ -212,10 +212,6 @@ test("host console route data is allowed for HostOf scoped to the current game",
   );
   assert.equal(data.deadlineClock.nowSeconds, 1781806740);
   assert.equal(data.phase.deadline, 1781841600);
-  assert.equal(
-    data.workQueues.find((queue) => queue.id === "deadline").value,
-    "Closes in 9h 41m",
-  );
   assert.deepEqual(
     data.moderatorActionGroups
       .find((group) => group.id === "votecount")
@@ -238,23 +234,26 @@ test("host console route data is allowed for HostOf scoped to the current game",
       .actions.map((action) => action.id),
     ["complete_game"],
   );
-  assert.deepEqual(data.inviteTargets.player, {
-    id: "player",
-    eyebrow: "Player invite",
-    action: "?/issuePlayerInvite",
-    panelTestId: "host-player-invite-panel",
-    targetTestId: "host-player-invite-target",
-    submitTestId: "host-player-invite-submit",
-    statusTestId: "host-player-invite-status",
-    urlTestId: "host-player-invite-url",
-    accountTestId: "host-player-invite-account",
+  assert.deepEqual(data.replacementInvite, {
+    id: "replacement",
+    eyebrow: "Replacement invite",
+    action: "?/issueReplacementInvite",
+    panelTestId: "host-replacement-invite-panel",
+    targetTestId: "host-replacement-invite-target",
+    submitTestId: "host-replacement-invite-submit",
+    statusTestId: "host-replacement-invite-status",
+    urlTestId: "host-replacement-invite-url",
+    accountTestId: "host-replacement-invite-account",
     available: true,
     slotId: "slot-7",
-    principalId: PLAYER_MIRA_PRINCIPAL_ID,
+    principalId: PLAYER_ROWAN_PRINCIPAL_ID,
     expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
-    targetLabel: "Mira · S7",
-    submitLabel: "Issue player invite",
+    targetLabel: "player-rowan · S7",
+    submitLabel: "Issue invite",
   });
+  assert.equal(data.thread.posts.length > 0, true);
+  assert.equal(data.threadPager.channel, "main");
+  assert.equal(data.threadEndpoint, "/api/gameplay/games/midsummer?limit=50");
   assert.equal(
     data.hostLifecycleControlCheckpoint.root.testId,
     "host-lifecycle-control-checkpoint",
@@ -274,8 +273,8 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(data.hostLifecycleControlCheckpoint.status.state, "ack");
 });
 
-test("host invite targets derive from projected slot occupancy", () => {
-  const targets = buildHostInviteTargets({
+test("the replacement invite target derives from projected slot occupancy", () => {
+  const target = buildHostReplacementInviteTarget({
     replacement: {
       slotId: "slot_12",
       occupantLabel: "player-alex",
@@ -285,31 +284,25 @@ test("host invite targets derive from projected slot occupancy", () => {
     replacementLabel: "player-jules",
   });
 
-  assert.equal(targets.player.slotId, "slot_12");
-  assert.equal(targets.player.available, true);
-  assert.equal(targets.player.principalId, PLAYER_ALEX_PRINCIPAL_ID);
-  assert.equal(targets.player.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
-  assert.equal(targets.player.targetLabel, "player-alex · S12");
-  assert.equal(targets.replacement.slotId, "slot_12");
-  assert.equal(targets.replacement.available, true);
-  assert.equal(targets.replacement.principalId, PLAYER_JULES_PRINCIPAL_ID);
-  assert.equal(targets.replacement.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
-  assert.equal(targets.replacement.targetLabel, "player-jules · S12");
+  assert.equal(target.slotId, "slot_12");
+  assert.equal(target.available, true);
+  assert.equal(target.principalId, PLAYER_JULES_PRINCIPAL_ID);
+  assert.equal(target.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
+  assert.equal(target.targetLabel, "player-jules · S12");
 });
 
-test("host invite targets fail closed when a live replacement omits principal authority", () => {
-  const targets = buildHostInviteTargets({
+test("the replacement invite target fails closed when a live replacement omits principal authority", () => {
+  const target = buildHostReplacementInviteTarget({
     replacement: {
       slotId: "slot_12",
       occupantLabel: "player-alex",
     },
+    replacementPrincipalId: PLAYER_JULES_PRINCIPAL_ID,
   });
 
-  assert.equal(targets.player.available, false);
-  assert.equal(targets.player.principalId, "");
-  assert.equal(targets.player.expectedOccupantPrincipalId, "");
-  assert.equal(targets.replacement.available, false);
-  assert.equal(targets.replacement.expectedOccupantPrincipalId, "");
+  assert.equal(target.available, false);
+  assert.equal(target.expectedOccupantPrincipalId, "");
+  assert.equal(target.targetLabel, "No authoritative replacement selected");
 });
 
 test("host console route data uses host prompt and votecount cold-loads when available", async () => {
@@ -320,6 +313,9 @@ test("host console route data uses host prompt and votecount cold-loads when ava
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
     fetchImpl: async (url) => {
       seen.push(url);
+      if (url === "/api/gameplay/games/midsummer?limit=50") {
+        return jsonResponse(threadPageResponse());
+      }
       if (url === "/api/gameplay/games/midsummer/votecount") {
         return jsonResponse([
           {
@@ -478,6 +474,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   });
 
   assert.deepEqual(seen, [
+    "/api/gameplay/games/midsummer?limit=50",
     "/api/gameplay/games/midsummer/host-prompts",
     "/api/gameplay/games/midsummer/votecount",
     "/api/gameplay/games/midsummer/day-vote-outcomes",
@@ -602,7 +599,6 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       reason: null,
     },
   ]);
-  assert.equal(data.workQueues.find((queue) => queue.id === "votecount").value, "1 projected target");
 });
 
 test("host console route data is allowed for CohostOf scoped to the current game", async () => {
@@ -611,7 +607,9 @@ test("host console route data is allowed for CohostOf scoped to the current game
     principalId: COHOST_PRINCIPAL_ID,
     capabilities: [{ kind: "CohostOf", game: "midsummer" }],
     fetchImpl: async (url) =>
-      url.endsWith("/host-console-state?slot_id=slot-7")
+      url === "/api/gameplay/games/midsummer?limit=50"
+        ? jsonResponse(threadPageResponse())
+        : url.endsWith("/host-console-state?slot_id=slot-7")
         ? jsonResponse({
             game: "midsummer",
             authority: {
@@ -673,47 +671,6 @@ test("host console route data is allowed for CohostOf scoped to the current game
     "disabled:only the host can change player status",
   );
   assert.equal(data.hostLifecycleControlCheckpoint.status.state, "pending");
-});
-
-test("host work queue deadline countdown recomputes from the projected phase", () => {
-  const fixtureQueues = buildHostWorkQueues({
-    phase: { deadline: 1781841600 },
-    votecountCount: 2,
-    nowSeconds: 1781806740,
-  });
-  assert.deepEqual(fixtureQueues.map((queue) => [queue.id, queue.value]), [
-    ["deadline", "Closes in 9h 41m"],
-    ["votecount", "2 projected targets"],
-      ["replacement", "No replacement pending"],
-  ]);
-
-  const extendedQueues = buildHostWorkQueues({
-    phase: { deadline: 1781841600 + 86400 },
-    votecountCount: 1,
-    nowSeconds: 1781806740,
-  });
-  assert.equal(
-    extendedQueues.find((queue) => queue.id === "deadline").value,
-    "Closes in 33h 41m",
-  );
-  assert.equal(
-    extendedQueues.find((queue) => queue.id === "votecount").value,
-    "1 projected target",
-  );
-
-  const noDeadlineQueues = buildHostWorkQueues({
-    phase: { deadline: null },
-    votecountCount: 0,
-    nowSeconds: 1781806740,
-  });
-  assert.equal(
-    noDeadlineQueues.find((queue) => queue.id === "deadline").value,
-    "No deadline committed",
-  );
-  assert.equal(
-    noDeadlineQueues.find((queue) => queue.id === "votecount").value,
-    "No active ballots",
-  );
 });
 
 test("host console access accepts API-shaped game capabilities", () => {
@@ -934,9 +891,9 @@ test("host action issues a replacement invite through the authenticated host ses
   });
 });
 
-test("host action issues a player invite through the authenticated host session", async () => {
+test("the setup action issues a player invite through the authenticated host session", async () => {
   const observed = [];
-  const result = await actions.issuePlayerInvite({
+  const result = await setupActions.issuePlayerInvite({
     cookies: {
       get(name) {
         return name === "fmarch_session" ? "host-session-token" : undefined;
@@ -1021,7 +978,7 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
   }
   const observed = [];
   try {
-    const result = await actions.issuePlayerInvite({
+    const result = await setupActions.issuePlayerInvite({
       cookies: {
         get: (name) => (name === "fmarch_session" ? "fmss_host-session" : undefined),
       },
@@ -1064,7 +1021,7 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
 
 test("host action rejects stale player invite targets before issuing an invite", async () => {
   const observed = [];
-  const result = await actions.issuePlayerInvite({
+  const result = await setupActions.issuePlayerInvite({
     cookies: {
       get(name) {
         return name === "fmarch_session" ? "host-session-token" : undefined;
@@ -1111,7 +1068,7 @@ test("host action rejects stale player invite targets before issuing an invite",
 
 test("host action retries stale player invites against the current occupant", async () => {
   const observed = [];
-  const result = await actions.issuePlayerInvite({
+  const result = await setupActions.issuePlayerInvite({
     cookies: {
       get(name) {
         return name === "fmarch_session" ? "host-session-token" : undefined;
@@ -1186,7 +1143,7 @@ test("host invites reject missing or text-shaped principal authority before any 
     url: new URL("http://localhost/g/midsummer/host"),
   };
 
-  const missingPrincipal = await actions.issuePlayerInvite({
+  const missingPrincipal = await setupActions.issuePlayerInvite({
     ...common,
     request: formRequest({
       accountId: "mira@example.test",
@@ -1197,7 +1154,7 @@ test("host invites reject missing or text-shaped principal authority before any 
   assert.equal(missingPrincipal.status, 400);
   assert.match(missingPrincipal.data.playerInvite.message, /canonical UUID/);
 
-  const textExpectedOccupant = await actions.issuePlayerInvite({
+  const textExpectedOccupant = await setupActions.issuePlayerInvite({
     ...common,
     request: formRequest({
       accountId: "mira@example.test",
@@ -1209,7 +1166,7 @@ test("host invites reject missing or text-shaped principal authority before any 
   assert.equal(textExpectedOccupant.status, 400);
   assert.match(textExpectedOccupant.data.playerInvite.message, /Expected occupant principal/);
 
-  const missingSlot = await actions.issuePlayerInvite({
+  const missingSlot = await setupActions.issuePlayerInvite({
     ...common,
     request: formRequest({
       accountId: "mira@example.test",
@@ -1232,7 +1189,7 @@ test("host invites refuse malformed projection or mismatched invite response aut
     url: new URL("http://localhost/g/midsummer/host"),
   };
 
-  const malformedProjection = await actions.issuePlayerInvite({
+  const malformedProjection = await setupActions.issuePlayerInvite({
     ...common,
     request: formRequest({
       accountId: "mira@example.test",
@@ -1249,7 +1206,7 @@ test("host invites refuse malformed projection or mismatched invite response aut
   assert.match(malformedProjection.data.playerInvite.message, /projection is unavailable/);
 
   const observed = [];
-  const mismatchedInvite = await actions.issuePlayerInvite({
+  const mismatchedInvite = await setupActions.issuePlayerInvite({
     ...common,
     request: formRequest({
       accountId: "mira@example.test",
@@ -1288,6 +1245,29 @@ test("route model does not grant tablet smoke access by itself", () => {
 
   assert.deepEqual(capabilities, []);
 });
+
+function threadPageResponse() {
+  return {
+    game: { game: "midsummer", pack: "midsummer", status: "active", phase_id: "D01", updated_seq: 1, completed_seq: null },
+    next_before_seq: null,
+    roster: [],
+    posts: [
+      {
+        game: "midsummer",
+        source_seq: 1,
+        stream_seq: 1,
+        channel_id: "main",
+        author: { kind: "host_narrator" },
+        phase_id: "D01",
+        body: "Day 1 is open.",
+        media: [],
+        quotations: [],
+        citation_count: 0,
+        occurred_at: 1,
+      },
+    ],
+  };
+}
 
 function jsonResponse(body) {
   return {

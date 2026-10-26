@@ -51,6 +51,7 @@ export const EMPTY_PLAYER_GAMEPLAY_SNAPSHOT = Object.freeze({
 });
 
 export const EMPTY_HOST_GAMEPLAY_SNAPSHOT = Object.freeze({
+  thread: EMPTY_THREAD_PAGE,
   hostPrompts: EMPTY_ROWS,
   votecount: EMPTY_ROWS,
   dayVoteOutcomes: EMPTY_ROWS,
@@ -255,6 +256,13 @@ export async function loadHostGameplaySnapshot({
     );
   }
   const requests = [
+    request("thread", {
+      fetchImpl,
+      timeoutMs,
+      url: playerThreadUrl({ apiBaseUrl, game, channel: "main", limit: 50 }),
+      validate: (value) =>
+        validateGameplayThreadPageResponse(value, { game, channel: "main" }),
+    }),
     request("hostPrompts", {
       fetchImpl,
       timeoutMs,
@@ -293,8 +301,16 @@ export async function loadHostGameplaySnapshot({
   }
 
   const values = valuesByEndpoint(requests, results);
+  try {
+    values.thread = await hydrateReaderThreadPage(values.thread, { game, channel: "main",
+      fetchImpl, apiBaseUrl, signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined });
+  } catch (error) {
+    return failedSnapshot({ endpoint: "threadCitations", result: { kind: error.status === 403 ? "forbidden"
+      : error.status === 401 ? "unauthorized" : "unavailable", reason: "citation_hydration_failed", status: error.status ?? null } }, EMPTY_HOST_GAMEPLAY_SNAPSHOT);
+  }
   return readySnapshot(
     Object.freeze({
+      thread: normalizeThreadPage(values.thread, EMPTY_THREAD_PAGE),
       hostPrompts: normalizeHostPrompts(values.hostPrompts, EMPTY_ROWS),
       votecount: normalizeVotecount(values.votecount, EMPTY_ROWS),
       dayVoteOutcomes: normalizeDayVoteOutcomes(

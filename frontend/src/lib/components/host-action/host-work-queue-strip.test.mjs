@@ -3,86 +3,64 @@ import { test } from "node:test";
 import {
   HOST_WORK_QUEUE_STRIP_CONTRACT,
   buildHostWorkQueueStripViewModel,
-  formatDeadlineCountdown,
 } from "./host-work-queue-strip.mjs";
 
-test("host work queue strip model exposes deadline votecount and replacement queues", () => {
+const decisions = [
+  {
+    id: "engine-host-prompt:D01:skip_next_day:slot_1",
+    kind: "engine_host_prompt",
+    sourceId: "D01:skip_next_day:slot_1",
+    label: "Skip the next day?",
+    meta: "Day 1 · Ilya · S1",
+    urgency: "attention",
+    urgencyLabel: "Needs decision",
+    state: "ready",
+    testId: "host-task-engine-host-prompt-D01-skip_next_day-slot_1",
+  },
+  {
+    id: "replacement",
+    kind: "replacement",
+    label: "Replacement",
+    meta: "Mira",
+    urgency: "attention",
+    urgencyLabel: "Player waiting",
+    state: "ready",
+    testId: "host-task-replacement",
+  },
+];
+
+test("the queue lists each decision with its posture and marks the selected one", () => {
   const view = buildHostWorkQueueStripViewModel({
-    queues: [
-      { id: "deadline", label: "Deadline", value: "Closes in 9h 41m" },
-      { id: "votecount", label: "Votecount", value: "2 projected targets" },
-      { id: "replacement", label: "Replacement", value: "Mira · S7" },
-    ],
+    decisions,
+    selectedTaskId: "replacement",
+    summary: "2 decisions need attention.",
   });
 
   assert.equal(view.root.className, HOST_WORK_QUEUE_STRIP_CONTRACT.rootClassName);
-  assert.equal(view.root.ariaLabel, "Host queues");
-  assert.equal(view.root.data.component, "host-work-queue-strip");
+  assert.equal(view.root.ariaLabel, "Host task queue");
+  assert.equal(view.root.testId, "host-task-queue");
+  assert.deepEqual(view.root.data, { component: "host-task-queue", thumbZone: "moderator-primary-actions", layout: "strip" });
+  assert.deepEqual(view.summary, {
+    testId: "host-task-queue-summary",
+    label: "Host queue",
+    attentionCount: 2,
+    attentionLabel: "2 decisions need attention",
+    text: "2 decisions need attention.",
+  });
   assert.deepEqual(
-    view.queues.map((queue) => [
-      queue.id,
-      queue.label,
-      queue.value,
-      queue.testId,
-      queue.minBlockPx,
-    ]),
+    view.tasks.map((task) => [task.id, task.testId, task.selected, task.minBlockPx, task.urgencyLabel]),
     [
-      ["deadline", "Deadline", "Closes in 9h 41m", "host-work-queue-deadline", 112],
-      ["votecount", "Votecount", "2 projected targets", "host-work-queue-votecount", 112],
-      ["replacement", "Replacement", "Mira · S7", "host-work-queue-replacement", 112],
+      ["engine-host-prompt:D01:skip_next_day:slot_1", "host-task-engine-host-prompt-D01-skip_next_day-slot_1", false, 44, "Needs decision"],
+      ["replacement", "host-task-replacement", true, 44, "Player waiting"],
     ],
   );
 });
 
-test("deadline countdown is a pure projection of deadline and injected now", () => {
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781841600, nowSeconds: 1781806740 }),
-    "Closes in 9h 41m",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781810340, nowSeconds: 1781806740 }),
-    "Closes in 1h",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781809200, nowSeconds: 1781806740 }),
-    "Closes in 41m",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781806780, nowSeconds: 1781806740 }),
-    "Closes in under 1m",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781806740, nowSeconds: 1781806740 }),
-    "Deadline passed",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781800000, nowSeconds: 1781806740 }),
-    "Deadline passed",
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: null, nowSeconds: 1781806740 }),
-    null,
-  );
-  assert.equal(
-    formatDeadlineCountdown({ deadlineSeconds: 1781841600, nowSeconds: undefined }),
-    null,
-  );
-  assert.equal(formatDeadlineCountdown(), null);
-});
-
-test("host work queue strip model normalizes missing queue fields", () => {
-  const view = buildHostWorkQueueStripViewModel({
-    queues: [{ label: "Needs Review!" }],
-  });
-
-  assert.deepEqual(view.queues, [
-    {
-      id: "queue",
-      label: "Needs Review!",
-      value: "No work queued",
-      className: "host-console-critical-path__queue fm-section",
-      testId: "host-work-queue-Needs-Review-",
-      minBlockPx: 112,
-    },
-  ]);
+test("an idle queue says so and carries the rail layout when asked", () => {
+  const view = buildHostWorkQueueStripViewModel({ layout: "rail" });
+  assert.equal(view.root.data.layout, "rail");
+  assert.equal(view.summary.attentionCount, 0);
+  assert.equal(view.summary.attentionLabel, "0 decisions need attention");
+  assert.equal(view.summary.text, "Nothing needs you right now");
+  assert.deepEqual(view.tasks, []);
 });

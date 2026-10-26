@@ -1,56 +1,57 @@
+// The decision queue: every task the game is waiting on the host for, in
+// posture order. Below the rail width it is a strip under the host bar and a
+// chosen task opens as a sheet; from the rail width up it heads the rail
+// above the decision canvas (usage-frequency audit, decision 11).
 export const HOST_WORK_QUEUE_STRIP_CONTRACT = Object.freeze({
-  rootClassName: "host-console-critical-path__queues",
-  queueClassName: "host-console-critical-path__queue fm-section",
-  componentName: "host-work-queue-strip",
-  minQueueBlockPx: 112,
+  rootClassName: "host-task-queue",
+  componentName: "host-task-queue",
+  rootTestId: "host-task-queue",
+  summaryTestId: "host-task-queue-summary",
+  thumbZone: "moderator-primary-actions",
+  taskMinBlockPx: 44,
 });
 
-export function buildHostWorkQueueStripViewModel({ queues = [] } = {}) {
+export function buildHostWorkQueueStripViewModel({
+  decisions = [],
+  selectedTaskId = null,
+  attentionCount = decisions.length,
+  summary = "Nothing needs you right now",
+  layout = "strip",
+} = {}) {
   return Object.freeze({
     root: Object.freeze({
       className: HOST_WORK_QUEUE_STRIP_CONTRACT.rootClassName,
-      ariaLabel: "Host queues",
+      ariaLabel: "Host task queue",
+      testId: HOST_WORK_QUEUE_STRIP_CONTRACT.rootTestId,
       data: Object.freeze({
         component: HOST_WORK_QUEUE_STRIP_CONTRACT.componentName,
+        thumbZone: HOST_WORK_QUEUE_STRIP_CONTRACT.thumbZone,
+        layout,
       }),
     }),
-    queues: Object.freeze(
-      queues.map((queue) =>
+    summary: Object.freeze({
+      testId: HOST_WORK_QUEUE_STRIP_CONTRACT.summaryTestId,
+      label: "Host queue",
+      attentionCount,
+      attentionLabel: `${attentionCount} decision${attentionCount === 1 ? "" : "s"} need attention`,
+      text: summary,
+    }),
+    tasks: Object.freeze(
+      decisions.map((task) =>
         Object.freeze({
-          id: String(queue.id ?? "queue"),
-          label: String(queue.label ?? "Queue"),
-          value: String(queue.value ?? "No work queued"),
-          className: HOST_WORK_QUEUE_STRIP_CONTRACT.queueClassName,
-          testId: `host-work-queue-${stableId(queue.id ?? queue.label ?? "queue")}`,
-          minBlockPx: HOST_WORK_QUEUE_STRIP_CONTRACT.minQueueBlockPx,
+          id: task.id,
+          kind: task.kind,
+          sourceId: task.sourceId ?? null,
+          label: task.label,
+          meta: task.meta,
+          urgency: task.urgency,
+          urgencyLabel: task.urgencyLabel,
+          state: task.state,
+          testId: task.testId,
+          selected: task.id === selectedTaskId,
+          minBlockPx: HOST_WORK_QUEUE_STRIP_CONTRACT.taskMinBlockPx,
         }),
       ),
     ),
   });
-}
-
-export function formatDeadlineCountdown({ deadlineSeconds, nowSeconds } = {}) {
-  if (!Number.isFinite(deadlineSeconds) || !Number.isFinite(nowSeconds)) {
-    return null;
-  }
-  const remainingSeconds = Math.floor(deadlineSeconds) - Math.floor(nowSeconds);
-  if (remainingSeconds <= 0) {
-    return "Deadline passed";
-  }
-  if (remainingSeconds < 60) {
-    return "Closes in under 1m";
-  }
-  const hours = Math.floor(remainingSeconds / 3600);
-  const minutes = Math.floor((remainingSeconds % 3600) / 60);
-  if (hours === 0) {
-    return `Closes in ${minutes}m`;
-  }
-  if (minutes === 0) {
-    return `Closes in ${hours}h`;
-  }
-  return `Closes in ${hours}h ${minutes}m`;
-}
-
-function stableId(value) {
-  return String(value).replace(/[^a-zA-Z0-9_-]+/g, "-");
 }
