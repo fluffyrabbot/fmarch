@@ -286,6 +286,15 @@ the shape, and three deviations from the text above:
   crossing rebuilds the sheets or the rail and drops what they held, and a
   blip that crosses and returns (a full-page screenshot resizes the viewport
   for a frame) is not a crossing.
+- Two findings outside the slice, fixed because they blocked its proof under
+  the load a mixed cargo-and-browser Linux job puts on the worker: a reader
+  recovery after a reload could be superseded by the live resync's own thread
+  read and surface "Recovery cancelled" instead of the denied or unavailable
+  message (`recoverPlayerThreadWindow` now answers `retry` for a superseded
+  read and the route runs recovery once more against the fresh window), and
+  proof-cache maintenance plans were tied to the checkout path that wrote
+  them, so one job's reviewed GC plan made every later job's audit red (plans
+  now belong to the cache directory they are stored in).
 - Proofs follow the topology: the moderator role-smoke scenario resolves per
   viewport like the player's (queue strip as the phone thumb zone, rail from
   1100px), the deadline flow opens its task through the bar, and the moderator
