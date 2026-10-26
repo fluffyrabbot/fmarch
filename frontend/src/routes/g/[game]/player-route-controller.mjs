@@ -1043,8 +1043,11 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   const response = await fetchImpl(playerThreadUrl({ game: data.game.id,
     channel: data.threadPager.channel, limit: data.threadPager.pageSize, aroundSeq: seq,
   }), { headers: { accept: "application/json" }, signal });
-  if (!isCurrent() || !currentRead()) return "cancelled";
-  if ([401, 403, 404].includes(response.status) && !currentOwner()) return "cancelled";
+  if (!isCurrent()) return "cancelled";
+  // "retry": a concurrent refresh (a live resync after a reload) superseded
+  // this read; the route runs recovery once more against the fresh window,
+  // so a stale denial is re-checked rather than shown or ignored.
+  if (!currentRead() || ([401, 403, 404].includes(response.status) && !currentOwner())) return "retry";
   if ([401, 403].includes(response.status)) {
     projectionStore.revokeAuthority({ reason: "reader_destination_access_denied", status: response.status });
     return "denied";
@@ -1062,12 +1065,14 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   }
   if (!response.ok) throw new Error(`Thread destination rejected: ${response.status}`);
   let payload = await response.json();
-  if (!isCurrent() || !currentRead()) return "cancelled";
+  if (!isCurrent()) return "cancelled";
+  if (!currentRead()) return "retry";
   if (!validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: data.threadPager.channel })) {
     throw new Error("Invalid thread destination response");
   }
   payload = await hydrateReaderPage(payload, { data, fetchImpl, projectionStore, signal, currentRead, currentOwner });
-  if (!isCurrent() || !currentRead()) return "cancelled";
+  if (!isCurrent()) return "cancelled";
+  if (!currentRead()) return "retry";
   const current = projectionStore.getSnapshot().thread;
   const window = normalizeThreadPage(payload, { posts: [] });
   if (!current || current.nextBeforeSeq !== initial?.nextBeforeSeq || current.nextAfterSeq !== initial?.nextAfterSeq
@@ -1076,7 +1081,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
     const ready = current?.nextBeforeSeq === window.nextBeforeSeq && current?.nextAfterSeq === window.nextAfterSeq
       && (intent === "newest" || current.posts.some(post => String(post.seq) === seq));
     if (ready) onRecovered(seq);
-    return ready ? "ready" : "cancelled";
+    return ready ? "ready" : "retry";
   }
   const before = new Map(initial.posts.map(post => [String(post.seq), post]));
   const now = new Map(current.posts.map(post => [String(post.seq), post]));
@@ -1096,7 +1101,7 @@ export async function recoverPlayerThreadWindow({ data, fetchImpl, projectionSto
   }
   const ready = intent === "newest" || posts.some(post => String(post.seq) === seq);
   if (!ready) {
-    if (!currentOwner()) return "cancelled";
+    if (!currentOwner()) return "retry";
     projectionStore.invalidate(["thread"], { reason: "reader_destination_unavailable" });
     projectionStore.applySnapshot({ thread: { ...current,
       posts: current.posts.filter(post => String(post.seq) !== seq),
