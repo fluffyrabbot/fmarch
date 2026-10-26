@@ -6,7 +6,7 @@
 //!   dispatches via `CommandDispatch::AttachDayProgram` for adapter-owned
 //!   immutable artifact lookup. Core accepts `program: DayProgram` after the
 //!   adapter materializes the full program.
-//! - **media Option vs Vec**: wire `PublishSpectatorPost` / `SubmitPost` use
+//! - **media Option vs Vec**: wire `PublishHostPost` / `SubmitPost` use
 //!   `Option<Vec<SubmitPostMedia>>` (omit-friendly, empty when absent). Core
 //!   uses `Vec<ThreadPostMedia>` (always present, may be empty).
 //! - **empty optional variants**: wire may omit empty `cohost_denied` /
@@ -61,9 +61,7 @@ fn core_command_wire_status(cmd: &commands::Command) -> CoreWireStatus {
         commands::Command::PublishVotecount { .. } => CoreWireStatus::Mapped("PublishVotecount"),
         commands::Command::ResolveHostPrompt { .. } => CoreWireStatus::Mapped("ResolveHostPrompt"),
         commands::Command::SetPostPolicy { .. } => CoreWireStatus::Mapped("SetPostPolicy"),
-        commands::Command::PublishSpectatorPost { .. } => {
-            CoreWireStatus::Mapped("PublishSpectatorPost")
-        }
+        commands::Command::PublishHostPost { .. } => CoreWireStatus::Mapped("PublishHostPost"),
         commands::Command::ControlItaSession { .. } => CoreWireStatus::Mapped("ControlItaSession"),
         commands::Command::ApplyEffectPlan { .. } => CoreWireStatus::Mapped("ApplyEffectPlan"),
         commands::Command::AttachDayProgram { .. } => CoreWireStatus::Mapped("AttachDayProgram"),

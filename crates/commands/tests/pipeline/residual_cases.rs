@@ -2075,8 +2075,9 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
         handle(
             &pool,
             &user(spectator),
-            Command::PublishSpectatorPost {
+            Command::PublishHostPost {
                 game,
+                channel_id: "spectator".into(),
                 body: "spectator cannot publish".into(),
                 media: Vec::new(),
             },
@@ -2177,8 +2178,9 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     handle(
         &pool,
         &user(host),
-        Command::PublishSpectatorPost {
+        Command::PublishHostPost {
             game,
+            channel_id: "spectator".into(),
             body: "host-authored spectator notice".into(),
             media: Vec::new(),
         },

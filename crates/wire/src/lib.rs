@@ -914,8 +914,9 @@ pub enum Command {
         channel_id: String,
         allow_media_only: bool,
     },
-    PublishSpectatorPost {
+    PublishHostPost {
         game: Uuid,
+        channel_id: String,
         body: String,
         #[serde(default)]
         #[ts(optional)]

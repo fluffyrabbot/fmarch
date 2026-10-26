@@ -372,21 +372,25 @@ impl CommandDispatchExt for Command {
                 channel_id,
                 allow_media_only,
             },
-            Command::PublishSpectatorPost { game, body, media } => {
-                commands::Command::PublishSpectatorPost {
-                    game,
-                    body,
-                    media: media
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|media| commands::ThreadPostMedia {
-                            content_id: media.content_id,
-                            alt: media.alt,
-                            variants: BTreeMap::new(),
-                        })
-                        .collect(),
-                }
-            }
+            Command::PublishHostPost {
+                game,
+                channel_id,
+                body,
+                media,
+            } => commands::Command::PublishHostPost {
+                game,
+                channel_id,
+                body,
+                media: media
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|media| commands::ThreadPostMedia {
+                        content_id: media.content_id,
+                        alt: media.alt,
+                        variants: BTreeMap::new(),
+                    })
+                    .collect(),
+            },
             Command::ControlItaSession {
                 game,
                 session_id,

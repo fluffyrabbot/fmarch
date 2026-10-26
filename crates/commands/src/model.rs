@@ -245,9 +245,11 @@ pub enum Command {
         channel_id: String,
         allow_media_only: bool,
     },
-    /// Publish a host-authored post into the fixed spectator room. Host-team (Narrative).
-    PublishSpectatorPost {
+    /// Publish a host-authored post into the public main thread or the fixed
+    /// spectator room. Host-team (Narrative).
+    PublishHostPost {
         game: Uuid,
+        channel_id: String,
         body: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         media: Vec<ThreadPostMedia>,

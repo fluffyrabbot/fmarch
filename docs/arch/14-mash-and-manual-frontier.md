@@ -55,7 +55,7 @@ The spine is solid for mini/standard games and night-resolution culture:
 | User ≠ Slot; engine user-agnostic | Shipped | [01](01-domain-model.md), [09](09-engine-and-packs.md) |
 | Closed IR + declarative packs | Shipped; shipped culture packs pin high additive `ir_version` (e.g. mafiascum at 68 in tree; culture packs commonly mid-40s+) | `crates/domain`, `packs/mafiascum`, `packs/mafia_universe`, `packs/chinese_structured` |
 | Host prompts from engine policy | Shipped | Inner `HostPromptIssued` inside `ResolutionApplied`; `ResolveHostPrompt`; pack `host_prompt_resolution_effects` (`PkKill`, `AdvanceRevote`, `AdvanceNight`, `SkipNextDay`, `AcknowledgeOnly`). Beloved Princess uses `beloved_princess_policy` → skip_next_day prompt — not a separate command |
-| Host lifecycle **mutators** | Backend co-GM gates shipped; delivery followup required | `SetSlotStatus` → `SlotStatusChanged`; tags; `ResolvePhase`; `ControlItaSession`; `PublishSpectatorPost`; etc. use `require_game_run` + create-time denylist. The host UI still exposes only deadline controls to cohosts and events still need centrally stamped principal/authority metadata. Structural acts stay `HostOf` |
+| Host lifecycle **mutators** | Backend co-GM gates shipped; delivery followup required | `SetSlotStatus` → `SlotStatusChanged`; tags; `ResolvePhase`; `ControlItaSession`; `PublishHostPost`; etc. use `require_game_run` + create-time denylist. The host UI still exposes only deadline controls to cohosts and events still need centrally stamped principal/authority metadata. Structural acts stay `HostOf` |
 | Host console as exception queue | Interaction contract settled | [13](13-interaction-architecture.md); `frontend/.../host-task-workspace.mjs` `buildHostTaskWorkspaceViewModel` + `TASK_POSTURE` |
 | Setup workflow | Pack → Roster → Roles → Rules → Review (pre-Program baseline) | Historical baseline for [13](13-interaction-architecture.md); the current six-stage contract is recorded below |
 | Scoped channels | Role PM, faction rooms, mason/neighbor, dead, spectator | [01](01-domain-model.md) |
@@ -417,10 +417,12 @@ parallel `SetVoteWeight` command or projection-only grant.
 
 **Narrative decision (separate from mechanical catalog):**
 
-Manual spectator authoring remains first-class through `PublishSpectatorPost`.
-Automatic DayEvent narrative uses the same generalized host-notice builder, but
-is a distinct service-owned workflow. Player `SubmitPost` still requires
-`SlotOccupant` and a seat — it is **not** a silent host→`main` path.
+Manual host authoring is first-class through `PublishHostPost`, which names
+its channel: the public `main` thread (the host console composer) or the fixed
+`spectator` room. Automatic DayEvent narrative uses the same generalized
+host-notice builder, but is a distinct service-owned workflow. Player
+`SubmitPost` still requires `SlotOccupant` and a seat — it is **not** a silent
+host→`main` path; the host path is the explicit, Narrative-classed command.
 
 v1 host-authored narrative therefore:
 

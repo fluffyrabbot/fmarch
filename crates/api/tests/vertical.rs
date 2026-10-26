@@ -3275,8 +3275,9 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             app.clone(),
             4,
             "host_h",
-            Command::PublishSpectatorPost {
+            Command::PublishHostPost {
                 game,
+                channel_id: "spectator".into(),
                 body: "Host notice for the spectator room".into(),
                 media: Some(vec![SubmitPostMedia {
                     content_id: content_id.clone(),
@@ -3315,8 +3316,9 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             other_instance,
             5,
             "host_h",
-            Command::PublishSpectatorPost {
+            Command::PublishHostPost {
                 game,
+                channel_id: "spectator".into(),
                 body: "Live spectator notice".into(),
                 media: None,
             },
@@ -3472,8 +3474,9 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             app.clone(),
             7,
             "host_h",
-            Command::PublishSpectatorPost {
+            Command::PublishHostPost {
                 game,
+                channel_id: "spectator".into(),
                 body: "Notice racing spectator revocation".into(),
                 media: None,
             },
@@ -3544,8 +3547,9 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             app,
             10,
             "host_h",
-            Command::PublishSpectatorPost {
+            Command::PublishHostPost {
                 game,
+                channel_id: "spectator".into(),
                 body: "Notice after revocation".into(),
                 media: None,
             },

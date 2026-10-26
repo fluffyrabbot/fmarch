@@ -316,7 +316,7 @@ SpectatorOf(game)            read fixed spectator room; never grants a player sl
 - `SpectatorOf(game)` is derived from explicit `spectator_membership` grant/revoke events.
   Granting rejects current slot occupants, and assignment/replacement rejects current
   spectators, keeping observer and player authority disjoint. The spectator room accepts
-  only host-authored `PublishSpectatorPost`; all player `SubmitPost` attempts reject before
+  only host-authored `PublishHostPost`; all player `SubmitPost` attempts reject before
   any client-supplied actor slot is considered.
 - Replacement revokes the outgoing session's **game-scoped slot and channel authority** on
   the next capability resolution. It intentionally does not revoke the account session

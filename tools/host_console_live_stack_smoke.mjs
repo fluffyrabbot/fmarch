@@ -2616,8 +2616,9 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   }
   const uploaded = await uploadResponse.json();
   const historyNotice = await sendCommand("host_h", {
-    PublishSpectatorPost: {
+    PublishHostPost: {
       game: spectatorGame,
+      channel_id: "spectator",
       body: spectatorDefinition.historyBody,
       media: [{ content_id: uploaded.content_id, alt: spectatorDefinition.mediaAlt }],
     },
@@ -2692,8 +2693,9 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
 
   const liveBoundary = await capturePlayerLiveBoundary(page, { game: spectatorGame, channelId: spectatorDefinition.channelId });
   const liveNotice = await sendCommand("host_h", {
-    PublishSpectatorPost: {
+    PublishHostPost: {
       game: spectatorGame,
+      channel_id: "spectator",
       body: spectatorDefinition.liveBody,
       media: [],
     },

@@ -811,9 +811,12 @@ async fn handle_command(
             channel_id,
             allow_media_only,
         } => set_post_policy(tx, principal, game, channel_id, allow_media_only).await,
-        Command::PublishSpectatorPost { game, body, media } => {
-            publish_spectator_post(tx, principal, game, body, media).await
-        }
+        Command::PublishHostPost {
+            game,
+            channel_id,
+            body,
+            media,
+        } => publish_host_post(tx, principal, game, channel_id, body, media).await,
         Command::ControlItaSession {
             game,
             session_id,
@@ -1061,9 +1064,7 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
         Command::PublishVotecount { .. } => ("PublishVotecount", CommandAuditAuthority::HostTeam),
         Command::ResolveHostPrompt { .. } => ("ResolveHostPrompt", CommandAuditAuthority::HostTeam),
         Command::SetPostPolicy { .. } => ("SetPostPolicy", CommandAuditAuthority::HostTeam),
-        Command::PublishSpectatorPost { .. } => {
-            ("PublishSpectatorPost", CommandAuditAuthority::HostTeam)
-        }
+        Command::PublishHostPost { .. } => ("PublishHostPost", CommandAuditAuthority::HostTeam),
         Command::ControlItaSession { .. } => ("ControlItaSession", CommandAuditAuthority::HostTeam),
         Command::ApplyEffectPlan { .. } => ("ApplyEffectPlan", CommandAuditAuthority::HostTeam),
         Command::AttachDayProgram { .. } => ("AttachDayProgram", CommandAuditAuthority::HostTeam),
@@ -1111,7 +1112,7 @@ fn command_game(command: &Command) -> Uuid {
         | Command::PublishVotecount { game }
         | Command::ResolveHostPrompt { game, .. }
         | Command::SetPostPolicy { game, .. }
-        | Command::PublishSpectatorPost { game, .. }
+        | Command::PublishHostPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
         | Command::AttachDayProgram { game, .. }
@@ -1181,7 +1182,7 @@ pub fn command_identity_targets(
         | Command::PublishVotecount { .. }
         | Command::ResolveHostPrompt { .. }
         | Command::SetPostPolicy { .. }
-        | Command::PublishSpectatorPost { .. }
+        | Command::PublishHostPost { .. }
         | Command::ControlItaSession { .. }
         | Command::ApplyEffectPlan { .. }
         | Command::AttachDayProgram { .. }
@@ -1225,7 +1226,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::PublishVotecount { game }
         | Command::ResolveHostPrompt { game, .. }
         | Command::SetPostPolicy { game, .. }
-        | Command::PublishSpectatorPost { game, .. }
+        | Command::PublishHostPost { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::ApplyEffectPlan { game, .. }
         | Command::AttachDayProgram { game, .. }
@@ -2686,7 +2687,7 @@ async fn submit_post(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     // The fixed spectator room has no player-authoring path. It only accepts
-    // host-authored notices through PublishSpectatorPost, before any
+    // host-authored notices through PublishHostPost, before any
     // client-supplied slot or capability is inspected.
     if channel_id == "spectator" {
         return Err(Reject::NotAuthorized);
@@ -2785,13 +2786,21 @@ async fn charge_game_post_budget(
         })
 }
 
-async fn publish_spectator_post(
+/// Channels a host may author into by hand. Private rooms take host text only
+/// through the DayEvent narrative workflow, never through a free composer.
+const HOST_POST_CHANNELS: [&str; 2] = ["main", "spectator"];
+
+async fn publish_host_post(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
+    channel_id: String,
     body: String,
     media: Vec<ThreadPostMedia>,
 ) -> Result<Ack, Reject> {
+    if !HOST_POST_CHANNELS.contains(&channel_id.as_str()) {
+        return Err(Reject::InvalidTarget);
+    }
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
@@ -2800,7 +2809,7 @@ async fn publish_spectator_post(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let notice = build_host_notice(HostNoticeSpec {
-        channel_id: "spectator".to_string(),
+        channel_id,
         body,
         media,
         phase_id: phase,

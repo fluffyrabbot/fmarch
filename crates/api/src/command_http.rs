@@ -550,7 +550,7 @@ async fn prepare_command_media(
 ) -> Result<commands::Command, CommandPreparationError> {
     let media = match &mut command {
         commands::Command::SubmitPost { media, .. }
-        | commands::Command::PublishSpectatorPost { media, .. } => media,
+        | commands::Command::PublishHostPost { media, .. } => media,
         _ => return Ok(command),
     };
     if media.is_empty() {
@@ -966,7 +966,7 @@ fn classify_command(command: &wire::Command) -> CommandClassification {
                 ..DirtySurfaces::default()
             },
         },
-        Command::PublishSpectatorPost { game, .. } => CommandClassification {
+        Command::PublishHostPost { game, .. } => CommandClassification {
             game: *game,
             dirty: DirtySurfaces {
                 thread: true,
