@@ -537,7 +537,9 @@ export function readProofCacheGcPlan(path, { root }) {
   if (receipt.schema !== PROOF_CACHE_GC_PLAN_SCHEMA || receipt.kind !== PROOF_CACHE_GC_PLAN_KIND || receipt.state !== 'planned') {
     throw new Error('invalid proof cache GC plan receipt identity');
   }
-  if (receipt.repo_root !== resolve(root)) throw new Error('proof cache GC plan belongs to another repository root');
+  // The cache is shared by every checkout whose target links to it (fleet job
+  // worktrees come and go); a plan stored in this cache's plan directory
+  // belongs to this cache, and repo_root only records where it was written.
   if (claimed !== sha256(stableJson(base))) throw new Error('proof cache GC plan receipt digest does not match');
   const payload = {
     generated_at: receipt.generated_at,
@@ -814,7 +816,6 @@ function readRecoveryReceipt(path, { root }) {
   if (receipt.schema !== PROOF_CACHE_GC_RECOVERY_SCHEMA || receipt.kind !== PROOF_CACHE_GC_RECOVERY_KIND || receipt.state !== 'planned') {
     throw new Error('invalid proof cache GC recovery receipt identity');
   }
-  if (receipt.repo_root !== resolve(root)) throw new Error('proof cache GC recovery belongs to another repository root');
   if (claimed !== sha256(stableJson(base))) throw new Error('proof cache GC recovery receipt digest does not match');
   return receipt;
 }
