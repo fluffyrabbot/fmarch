@@ -1,7 +1,13 @@
 <script>
   import { page } from "$app/stores";
-  import { getContext, onDestroy, onMount } from "svelte";
+  import { getContext, onDestroy, onMount, tick } from "svelte";
   import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
+  import GameFrame from "$lib/components/gameplay/GameFrame.svelte";
+  import PlayerSheet from "$lib/components/gameplay/PlayerSheet.svelte";
+  import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
+  import { observeGameLayout } from "$lib/components/gameplay/game-layout.mjs";
+  import { captureReadingPosition, restoreReadingPosition } from "$lib/app/post-address.mjs";
+  import HostComposer from "$lib/components/host-action/HostComposer.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
     buildRouteStateViewModel,
@@ -53,11 +59,13 @@
     dispatchHostRouteAction,
     recoverHostRouteAction,
   } from "./host-route-controller.mjs";
+  import { HOST_CONSOLE_ROUTE_CONTRACT, buildHostReplacementInviteTarget } from "./host-route-model.mjs";
   import {
-    HOST_CONSOLE_ROUTE_CONTRACT,
-    buildHostInviteTargets,
-    buildHostWorkQueues,
-  } from "./host-route-model.mjs";
+    loadNewerPlayerThreadPage,
+    loadOlderPlayerThreadPage,
+    playerThreadErrorStatus,
+    playerThreadPendingStatus,
+  } from "../player-route-controller.mjs";
   import { THEME_CONTEXT } from "$lib/app/theme-context.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import {
@@ -93,6 +101,31 @@
     replacement: data.replacement,
   };
   $: currentPhase = projection.phase;
+  // The host reads the game where it happens (usage-frequency audit,
+  // decision 11): the main thread is the reading lane, the decision queue a
+  // strip under the bar below the rail width and the rail above it, and a
+  // chosen task opens as a sheet below the rail width.
+  let thread = data.thread;
+  let threadPageStatus = null;
+  let hostPostAction = null;
+  let hostPostBody = "";
+  // "flow" until hydration; then "sheet" below the rail width or "rail".
+  let layout = "flow";
+  let taskSheetOpen = false;
+  let taskSheetReturnTo = null;
+  let taskSheetFocus = [];
+  let preferredTaskId = null;
+  let dayEventSelections = {};
+  let recoveryOpenedFor = null;
+  onMount(() => observeGameLayout(window, (value) => {
+    const first = layout === "flow";
+    layout = value;
+    if (value === "rail") taskSheetOpen = false;
+    // A replacement invite result renders inside the Replacement task
+    // (decision 12): show that task where the host left it.
+    if (first && form?.replacementInvite !== undefined) void openTask("replacement", null);
+  }));
+  $: if (form?.replacementInvite !== undefined && preferredTaskId === null) preferredTaskId = "replacement";
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
   let hostPrompts = data.hostPrompts;
@@ -107,7 +140,7 @@
     commandRecoveryStorageAvailable === true &&
     projectionHealth?.ready === true;
   $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
-    workQueues: data.workQueues,
+    thread,
     votecount,
     hostPrompts,
     hostTasks,
@@ -120,21 +153,43 @@
     surface: "moderator",
     state: "empty",
   });
-  $: inviteTargets = gateHostInviteTargets(
-    buildHostInviteTargets({ replacement: projection.replacement }),
-    projectionCommandsReady,
-  );
-  $: workQueues = buildHostWorkQueues({
+  // The invite names the seat's occupant from the live projection: after a
+  // replacement is processed the occupant is the incoming player.
+  $: liveReplacementInvite = buildHostReplacementInviteTarget({
+    replacement: projection.replacement ?? data.replacement,
+    replacementPrincipalId:
+      data.replacementInvite.principalId || projection.replacement?.incomingPrincipalId || null,
+  });
+  $: replacementInvite = Object.freeze({
+    ...liveReplacementInvite,
+    available: projectionCommandsReady && liveReplacementInvite.available === true,
+  });
+  $: workspace = buildHostTaskWorkspaceViewModel({
+    groups: moderatorActionGroups,
+    commandStatuses,
+    commandContext: data.commandContext,
     phase: currentPhase,
-    replacement: projection.replacement,
-    votecountCount: votecount.length,
+    replacement: projection.replacement ?? data.replacement,
+    hostPrompts,
+    hostTasks,
+    hostDayEvents,
+    roster: projection.roster ?? [],
+    dayEventSelections,
+    votecount,
+    selectedTaskId: preferredTaskId,
     nowSeconds: hostClockSeconds,
   });
-  $: hostAttentionCount = buildHostTaskWorkspaceViewModel({
-    groups: moderatorActionGroups, commandStatuses, phase: currentPhase,
-    hostTasks, hostPrompts, hostDayEvents,
-    nowSeconds: hostClockSeconds,
-  }).queue.attentionCount;
+  // A task that needs recovery after a reload surfaces itself once: below
+  // the rail width that means opening its sheet.
+  $: if (
+    layout === "sheet" &&
+    workspace.selectedTask?.state === "interrupted" &&
+    recoveryOpenedFor !== workspace.selectedTask.id &&
+    !taskSheetOpen
+  ) {
+    recoveryOpenedFor = workspace.selectedTask.id;
+    void openTask(workspace.selectedTask.id, null);
+  }
   $: themePhase?.update(currentPhase?.id);
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
     phase: currentPhase,
@@ -157,6 +212,7 @@
       nowSeconds: hostClockSeconds,
     });
     projection = derived.projection;
+    thread = derived.thread ?? thread;
     votecount = derived.votecount;
     dayVoteOutcomes = derived.dayVoteOutcomes;
     hostPrompts = derived.hostPrompts;
@@ -164,14 +220,18 @@
     hostDayEvents = derived.hostDayEvents;
     dayEventScheduler = derived.dayEventScheduler;
   });
-  $: moderatorActionGroups = buildHostDerivedState({
-    gameId: data.game.id,
-    snapshot: { host: projection, votecount, dayVoteOutcomes, hostPrompts },
-    capabilityKind: data.access.capability?.kind,
-    nowSeconds: hostClockSeconds,
-    replacementCandidate,
-    fixtureMode: data.fixtureMode === true,
-  }).moderatorActionGroups;
+  $: {
+    const derived = buildHostDerivedState({
+      gameId: data.game.id,
+      snapshot: { host: projection, votecount, dayVoteOutcomes, hostPrompts },
+      capabilityKind: data.access.capability?.kind,
+      nowSeconds: hostClockSeconds,
+      replacementCandidate,
+      fixtureMode: data.fixtureMode === true,
+    });
+    moderatorActionGroups = derived.moderatorActionGroups;
+    hostPostAction = derived.hostPostAction;
+  }
   projectionStore.subscribeHealth((health) => {
     projectionHealth = health;
   });
@@ -331,6 +391,9 @@
       const tracedOutcome = attachEventConfirmationTrace(outcome, event);
       commandOutcomes = appendHostCommandOutcome(commandOutcomes, tracedOutcome);
       recordCommandStatus(event.actionId, tracedOutcome);
+      if (event.actionId === "publish_host_post" && tracedOutcome.state === "ack") {
+        hostPostBody = "";
+      }
       if (
         typeof window !== "undefined" &&
         event.confirmationTrace !== undefined &&
@@ -481,18 +544,73 @@
       : `${room?.state ?? "closed"} · read-only`;
   }
 
-  function gateHostInviteTargets(targets, ready) {
-    return Object.freeze(
-      Object.fromEntries(
-        Object.entries(targets).map(([key, target]) => [
-          key,
-          Object.freeze({
-            ...target,
-            available: ready === true && target.available === true,
-          }),
-        ]),
-      ),
-    );
+  function taskArticleSelector(taskId) {
+    return `article[data-task-id="${CSS.escape(taskId)}"]:not([hidden])`;
+  }
+
+  /** Selects a task; below the rail width it opens as a sheet over the thread. */
+  async function openTask(taskId, invoker = null) {
+    preferredTaskId = taskId;
+    await tick();
+    if (layout === "sheet") {
+      taskSheetReturnTo = invoker;
+      taskSheetFocus = [
+        `${taskArticleSelector(taskId)} [data-testid="command-recovery-retry-${CSS.escape(taskId)}"]`,
+        `${taskArticleSelector(taskId)} [data-testid="critical-host-action-trigger"]`,
+        `${taskArticleSelector(taskId)} h2`,
+      ];
+      taskSheetOpen = true;
+      return;
+    }
+    const article = document.querySelector(taskArticleSelector(taskId));
+    article?.querySelector("h2")?.focus({ preventScroll: true });
+    article?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  function focusComposer() {
+    const body = document.querySelector('[data-testid="host-composer-body"]');
+    body?.focus({ preventScroll: true });
+    body?.scrollIntoView?.({ block: "center" });
+  }
+
+  function toggleDayEventWinner(eventId, slot) {
+    const current = new Set(dayEventSelections[eventId] ?? []);
+    if (current.has(slot)) {
+      current.delete(slot);
+    } else {
+      current.add(slot);
+    }
+    dayEventSelections = { ...dayEventSelections, [eventId]: [...current].sort() };
+  }
+
+  async function loadNewerThread() {
+    const position = captureReadingPosition();
+    threadPageStatus = playerThreadPendingStatus();
+    try {
+      const result = await loadNewerPlayerThreadPage({ data, fetchImpl: fetch, projectionStore, thread });
+      threadPageStatus = result.threadPageStatus;
+      await tick();
+      restoreReadingPosition(position);
+    } catch (error) {
+      threadPageStatus = playerThreadErrorStatus(error);
+    }
+  }
+
+  async function loadOlderThread() {
+    const position = captureReadingPosition();
+    threadPageStatus = playerThreadPendingStatus();
+    try {
+      const result = await loadOlderPlayerThreadPage({ data, fetchImpl: fetch, projectionStore, thread });
+      threadPageStatus = result.threadPageStatus;
+      await tick();
+      restoreReadingPosition(position);
+    } catch (error) {
+      threadPageStatus = playerThreadErrorStatus(error);
+    }
+  }
+
+  async function copyPostLink(post) {
+    await navigator.clipboard.writeText(new URL(post.permalink.href, window.location.href).toString());
   }
 </script>
 
@@ -500,297 +618,315 @@
   <title>{data.game.label} host console</title>
 </svelte:head>
 
-<main
-  class="host-console-critical-path"
-  data-component="host-console-route"
-  data-game={data.game.id}
-  data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
->
-  <HostConsoleBar
-    shell={data.shell}
-    capability={data.access.capability}
-    game={data.game}
-    phase={currentPhase}
-    {liveStatus}
-    attentionCount={hostAttentionCount}
-  />
+{#if moderatorForcedRouteState || moderatorSurfaceEmpty}
+  <main
+    class="host-console-critical-path"
+    data-component="host-console-route"
+    data-game={data.game.id}
+    data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
+  >
+    <HostConsoleBar
+      shell={data.shell}
+      capability={data.access.capability}
+      game={data.game}
+      phase={currentPhase}
+      {liveStatus}
+      nowSeconds={hostClockSeconds}
+    />
+    <div class="host-console-critical-path__body">
+      <RouteState view={moderatorForcedRouteState ?? moderatorEmptyState} />
+    </div>
+  </main>
+{:else}
+  <GameFrame
+    {layout}
+    surfaceTestId={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
+    surfaceClass="host-console-critical-path"
+    railTestId="host-rail"
+    railLabel="Host decisions"
+    dock={false}
+    component="host-console-route"
+    gameId={data.game.id}
+  >
+    <HostConsoleBar
+      slot="bar"
+      shell={data.shell}
+      capability={data.access.capability}
+      game={data.game}
+      phase={currentPhase}
+      {liveStatus}
+      nowSeconds={hostClockSeconds}
+      attentionCount={workspace.queue.attentionCount}
+      tasks={workspace.tasks}
+      decisions={workspace.decisions}
+      postAvailable={projectionCommandsReady && hostPostAction !== null}
+      onOpenTask={openTask}
+      onPost={focusComposer}
+    />
 
-  {#if data.commandsEnabled === true && !commandRecoveryStorageAvailable}
-    <section
-      class="fm-section"
-      data-testid="host-command-recovery-storage-warning"
-      role="status"
+    {#if data.commandsEnabled === true && !commandRecoveryStorageAvailable}
+      <section
+        class="fm-section"
+        data-testid="host-command-recovery-storage-warning"
+        role="status"
+      >
+        <strong>Reload recovery unavailable</strong>
+        <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
+      </section>
+    {/if}
+
+    {#if !projectionCommandsReady && data.commandsEnabled === true}
+      <section
+        class="fm-section"
+        data-testid="host-projection-command-health"
+        role="status"
+      >
+        <strong>Host commands paused</strong>
+        <p>
+          Authoritative host state is {projectionHealth?.state ?? "unavailable"}.
+          Controls return after a validated refresh.
+        </p>
+      </section>
+    {/if}
+
+    {#if layout !== "rail"}
+      <HostWorkQueueStrip
+        decisions={workspace.decisions}
+        selectedTaskId={workspace.selectedTaskId}
+        attentionCount={workspace.queue.attentionCount}
+        summary={workspace.queue.summary}
+        layout="strip"
+        onSelect={openTask}
+      />
+    {/if}
+
+    <PlayerThread
+      {thread}
+      {threadPageStatus}
+      roster={projection.roster ?? []}
+      onLoadOlder={loadOlderThread}
+      onLoadNewer={loadNewerThread}
+      onCopyLink={copyPostLink}
+    />
+
+    <HostComposer
+      action={hostPostAction}
+      ready={projectionCommandsReady}
+      bind:body={hostPostBody}
+      status={commandStatuses.publish_host_post}
+      onCommand={handleDispatch}
+      onRetry={retryHostCommand}
+      onCancel={cancelHostCommandRecovery}
+    />
+
+    <details
+      class="host-console-critical-path__drawer"
+      data-testid="host-supporting-evidence"
+      data-legibility="technical"
     >
-      <strong>Reload recovery unavailable</strong>
-      <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
-    </section>
-  {/if}
+      <summary>
+        <span>Technical details</span>
+        <small>Access, receipts, game state, vote record, and lifecycle checks</small>
+      </summary>
+      <div class="host-console-critical-path__drawer-content">
+        <section
+          class="host-task-workspace__command-context fm-proof-disclosure"
+          data-legibility="technical"
+          data-testid={workspace.commandContext.testId}
+          data-game-id={workspace.commandContext.gameId}
+          data-principal-id={workspace.commandContext.principalId}
+          data-capability-kind={workspace.commandContext.capabilityEvidence.kind}
+          data-capability-scope={workspace.commandContext.capabilityEvidence.scope}
+          data-command-endpoint={workspace.commandContext.commandEndpoint}
+        >
+          <div class="fm-proof-disclosure__body">
+            <span>{workspace.commandContext.label}</span>
+            <strong>{workspace.commandContext.value}</strong>
+            <small>{workspace.commandContext.commandEndpoint}</small>
+            {#if workspace.selectedTask}
+              <dl class="host-task-workspace__diagnostics" data-task-id={workspace.selectedTask.id}>
+                <div><dt>Required access</dt><dd>{workspace.selectedTask.diagnostics.authority}</dd></div>
+                <div><dt>Dispatch boundary</dt><dd>{workspace.selectedTask.diagnostics.boundary}</dd></div>
+                <div><dt>Protocol</dt><dd>{workspace.selectedTask.diagnostics.protocol}</dd></div>
+              </dl>
+            {/if}
+          </div>
+        </section>
 
-  <div class="host-console-critical-path__body">
-    {#if moderatorForcedRouteState}
-      <RouteState view={moderatorForcedRouteState} />
-    {:else if moderatorSurfaceEmpty}
-      <RouteState view={moderatorEmptyState} />
-    {:else}
-      {#if projectionCommandsReady}
-        <HostTaskWorkspace
-          groups={moderatorActionGroups}
+        <HostCommandActivity
           {commandStatuses}
-          commandContext={data.commandContext}
-          phase={currentPhase}
-          nowSeconds={hostClockSeconds}
-          replacement={projection.replacement ?? data.replacement}
-          {hostPrompts}
-          {hostTasks}
-          {hostDayEvents}
-          roster={projection.roster ?? []}
-          {votecount}
-          onDispatch={handleDispatch}
-          onRetry={retryHostCommand}
-          onCancel={cancelHostCommandRecovery}
+          {commandOutcomes}
         />
-      {:else if data.commandsEnabled === true}
+
         <section
           class="fm-section"
-          data-testid="host-projection-command-health"
-          role="status"
+          data-testid="host-day-event-scheduler"
+          data-pending={dayEventScheduler?.pending === true}
         >
-          <strong>Host commands paused</strong>
-          <p>
-            Authoritative host state is {projectionHealth?.state ?? "unavailable"}.
-            Controls return after a validated refresh.
-          </p>
+          <header>
+            <p class="fm-eyebrow">DayEvent automation</p>
+            <strong>
+              {dayEventScheduler?.pending
+                ? dayEventScheduler?.autoResolvePending
+                  ? "Automatic resolution pending"
+                  : dayEventScheduler?.narrativePending
+                    ? "Narrative delivery pending"
+                  : "Schedule work pending"
+                : "Scheduler caught up"}
+            </strong>
+          </header>
+          {#if dayEventScheduler}
+            <p data-testid="host-day-event-scheduler-health">
+              {dayEventScheduler.totalSuccesses}/{dayEventScheduler.totalAttempts}
+              successful observations · wake {dayEventScheduler.lastObservedWakeSeq}/{dayEventScheduler.wakeSeq}
+            </p>
+            <p>Next due: {schedulerTime(dayEventScheduler.nextDueAt)}</p>
+            {#if dayEventScheduler.lastError}
+              <p role="status">Retrying after: {dayEventScheduler.lastError}</p>
+            {/if}
+          {:else}
+            <p>No scheduled DayEvent work has been projected.</p>
+          {/if}
+          {#if hostDayEvents.some(hasScheduleObservation)}
+            <ul data-testid="host-day-event-schedule-evidence">
+              {#each hostDayEvents as event (event.eventId)}
+                {#if hasScheduleObservation(event)}
+                  <li>
+                    <strong>{event.eventId}</strong>
+                    · opened {schedulerTime(event.scheduleEvidence?.openObservedAt)}
+                    · locked {schedulerTime(event.scheduleEvidence?.lockObservedAt)}
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+          {/if}
+          {#if hostDayEvents.some(hasResolutionEvidence)}
+            <ul data-testid="host-day-event-resolution-evidence">
+              {#each hostDayEvents as event (event.eventId)}
+                {#if hasResolutionEvidence(event)}
+                  <li>
+                    <strong>{event.eventId}</strong>
+                    · {resolutionPolicyLabel(event)}
+                    · winners {event.winnerSlots.join(", ")}
+                    {#if event.resolutionEvidence.seed !== null}
+                      · seed {event.resolutionEvidence.seed}
+                    {/if}
+                    · rewards {event.rewardKeysApplied.join(", ")}
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+          {/if}
+          {#if hostDayEvents.some(hasNarrativeEvidence)}
+            <ul data-testid="host-day-event-narrative-evidence">
+              {#each hostDayEvents as event (event.eventId)}
+                {#each event.narratives as narrative (`${event.eventId}:${narrative.lifecycle}`)}
+                  <li>
+                    <strong>{event.eventId} · {narrative.lifecycle}</strong>
+                    · {narrative.status} to {narrative.channelId}
+                    {#if narrative.body}
+                      · {narrative.body}
+                    {/if}
+                  </li>
+                {/each}
+              {/each}
+            </ul>
+          {/if}
+          {#if hostDayEvents.some(hasPrivateRoom)}
+            <ul data-testid="host-day-event-room-evidence">
+              {#each hostDayEvents as event (event.eventId)}
+                {#if event.room}
+                  <li
+                    data-event-room={event.room.channelId}
+                    data-member-count={event.room.memberCount}
+                  >
+                    <strong>{event.eventId} · private room</strong>
+                    · {event.room.memberCount} members
+                    · {event.room.membership}
+                    · {roomPosture(event.room)}
+                  </li>
+                {/if}
+              {/each}
+            </ul>
+          {/if}
         </section>
-      {/if}
 
-      <HostReplacementChooser
-        gameId={data.game.id}
-        replacement={projection.replacement}
-        authority={projection.authority}
-        completed={projection.completed}
-        ready={projectionCommandsReady}
-        onSelection={(candidate) => replacementCandidate = candidate}
-        commandStatus={commandStatuses.process_replacement}
-        showRecovery={!projectionCommandsReady || !moderatorActionGroups.some((group) => group.actions.some((action) => action.id === "process_replacement"))}
-        onRetry={retryHostCommand}
-        onCancel={cancelHostCommandRecovery}
-      />
+        <HostLifecycleControlCheckpoint
+          checkpoint={hostLifecycleControlCheckpoint}
+        />
 
-      <details
-        class="host-console-critical-path__drawer"
-        data-testid="host-supporting-evidence"
-        data-legibility="technical"
+        <HostPromptResolutionHistory {hostPrompts} />
+
+        <HostVotecountPanel
+          boundary={data.votecountBoundary}
+          rows={votecount}
+          roster={projection.roster ?? []}
+        />
+
+        <DayVoteOutcomePanel
+          outcomes={dayVoteOutcomes}
+          boundary={data.dayVoteOutcomeBoundary}
+          rootTestId="host-day-vote-outcome"
+          roster={projection.roster ?? []}
+        />
+
+        <HostPhaseSummary phase={data.phase} {projection} />
+      </div>
+    </details>
+
+    <svelte:fragment slot="rail">
+      <PlayerSheet
+        {layout}
+        open={taskSheetOpen}
+        label={workspace.selectedTask?.label ?? "Host task"}
+        testId="host-task-sheet"
+        detent="full"
+        returnTo={taskSheetReturnTo}
+        focusSelectors={taskSheetFocus}
+        onClose={() => { taskSheetOpen = false; }}
       >
-        <summary>
-          <span>Technical details</span>
-          <small>Receipts, game state, vote record, and lifecycle checks</small>
-        </summary>
-        <div class="host-console-critical-path__drawer-content">
-          <HostCommandActivity
-            {commandStatuses}
-            {commandOutcomes}
+        {#if layout === "rail"}
+          <HostWorkQueueStrip
+            decisions={workspace.decisions}
+            selectedTaskId={workspace.selectedTaskId}
+            attentionCount={workspace.queue.attentionCount}
+            summary={workspace.queue.summary}
+            layout="rail"
+            onSelect={openTask}
           />
-
-          <HostWorkQueueStrip queues={workQueues} />
-
-          <section
-            class="fm-section"
-            data-testid="host-day-event-scheduler"
-            data-pending={dayEventScheduler?.pending === true}
+        {/if}
+        {#if projectionCommandsReady}
+          <HostTaskWorkspace
+            view={workspace}
+            onToggleDayEventWinner={toggleDayEventWinner}
+            onDispatch={handleDispatch}
+            onRetry={retryHostCommand}
+            onCancel={cancelHostCommandRecovery}
           >
-            <header>
-              <p class="fm-eyebrow">DayEvent automation</p>
-              <strong>
-                {dayEventScheduler?.pending
-                  ? dayEventScheduler?.autoResolvePending
-                    ? "Automatic resolution pending"
-                    : dayEventScheduler?.narrativePending
-                      ? "Narrative delivery pending"
-                    : "Schedule work pending"
-                  : "Scheduler caught up"}
-              </strong>
-            </header>
-            {#if dayEventScheduler}
-              <p data-testid="host-day-event-scheduler-health">
-                {dayEventScheduler.totalSuccesses}/{dayEventScheduler.totalAttempts}
-                successful observations · wake {dayEventScheduler.lastObservedWakeSeq}/{dayEventScheduler.wakeSeq}
-              </p>
-              <p>Next due: {schedulerTime(dayEventScheduler.nextDueAt)}</p>
-              {#if dayEventScheduler.lastError}
-                <p role="status">Retrying after: {dayEventScheduler.lastError}</p>
-              {/if}
-            {:else}
-              <p>No scheduled DayEvent work has been projected.</p>
-            {/if}
-            {#if hostDayEvents.some(hasScheduleObservation)}
-              <ul data-testid="host-day-event-schedule-evidence">
-                {#each hostDayEvents as event (event.eventId)}
-                  {#if hasScheduleObservation(event)}
-                    <li>
-                      <strong>{event.eventId}</strong>
-                      · opened {schedulerTime(event.scheduleEvidence?.openObservedAt)}
-                      · locked {schedulerTime(event.scheduleEvidence?.lockObservedAt)}
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            {/if}
-            {#if hostDayEvents.some(hasResolutionEvidence)}
-              <ul data-testid="host-day-event-resolution-evidence">
-                {#each hostDayEvents as event (event.eventId)}
-                  {#if hasResolutionEvidence(event)}
-                    <li>
-                      <strong>{event.eventId}</strong>
-                      · {resolutionPolicyLabel(event)}
-                      · winners {event.winnerSlots.join(", ")}
-                      {#if event.resolutionEvidence.seed !== null}
-                        · seed {event.resolutionEvidence.seed}
-                      {/if}
-                      · rewards {event.rewardKeysApplied.join(", ")}
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            {/if}
-            {#if hostDayEvents.some(hasNarrativeEvidence)}
-              <ul data-testid="host-day-event-narrative-evidence">
-                {#each hostDayEvents as event (event.eventId)}
-                  {#each event.narratives as narrative (`${event.eventId}:${narrative.lifecycle}`)}
-                    <li>
-                      <strong>{event.eventId} · {narrative.lifecycle}</strong>
-                      · {narrative.status} to {narrative.channelId}
-                      {#if narrative.body}
-                        · {narrative.body}
-                      {/if}
-                    </li>
-                  {/each}
-                {/each}
-              </ul>
-            {/if}
-            {#if hostDayEvents.some(hasPrivateRoom)}
-              <ul data-testid="host-day-event-room-evidence">
-                {#each hostDayEvents as event (event.eventId)}
-                  {#if event.room}
-                    <li
-                      data-event-room={event.room.channelId}
-                      data-member-count={event.room.memberCount}
-                    >
-                      <strong>{event.eventId} · private room</strong>
-                      · {event.room.memberCount} members
-                      · {event.room.membership}
-                      · {roomPosture(event.room)}
-                    </li>
-                  {/if}
-                {/each}
-              </ul>
-            {/if}
-          </section>
-
-          <HostLifecycleControlCheckpoint
-            checkpoint={hostLifecycleControlCheckpoint}
-          />
-
-          <HostPromptResolutionHistory {hostPrompts} />
-
-          <HostVotecountPanel
-            boundary={data.votecountBoundary}
-            rows={votecount}
-            roster={projection.roster ?? []}
-          />
-
-          <DayVoteOutcomePanel
-            outcomes={dayVoteOutcomes}
-            boundary={data.dayVoteOutcomeBoundary}
-            rootTestId="host-day-vote-outcome"
-            roster={projection.roster ?? []}
-          />
-
-          <HostPhaseSummary phase={data.phase} {projection} />
-        </div>
-      </details>
-
-      <details
-        class="host-console-critical-path__drawer"
-        data-testid="host-invite-workflows"
-        open={form?.playerInvite !== undefined || form?.replacementInvite !== undefined}
-      >
-        <summary>
-          <span>Player access</span>
-          <small>Invite players and replacements</small>
-        </summary>
-        <div class="host-console-critical-path__invite-grid">
-          {#each [
-            [inviteTargets.player, form?.playerInvite],
-            [inviteTargets.replacement, form?.replacementInvite],
-          ] as [inviteTarget, inviteResult]}
-            <section
-              class="host-console-critical-path__invite-panel fm-section"
-              data-testid={inviteTarget.panelTestId}
-            >
-            <header>
-              <p class="fm-eyebrow">{inviteTarget.eyebrow}</p>
-              <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
-            </header>
-            <form method="POST" action={inviteTarget.action}>
-              <label class="fm-field">
-                <span>Account</span>
-                <input
-                  name="accountId"
-                  type="text"
-                  autocomplete="username"
-                  required
-                  disabled={!inviteTarget.available}
-                  data-testid={inviteTarget.accountTestId}
-                />
-              </label>
-              <input
-                type="hidden"
-                name="principalId"
-                value={inviteTarget.principalId}
+            <svelte:fragment slot="replacement-chooser">
+              <HostReplacementChooser
+                gameId={data.game.id}
+                replacement={projection.replacement}
+                authority={projection.authority}
+                completed={projection.completed}
+                ready={projectionCommandsReady}
+                onSelection={(candidate) => replacementCandidate = candidate}
+                commandStatus={commandStatuses.process_replacement}
+                showRecovery={!moderatorActionGroups.some((group) => group.actions.some((action) => action.id === "process_replacement"))}
+                onRetry={retryHostCommand}
+                onCancel={cancelHostCommandRecovery}
               />
-              <input type="hidden" name="slotId" value={inviteTarget.slotId} />
-              <input
-                type="hidden"
-                name="expectedOccupantPrincipalId"
-                value={inviteTarget.expectedOccupantPrincipalId}
-              />
-              <button
-                class="touch-control"
-                type="submit"
-                disabled={!inviteTarget.available}
-                data-testid={inviteTarget.submitTestId}
+            </svelte:fragment>
+            <svelte:fragment slot="replacement-invite">
+              <section
+                class="host-console-critical-path__invite-panel fm-section"
+                data-testid={replacementInvite.panelTestId}
               >
-                {inviteTarget.submitLabel}
-              </button>
-            </form>
-            {#if !inviteTarget.available}
-              <p class="host-console-critical-path__invite-status" data-state="blocked">
-                Invite unavailable until the live slot projection includes its assigned principal.
-              </p>
-            {/if}
-            {#if inviteResult}
-              <p
-                class="host-console-critical-path__invite-status"
-                data-state={inviteResult.state}
-                data-testid={inviteTarget.statusTestId}
-              >
-                {inviteResult.message}
-              </p>
-              {#if inviteResult.state === "ack"}
-                <a
-                  class="host-console-critical-path__invite-url"
-                  href={inviteResult.loginUrl}
-                  data-testid={inviteTarget.urlTestId}
-                >
-                  {inviteResult.loginUrl}
-                </a>
-              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
-                <form
-                  class="host-console-critical-path__invite-retry"
-                  method="POST"
-                  action={inviteTarget.action}
-                  data-testid="host-player-invite-retry"
-                >
+                <header>
+                  <p class="fm-eyebrow">{replacementInvite.eyebrow}</p>
+                  <strong data-testid={replacementInvite.targetTestId}>{replacementInvite.targetLabel}</strong>
+                </header>
+                <form method="POST" action={replacementInvite.action}>
                   <label class="fm-field">
                     <span>Account</span>
                     <input
@@ -798,40 +934,56 @@
                       type="text"
                       autocomplete="username"
                       required
-                      disabled={!projectionCommandsReady}
-                      data-testid="host-player-invite-retry-account"
+                      disabled={!replacementInvite.available}
+                      data-testid={replacementInvite.accountTestId}
                     />
                   </label>
-                  <input
-                    type="hidden"
-                    name="principalId"
-                    value={inviteResult.currentOccupantPrincipalId}
-                  />
-                  <input
-                    type="hidden"
-                    name="slotId"
-                    value={inviteResult.slotId ?? inviteTarget.slotId}
-                  />
+                  <input type="hidden" name="principalId" value={replacementInvite.principalId} />
+                  <input type="hidden" name="slotId" value={replacementInvite.slotId} />
                   <input
                     type="hidden"
                     name="expectedOccupantPrincipalId"
-                    value={inviteResult.currentOccupantPrincipalId}
+                    value={replacementInvite.expectedOccupantPrincipalId}
                   />
                   <button
                     class="touch-control"
                     type="submit"
-                    disabled={!projectionCommandsReady}
-                    data-testid="host-player-invite-retry-submit"
+                    disabled={!replacementInvite.available}
+                    data-testid={replacementInvite.submitTestId}
                   >
-                    Issue current player invite
+                    {replacementInvite.submitLabel}
                   </button>
                 </form>
-              {/if}
-            {/if}
-            </section>
-          {/each}
-        </div>
-      </details>
-    {/if}
-  </div>
-</main>
+                {#if !replacementInvite.available}
+                  <p class="host-console-critical-path__invite-status" data-state="blocked">
+                    Invite unavailable until the live slot projection includes its assigned principal.
+                  </p>
+                {/if}
+                {#if form?.replacementInvite}
+                  <p
+                    class="host-console-critical-path__invite-status"
+                    data-state={form.replacementInvite.state}
+                    data-testid={replacementInvite.statusTestId}
+                  >
+                    {form.replacementInvite.message}
+                  </p>
+                  {#if form.replacementInvite.state === "ack"}
+                    <a
+                      class="host-console-critical-path__invite-url"
+                      href={form.replacementInvite.loginUrl}
+                      data-testid={replacementInvite.urlTestId}
+                    >
+                      {form.replacementInvite.loginUrl}
+                    </a>
+                  {/if}
+                {/if}
+              </section>
+            </svelte:fragment>
+          </HostTaskWorkspace>
+        {:else if data.commandsEnabled === true}
+          <p class="host-task-workspace__empty" data-testid="host-task-sheet-paused">Host commands return after a validated refresh.</p>
+        {/if}
+      </PlayerSheet>
+    </svelte:fragment>
+  </GameFrame>
+{/if}

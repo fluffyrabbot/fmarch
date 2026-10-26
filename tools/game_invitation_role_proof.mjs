@@ -2689,7 +2689,7 @@ async function proveHostScopedInviteIssuance({
     issuingCapability: "HostOf(game)",
     hostRoleSurface: hostSurface.roleSurface,
     hostAction: "?/issuePlayerInvite",
-    hostPanelTestId: "host-player-invite-panel",
+    hostPanelTestId: "host-setup-invite-slot-7",
     clickedThroughFromHostRoleUrl: hostSurface.clickedThroughFromHostRoleUrl,
     issuedByPrincipalId: issued.invitedByPrincipalId,
     issuedForGame: hostSurface.game,
@@ -2723,39 +2723,34 @@ async function driveHostPlayerInviteSurface({
         sameSite: "Lax",
       },
     ]);
+    // The host role URL is the seeded surface; player access is roster work
+    // on the setup route (usage-frequency audit, decision 12), reached from
+    // the host console's own link.
     const targetUrl = new URL(hostReturnTo, frontendBaseUrl);
     targetUrl.searchParams.set("slot_id", "slot-7");
     await page.goto(targetUrl.toString(), { waitUntil: "networkidle" });
-    const inviteDrawer = page.getByTestId("host-invite-workflows");
-    await inviteDrawer.waitFor({ state: "visible" });
-    await inviteDrawer.evaluate((node) => {
-      node.open = true;
-    });
-    await page.getByTestId("host-player-invite-panel").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    const targetText = await page.getByTestId("host-player-invite-target").innerText();
+    await page.getByTestId("host-console-surface").waitFor({ state: "visible", timeout: 15000 });
+    await page.goto(new URL(`/g/${game}/setup`, frontendBaseUrl).toString(), { waitUntil: "networkidle" });
+    await page.getByTestId("host-setup-step-roster").click();
+    const invitePanel = page.getByTestId("host-setup-invite-slot-7");
+    await invitePanel.waitFor({ state: "visible", timeout: 15000 });
+    const targetText = await invitePanel.locator("span").first().innerText();
     if (!targetText.includes("player-mira")) {
-      throw new Error(`host player invite target drifted: ${targetText}; ${JSON.stringify(await page.evaluate(() => ({
-        projection: window.__fmarchHostProjection,
-        events: window.__fmarchHostLiveProjectionEvents,
-        status: window.__fmarchHostLiveProjectionStatus,
-      })))}`);
+      throw new Error(`host player invite target drifted: ${targetText}`);
     }
     await page
-      .getByTestId("host-player-invite-account")
+      .getByTestId("host-setup-invite-account-slot-7")
       .fill(playerAccount.accountId);
-    await page.getByTestId("host-player-invite-submit").click();
-    await page.getByTestId("host-player-invite-url").waitFor({
+    await page.getByTestId("host-setup-invite-submit-slot-7").click();
+    await page.getByTestId("host-setup-player-invite-url").waitFor({
       state: "visible",
       timeout: 15000,
     });
-    const statusText = await page.getByTestId("host-player-invite-status").innerText();
+    const statusText = await page.getByTestId("host-setup-player-invite-status").innerText();
     if (!statusText.includes("Player invite issued")) {
       throw new Error(`host player invite status drifted: ${statusText}`);
     }
-    const href = await page.getByTestId("host-player-invite-url").getAttribute("href");
+    const href = await page.getByTestId("host-setup-player-invite-url").getAttribute("href");
     const loginUrl = new URL(href, frontendBaseUrl);
     const inviteToken = loginUrl.searchParams.get("invite");
     const returnTo = loginUrl.searchParams.get("returnTo");
@@ -3907,7 +3902,7 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
       "?/issuePlayerInvite" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.hostPanelTestId !==
-      "host-player-invite-panel" ||
+      "host-setup-invite-slot-7" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
       true ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalId !==

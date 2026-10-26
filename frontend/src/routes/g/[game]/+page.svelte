@@ -54,7 +54,7 @@
   import VoteSheet from "$lib/components/gameplay/VoteSheet.svelte";
   import ContextSheet from "$lib/components/gameplay/ContextSheet.svelte";
   import PlayerSheet from "$lib/components/gameplay/PlayerSheet.svelte";
-  import { observePlayerLayout } from "$lib/components/gameplay/player-layout.mjs";
+  import { observeGameLayout } from "$lib/components/gameplay/game-layout.mjs";
   import { buildPlayerCommandPanelViewModel } from "$lib/components/player-command/player-command-panel-model.mjs";
   import { voteActionForSlot } from "$lib/components/player-command/player-vote-picker-model.mjs";
   import { buildPlayerActionSubmissionCheckpoint } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
@@ -173,7 +173,7 @@
   let moreSheetReturnTo = null;
   let voteSheetFocus = [];
   let moreSheetFocus = [];
-  onMount(() => observePlayerLayout(window, (value) => {
+  onMount(() => observeGameLayout(window, (value) => {
     layout = value;
     if (value === "rail") {
       voteSheetOpen = false;

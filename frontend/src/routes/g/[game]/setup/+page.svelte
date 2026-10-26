@@ -104,6 +104,9 @@
 
   $: if (form?.playerInvite && setupFormKey(form.playerInvite) !== lastInviteFormKey) {
     lastInviteFormKey = setupFormKey(form.playerInvite);
+    // Player access is roster work (usage-frequency audit, decision 12): an
+    // invite result renders on the roster stage, where its form is.
+    preferredStageId = "roster";
     const inviteResult = {
       id: `invite-${form.playerInvite.slotId ?? "player"}`,
       ...form.playerInvite,
@@ -398,9 +401,9 @@
                     <span>{target.targetLabel}</span>
                     <label class="fm-field">
                       <span>Sign-in account or email</span>
-                      <input name="accountId" type="text" autocomplete="username" required />
+                      <input name="accountId" type="text" autocomplete="username" required data-testid={`host-setup-invite-account-${target.slotId}`} />
                     </label>
-                    <button class="fm-touch-button fm-touch-button--secondary" type="submit">Issue invite</button>
+                    <button class="fm-touch-button fm-touch-button--secondary" type="submit" data-testid={`host-setup-invite-submit-${target.slotId}`}>Issue invite</button>
                   </form>
                 {/each}
                 {#if form?.playerInvite}
@@ -411,15 +414,16 @@
                   {#if form.playerInvite.loginUrl}
                     <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">Open player invitation</a>
                   {:else if form.playerInvite.currentOccupantPrincipalId}
-                    <form method="POST" action="?/issuePlayerInvite">
+                    <form class="host-setup__invite" method="POST" action="?/issuePlayerInvite" data-testid="host-setup-player-invite-retry">
                       <input type="hidden" name="principalId" value={form.playerInvite.currentOccupantPrincipalId} />
                       <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
                       <input type="hidden" name="expectedOccupantPrincipalId" value={form.playerInvite.currentOccupantPrincipalId} />
+                      <span>{seatLabel(form.playerInvite.slotId, { name: setupState.slots.find((slot) => slot.slotId === form.playerInvite.slotId)?.publicName })}</span>
                       <label class="fm-field">
                         <span>Sign-in account or email</span>
-                        <input name="accountId" type="text" autocomplete="username" required />
+                        <input name="accountId" type="text" autocomplete="username" required data-testid="host-setup-player-invite-retry-account" />
                       </label>
-                      <button class="fm-touch-button" type="submit">Issue current player invite</button>
+                      <button class="fm-touch-button" type="submit" data-testid="host-setup-player-invite-retry-submit">Issue current player invite</button>
                     </form>
                   {/if}
                 {/if}

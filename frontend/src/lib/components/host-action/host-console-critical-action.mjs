@@ -25,7 +25,45 @@ export const HOST_ACTION_PERMISSION_CLASS = Object.freeze({
   resolve_phase: "phase_resolve",
   lock_thread: "phase_resolve",
   advance_phase_by_deadline: "phase_resolve",
+  publish_host_post: "narrative",
 });
+
+/**
+ * The host composer's write: a host-authored post into the public main
+ * thread. It is the frequent host write, so it is not a critical action
+ * (no confirmation, never in the decision queue); the route authorizes a
+ * dispatched post against this action with the typed body substituted.
+ */
+export function buildHostPostAction(
+  gameId,
+  {
+    completed = false,
+    capabilityKind = "HostOf",
+    allowedPermissionClasses = [],
+  } = {},
+) {
+  if (completed === true) {
+    return null;
+  }
+  const action = freezeHostAction({
+    id: "publish_host_post",
+    label: "Post",
+    objectLabel: "Main thread",
+    outcomeLabel: "post to the main thread as the host",
+    confirmationText: "Post to the main thread as the host.",
+    requiresConfirmation: false,
+    irreversible: false,
+    payload: {
+      kind: "publish_host_post",
+      gameId,
+      channelId: "main",
+      body: "",
+    },
+  });
+  return hostActionAllowedForCapability(action, capabilityKind, allowedPermissionClasses)
+    ? action
+    : null;
+}
 
 export function buildHostConsoleCriticalActions(
   gameId,

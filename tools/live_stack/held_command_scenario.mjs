@@ -16,7 +16,7 @@ export async function captureHeldBrowserPost(page, {
   }
   const invite = kind === "issuePlayerInvite";
   const matches = (url) => invite
-    ? url.pathname === `/g/${game}/host` && url.searchParams.has("/issuePlayerInvite")
+    ? url.pathname === `/g/${game}/setup` && url.searchParams.has("/issuePlayerInvite")
     : url.pathname === "/commands";
   let capturedRoute;
   let capture;

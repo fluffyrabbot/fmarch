@@ -8,11 +8,14 @@ import {
 import {
   normalizeHostPrompts,
   normalizeDayVoteOutcomes,
+  normalizeThreadPage,
   normalizeVotecount,
 } from "../../../../lib/app/cold-load.mjs";
+import { hydrateReaderThreadPage } from "../../../../lib/app/reader-citations.mjs";
 import {
   buildHostConsoleActionGroups,
   buildHostConsoleCriticalActions,
+  buildHostPostAction,
   hostActionAllowedForCapability,
 } from "../../../../lib/components/host-action/host-console-critical-action.mjs";
 import { replacementWithCandidate } from "../../../../lib/components/host-action/host-replacement-candidate.mjs";
@@ -33,6 +36,7 @@ import {
 } from "../../../../lib/app/command-recovery-storage.mjs";
 import {
   validateDayVoteOutcomesResponse,
+  validateGameplayThreadPageResponse,
   validateHostPromptsResponse,
   validateHostConsoleLiveDelta,
   validateHostConsoleStateResponse,
@@ -41,6 +45,7 @@ import {
 
 export const HOST_RECONNECT_REFRESH_KEYS = Object.freeze([
   "host",
+  "thread",
   "votecount",
   "dayVoteOutcomes",
   "hostPrompts",
@@ -57,6 +62,7 @@ export function buildHostProjectionInitialSnapshot(data) {
       dayEvents: data.hostDayEvents ?? [],
       dayEventScheduler: data.dayEventScheduler ?? null,
     }),
+    thread: data.thread,
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
     hostPrompts: data.hostPrompts,
@@ -65,6 +71,16 @@ export function buildHostProjectionInitialSnapshot(data) {
 
 export function buildHostProjectionColdLoads(data) {
   return Object.freeze({
+    // The public main thread, read exactly as a player reads it; live
+    // ThreadPostsChanged deltas on the host socket patch the same key.
+    thread: Object.freeze({
+      url: data.threadEndpoint,
+      validate: (payload) =>
+        validateGameplayThreadPageResponse(payload, { game: data.game.id, channel: "main" }),
+      normalize: normalizeThreadPage,
+      hydrate: (page, options) =>
+        hydrateReaderThreadPage(page, { ...options, game: data.game.id, channel: "main" }),
+    }),
     host: Object.freeze({
       url: data.hostConsoleStateEndpoint,
       validate: (payload) =>
@@ -179,9 +195,17 @@ export function buildHostDerivedState({
     votecountCount: votecount.length,
     capabilityKind: effectiveCapabilityKind,
   });
+  const hostPostAction = projection.authorityRevoked === true
+    ? null
+    : buildHostPostAction(gameId, {
+        completed: projection.completed,
+        capabilityKind: effectiveCapabilityKind,
+        allowedPermissionClasses: projection.authority?.allowedClasses ?? [],
+      });
 
   return Object.freeze({
     projection,
+    thread: snapshot.thread ?? null,
     votecount,
     dayVoteOutcomes,
     hostPrompts,
@@ -190,6 +214,7 @@ export function buildHostDerivedState({
     dayEventScheduler: projection.dayEventScheduler ?? null,
     criticalActions,
     moderatorActionGroups,
+    hostPostAction,
   });
 }
 
@@ -406,7 +431,11 @@ export async function dispatchHostRouteAction({
       throw new Error("retained replacement retry must use the original command identity");
     }
   }
-  if (retainedReplacementAttempt === null && !currentDerivedState.criticalActions.some((action) =>
+  const authoritativeActions = [
+    ...currentDerivedState.criticalActions,
+    ...(currentDerivedState.hostPostAction === null ? [] : [currentDerivedState.hostPostAction]),
+  ];
+  if (retainedReplacementAttempt === null && !authoritativeActions.some((action) =>
     action.id === event?.actionId &&
     currentHostPayloadMatches(action.payload, event?.payload)
   )) {
@@ -526,6 +555,9 @@ export function hostPostAckRefreshKeys({ event, outcome }) {
   if (event?.payload?.kind === "resolve_phase") {
     return Object.freeze(["host", "votecount", "dayVoteOutcomes", "hostPrompts"]);
   }
+  if (event?.payload?.kind === "publish_host_post") {
+    return Object.freeze(["thread"]);
+  }
   if (event?.payload?.kind === "resolve_day_event") {
     return Object.freeze(
       outcome.projectionState === undefined ? ["host"] : [],
@@ -633,6 +665,11 @@ function canonicalJson(value) {
 }
 
 function currentHostPayloadMatches(current, selected) {
+  if (current?.kind === "publish_host_post" && selected?.kind === "publish_host_post") {
+    // The host writes the body. Game, channel and payload shape remain exact.
+    return typeof selected.body === "string" && selected.body.trim() !== "" &&
+      canonicalJson(current) === canonicalJson({ ...selected, body: current.body });
+  }
   if (current?.kind === "extend_deadline" && selected?.kind === "extend_deadline") {
     // The host chooses the time. Only that field may differ from the current
     // authorized action; game, phase and payload shape remain exact.

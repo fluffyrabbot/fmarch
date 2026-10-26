@@ -43,6 +43,8 @@ export const flowRestartStepTypes = Object.freeze(["click", "fill", "wait-visibl
 export const flowHookNames = Object.freeze([
   "moderatorHostPromptAck",
   "moderatorSlotLifecycleAck",
+  "moderatorRevealDeadline",
+  "moderatorDismissTask",
   "playerMediaNetwork",
   "playerLiveThreadEmit",
   "playerRevealVote",
@@ -304,8 +306,9 @@ const moderatorActionTarget = (testId) =>
 export const commandFlows = Object.freeze({
   moderator: Object.freeze({
     steps: Object.freeze([
-      { type: "click", target: { within: "host-tools", selector: "summary" } },
-      { type: "click", target: { testId: "host-task-deadline" } },
+      // Deadline is a routine tool in the bar (decision 12); below the rail
+      // width its canvas opens as a sheet (decision 11).
+      { type: "hook", id: "deadlineSurface", name: "moderatorRevealDeadline" },
       {
         type: "capture-geometry-baseline",
         id: "confirmationGeometryBaseline",
@@ -448,6 +451,7 @@ export const commandFlows = Object.freeze({
         actionIdFrom: { id: "slotLifecycle", path: "actionId" },
         expectedState: "ack",
       },
+      { type: "hook", id: "taskSheetDismissed", name: "moderatorDismissTask" },
       {
         type: "read-attr",
         target: { testId: "host-command-status-extend_deadline" },
@@ -484,6 +488,8 @@ export const commandFlows = Object.freeze({
       },
       { type: "set-from-value", from: { id: "hostPrompt" }, resultPath: "hostPrompt" },
       { type: "set-from-value", from: { id: "slotLifecycle" }, resultPath: "slotLifecycle" },
+      { type: "set-from-value", from: { id: "deadlineSurface" }, resultPath: "deadlineSurface" },
+      { type: "set-from-value", from: { id: "taskSheetDismissed" }, resultPath: "taskSheetDismissed" },
       {
         type: "set-from-value",
         from: { id: "confirmationGeometry" },

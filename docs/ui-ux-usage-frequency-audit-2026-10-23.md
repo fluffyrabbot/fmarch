@@ -245,7 +245,7 @@ Decisions 9 and 10 landed on branch `ux-tier2-sheets-rail`
 notes on the shape, none a deviation from the text above:
 
 - The hydrated topology is chosen from `(min-width: 1100px)`
-  (`player-layout.mjs`) and followed across resizes; the server-rendered and
+  (`game-layout.mjs`) and followed across resizes; the server-rendered and
   no-JavaScript shape keeps Vote and More as in-flow sections after the
   composer, so document order, the SSR contracts and the no-bind lanes keep
   their meaning. The sheet's Close control joins Escape, backdrop and swipe.
@@ -260,7 +260,38 @@ notes on the shape, none a deviation from the text above:
   role-smoke scenario table resolves per viewport so the five-width matrix
   asserts the dock below 1100px and the rail from it up.
 
-Decisions 11–14 remain open.
+### Tier 2 landing notes, slice 4
+
+Decisions 11 and 12 landed on branch `ux-slice4-host-thread`
+(`docs/arch/13-interaction-architecture.md` records the topology). Notes on
+the shape, and three deviations from the text above:
+
+- The host composer is a real write. No host→`main` command existed, so the
+  spectator post command became `PublishHostPost` with an explicit channel
+  (`main` or `spectator`), the generalized host-notice path doc 14 already
+  named. The composer is text only in this slice; media and quotations stay
+  with the player composer until a host asks for them.
+- The routine tool row reads `Votecount`, `Deadline`, `End phase` rather than
+  `Publish votecount`: the row must fit beside `Post` and `Tools` on a 390px
+  phone, and the canvas it opens says `Publish count`.
+- The host route's player-invite panel and its action are gone with the
+  surface; the setup roster stage already issued player invites, and now also
+  carries the stale-occupant retry form. The host-console
+  "retry after refresh" proof that gated the invite inputs on live projection
+  health retired with the panel: the setup route has no live projection, and
+  the server still rejects a stale target with the current occupant.
+- `GameFrame` takes the surface's test ids and `dock={false}`, and the layout
+  module became `game-layout.mjs`: one rail width for both surfaces. A crossing
+  of the rail width now settles for 120 ms before the topology follows it:
+  crossing rebuilds the sheets or the rail and drops what they held, and a
+  blip that crosses and returns (a full-page screenshot resizes the viewport
+  for a frame) is not a crossing.
+- Proofs follow the topology: the moderator role-smoke scenario resolves per
+  viewport like the player's (queue strip as the phone thumb zone, rail from
+  1100px), the deadline flow opens its task through the bar, and the moderator
+  Linux baselines were rewritten with the UI commit.
+
+Decisions 13 and 14 remain open.
 
 ### Tier 3 — board as a needs-me list
 

@@ -679,13 +679,13 @@ test("static role contract artifact records shared nav focus and route state mat
         "/g/midsummer/host",
         "tasks",
         3,
-        ["attention", "queue-summary", "decision-canvas"],
+        ["attention", "queue-summary", "composer"],
         [
-          ["mobile", 390, "stacked"],
-          ["tablet", 1024, "queue-canvas"],
-          ["tablet-wide", 1180, "queue-canvas"],
-          ["tablet-landscape", 1280, "queue-canvas"],
-          ["desktop", 1440, "queue-canvas"],
+          ["mobile", 390, "thread-strip-sheet"],
+          ["tablet", 1024, "thread-strip-sheet"],
+          ["tablet-wide", 1180, "thread-rail"],
+          ["tablet-landscape", 1280, "thread-rail"],
+          ["desktop", 1440, "thread-rail"],
         ],
       ],
     ],
@@ -2567,8 +2567,8 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
     primaryActionBeforeStatusFloor: true,
-    desktopComposition: "queue-canvas",
-    mobileComposition: "stacked-horizontal-queue",
+    desktopComposition: "thread-rail",
+    mobileComposition: "thread-strip-sheet",
   });
   assert.equal(tabletInteraction.sharedAppCss.touchButtonMinInlinePx, 44);
   assert.equal(tabletInteraction.sharedAppCss.touchAction, "manipulation");

@@ -928,6 +928,12 @@ export function playerActionSubmittedFixture() {
   return PLAYER_ACTION_SUBMITTED_FIXTURE_COLD_LOAD;
 }
 
+/** The fixture main thread, as any fixture reader of the game sees it. */
+export function playerFixtureThread(gameId) {
+  const fixture = playerFixtureColdLoad(gameId);
+  return normalizeThreadPage(fixture.thread, fixture.thread);
+}
+
 function playerFixtureColdLoad(gameId) {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gameId)) {
     return PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD;

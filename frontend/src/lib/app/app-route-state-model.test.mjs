@@ -229,7 +229,7 @@ test("route empty helpers use role-owned visible work queues", () => {
 
   assert.equal(
     isModeratorRouteEmpty({
-      workQueues: [],
+      thread: { posts: [] },
       votecount: [],
       hostPrompts: [],
       hostTasks: [],
@@ -239,7 +239,7 @@ test("route empty helpers use role-owned visible work queues", () => {
   );
   assert.equal(
     isModeratorRouteEmpty({
-      workQueues: [],
+      thread: { posts: [] },
       votecount: [],
       hostPrompts: [],
       hostTasks: [],
@@ -249,7 +249,7 @@ test("route empty helpers use role-owned visible work queues", () => {
   );
   assert.equal(
     isModeratorRouteEmpty({
-      workQueues: [],
+      thread: { posts: [] },
       votecount: [],
       hostPrompts: [],
       hostTasks: [{ id: "engine-host-prompt:prompt-1" }],

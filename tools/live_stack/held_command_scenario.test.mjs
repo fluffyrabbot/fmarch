@@ -80,7 +80,7 @@ test("click failure removes the interceptor without inventing an emitted request
 });
 
 test("invite holds only its actual form route and never parses or rewrites submitted form bytes", async () => {
-  const fixture = pageFixture("accountId=account&principalId=original", `/g/${game}/host?/issuePlayerInvite`);
+  const fixture = pageFixture("accountId=account&principalId=original", `/g/${game}/setup?/issuePlayerInvite`);
   const held = await captureHeldBrowserPost(fixture.page, {
     game, kind: "issuePlayerInvite", initialRecovery, trigger: fixture.trigger,
   });

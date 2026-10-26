@@ -14049,7 +14049,9 @@ function withoutStaleReplacementEntry(replacementSessionRevocation) {
 }
 
 async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl }) {
-  await openHostConsoleDrawer(hostPage, "host-invite-workflows");
+  // The replacement invite lives inside the Replacement task (usage-frequency
+  // audit, decision 12), reached through the Tools popover.
+  await selectHostConsoleTask(hostPage, "replacement");
   await hostPage.getByTestId("host-replacement-invite-panel").waitFor({
     state: "visible",
   });
@@ -14143,11 +14145,14 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
   await context.addCookies([sessionCookie]);
   const page = await context.newPage();
   try {
-    await page.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
-    await openHostConsoleDrawer(page, "host-invite-workflows");
-    await page.getByTestId("host-player-invite-panel").waitFor({ state: "visible" });
+    // Player access is roster work on the setup route (usage-frequency
+    // audit, decision 12): a page loaded before the replacement holds the
+    // outgoing occupant as its expected target.
+    await page.goto(`${frontendBaseUrl}/g/${game}/setup`, { waitUntil: "networkidle" });
+    await page.getByTestId("host-setup-step-roster").click();
+    await page.getByTestId("host-setup-invite-slot-7").waitFor({ state: "visible" });
     await page
-      .getByTestId("host-player-invite-account")
+      .getByTestId("host-setup-invite-account-slot-7")
       .fill(localAccountForPrincipal("player-mira").accountId);
     const before = await readPlayerInviteTarget(page);
     if (
@@ -14174,20 +14179,33 @@ async function openHostConsoleDrawer(page, testId) {
   });
 }
 
+// Routine tools are bar controls, rare ones live in the Tools popover and
+// decisions in the queue strip (usage-frequency audit, decisions 11 and 12);
+// below the rail width a chosen task opens as a sheet over the thread.
+async function selectHostConsoleTask(page, taskId) {
+  if (await page.evaluate(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === true)) {
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === false);
+  }
+  const tool = page.getByTestId(`host-tool-${taskId}`);
+  if (await tool.count() > 0) {
+    if (!(await tool.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+    await tool.click();
+  } else {
+    await page.locator(`[data-testid="host-task-queue"] button[data-task-id="${taskId}"]`).click();
+  }
+  await page.locator(`article[data-task-id="${taskId}"]:not([hidden])`).waitFor({ state: "visible" });
+}
+
+// The roster stage's invite form for slot-7 on the setup route.
 async function readPlayerInviteTarget(page) {
+  const form = page.getByTestId("host-setup-invite-slot-7");
   return {
-    targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
-    accountId: await page.getByTestId("host-player-invite-account").inputValue(),
-    principalId: await page
-      .getByTestId("host-player-invite-panel")
-      .locator('input[name="principalId"]')
-      .inputValue(),
-    slotId: await page
-      .getByTestId("host-player-invite-panel")
-      .locator('input[name="slotId"]')
-      .inputValue(),
-    expectedOccupantPrincipalId: await page
-      .getByTestId("host-player-invite-panel")
+    targetLabel: await form.locator("span").first().innerText(),
+    accountId: await page.getByTestId("host-setup-invite-account-slot-7").inputValue(),
+    principalId: await form.locator('input[name="principalId"]').inputValue(),
+    slotId: await form.locator('input[name="slotId"]').inputValue(),
+    expectedOccupantPrincipalId: await form
       .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
@@ -14198,49 +14216,49 @@ async function verifyStaleHostPlayerInviteRecovery({
   staleHostInviteBefore,
   game,
 }) {
-  const submit = staleHostInvitePage.getByTestId("host-player-invite-submit");
+  const submit = staleHostInvitePage.getByTestId("host-setup-invite-submit-slot-7");
   await submit.click();
-  const status = staleHostInvitePage.getByTestId("host-player-invite-status");
+  const status = staleHostInvitePage.getByTestId("host-setup-player-invite-status");
   await status.waitFor({ state: "visible" });
   await staleHostInvitePage.waitForFunction(
     () =>
       document
-        .querySelector('[data-testid="host-player-invite-status"]')
+        .querySelector('[data-testid="host-setup-player-invite-status"]')
         ?.getAttribute("data-state") === "reject",
   );
   const message = await status.innerText();
   const urlRendered =
-    (await staleHostInvitePage.getByTestId("host-player-invite-url").count()) > 0;
-  const retry = staleHostInvitePage.getByTestId("host-player-invite-retry-submit");
+    (await staleHostInvitePage.getByTestId("host-setup-player-invite-url").count()) > 0;
+  const retry = staleHostInvitePage.getByTestId("host-setup-player-invite-retry-submit");
   await retry.waitFor({ state: "visible" });
   const retryTarget = {
     principalId: await staleHostInvitePage
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await staleHostInvitePage
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="slotId"]')
       .inputValue(),
     expectedOccupantPrincipalId: await staleHostInvitePage
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
   const retryAccount = localAccountForPrincipal("player-rowan");
   await staleHostInvitePage
-    .getByTestId("host-player-invite-retry-account")
+    .getByTestId("host-setup-player-invite-retry-account")
     .fill(retryAccount.accountId);
   await retry.click();
   await staleHostInvitePage.waitForFunction(
     () =>
       document
-        .querySelector('[data-testid="host-player-invite-status"]')
+        .querySelector('[data-testid="host-setup-player-invite-status"]')
         ?.getAttribute("data-state") === "ack",
   );
   const retryMessage = await status.innerText();
   const retryLoginUrl = await staleHostInvitePage
-    .getByTestId("host-player-invite-url")
+    .getByTestId("host-setup-player-invite-url")
     .innerText();
   return {
     status: "passed",

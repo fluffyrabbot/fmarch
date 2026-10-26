@@ -9,9 +9,6 @@ import {
   buildHostConsoleStateEndpoint,
   projectHostConsoleState,
 } from "../../../../lib/components/host-action/host-command-boundary.mjs";
-import {
-  formatDeadlineCountdown,
-} from "../../../../lib/components/host-action/host-work-queue-strip.mjs";
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
 import {
@@ -26,7 +23,9 @@ import {
   normalizeDayVoteOutcomes,
   normalizeHostPrompts,
   normalizeVotecount,
+  playerThreadUrl,
 } from "../../../../lib/app/cold-load.mjs";
+import { playerFixtureThread } from "../game-route-model.mjs";
 import {
   canonicalPrincipalId,
   FIXTURE_PRINCIPAL_IDS,
@@ -68,7 +67,7 @@ export function buildHostConsoleRouteData({
     gameId,
     slotId: replacement?.slotId,
   });
-  coldLoad = fixtureMode ? normalizedHostFixtureColdLoad() : requireHostColdLoad(coldLoad);
+  coldLoad = fixtureMode ? normalizedHostFixtureColdLoad(gameId) : requireHostColdLoad(coldLoad);
   const hostProjection = projectHostConsoleState(
     coldLoad.hostConsoleState,
     Object.freeze({
@@ -185,12 +184,22 @@ export function buildHostConsoleRouteData({
     completed: hostProjection.completed,
     phase: hostProjection.phase,
     replacement: hostProjection.replacement,
-    inviteTargets: buildHostInviteTargets({
+    replacementInvite: buildHostReplacementInviteTarget({
       replacement: hostProjection.replacement,
       replacementPrincipalId: fixtureMode
         ? FIXTURE_PRINCIPAL_IDS.playerRowan
         : hostProjection.replacement?.incomingPrincipalId ?? null,
     }),
+    // The host reads the game where it happens: the public main thread is
+    // the console's reading lane (usage-frequency audit, decision 11).
+    thread: coldLoad.thread,
+    threadPager: Object.freeze({
+      pageSize: 50,
+      channel: "main",
+      hasOlder: coldLoad.thread.nextBeforeSeq !== null,
+      nextBeforeSeq: coldLoad.thread.nextBeforeSeq,
+    }),
+    threadEndpoint: playerThreadUrl({ game: gameId, channel: "main", limit: 50 }),
     hostPrompts: coldLoad.hostPrompts,
     hostTasks: hostProjection.tasks,
     hostDayEvents: hostProjection.dayEvents,
@@ -206,45 +215,7 @@ export function buildHostConsoleRouteData({
     hostLifecycleControlCheckpoint,
     moderatorControls,
     deadlineClock: Object.freeze({ nowSeconds }),
-    workQueues: buildHostWorkQueues({
-      phase: hostProjection.phase,
-      replacement: hostProjection.replacement,
-      votecountCount: coldLoad.votecount.length,
-      nowSeconds,
-    }),
   });
-}
-
-export function buildHostWorkQueues({
-  phase = {},
-  replacement = null,
-  votecountCount = 0,
-  nowSeconds = null,
-} = {}) {
-  const countdown = formatDeadlineCountdown({
-    deadlineSeconds: phase?.deadline,
-    nowSeconds,
-  });
-  return Object.freeze([
-    Object.freeze({
-      id: "deadline",
-      label: "Deadline",
-      value: countdown ?? "No deadline committed",
-    }),
-    Object.freeze({
-      id: "votecount",
-      label: "Votecount",
-      value:
-        votecountCount === 0
-          ? "No active ballots"
-          : `${votecountCount} projected target${votecountCount === 1 ? "" : "s"}`,
-    }),
-    Object.freeze({
-      id: "replacement",
-      label: "Replacement",
-      value: replacementQueueLabel(replacement),
-    }),
-  ]);
 }
 
 function hostConsoleSummary({ phase, replacement }) {
@@ -278,7 +249,11 @@ function replacementQueueLabel(replacement) {
   return seatLabel(slotId, { name: occupant });
 }
 
-export function buildHostInviteTargets({
+/**
+ * The replacement invite lives inside the Replacement task (decision 12);
+ * player invites are setup work and live on the setup route's roster stage.
+ */
+export function buildHostReplacementInviteTarget({
   replacement = null,
   replacementPrincipalId = null,
   replacementLabel = "player-rowan",
@@ -288,49 +263,26 @@ export function buildHostInviteTargets({
       ? normalizeSlotId(replacement.slotId ?? "slot")
       : "";
   const occupant = canonicalPrincipalId(replacement?.assignedPrincipalId);
-  const publicName = normalizePublicPersonaName(replacement?.occupantLabel, "unavailable");
   const replacementPrincipal = canonicalPrincipalId(replacementPrincipalId) ?? "";
-  const available = slotId !== "" && occupant !== null;
+  const available = slotId !== "" && occupant !== null && replacementPrincipal !== "";
   return Object.freeze({
-    player: Object.freeze({
-      id: "player",
-      eyebrow: "Player invite",
-      action: "?/issuePlayerInvite",
-      panelTestId: "host-player-invite-panel",
-      targetTestId: "host-player-invite-target",
-      submitTestId: "host-player-invite-submit",
-      statusTestId: "host-player-invite-status",
-      urlTestId: "host-player-invite-url",
-      accountTestId: "host-player-invite-account",
-      slotId,
-      available,
-      principalId: occupant ?? "",
-      expectedOccupantPrincipalId: occupant ?? "",
-      targetLabel: available
-        ? seatLabel(slotId, { name: publicName })
-        : "No authoritative slot selected",
-      submitLabel: "Issue player invite",
-    }),
-    replacement: Object.freeze({
-      id: "replacement",
-      eyebrow: "Replacement invite",
-      action: "?/issueReplacementInvite",
-      panelTestId: "host-replacement-invite-panel",
-      targetTestId: "host-replacement-invite-target",
-      submitTestId: "host-replacement-invite-submit",
-      statusTestId: "host-replacement-invite-status",
-      urlTestId: "host-replacement-invite-url",
-      accountTestId: "host-replacement-invite-account",
-      available: available && replacementPrincipal !== "",
-      slotId,
-      principalId: replacementPrincipal,
-      expectedOccupantPrincipalId: occupant ?? "",
-      targetLabel:
-        available && replacementPrincipal !== ""
-          ? seatLabel(slotId, { name: replacementLabel })
-          : "No authoritative replacement selected",
-      submitLabel: "Issue invite",
-    }),
+    id: "replacement",
+    eyebrow: "Replacement invite",
+    action: "?/issueReplacementInvite",
+    panelTestId: "host-replacement-invite-panel",
+    targetTestId: "host-replacement-invite-target",
+    submitTestId: "host-replacement-invite-submit",
+    statusTestId: "host-replacement-invite-status",
+    urlTestId: "host-replacement-invite-url",
+    accountTestId: "host-replacement-invite-account",
+    available,
+    slotId,
+    principalId: replacementPrincipal,
+    expectedOccupantPrincipalId: occupant ?? "",
+    targetLabel: available
+      ? seatLabel(slotId, { name: replacementLabel })
+      : "No authoritative replacement selected",
+    submitLabel: "Issue invite",
   });
 }
 
@@ -374,8 +326,9 @@ function requireHostColdLoad(coldLoad) {
   return coldLoad;
 }
 
-function normalizedHostFixtureColdLoad() {
+function normalizedHostFixtureColdLoad(gameId) {
   return Object.freeze({
+    thread: playerFixtureThread(gameId),
     hostConsoleState: HOST_FIXTURE_COLD_LOAD.hostConsoleState,
     hostPrompts: normalizeHostPrompts(
       HOST_FIXTURE_COLD_LOAD.hostPrompts,

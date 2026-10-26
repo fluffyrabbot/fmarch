@@ -28,6 +28,7 @@
   class="fm-app-shell"
   data-component={APP_SHELL_CONTRACT.component}
   data-surface={shell.activeSurface}
+  data-game-bar-owned={shell.gameBarOwned ? "true" : undefined}
   data-theme={theme.themeId}
   data-scheme={theme.scheme}
   data-palette={theme.palette}
@@ -105,11 +106,13 @@
     .fm-app-shell__topbar { gap: 6px; padding-inline: 10px; }
     .fm-app-shell__nav-item { font-size: 14px; padding-inline: 4px; }
   }
-  @media (max-width: 560px) { :global(.fm-app-shell:not([data-surface="player"])) { --fm-app-topbar-block-size: 60px; } }
+  @media (max-width: 560px) { :global(.fm-app-shell:not([data-game-bar-owned])) { --fm-app-topbar-block-size: 60px; } }
   @media (forced-colors: active) { .fm-app-shell__daylight-option[aria-pressed="true"] { outline: 2px solid Highlight; } }
   /* One row at every width: the primary nav takes the room the switch and
      account menu leave and scrolls rather than letting labels overlap. */
   .fm-app-shell__nav--primary { flex: 1 1 auto; min-inline-size: 0; overflow-x: auto; scrollbar-width: none; }
   .fm-app-shell__nav--primary .fm-app-shell__nav-item { flex: none; white-space: nowrap; }
-  :global(.fm-app-shell[data-surface="player"]) { --fm-app-topbar-block-size: 0px; }
+  /* A game surface's own bar is the top bar: the player's game bar and the
+     host console's bar both carry the account menu, so nothing sits above. */
+  :global(.fm-app-shell[data-game-bar-owned]) { --fm-app-topbar-block-size: 0px; }
 </style>

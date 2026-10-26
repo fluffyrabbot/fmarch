@@ -39,7 +39,6 @@ import { assertHostDeadlineApiPhase, waitForHostDeadlineDelivery } from "./live_
 import { assertHostSeatScope, observeHostSeatReads } from "./live_stack/host_seat_scope_scenario.mjs";
 import { assertHostReplacementCandidate, assertHostReplacementEvidence } from "./live_stack/host_replacement_scenario.mjs";
 import { captureHeldBrowserPost } from "./live_stack/held_command_scenario.mjs";
-import { proveHostInviteRetryAfterRefresh } from "./live_stack/host_invite_retry_scenario.mjs";
 import {
   assertDuplicatePlayerActionDurability,
   assertDuplicatePlayerSubmitOutcome,
@@ -4970,7 +4969,6 @@ async function openModeratorBrowser(frontendBaseUrl) {
     );
   }
   await openHostConsoleDrawer(page, "host-supporting-evidence");
-  await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
   const seatScope = await captureHostSeatScope(page, seatReads);
   return { context, page, pageUrl, seatScope };
@@ -4998,7 +4996,7 @@ async function driveModeratorBrowser(
       candidate = await chooseHostReplacementCandidate(page);
       durableAfterLookup = await readHostReplacementDurability();
       stalePlayerInviteSession = await openStaleModeratorBrowser(pageUrl);
-      stalePlayerInviteBefore = await readPlayerInviteTarget(stalePlayerInviteSession.page);
+      stalePlayerInviteBefore = await readSetupInviteTarget(stalePlayerInviteSession.setupPage);
       if (
         !stalePlayerInviteBefore.targetLabel.includes("· S7") ||
         !stalePlayerInviteBefore.targetLabel.includes("player-mira") ||
@@ -5012,8 +5010,7 @@ async function driveModeratorBrowser(
       }
     }
     // The chooser exists before a candidate-dependent replacement task does.
-    if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-  await page.getByTestId(`host-task-${taskId}`).click();
+    await selectHostTask(page, taskId);
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -5036,10 +5033,10 @@ async function driveModeratorBrowser(
     if (expected.id === "process_replacement") {
       // Candidate lookup and confirmation setup finish before this real request
       // is paused. Release remains tied to the competing replacement ACK.
-      stalePlayerInviteSession.heldSubmission = await holdBrowserPost(stalePlayerInviteSession.page, {
+      stalePlayerInviteSession.heldSubmission = await holdBrowserPost(stalePlayerInviteSession.setupPage, {
         game, kind: "issuePlayerInvite",
         initialRecovery: await captureHostLiveBoundary(stalePlayerInviteSession.page),
-        trigger: () => rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page),
+        trigger: () => rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.setupPage),
       });
     }
     await confirm.click({ force: true });
@@ -5124,16 +5121,15 @@ async function driveModeratorBrowser(
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
   }
-  const livePlayerInvite = await readPlayerInviteTarget(page);
+  // The Replacement task's invite names the seat's occupant from the live
+  // projection; after processing, that occupant is the incoming player.
+  const livePlayerInvite = await readReplacementInviteTarget(page);
   if (
-    !livePlayerInvite.targetLabel.includes(replacementSlot.public_name) ||
-    livePlayerInvite.targetLabel.includes("player-rowan") ||
     livePlayerInvite.slotId !== "slot-7" ||
-    livePlayerInvite.principalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
     livePlayerInvite.expectedOccupantPrincipalId !== PLAYER_ROWAN_PRINCIPAL_ID
   ) {
     throw new Error(
-      `player invite target did not follow replacement projection: ${JSON.stringify({
+      `replacement invite occupant did not follow replacement projection: ${JSON.stringify({
         livePlayerInvite,
       })}`,
     );
@@ -5174,7 +5170,7 @@ async function driveModeratorBrowser(
       status: "passed",
       source: "host-console-state projection",
       targetLabel: livePlayerInvite.targetLabel,
-      principalId: livePlayerInvite.principalId,
+      principalId: livePlayerInvite.expectedOccupantPrincipalId,
       expectedOccupantPrincipalId: livePlayerInvite.expectedOccupantPrincipalId,
     },
     stalePlayerInviteReject,
@@ -5211,9 +5207,9 @@ function hostReplacementExpected() {
 
 async function chooseHostReplacementCandidate(page) {
   const outgoing = await page.evaluate(() => window.__fmarchHostProjection?.replacement);
+  await selectHostTask(page, "replacement");
   const chooser = page.getByTestId("host-replacement-chooser");
   await chooser.waitFor({ state: "visible" });
-  if (!await chooser.evaluate((node) => node.open)) await chooser.locator("summary").click();
   await page.getByTestId("host-replacement-handle").fill("rowan");
   const [response] = await Promise.all([
     page.waitForResponse((response) => {
@@ -5276,8 +5272,11 @@ async function driveHostStreamConflictBrowser(page) {
   const projectionRequests = [];
   const onRequest = (request) => {
     const pathname = new URL(request.url()).pathname;
+    // The host console reads the main thread too (usage-frequency audit,
+    // decision 11): its page is `/games/<game>` with the window as the query.
     if (
       pathname.endsWith("/host-console-state") ||
+      pathname.endsWith(`/games/${game}`) ||
       pathname.endsWith("/votecount") ||
       pathname.endsWith("/day-vote-outcomes") ||
       pathname.endsWith("/host-prompts")
@@ -5295,10 +5294,11 @@ async function driveHostStreamConflictBrowser(page) {
     assertHostStreamConflictRecovery(conflictEvidence.commandStatus);
     await page.waitForFunction(() =>
       window.__fmarchHostCommandDispatchBridgePlan?.projectionRefreshKeys?.join(",") ===
-      "host,votecount,dayVoteOutcomes,hostPrompts",
+      "host,thread,votecount,dayVoteOutcomes,hostPrompts",
     );
     await waitForProjectionRequests(projectionRequests, [
       "/host-console-state",
+      `/games/${game}`,
       "/votecount",
       "/day-vote-outcomes",
       "/host-prompts",
@@ -5310,7 +5310,7 @@ async function driveHostStreamConflictBrowser(page) {
         () => window.__fmarchHostCommandDispatchBridgePlan,
       ),
       proof:
-        "The live host page hit a scratch-DB forced same-stream append conflict through the real ExtendDeadline control, rendered retryable Reject StreamConflict copy with reload-and-retry guidance, and refreshed host, votecount, day-vote-outcome, and host-prompt projections before the normal retry path.",
+        "The live host page hit a scratch-DB forced same-stream append conflict through the real ExtendDeadline control, rendered retryable Reject StreamConflict copy with reload-and-retry guidance, and refreshed host, thread, votecount, day-vote-outcome, and host-prompt projections before the normal retry path.",
     };
   } finally {
     page.off("request", onRequest);
@@ -5475,10 +5475,15 @@ async function openStaleModeratorBrowser(pageUrl) {
     );
   }
   await openHostConsoleDrawer(page, "host-supporting-evidence");
-  await openHostConsoleDrawer(page, "host-invite-workflows");
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
   const seatScope = await captureHostSeatScope(page, seatReads);
-  return { context, page, seatScope };
+  // Player access is roster work on the setup route (usage-frequency audit,
+  // decision 12): the stale invite is prepared there, in the same session.
+  const setupPage = await context.newPage();
+  await setupPage.goto(new URL(`/g/${game}/setup`, pageUrl).href, { waitUntil: "networkidle" });
+  await setupPage.getByTestId("host-setup-step-roster").click();
+  await setupPage.getByTestId("host-setup-invite-slot-7").waitFor({ state: "visible" });
+  return { context, page, setupPage, seatScope };
 }
 
 async function captureHostSeatScope(page, seatReads) {
@@ -5489,7 +5494,7 @@ async function captureHostSeatScope(page, seatReads) {
       pageUrl: page.url(),
       reads: seatReads.reads,
       replacement: await page.evaluate(() => window.__fmarchHostProjection?.replacement),
-      inviteTarget: await readPlayerInviteTarget(page),
+      inviteTarget: await readReplacementInviteTarget(page),
     });
   } finally {
     seatReads.stop();
@@ -5553,33 +5558,61 @@ async function openHostConsoleDrawer(page, testId) {
   });
 }
 
-async function readPlayerInviteTarget(page) {
+// The Replacement task's invite panel (hidden until the task is chosen) names
+// the seat's current occupant from the live projection.
+async function readReplacementInviteTarget(page) {
+  const panel = page.getByTestId("host-replacement-invite-panel");
+  await panel.waitFor({ state: "attached" });
   return {
-    targetLabel: await page.getByTestId("host-player-invite-target").textContent(),
-    principalId: await page
-      .getByTestId("host-player-invite-panel")
-      .locator('input[name="principalId"]')
-      .inputValue(),
-    slotId: await page
-      .getByTestId("host-player-invite-panel")
-      .locator('input[name="slotId"]')
-      .inputValue(),
-    expectedOccupantPrincipalId: await page
-      .getByTestId("host-player-invite-panel")
+    targetLabel: await page.getByTestId("host-replacement-invite-target").textContent(),
+    slotId: await panel.locator('input[name="slotId"]').inputValue(),
+    expectedOccupantPrincipalId: await panel
       .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
 }
 
+// The roster stage's invite form for slot-7 on the setup route.
+async function readSetupInviteTarget(page) {
+  const form = page.getByTestId("host-setup-invite-slot-7");
+  await form.waitFor({ state: "visible" });
+  return {
+    targetLabel: await form.locator("span").first().textContent(),
+    principalId: await form.locator('input[name="principalId"]').inputValue(),
+    slotId: await form.locator('input[name="slotId"]').inputValue(),
+    expectedOccupantPrincipalId: await form
+      .locator('input[name="expectedOccupantPrincipalId"]')
+      .inputValue(),
+  };
+}
+
+// Routine tools are bar controls, rare ones live in the Tools popover and
+// decisions in the queue strip (usage-frequency audit, decisions 11 and 12);
+// below the rail width a chosen task opens as a sheet over the thread.
+async function selectHostTask(page, taskId) {
+  if (await page.evaluate(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === true)) {
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === false);
+  }
+  const tool = page.getByTestId(`host-tool-${taskId}`);
+  if (await tool.count() > 0) {
+    if (!(await tool.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+    await tool.click();
+  } else {
+    await page.locator(`[data-testid="host-task-queue"] button[data-task-id="${taskId}"]`).click();
+  }
+  await page.locator(`article[data-task-id="${taskId}"]:not([hidden])`).waitFor({ state: "visible" });
+}
+
 async function rejectStalePlayerInviteFromBrowser(page) {
-  const beforeSubmit = await readPlayerInviteTarget(page);
+  const beforeSubmit = await readSetupInviteTarget(page);
   const invitedAccountId = rolePmIncomingAccountId;
-  await page.getByTestId("host-player-invite-account").fill(invitedAccountId);
-  const submit = page.getByTestId("host-player-invite-submit");
+  await page.getByTestId("host-setup-invite-account-slot-7").fill(invitedAccountId);
+  const submit = page.getByTestId("host-setup-invite-submit-slot-7");
   const submitBox = await submit.boundingBox();
   assertHitTarget(submitBox, "stale player invite submit");
   await submit.click();
-  const status = page.getByTestId("host-player-invite-status");
+  const status = page.getByTestId("host-setup-player-invite-status");
   try {
     await status.waitFor({ state: "visible" });
   } catch (error) {
@@ -5597,7 +5630,7 @@ async function rejectStalePlayerInviteFromBrowser(page) {
   await page.waitForFunction(
     () =>
       document
-        .querySelector('[data-testid="host-player-invite-status"]')
+        .querySelector('[data-testid="host-setup-player-invite-status"]')
         ?.getAttribute("data-state") === "reject",
   );
   const message = await status.innerText();
@@ -5607,24 +5640,24 @@ async function rejectStalePlayerInviteFromBrowser(page) {
   ) {
     throw new Error(`stale player invite rejection copy was not specific: ${message}`);
   }
-  if ((await page.getByTestId("host-player-invite-url").count()) !== 0) {
+  if ((await page.getByTestId("host-setup-player-invite-url").count()) !== 0) {
     throw new Error("stale player invite rendered an invite URL");
   }
-  const retry = page.getByTestId("host-player-invite-retry-submit");
+  const retry = page.getByTestId("host-setup-player-invite-retry-submit");
   await retry.waitFor({ state: "visible" });
   const retryBox = await retry.boundingBox();
   assertHitTarget(retryBox, "stale player invite retry submit");
   const retryTarget = {
     principalId: await page
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await page
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="slotId"]')
       .inputValue(),
     expectedOccupantPrincipalId: await page
-      .getByTestId("host-player-invite-retry")
+      .getByTestId("host-setup-player-invite-retry")
       .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
@@ -5637,11 +5670,17 @@ async function rejectStalePlayerInviteFromBrowser(page) {
       `stale player invite retry did not target current occupant: ${JSON.stringify(retryTarget)}`,
     );
   }
-  const admissionRecovery = await proveHostInviteRetryAfterRefresh({
-    page, game, invitedAccountId, expectedTarget: retryTarget,
-  });
+  await page.getByTestId("host-setup-player-invite-retry-account").fill(invitedAccountId);
+  await retry.click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-setup-player-invite-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
   const retryMessage = await status.innerText();
-  const retryLoginUrl = await page.getByTestId("host-player-invite-url").innerText();
+  // The setup roster renders the invitation as a labelled link; the URL is its href.
+  const retryLoginUrl = await page.getByTestId("host-setup-player-invite-url").getAttribute("href") ?? "";
   if (!retryLoginUrl.includes("player-")) {
     throw new Error(
       `stale player invite retry did not render a player invite URL: ${retryLoginUrl}`,
@@ -5662,15 +5701,13 @@ async function rejectStalePlayerInviteFromBrowser(page) {
       target: retryTarget,
       message: retryMessage,
       loginUrl: retryLoginUrl,
-      admissionRecovery,
     },
   };
 }
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
   const taskId = actionId === "extend_deadline" ? "deadline" : "phase";
-  if (!(await page.getByTestId(`host-task-${taskId}`).isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-  await page.getByTestId(`host-task-${taskId}`).click();
+  await selectHostTask(page, taskId);
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -5708,8 +5745,7 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
 }
 
 async function expectHostPhaseActions(page, expectedActions) {
-  if (!(await page.getByTestId("host-task-phase").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-  await page.getByTestId("host-task-phase").click();
+  await selectHostTask(page, "phase");
   try {
     await page.waitForFunction((expected) => {
       const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
@@ -5809,10 +5845,7 @@ async function issueBelovedPrincessPrompt(page) {
 
 async function resolveHostPromptFromBrowser(page) {
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
-  await page
-    .getByTestId("host-task-queue")
-    .locator('button[data-task-source-id="D01:skip_next_day:slot_1"]')
-    .click();
+  await selectHostTask(page, "engine-host-prompt:D01:skip_next_day:slot_1");
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -5867,8 +5900,7 @@ async function resolveHostPromptFromBrowser(page) {
 
 async function modkillSlotFromBrowser(page) {
   const actionId = "modkill_slot";
-  if (!(await page.getByTestId("host-task-slot-lifecycle").isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-  await page.getByTestId("host-task-slot-lifecycle").click();
+  await selectHostTask(page, "slot-lifecycle");
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });

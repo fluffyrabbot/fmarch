@@ -2,9 +2,18 @@
   import { onMount } from "svelte";
   /** "flow" (server/no-JavaScript), "sheet" (below the rail width) or "rail". */
   export let layout = "flow";
+  /** The surface this frame carries: the player workspace or the host console. */
+  export let surfaceTestId = "player-surface";
+  export let surfaceClass = "";
+  export let component = null;
+  export let gameId = null;
+  export let railTestId = "player-rail";
+  export let railLabel = "Game state";
+  /** False for a surface with no bottom dock, so no bottom clearance is reserved. */
+  export let dock = true;
   let frame;
   onMount(() => {
-    const bar = frame.querySelector('[data-testid="player-game-bar"]');
+    const bar = frame.querySelector("[data-game-bar]");
     if (!bar) return;
     const measure = () => frame.style.setProperty("--fm-game-bar-block-size", `${bar.getBoundingClientRect().height}px`);
     measure();
@@ -14,7 +23,15 @@
   });
 </script>
 
-<main bind:this={frame} class="game-frame player-surface" data-testid="player-surface" data-layout={layout}>
+<main
+  bind:this={frame}
+  class="game-frame player-surface {surfaceClass}"
+  data-testid={surfaceTestId}
+  data-component={component ?? undefined}
+  data-game={gameId ?? undefined}
+  data-layout={layout}
+  data-dock={dock ? undefined : "false"}
+>
   <slot name="bar" />
   <div class="game-frame__workspace">
     <slot name="channels" />
@@ -25,7 +42,7 @@
       <!-- Below the rail width this holds the closed sheets (no box of its own);
            from the rail width up it is the sticky second column. Without
            JavaScript its sections simply follow the composer in document order. -->
-      <aside class="game-frame__rail" aria-label="Game state" data-testid="player-rail" data-scroll-container={layout === "rail" ? "" : undefined}>
+      <aside class="game-frame__rail" aria-label={railLabel} data-testid={railTestId} data-scroll-container={layout === "rail" ? "" : undefined}>
         <slot name="rail" />
       </aside>
     </div>
@@ -78,6 +95,10 @@
 
   .game-frame[data-layout="sheet"] .game-frame__rail {
     display: contents;
+  }
+
+  .game-frame[data-dock="false"] {
+    padding-block-end: 44px;
   }
 
   @media (max-width: 840px) {

@@ -53,7 +53,7 @@
     : events.length === 1 ? String(events[0].label ?? "Open event") : `${events.length} open events`;
 </script>
 
-<header class="game-bar" data-testid="player-game-bar" data-phase-kind={phaseKind ?? undefined}>
+<header class="game-bar" data-testid="player-game-bar" data-game-bar data-phase-kind={phaseKind ?? undefined}>
   <div class="game-bar__identity">
     <span>{game.label}</span>
     <h1>{phase.label}</h1>

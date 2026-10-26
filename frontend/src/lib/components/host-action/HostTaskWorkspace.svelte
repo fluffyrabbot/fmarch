@@ -1,54 +1,18 @@
 <script>
+  // The decision canvas: one selected task with its intent, consequence and
+  // actions. Below the rail width it is the body of the task sheet; from the
+  // rail width up it follows the queue in the rail (usage-frequency audit,
+  // decision 11). The queue itself is HostWorkQueueStrip.
   import AppStatus from "$lib/app/AppStatus.svelte";
   import CommandRecovery from "$lib/app/CommandRecovery.svelte";
   import HostAction from "./HostAction.svelte";
-  import { buildHostTaskWorkspaceViewModel } from "./host-task-workspace.mjs";
 
-  export let groups = [];
-  export let commandStatuses = {};
-  export let commandContext = {};
-  export let phase = {};
-  export let nowSeconds = null;
-  export let replacement = {};
-  export let hostPrompts = [];
-  export let hostTasks = [];
-  export let hostDayEvents = [];
-  export let roster = [];
-  export let votecount = [];
+  /** The workspace view model (`buildHostTaskWorkspaceViewModel`). */
+  export let view;
+  export let onToggleDayEventWinner = () => {};
   export let onDispatch = () => {};
   export let onRetry = () => {};
   export let onCancel = () => {};
-
-  let preferredTaskId = null;
-  let dayEventSelections = {};
-  $: view = buildHostTaskWorkspaceViewModel({
-    groups,
-    commandStatuses,
-    commandContext,
-    phase,
-    replacement,
-    hostPrompts,
-    hostTasks,
-    hostDayEvents,
-    roster,
-    dayEventSelections,
-    votecount,
-    selectedTaskId: preferredTaskId,
-    nowSeconds,
-  });
-
-  function toggleDayEventWinner(eventId, slot) {
-    const current = new Set(dayEventSelections[eventId] ?? []);
-    if (current.has(slot)) {
-      current.delete(slot);
-    } else {
-      current.add(slot);
-    }
-    dayEventSelections = {
-      ...dayEventSelections,
-      [eventId]: [...current].sort(),
-    };
-  }
 </script>
 
 <section
@@ -60,48 +24,12 @@
   data-workspace-mode={view.root.data.mode}
   data-testid={view.root.testId}
 >
-  <nav class="host-task-workspace__queue" aria-label="Host task queue" data-testid={view.queue.testId}>
-    <header data-testid="host-task-queue-summary">
-      <div>
-        <p class="fm-eyebrow">Attention</p>
-        <h2>{view.queue.label}</h2>
-      </div>
-      <strong aria-label={`${view.queue.attentionCount} decisions need attention`}>
-        {view.queue.attentionCount}
-      </strong>
-    </header>
-    <p>{view.queue.summary}</p>
-    <div class="host-task-workspace__task-list">
-      {#each view.decisions as task}
-        <button
-          type="button"
-          class:host-task-workspace__task--selected={task.id === view.selectedTaskId}
-          data-state={task.state}
-          data-urgency={task.urgency}
-          data-task-id={task.id}
-          data-task-kind={task.kind}
-          data-task-source-id={task.sourceId}
-          data-testid={task.testId}
-          aria-pressed={task.id === view.selectedTaskId}
-          on:click={() => preferredTaskId = task.id}
-        >
-          <span>{task.urgencyLabel}</span>
-          <strong>{task.label}</strong>
-          <small>{task.meta}</small>
-        </button>
-      {/each}
-    </div>
-    <details class="host-tools" data-testid="host-tools">
-      <summary class="fm-touch-button fm-touch-button--secondary">Tools</summary>
-      {#each view.tools as tool}
-        <button class="fm-touch-button fm-touch-button--secondary" type="button" data-testid={tool.testId} data-task-id={tool.id} on:click={() => preferredTaskId = tool.id}>{tool.label}</button>
-      {/each}
-    </details>
-  </nav>
-
-  <section class="host-task-workspace__canvas" data-testid={view.canvas.testId}>
-    {#if view.selectedTask}
-      {#each view.tasks as task}
+  <div class="host-task-workspace__canvas" data-testid={view.canvas.testId}>
+    {#if view.selectedTask === null}
+      <p class="host-task-workspace__empty">Nothing needs you right now</p>
+    {/if}
+    {#if view.tasks.length > 0}
+      {#each view.tasks as task (task.id)}
         <article
           class="host-task-workspace__decision"
           data-testid={task.panelTestId}
@@ -113,7 +41,7 @@
           <header>
             <div>
               <p class="fm-eyebrow">{task.urgencyLabel}</p>
-              <h2>{task.label}</h2>
+              <h2 tabindex="-1">{task.label}</h2>
               {#if task.meta}
                 <p class="host-task-workspace__meta" data-testid={`${task.panelTestId}-meta`}>{task.meta}</p>
               {/if}
@@ -156,7 +84,7 @@
                           checked={participant.selected}
                           disabled={participant.disabled}
                           on:change={() =>
-                            toggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
+                            onToggleDayEventWinner(task.dayEvent.eventId, participant.slot)}
                         />
                         <span>{participant.label}</span>
                       </label>
@@ -165,6 +93,10 @@
                 </fieldset>
               {/if}
             </section>
+          {/if}
+
+          {#if task.kind === "replacement"}
+            <slot name="replacement-chooser" />
           {/if}
 
           {#if task.actions.length === 0}
@@ -199,37 +131,13 @@
             </div>
           {/if}
 
+          {#if task.kind === "replacement"}
+            <slot name="replacement-invite" />
+          {/if}
         </article>
       {/each}
-    {:else}
-      <p class="host-task-workspace__empty">Nothing needs you right now</p>
     {/if}
-
-    <details
-      class="host-task-workspace__command-context fm-proof-disclosure"
-      data-legibility="technical"
-      data-testid={view.commandContext.testId}
-      data-game-id={view.commandContext.gameId}
-      data-principal-id={view.commandContext.principalId}
-      data-capability-kind={view.commandContext.capabilityEvidence.kind}
-      data-capability-scope={view.commandContext.capabilityEvidence.scope}
-      data-command-endpoint={view.commandContext.commandEndpoint}
-    >
-      <summary>{view.commandContext.summary}</summary>
-      <div class="fm-proof-disclosure__body">
-        <span>{view.commandContext.label}</span>
-        <strong>{view.commandContext.value}</strong>
-        <small>{view.commandContext.commandEndpoint}</small>
-        {#if view.selectedTask}
-          <dl class="host-task-workspace__diagnostics" data-task-id={view.selectedTask.id}>
-            <div><dt>Required access</dt><dd>{view.selectedTask.diagnostics.authority}</dd></div>
-            <div><dt>Dispatch boundary</dt><dd>{view.selectedTask.diagnostics.boundary}</dd></div>
-            <div><dt>Protocol</dt><dd>{view.selectedTask.diagnostics.protocol}</dd></div>
-          </dl>
-        {/if}
-      </div>
-    </details>
-  </section>
+  </div>
 </section>
 
 <style>

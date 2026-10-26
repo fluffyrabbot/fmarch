@@ -1,4 +1,4 @@
-import { PLAYER_RAIL_MIN_WIDTH_PX } from "../../../lib/components/gameplay/player-layout.mjs";
+import { GAME_RAIL_MIN_WIDTH_PX } from "../../../lib/components/gameplay/game-layout.mjs";
 
 // Below the rail width Vote and More are bottom sheets opened from the dock;
 // from it up they are a sticky rail beside the reading lane and the dock is
@@ -7,14 +7,14 @@ export const PLAYER_ROUTE_LAYOUT_CONTRACT = Object.freeze({
   rootClassName: "game-frame__workspace",
   mode: "reading-first-action-dock",
   minTabletViewportPx: 1024,
-  railMinViewportPx: PLAYER_RAIL_MIN_WIDTH_PX,
+  railMinViewportPx: GAME_RAIL_MIN_WIDTH_PX,
   collapseBelowPx: null,
   regions: Object.freeze(["game-bar", "channels", "thread", "composer", "rail", "dock"]),
   sheets: Object.freeze(["vote", "more"]),
   commandRail: Object.freeze({
     className: "action-dock",
     mode: "fixed-context-navigation",
-    renderedBelowPx: PLAYER_RAIL_MIN_WIDTH_PX,
+    renderedBelowPx: GAME_RAIL_MIN_WIDTH_PX,
     stickyTopPx: null,
     unstickBelowPx: null,
     stabilityMode: "thread-width-stable",

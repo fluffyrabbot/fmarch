@@ -446,26 +446,32 @@ function assertAdminDecisionCanvasBeforeStatusReadouts(source) {
 }
 
 function proveModeratorControlSurfaceCss({ css, component, route }) {
+  // The host console shares the game frame (usage-frequency audit, decision
+  // 11): the thread is the lane, the decision queue a horizontal strip under
+  // the bar below the rail width and a vertical list heading the rail above
+  // it, and the canvas the sheet body or the rail. Tools are bar controls.
   assert.match(
     component,
     /data-workspace-mode=\{view\.root\.data\.mode\}/s,
   );
-  assert.match(component, /data-testid=\{view\.queue\.testId\}/s);
   assert.match(component, /data-testid=\{view\.canvas\.testId\}/s);
   assert.match(component, /hidden=\{task\.id !== view\.selectedTaskId\}/s);
   assertHostActionBeforeStatusFloor(component);
   assertHostControlBeforeStatusReadouts(route);
+  assert.match(route, /<GameFrame[\s\S]*?surfaceClass="host-console-critical-path"/s);
+  assert.match(route, /<PlayerThread/s);
+  assert.match(route, /<PlayerSheet[\s\S]*?testId="host-task-sheet"/s);
   assert.match(
     css,
-    /\.host-task-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(220px,\s*280px\) minmax\(0,\s*1fr\);/s,
+    /\.host-task-queue__list\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s,
   );
   assert.match(
     css,
-    /@media \(max-width:\s*760px\)[\s\S]*?\.host-task-workspace\s*\{[^}]*grid-template-columns:\s*1fr;/s,
+    /\.host-task-queue\[data-layout="rail"\] \.host-task-queue__list\s*\{[^}]*display:\s*grid;/s,
   );
   assert.match(
     css,
-    /\.host-task-workspace__task-list\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s,
+    /\.host-console-bar__tool\s*\{[^}]*min-block-size:\s*var\(--fm-touch-target-min\);/s,
   );
   assert.match(
     css,
@@ -487,8 +493,8 @@ function proveModeratorControlSurfaceCss({ css, component, route }) {
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
     primaryActionBeforeStatusFloor: true,
-    desktopComposition: "queue-canvas",
-    mobileComposition: "stacked-horizontal-queue",
+    desktopComposition: "thread-rail",
+    mobileComposition: "thread-strip-sheet",
   };
 }
 
@@ -509,33 +515,40 @@ function assertHostActionBeforeStatusFloor(component) {
 }
 
 function assertHostControlBeforeStatusReadouts(route) {
+  const barIndex = route.indexOf("<HostConsoleBar\n      slot=\"bar\"");
+  assert.notEqual(barIndex, -1, "host route must render HostConsoleBar in the frame's bar slot");
+  const queueIndex = route.indexOf("<HostWorkQueueStrip");
+  assert.notEqual(queueIndex, -1, "host route must render <HostWorkQueueStrip");
+  const threadIndex = route.indexOf("<PlayerThread");
+  assert.notEqual(threadIndex, -1, "host route must render the thread");
+  const composerIndex = route.indexOf("<HostComposer");
+  assert.notEqual(composerIndex, -1, "host route must render HostComposer");
   const controlIndex = route.indexOf("<HostTaskWorkspace");
   assert.notEqual(controlIndex, -1, "host route must render HostTaskWorkspace");
-  const workQueueIndex = route.indexOf("<HostWorkQueueStrip");
-  assert.notEqual(workQueueIndex, -1, "host route must render <HostWorkQueueStrip");
   assert.equal(
-    controlIndex < workQueueIndex,
+    barIndex < queueIndex && queueIndex < threadIndex && threadIndex < composerIndex,
     true,
-    "HostTaskWorkspace leads the console before supporting queue readouts",
+    "the lane reads bar, queue strip, thread, composer",
   );
-  const checkpointIndex = route.indexOf("<HostLifecycleControlCheckpoint");
-  assert.notEqual(checkpointIndex, -1, "host route must render HostLifecycleControlCheckpoint");
+  const technicalIndex = route.indexOf('data-testid="host-supporting-evidence"');
+  assert.notEqual(technicalIndex, -1, "host route must render one Technical details drawer");
   assert.equal(
-    controlIndex < checkpointIndex,
-    true,
-    "HostTaskWorkspace leads the lifecycle proof checkpoint",
+    route.indexOf("<span>Technical details</span>"),
+    route.lastIndexOf("<span>Technical details</span>"),
+    "Technical details is stated once",
   );
   for (const marker of [
     "<HostCommandActivity",
+    "<HostLifecycleControlCheckpoint",
     "<HostPhaseSummary",
     "<HostVotecountPanel",
   ]) {
     const index = route.indexOf(marker);
     assert.notEqual(index, -1, `host route must render ${marker}`);
     assert.equal(
-      controlIndex < index,
+      composerIndex < index && technicalIndex < index,
       true,
-      `HostTaskWorkspace should render before ${marker} for first-viewport moderator actions`,
+      `${marker} belongs to the Technical details drawer after the composer`,
     );
   }
 }

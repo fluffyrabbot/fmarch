@@ -20,6 +20,9 @@ export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
   statusFloorMinBlockSizePx: 44,
 });
 
+const ROUTINE_TOOL_IDS = Object.freeze(["votecount", "deadline", "phase"]);
+const RARE_TOOL_IDS = Object.freeze(["replacement", "slot-lifecycle", "roles"]);
+
 const TASK_POSTURE = Object.freeze({
   deadline: Object.freeze({ rank: 1, urgency: "attention", label: "Deadline" }),
   "host-prompts": Object.freeze({ rank: 2, urgency: "attention", label: "Needs decision" }),
@@ -76,7 +79,11 @@ export function buildHostTaskWorkspaceViewModel({
   const phaseLocked = phase?.locked === true || phase?.state === "locked";
   const decisions = tasks.filter((task) => hostTaskIsDue(task, { deadlineDue, phaseLocked }));
 
-  const tools = tasks.filter(task => !decisions.includes(task));
+  // Tools the host reaches outside the queue, split by frequency (decision
+  // 12): the per-phase routine lives in the bar, the rare three in a popover.
+  const toolEntry = (id) => tasks.find((task) => task.id === id) ?? null;
+  const routineTools = ROUTINE_TOOL_IDS.map(toolEntry).filter(Boolean);
+  const rareTools = RARE_TOOL_IDS.map(toolEntry).filter(Boolean);
   const resolvedSelectedId = tasks.some((task) => task.id === selectedTaskId)
     ? selectedTaskId
     : decisions[0]?.id ?? null;
@@ -105,7 +112,8 @@ export function buildHostTaskWorkspaceViewModel({
     }),
     tasks: Object.freeze(tasks),
     decisions: Object.freeze(decisions),
-    tools: Object.freeze(tools),
+    routineTools: Object.freeze(routineTools),
+    rareTools: Object.freeze(rareTools),
     selectedTaskId: resolvedSelectedId,
     selectedTask,
     commandContext: buildCommandContext(commandContext),

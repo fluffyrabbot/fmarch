@@ -236,7 +236,7 @@ function validateInviteRoleProof(artifact) {
     proof.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
       "?/issuePlayerInvite" ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.hostPanelTestId !==
-      "host-player-invite-panel" ||
+      "host-setup-invite-slot-7" ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
       true ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !== proof.game

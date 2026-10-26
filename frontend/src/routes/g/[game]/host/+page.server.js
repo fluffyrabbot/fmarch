@@ -81,20 +81,10 @@ export async function load({ params, locals, fetch, url, cookies }) {
   };
 }
 
+// Player invites are setup work and live on the setup route's roster stage
+// (usage-frequency audit, decision 12); the host console keeps the
+// replacement invite inside its Replacement task.
 export const actions = {
-  issuePlayerInvite: async ({ cookies, fetch, locals, params, request, url }) =>
-    await _issueHostScopedInvite({
-      cookies,
-      fetch,
-      locals,
-      params,
-      request,
-      url,
-      field: "playerInvite",
-      tokenPrefix: "player",
-      ackMessage: "Player invite issued",
-      rejectMessage: "Player invite was rejected",
-    }),
   issueReplacementInvite: async ({ cookies, fetch, locals, params, request, url }) =>
     await _issueHostScopedInvite({
       cookies,

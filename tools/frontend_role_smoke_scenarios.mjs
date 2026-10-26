@@ -28,8 +28,8 @@ import {
   playerForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/game-route-model.mjs";
 import {
-  PLAYER_RAIL_MIN_WIDTH_PX,
-} from "../frontend/src/lib/components/gameplay/player-layout.mjs";
+  GAME_RAIL_MIN_WIDTH_PX,
+} from "../frontend/src/lib/components/gameplay/game-layout.mjs";
 import {
   HOST_CONSOLE_ROUTE_CONTRACT,
   hostConsoleForbiddenMessage,
@@ -506,7 +506,7 @@ export const roles = Object.freeze([
     viewportVariants: Object.freeze([
       Object.freeze({
         name: "rail",
-        minWidth: PLAYER_RAIL_MIN_WIDTH_PX,
+        minWidth: GAME_RAIL_MIN_WIDTH_PX,
         overrides: Object.freeze({
           visibleTestIds: Object.freeze([
             "player-game-bar",
@@ -554,11 +554,13 @@ export const roles = Object.freeze([
     firstViewportSurface: "tasks",
     capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
     requiredText: HOST_CONSOLE_ROUTE_CONTRACT.requiredText,
+    // The thread is the host's main lane; the highest-priority decision is the
+    // first strip button, one tap from its canvas (decision 11).
     mobileViewportBudget: Object.freeze({
       primaryActionSelector:
-        '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
+        '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       maxPrimaryActionBottomViewportRatio: 1,
-      maxDocumentHeightViewportRatio: 2.5,
+      maxDocumentHeightViewportRatio: 3.5,
     }),
     interactionGeometryBudget: Object.freeze({
       confirmation: Object.freeze({
@@ -621,55 +623,96 @@ export const roles = Object.freeze([
     }),
     closedByDefault: Object.freeze([
       '[data-testid="host-supporting-evidence"]',
-      '[data-testid="host-invite-workflows"]',
     ]),
     expandBeforeChecks: Object.freeze([
       '[data-testid="host-supporting-evidence"]',
-      '[data-testid="host-invite-workflows"]',
     ]),
     collapseBeforeScreenshot: Object.freeze([
       '[data-testid="host-supporting-evidence"]',
-      '[data-testid="host-invite-workflows"]',
     ]),
     collapseBeforeCommands: Object.freeze([
       '[data-testid="host-supporting-evidence"]',
-      '[data-testid="host-invite-workflows"]',
     ]),
+    // Below the rail width the decision canvas is a sheet, revealed by the
+    // task hooks; the strip, the thread and the composer are the lane.
     visibleTestIds: [
       "host-console-bar",
-      "host-task-queue-summary",
+      "host-console-attention",
+      "host-tool-row",
       "host-task-queue",
+      "host-task-queue-summary",
+      "host-task-engine-host-prompt-D01-skip_next_day-slot_1",
       "host-task-day-event-resolve-event-cookie",
-      "host-decision-canvas",
+      "player-thread-pager",
+      "host-composer",
     ],
     overlapTestIds: [
       "host-console-bar",
       "host-task-queue-summary",
-      "host-decision-canvas",
+      "host-composer",
     ],
     statusRegions: [],
     touchSelectors: [
+      '[data-testid="host-bar-post"]',
+      '[data-testid="host-tool-votecount"]',
+      '[data-testid="host-tool-deadline"]',
+      '[data-testid="host-tool-phase"]',
+      '[data-testid="host-tools"] > summary',
       '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       '[data-testid="host-task-day-event-resolve-event-cookie"]',
       '[data-testid="host-task-replacement"]',
-      '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="host-console-votecount-row-slot-2"]',
+      '[data-testid="player-thread-load-older"]',
+      '[data-testid="host-composer-submit"]',
       '[data-testid="host-supporting-evidence"] > summary',
-      '[data-testid="host-invite-workflows"] > summary',
     ],
     thumbZones: Object.freeze([
       Object.freeze({
-        testId: "moderator-primary-action-zone",
+        testId: "host-task-queue",
         zone: "moderator-primary-actions",
         targetSelectors: Object.freeze([
-          '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
         ]),
+      }),
+    ]),
+    // From the rail width up the queue heads the rail and the canvas follows
+    // it: the resolve-prompt action is on screen without a sheet.
+    viewportVariants: Object.freeze([
+      Object.freeze({
+        name: "rail",
+        minWidth: GAME_RAIL_MIN_WIDTH_PX,
+        overrides: Object.freeze({
+          visibleTestIds: Object.freeze([
+            "host-console-bar",
+            "host-console-attention",
+            "host-tool-row",
+            "host-rail",
+            "host-task-queue",
+            "host-task-queue-summary",
+            "host-decision-canvas",
+            "player-thread-pager",
+            "host-composer",
+          ]),
+          overlapTestIds: Object.freeze([
+            "host-console-bar",
+            "host-rail",
+            "host-composer",
+          ]),
+          thumbZones: Object.freeze([
+            Object.freeze({
+              testId: "moderator-primary-action-zone",
+              zone: "moderator-primary-actions",
+              targetSelectors: Object.freeze([
+                '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
+              ]),
+            }),
+          ]),
+        }),
       }),
     ]),
     nav: moderatorNav,
     focus: roleFocusScenario({
       shell: moderatorShell,
-      expectedAfterNav: ["critical-host-action-trigger"],
+      expectedAfterNav: ["host-bar-post", "critical-host-action-trigger"],
     }),
   }),
 ]);

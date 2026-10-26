@@ -363,7 +363,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
         "moderator",
         [
           [
-            "moderator-primary-action-zone",
+            "host-task-queue",
             "moderator-primary-actions",
             1,
           ],
@@ -387,9 +387,9 @@ test("role smoke pins collapsed support and mobile first-viewport budgets", () =
     },
     moderator: {
       primaryActionSelector:
-        '[data-testid="critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1"] [data-testid="critical-host-action-trigger"]',
+        '[data-testid="host-task-engine-host-prompt-D01-skip_next_day-slot_1"]',
       maxPrimaryActionBottomViewportRatio: 1,
-      maxDocumentHeightViewportRatio: 2.5,
+      maxDocumentHeightViewportRatio: 3.5,
     },
   };
 

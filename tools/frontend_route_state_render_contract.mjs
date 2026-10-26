@@ -1813,28 +1813,40 @@ async function proveRenderedModeratorSurface(bundle) {
     "moderator command authority endpoint",
   );
   assertIncludes(html, 'data-testid="host-console-bar"', "moderator game bar");
+  assertIncludes(html, 'data-testid="host-console-attention"', "moderator attention badge");
+  assertIncludes(html, 'data-testid="host-bar-post"', "moderator Post action");
+  for (const tool of ["votecount", "deadline", "phase", "replacement", "slot-lifecycle", "roles"]) {
+    assertIncludes(html, `data-testid="host-tool-${tool}"`, `moderator ${tool} tool`);
+  }
+  assertIncludes(html, 'data-testid="host-tools"', "moderator Tools popover");
   assertIncludes(html, 'data-testid="host-task-queue"', "moderator task queue");
+  assertIncludes(html, 'data-testid="host-task-queue-summary"', "moderator task queue summary");
+  assertIncludes(html, 'data-testid="player-thread-pager"', "moderator reading lane");
+  assertIncludes(html, 'data-testid="host-composer"', "moderator host composer");
+  assertIncludes(html, 'data-testid="host-supporting-evidence"', "moderator technical details");
+  assertIncludes(html, 'data-testid="host-replacement-chooser"', "moderator replacement chooser inside its task");
+  assertIncludes(html, 'data-testid="host-replacement-invite-panel"', "moderator replacement invite inside its task");
+  assertExcludes(html, 'data-testid="host-player-invite-panel"', "player invites live on the setup route");
   assertIncludes(html, 'data-testid="host-decision-canvas"', "moderator decision canvas");
   assertIncludes(
     html,
     'data-workspace-mode="exception-queue-decision-canvas"',
     "moderator workspace mode",
   );
+  // The queue holds decisions only; routine and rare tools are bar controls.
   for (const id of [
-    "deadline",
     "engine-host-prompt-D01-skip_next_day-slot_1",
     "day-event-resolve-event-cookie",
     "replacement",
-    "phase",
-    "votecount",
-    "slot-lifecycle",
-    "roles",
   ]) {
     assertIncludes(
       html,
       `data-testid="host-task-${id}"`,
-      `moderator task ${id}`,
+      `moderator decision ${id}`,
     );
+  }
+  for (const id of ["deadline", "phase", "votecount", "slot-lifecycle", "roles"]) {
+    assertExcludes(html, `data-testid="host-task-${id}"`, `moderator tool ${id} stays out of the queue`);
   }
   for (const actionId of [
     "critical-host-action-extend_deadline",
