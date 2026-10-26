@@ -1,4 +1,7 @@
 <script>
+  // The incoming-member lookup, inside the Replacement task canvas
+  // (usage-frequency audit, decision 12): choosing a candidate is what gives
+  // the task its process_replacement action.
   import { seatLabel } from "$lib/app/seat-presenter.mjs";
   import { onDestroy } from "svelte";
   import AppStatus from "$lib/app/AppStatus.svelte";
@@ -27,10 +30,9 @@
 </script>
 
 {#if context || commandStatus}
-  <details class="host-console-critical-path__drawer" data-testid="host-replacement-chooser">
-    <summary><span>Replace a player</span><small>{replacement?.slotId ? seatLabel(replacement.slotId, { name: replacement.occupantLabel }) : "Command history"}</small></summary>
-    <div class="host-console-critical-path__drawer-content">
-      {#if context}
+  <div class="host-replacement-chooser" data-testid="host-replacement-chooser">
+    {#if context}
+      <h3>Incoming member for {replacement?.slotId ? seatLabel(replacement.slotId, { name: replacement.occupantLabel }) : "the seat"}</h3>
       <p>Choose an available member by their full public handle. The replacement keeps this slot’s history.</p>
       <form on:submit|preventDefault={() => chooser.lookup()}>
         <label class="fm-field">
@@ -52,13 +54,12 @@
       <p role="status" data-testid="host-replacement-lookup-status" data-state={view.state}>
         {view.available ? view.message : "Replacement lookup is paused until host state is current."}
       </p>
+    {/if}
+    {#if commandStatus}
+      <AppStatus status={commandStatus} testId="host-replacement-command-status" />
+      {#if showRecovery}
+        <CommandRecovery status={commandStatus} retryEnabled={ready} {onRetry} {onCancel} />
       {/if}
-      {#if commandStatus}
-        <AppStatus status={commandStatus} testId="host-replacement-command-status" />
-        {#if showRecovery}
-          <CommandRecovery status={commandStatus} retryEnabled={ready} {onRetry} {onCancel} />
-        {/if}
-      {/if}
-    </div>
-  </details>
+    {/if}
+  </div>
 {/if}

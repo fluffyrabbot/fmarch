@@ -43,6 +43,9 @@ import {
   buildHostWorkQueueStripViewModel,
 } from "../frontend/src/lib/components/host-action/host-work-queue-strip.mjs";
 import {
+  buildHostConsoleBarViewModel,
+} from "../frontend/src/lib/components/host-action/host-console-bar.mjs";
+import {
   buildPlayerChannelSwitcherViewModel,
 } from "../frontend/src/lib/components/player-channel-switcher/player-channel-switcher-model.mjs";
 import {
@@ -594,9 +597,9 @@ async function proveFirstViewportLayoutContract(roleSurfaces) {
           roleConfig.firstViewportSurface === "workspace"
             ? "reading-lane"
             : roleConfig.firstViewportSurface === "tasks"
-              ? viewport.width <= 760
-                ? "stacked"
-                : "queue-canvas"
+              ? viewport.width < 1100
+                ? "thread-strip-sheet"
+                : "thread-rail"
             : statusStripColumnsForWidth(viewport.width),
       })),
     };
@@ -1920,7 +1923,14 @@ async function proveModeratorSurface() {
     phase: data.phase,
     projection: derived.projection,
   });
-  const queues = buildHostWorkQueueStripViewModel({ queues: data.workQueues });
+  const bar = buildHostConsoleBarViewModel({
+    game: data.game,
+    phase: derived.projection.phase,
+    nowSeconds: data.deadlineClock.nowSeconds,
+    attentionCount: 0,
+    tasks: [],
+    decisions: [],
+  });
   const votecount = buildHostVotecountPanelViewModel({
     boundary: data.votecountBoundary,
     rows: derived.votecount,
@@ -1945,6 +1955,12 @@ async function proveModeratorSurface() {
       extend_deadline: hostCommandPendingStatus(extendDeadlineEvent),
     },
   });
+  const queue = buildHostWorkQueueStripViewModel({
+    decisions: controls.decisions,
+    selectedTaskId: controls.selectedTaskId,
+    attentionCount: controls.queue.attentionCount,
+    summary: controls.queue.summary,
+  });
   const activity = buildHostCommandActivityViewModel({
     commandStatuses: {
       extend_deadline: hostCommandPendingStatus(extendDeadlineEvent),
@@ -1959,7 +1975,8 @@ async function proveModeratorSurface() {
   });
 
   assert.equal(phase.facts.length >= 5, true);
-  assert.equal(queues.queues.length >= 3, true);
+  assert.equal(bar.routine.length, 3);
+  assert.equal(bar.tools.items.length, 3);
   assert.equal(votecount.rows.length > 0, true);
   assert.equal(controls.tasks.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
@@ -1983,7 +2000,7 @@ async function proveModeratorSurface() {
       ["advance_phase", "ack", "host-command-activity-status-advance_phase"],
     ],
   );
-  assert.equal(queues.queues.every((queue) => queue.minBlockPx >= 112), true);
+  assert.equal(queue.tasks.every((task) => task.minBlockPx >= 44), true);
   assert.equal(votecount.rows.every((row) => row.minTargetPx >= 44), true);
   assert.equal(
     controls.tasks.some((task) =>
@@ -2153,31 +2170,35 @@ async function proveModeratorSurface() {
         },
         {
           id: "queue-summary",
-          testId: "host-task-queue-summary",
-          label: "Host queue",
+          testId: queue.summary.testId,
+          label: queue.summary.label,
           value: controls.queue.summary,
-          detail: controls.tasks.map((task) => task.label).join(", "),
+          detail: controls.decisions.map((task) => task.label).join(", "),
           ...textFitSummary({
-            label: "Host queue",
+            label: queue.summary.label,
             value: controls.queue.summary,
-            detail: controls.tasks.map((task) => task.label).join(", "),
+            detail: controls.decisions.map((task) => task.label).join(", "),
           }),
         },
         {
-          id: "decision-canvas",
-          testId: HOST_TASK_WORKSPACE_CONTRACT.canvasTestId,
-          label: "Selected decision",
-          value: controls.selectedTask.label,
-          detail: controls.selectedTask.consequence,
+          id: "composer",
+          testId: "host-composer",
+          label: "Post as host",
+          value: "Main thread",
+          detail: `${data.thread.posts.length} posts in the reading lane`,
           ...textFitSummary({
-            label: "Selected decision",
-            value: controls.selectedTask.label,
-            detail: controls.selectedTask.consequence,
+            label: "Post as host",
+            value: "Main thread",
+            detail: `${data.thread.posts.length} posts in the reading lane`,
           }),
         },
       ],
       phaseFacts: phase.facts.map((fact) => fact.testId),
-      queues: queues.queues.map((queue) => queue.id),
+      bar: {
+        routine: bar.routine.map((tool) => tool.testId),
+        rare: bar.tools.items.map((tool) => tool.testId),
+      },
+      queue: queue.tasks.map((task) => task.id),
       votecountRows: votecount.rows.length,
       commandActivity: {
         component: activity.root.data.component,

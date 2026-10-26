@@ -185,6 +185,14 @@ export function mapHostActionToWireCommand(actionEvent) {
           game: requiredString(payload.gameId, "payload.gameId"),
         }),
       });
+    case "publish_host_post":
+      return Object.freeze({
+        PublishHostPost: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          channel_id: requiredString(payload.channelId, "payload.channelId"),
+          body: requiredString(payload.body, "payload.body"),
+        }),
+      });
     case "mark_dead":
     case "modkill_slot":
       return Object.freeze({

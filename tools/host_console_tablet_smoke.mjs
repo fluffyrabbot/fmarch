@@ -191,9 +191,7 @@ try {
   const actionEvidence = [];
 
   for (const [index, expectedAction] of criticalActions.entries()) {
-    const task = page.getByTestId(`host-task-${expectedAction.taskId}`);
-    if (!(await task.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
-    await task.click();
+    await selectHostTask(page, expectedAction.taskId);
     await page
       .getByTestId(`moderator-control-${expectedAction.taskId}`)
       .waitFor({ state: "visible" });
@@ -756,4 +754,22 @@ async function freePort() {
       });
     });
   });
+}
+
+// Routine tools are bar controls, rare ones live in the Tools popover and
+// decisions in the queue strip (usage-frequency audit, decisions 11 and 12);
+// below the rail width a chosen task opens as a sheet over the thread.
+async function selectHostTask(page, taskId) {
+  if (await page.evaluate(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === true)) {
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector('[data-testid="host-task-sheet"]')?.open === false);
+  }
+  const tool = page.getByTestId(`host-tool-${taskId}`);
+  if (await tool.count() > 0) {
+    if (!(await tool.isVisible())) await page.getByTestId("host-tools").locator("summary").click();
+    await tool.click();
+  } else {
+    await page.locator(`[data-testid="host-task-queue"] button[data-task-id="${taskId}"]`).click();
+  }
+  await page.locator(`article[data-task-id="${taskId}"]:not([hidden])`).waitFor({ state: "visible" });
 }
