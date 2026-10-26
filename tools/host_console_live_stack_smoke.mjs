@@ -80,7 +80,7 @@ import {
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
 import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
-import { armPlayerVote, playerVoteOption } from "./player_vote_picker_driver.mjs";
+import { armPlayerVote, playerVoteOption, revealPlayerVoteSheet } from "./player_vote_picker_driver.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -4475,6 +4475,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   await page.evaluate((commandId) => {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicatePlayerSubmitCommandId);
+  await revealPlayerVoteSheet(page);
   const legalButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await legalButton.boundingBox(), "legal player action button");
   await legalButton.click();
@@ -4706,6 +4707,7 @@ async function openStalePlayerActionBrowser(frontendBaseUrl) {
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
   await capturePlayerLiveBoundary(page, { game: actionGame, channelId: "main" });
+  await revealPlayerVoteSheet(page);
   await page.locator('[data-action="submit_action:factional_kill"]').waitFor({
     state: "visible",
   });
@@ -5532,7 +5534,9 @@ async function stagePlayerSubmission(session, { commandKind, commandId, targetGa
   session.heldSubmission = await holdBrowserPost(page, {
     game: targetGame, kind: commandKind, initialRecovery,
     trigger: async () => {
-      // A vote is armed in the picker and dispatched by its confirmation.
+      // A vote is armed in the picker and dispatched by its confirmation; a
+      // phase action is in the same sheet, one tap from its confirmation.
+      await revealPlayerVoteSheet(page);
       const button = commandKind === "SubmitVote"
         ? await armPlayerVote(page, playerVoteOption(page, "submit_vote"))
         : page.locator('[data-action="submit_action:factional_kill"]');
