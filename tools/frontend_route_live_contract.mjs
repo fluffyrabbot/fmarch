@@ -516,6 +516,12 @@ async function proveModeratorLiveRuntime() {
       ],
       [data.dayVoteOutcomesEndpoint]: [],
       [data.hostPromptEndpoint]: [],
+      [data.threadEndpoint]: {
+        game: { game: "midsummer", pack: "midsummer", status: "active", phase_id: "D01", updated_seq: 1, completed_seq: null },
+        next_before_seq: null,
+        roster: [],
+        posts: [],
+      },
     }),
     resyncKeys: hostReconnectRefreshKeys(),
     scheduleReconnect(callback, delayMs) {
@@ -579,6 +585,7 @@ async function proveModeratorLiveRuntime() {
   assert.equal(finalStatus.state, "recovered");
   assert.deepEqual(hostReconnectRefreshKeys(), [
     "host",
+    "thread",
     "votecount",
     "dayVoteOutcomes",
     "hostPrompts",

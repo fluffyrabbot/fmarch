@@ -211,21 +211,22 @@ test("idle host has no decisions while deadline and phase tools remain available
   assert.equal(view.queue.attentionCount, 0);
   assert.equal(view.queue.summary, "Nothing needs you right now");
   assert.equal(view.selectedTask, null);
-  assert.deepEqual(view.tools.map(task => task.id), ["deadline", "phase"]);
+  assert.deepEqual(view.routineTools.map(task => task.id), ["deadline", "phase"]);
+  assert.deepEqual(view.rareTools, []);
 });
 
 test("an expired deadline puts the deadline and phase resolution in the queue", () => {
   const dueGroups = groups.map(group => group.id === "phase" ? { ...group, actions: [{ id: "resolve_phase", payload: { kind: "resolve_phase" } }] } : group);
   const view = buildHostTaskWorkspaceViewModel({ groups: dueGroups, phase: { deadline: 100, locked: false }, nowSeconds: 100 });
   assert.deepEqual(view.decisions.map(task => task.id), ["deadline", "phase"]);
-  assert.equal(view.tools.length, 0);
+  assert.deepEqual(view.routineTools.map(task => task.id), ["deadline", "phase"]);
 });
 
 test("a resolved phase waiting to advance enters the queue before its deadline", () => {
   const lockedGroups = groups.map(group => group.id === "phase" ? { ...group, actions: [{ id: "advance_phase", payload: { kind: "advance_phase" } }] } : group);
   const view = buildHostTaskWorkspaceViewModel({ groups: lockedGroups, phase: { deadline: 200, locked: true }, nowSeconds: 100 });
   assert.deepEqual(view.decisions.map(task => task.id), ["phase"]);
-  assert.deepEqual(view.tools.map(task => task.id), ["deadline"]);
+  assert.deepEqual(view.routineTools.map(task => task.id), ["deadline", "phase"]);
 });
 
 test("the deadline canvas states the current deadline once", () => {
