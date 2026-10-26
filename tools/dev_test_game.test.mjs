@@ -21770,7 +21770,7 @@ function identityAdapterProofFixture(game) {
         issuingCapability: "HostOf(game)",
         hostRoleSurface: `/g/${game}/host`,
         hostAction: "?/issuePlayerInvite",
-        hostPanelTestId: "host-player-invite-panel",
+        hostPanelTestId: "host-setup-invite-slot-7",
         clickedThroughFromHostRoleUrl: true,
         issuedByPrincipalUserId: "host_h",
         issuedForGame: game,

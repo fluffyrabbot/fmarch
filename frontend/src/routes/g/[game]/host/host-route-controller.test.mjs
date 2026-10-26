@@ -128,11 +128,13 @@ test("host route controller builds projection store boundaries from route data",
       dayEvents: [],
       dayEventScheduler: null,
     },
+    thread: data.thread,
     votecount: data.votecount,
     dayVoteOutcomes: data.dayVoteOutcomes,
     hostPrompts: data.hostPrompts,
   });
   assert.deepEqual(Object.keys(buildHostProjectionColdLoads(data)), [
+    "thread",
     "host",
     "votecount",
     "dayVoteOutcomes",
@@ -140,6 +142,7 @@ test("host route controller builds projection store boundaries from route data",
   ]);
   assert.deepEqual(hostReconnectRefreshKeys(), [
     "host",
+    "thread",
     "votecount",
     "dayVoteOutcomes",
     "hostPrompts",
@@ -793,6 +796,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostAckRefreshKeys({
+      event: { payload: { kind: "publish_host_post" } },
+      outcome: { state: "ack" },
+    }),
+    ["thread"],
+  );
+  assert.deepEqual(
+    hostPostAckRefreshKeys({
       event: { payload: { kind: "resolve_day_event" } },
       outcome: { state: "ack", projectionState: {} },
     }),
@@ -871,7 +881,7 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
       event: { payload: { kind: "extend_deadline" } },
       outcome: { state: "reject", error: "StreamConflict", retryable: true },
     }),
-    ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ["host", "thread", "votecount", "dayVoteOutcomes", "hostPrompts"],
   );
 });
 

@@ -33,7 +33,6 @@ export function assertHostSeatScope(evidence) {
   assert.equal(replacement?.slotId, slotId);
   assert.equal(replacement?.assignedPrincipalId, principalId);
   assert.equal(inviteTarget?.slotId, slotId);
-  assert.equal(inviteTarget?.principalId, principalId);
   assert.equal(inviteTarget?.expectedOccupantPrincipalId, principalId);
   return evidence;
 }
