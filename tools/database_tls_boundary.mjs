@@ -233,7 +233,9 @@ function capture(command, args, { env = process.env } = {}) {
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     child.once("error", reject);
-    child.once("exit", (code, signal) => {
+    // "close" follows the last stdout chunk; "exit" can precede it, and a
+    // short command such as `id -un` then reads back as empty.
+    child.once("close", (code, signal) => {
       if (code === 0) resolve(Buffer.concat(stdout).toString("utf8"));
       else {
         reject(
