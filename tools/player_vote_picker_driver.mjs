@@ -55,6 +55,21 @@ export function playerVoteOptionForTarget(page, target) {
   return page.locator(`${PICKER} [data-vote-key="${key}"]`);
 }
 
+/**
+ * Close the Vote sheet where it is open. Command feedback (Retry, Dismiss)
+ * renders in the game bar behind the modal sheet, so a proof closes the sheet
+ * before it reaches those controls, as a player does.
+ */
+export async function dismissPlayerVoteSheet(page) {
+  const layout = await playerSurfaceLayout(page);
+  if (layout !== "sheet") return layout;
+  const open = await page.evaluate((sheet) => document.querySelector(sheet)?.open === true, SHEET);
+  if (!open) return layout;
+  await page.getByTestId("player-vote-sheet-close").click();
+  await page.waitForFunction((sheet) => document.querySelector(sheet)?.open !== true, SHEET);
+  return layout;
+}
+
 /** Open the picker's row list without leaving the reading position. */
 export async function openPlayerVotePicker(page) {
   await revealPlayerVoteSheet(page);
