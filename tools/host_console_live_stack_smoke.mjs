@@ -80,7 +80,7 @@ import {
 import { generatedThreadMediaPng } from "../frontend/src/lib/server/thread-media-png.mjs";
 
 import { proofBinarySpawn } from "./proof_cargo_builds.mjs";
-import { armPlayerVote, playerVoteOption, revealPlayerVoteSheet } from "./player_vote_picker_driver.mjs";
+import { armPlayerVote, dismissPlayerVoteSheet, playerVoteOption, revealPlayerVoteSheet } from "./player_vote_picker_driver.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configuredScope = process.env.FMARCH_LIVE_STACK_SCOPE;
@@ -653,7 +653,7 @@ try {
   primaryError = error;
   await writeProgress({
     stage: "failed",
-    error: String(error?.stack ?? error),
+    error: describeFailure(error),
   });
   const handled = await handleLocalhostBindFailure({
     error,
@@ -684,7 +684,7 @@ try {
       database: smokeDatabase.name,
       ...(primaryError === null
         ? {}
-        : { error: String(primaryError?.stack ?? primaryError) }),
+        : { error: describeFailure(primaryError) }),
     });
     try {
       await dropScratchDatabase(smokeDatabase);
@@ -3784,6 +3784,8 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     if (voteRetry.storedCommandId !== rejectedAttempt.commandId || !voteRetry.commandIdFactoryAbsent) {
       throw new Error(`retry control did not retain the original decision naturally: ${JSON.stringify(voteRetry)}`);
     }
+    // The feedback and its Retry sit in the bar behind the modal Vote sheet.
+    await dismissPlayerVoteSheet(retryPage);
     await retryPage.getByTestId(retryControlTestId).click();
     const retriedOutcome = await waitForPlayerVoteTerminal(retryPage, rejectedAttempt);
     assertSameVoteRetry(rejectedAttempt, retriedOutcome);
@@ -4403,6 +4405,8 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   if (capability !== "SlotOccupant") {
     throw new Error(`action player capability did not declare SlotOccupant: ${capability}`);
   }
+  // Phase actions live in the Vote sheet below the rail width.
+  await revealPlayerVoteSheet(page);
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
   if (commandStateResponses.length === 0) {
@@ -5523,6 +5527,16 @@ async function holdBrowserPost(page, options) {
   const held = await captureHeldBrowserPost(page, options);
   heldBrowserPosts.push(held);
   return held;
+}
+
+// The stack of the failure and of every `cause` beneath it: a harness error
+// wraps the browser action that failed, and only the cause names it.
+function describeFailure(error) {
+  const parts = [];
+  for (let current = error, depth = 0; current !== undefined && current !== null && depth < 5; current = current.cause, depth += 1) {
+    parts.push(String(current?.stack ?? current));
+  }
+  return parts.join("\ncaused by: ");
 }
 
 async function stagePlayerSubmission(session, { commandKind, commandId, targetGame = game }) {
