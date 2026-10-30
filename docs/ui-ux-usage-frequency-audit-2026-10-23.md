@@ -299,6 +299,23 @@ the shape, and three deviations from the text above:
   viewport like the player's (queue strip as the phone thumb zone, rail from
   1100px), the deadline flow opens its task through the bar, and the moderator
   Linux baselines were rewritten with the UI commit.
+- Slice 3 had broken the live-stack smoke unseen: its landing job never ran
+  that lane, and at the smoke's 1024px viewport the vote picker and the phase
+  actions sit inside the closed Vote sheet. The shared vote picker driver
+  (`tools/player_vote_picker_driver.mjs`) now opens the sheet from the Vote
+  chip, or the Act chip at night, before it arms a row; the dev-test-game
+  proofs that locate those controls directly still need the same call.
+  The same lane then showed a slice 3 product gap: a command dispatched from
+  the Vote sheet reports its outcome in the game bar, behind the modal sheet,
+  so a retryable rejection's Retry and Dismiss are reachable only after the
+  sheet is closed. The proof closes the sheet first, as a player does; the
+  sheet closing on a terminal outcome, or carrying the feedback itself, is
+  slice 5 work alongside the menu decisions.
+- The worker's `/home` could not admit the push job (about 110 GB required).
+  With the owner's approval only the Cargo incremental directories untouched
+  for three or more days under the v2 build root were removed, 1,035
+  directories on 2026-10-30, which freed 32 GB on the btrfs volume; the v1
+  build root and all proof evidence were kept.
 
 Decisions 13 and 14 remain open.
 
