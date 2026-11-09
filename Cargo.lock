@@ -76,13 +76,13 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 name = "api"
 version = "0.1.0"
 dependencies = [
- "command_transport",
  "async-trait",
  "attention",
  "axum",
  "base64",
  "caps",
  "ciborium",
+ "command_transport",
  "commands",
  "community_membership",
  "content_reference",
@@ -2331,9 +2331,9 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 name = "operator_api"
 version = "0.1.0"
 dependencies = [
- "command_transport",
  "axum",
  "caps",
+ "command_transport",
  "commands",
  "domain",
  "eventstore",
