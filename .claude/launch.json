@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "slice4-workbench",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/fluffypro/apps/.fleet-worktrees/fmarch-ux-slice4-host-thread-20261026/frontend && FMARCH_FRONTEND_FIXTURE_SESSION=1 exec npx vite --host 127.0.0.1 --port 5181 --strictPort"
+      ],
+      "port": 5181
+    },
+    {
+      "name": "main-workbench",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/fluffypro/apps/fmarch/frontend && FMARCH_FRONTEND_FIXTURE_SESSION=1 exec npx vite --host 127.0.0.1 --port 5182 --strictPort"
+      ],
+      "port": 5182
+    }
+  ]
+}
